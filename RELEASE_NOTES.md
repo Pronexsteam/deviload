@@ -5,7 +5,7 @@ Portable Windows build — unzip, run Deviload.exe. Nothing to install.
 Included: Deviload.exe, yt-dlp, ffmpeg/ffprobe (BtbN GPL build), deno, WebView2 SDK DLLs, licences in LICENSES/, guide in docs/ (EN and RU).
 
 Highlights:
-- one-click **Sign in to YouTube** (age-restricted, private and "confirm you're not a bot" cases) — no manual cookie export
+- one-click **Sign in to YouTube** (private, members-only and "confirm you're not a bot" cases; age-restricted when the account is age-verified) — no manual cookie export
 - English / Russian interface, switch in the title bar
 - playlists, chapters, trim, GIF from selection, MP3 320 kbps / WAV / FLAC, subtitles, SponsorBlock
 - no console window; portable settings and history next to the exe

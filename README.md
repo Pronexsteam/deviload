@@ -18,7 +18,7 @@ Requirements: Windows 10/11 with the WebView2 Runtime (part of Windows 11 and of
 
 ## Sign in to YouTube
 
-Age-restricted, private and members-only videos, and the "Sign in to confirm you're not a bot" refusal all need a signed-in account. Press **Sign in to YouTube** in the title bar, log into Google in the window that opens, done: Deviload saves the session to `cookies.txt` next to the app and passes it to yt-dlp automatically. The account glyph that replaces the button signs you out again (deletes `cookies.txt` and the `wv2-profile` browser profile). `cookies.txt` is your account — never share it. Details: [guide, "Sign in to YouTube"](docs/guide-en.md#sign-in-to-youtube).
+Private and members-only videos and the "Sign in to confirm you're not a bot" refusal need a signed-in account (age-restricted videos too, but since mid-2026 YouTube may additionally require age verification on the account itself — that part is outside any downloader's control). Press **Sign in to YouTube** in the title bar, log into Google in the window that opens, done: Deviload saves the session to `cookies.txt` next to the app and passes it to yt-dlp automatically. The account glyph that replaces the button signs you out again (deletes `cookies.txt` and the `wv2-profile` browser profile). `cookies.txt` is your account — never share it. Details: [guide, "Sign in to YouTube"](docs/guide-en.md#sign-in-to-youtube).
 
 ## Build from source
 

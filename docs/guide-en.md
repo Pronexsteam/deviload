@@ -27,7 +27,7 @@ Windows 10/11 with the WebView2 Runtime (already part of Windows 11 and of every
 
 ### Why
 
-Some videos need a signed-in account: age-restricted and private videos, members-only content, or simply a YouTube that answers "Sign in to confirm you're not a bot" (HTTP 403) after many downloads from one network. Signing in once fixes all of these.
+Some videos need a signed-in account: private videos, members-only content, or simply a YouTube that answers "Sign in to confirm you're not a bot" (HTTP 403) after many downloads from one network. Signing in once fixes these. Age-restricted videos also need the sign-in, but since mid-2026 YouTube may additionally ask the account itself to verify its age; if it does, no downloader can get around that — verify the account on youtube.com and try again.
 
 ### How
 
@@ -91,7 +91,8 @@ Paste a link and wait for the preview card. The trim slider under the Quality pi
 
 | Symptom | What to do |
 |---|---|
-| `HTTP Error 403`, "Sign in to confirm you're not a bot", "This video is private / age-restricted" | Press **Sign in to YouTube** (see above). If you are already signed in and it still fails, sign out and sign in again — the session may have expired. |
+| `HTTP Error 403`, "Sign in to confirm you're not a bot", "This video is private" | Press **Sign in to YouTube** (see above). If you are already signed in and it still fails, sign out and sign in again — the session may have expired. |
+| "This content is age-restricted" while signed in | YouTube is asking the account to verify its age. Do that on youtube.com in a normal browser, then sign out and sign in again in Deviload. |
 | Status says *Downloaded — cookies are stale* | Same: sign out, sign in again. |
 | `ffmpeg not found` / audio and video are not merged | `ffmpeg.exe` and `ffprobe.exe` must sit next to `Deviload.exe`. Re-unzip the release, or run `setup.bat` in a source checkout. |
 | Downloads suddenly fail for every video | YouTube changed something; press **Update** to get the newest yt-dlp, then retry. |
