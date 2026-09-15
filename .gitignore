@@ -31,3 +31,5 @@ torrent-cache/
 # scratch
 _old/
 .work/
+# WebView2 sign-in profile (Google session)
+wv2-profile/

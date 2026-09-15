@@ -55,9 +55,11 @@ if (Test-Path $port) {
 }
 New-Item -ItemType Directory -Path $port | Out-Null
 
-$include = @('Deviload.exe', 'yt-dlp.exe', 'ffmpeg.exe', 'ffprobe.exe', 'ffplay.exe', 'deno.exe', 'icon.ico', 'ico.ico', 'mascot.png',
+# ffplay.exe is deliberately left out (not used by the app, ~200 MB)
+$include = @('Deviload.exe', 'Deviload.vbs', 'yt-dlp.exe', 'ffmpeg.exe', 'ffprobe.exe', 'deno.exe', 'icon.ico', 'ico.ico', 'mascot.png',
     'Microsoft.Web.WebView2.Core.dll', 'Microsoft.Web.WebView2.Wpf.dll', 'WebView2Loader.dll',
-    'setup.bat', 'setup.ps1', 'setup-webview2.bat', 'setup-webview2.ps1', 'setup-torrent.bat', 'setup-torrent.ps1')
+    'setup.bat', 'setup.ps1', 'setup-webview2.bat', 'setup-webview2.ps1', 'setup-torrent.bat', 'setup-torrent.ps1',
+    'LICENSE', 'README.md')
 
 foreach ($f in $include) {
     $p = Join-Path $dir $f
@@ -66,12 +68,28 @@ foreach ($f in $include) {
     }
 }
 
+# torrent engine: sources only, node_modules is installed on the user's machine by setup-torrent.bat
 $teSrc = Join-Path $dir 'torrent-engine'
 if (Test-Path $teSrc) {
     $teDst = Join-Path $port 'torrent-engine'
-    Copy-Item $teSrc -Destination $teDst -Recurse -Force
+    New-Item -ItemType Directory -Path $teDst | Out-Null
+    Get-ChildItem $teSrc -File | Where-Object { $_.Name -ne 'package-lock.json' } | Copy-Item -Destination $teDst -Force
 }
+
+# licence texts of the bundled binaries and the illustrated guide
+foreach ($d in @('LICENSES', 'docs')) {
+    $src = Join-Path $dir $d
+    if (Test-Path $src) { Copy-Item $src -Destination (Join-Path $port $d) -Recurse -Force }
+}
+
+# 5) zip (not committed: *.zip is gitignored)
+$zip = Join-Path $dir 'Deviload-portable.zip'
+if (Test-Path $zip) { Remove-Item $zip -Force }
+Write-Host "Zipping to $zip ..."
+Compress-Archive -Path (Join-Path $port '*') -DestinationPath $zip -CompressionLevel Optimal
+$zipMB = [math]::Round((Get-Item $zip).Length / 1MB, 1)
 
 Write-Host "=== Deviload build complete ==="
 Write-Host "Portable folder: $port"
+Write-Host "Zip: $zip ($zipMB MB)"
 Write-Host "Launch: double-click Deviload.exe"

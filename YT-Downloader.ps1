@@ -166,7 +166,7 @@ $script:L = @{
     # preview card
     tip_watch = 'Смотреть видео'; tip_thumb = 'Скачать HD-обложку'
     pv_loading = 'Загрузка превью…'; pv_untitled = 'Без названия'; pv_failed = 'Не удалось получить превью'
-    audio_original = 'Оригинал'; audio_ru = '🇷🇺 Русский дубляж'; audio_all = '🌐 Все дорожки (Multi-Audio)'
+    audio_original = 'Оригинал'; audio_ru = 'RU'; audio_all = 'Все дорожки (Multi-Audio)'
     # search overlay
     ttl_search = 'Поиск на YouTube'; btn_find = 'Найти'; btn_close = 'Закрыть'
     st_searching = 'Поиск…'; err_search_start = 'Не удалось запустить поиск'; none_found = 'Ничего не найдено'
@@ -242,6 +242,13 @@ $script:L = @{
     vid_failed = 'Видео — не удалось воспроизвести (скачай файл)'; tip_fullscreen = 'Во весь экран'; err_video = 'Не удалось открыть видео'
     # tray
     tray_open = 'Открыть'; tray_exit = 'Выход'
+    # sign-in
+    btn_signin = 'Войти в YouTube'; ttl_signin = 'Вход в YouTube'; tip_signin = 'Войти в аккаунт Google, чтобы качать приватные и 18+ видео без проверки «не робот»'
+    tip_signed_in = 'Вход выполнен · нажмите, чтобы выйти'; ttl_signout = 'Выход из YouTube'
+    ask_signout = 'Выйти из аккаунта YouTube? Файл cookies.txt и профиль браузера будут удалены.'
+    msg_signed_in = 'Вход выполнен — cookies сохранены в cookies.txt'; st_signed_in = 'Вход в YouTube выполнен'; st_signed_out = 'Вы вышли из YouTube'
+    err_signin_save = 'Не удалось сохранить cookies.txt'
+    msg_wv2_missing = "Для входа нужен WebView2 (встроенный браузер).`n`nЗапусти setup-webview2.bat рядом с приложением — он скачает нужные библиотеки — и открой Deviload заново."
   }
   en = @{
     # window / title bar
@@ -270,7 +277,7 @@ $script:L = @{
     # preview card
     tip_watch = 'Watch video'; tip_thumb = 'Download HD thumbnail'
     pv_loading = 'Loading preview…'; pv_untitled = 'Untitled'; pv_failed = 'Could not fetch preview'
-    audio_original = 'Original'; audio_ru = '🇷🇺 Russian dub'; audio_all = '🌐 All tracks (multi-audio)'
+    audio_original = 'Original'; audio_ru = 'RU'; audio_all = 'All tracks (multi-audio)'
     # search overlay
     ttl_search = 'Search YouTube'; btn_find = 'Search'; btn_close = 'Close'
     st_searching = 'Searching…'; err_search_start = 'Could not start search'; none_found = 'Nothing found'
@@ -346,6 +353,13 @@ $script:L = @{
     vid_failed = 'Video — playback failed (download the file)'; tip_fullscreen = 'Full screen'; err_video = 'Could not open video'
     # tray
     tray_open = 'Open'; tray_exit = 'Exit'
+    # sign-in
+    btn_signin = 'Sign in to YouTube'; ttl_signin = 'Sign in to YouTube'; tip_signin = 'Sign in with your Google account to download private and age-restricted videos without the "not a bot" check'
+    tip_signed_in = 'Signed in · click to sign out'; ttl_signout = 'Sign out of YouTube'
+    ask_signout = 'Sign out of YouTube? cookies.txt and the browser profile will be deleted.'
+    msg_signed_in = 'Signed in — cookies saved to cookies.txt'; st_signed_in = 'Signed in to YouTube'; st_signed_out = 'Signed out of YouTube'
+    err_signin_save = 'Could not save cookies.txt'
+    msg_wv2_missing = "Signing in needs WebView2 (the embedded browser).`n`nRun setup-webview2.bat next to the app — it downloads the required libraries — then open Deviload again."
   }
 }
 $script:lang = 'en'
@@ -643,6 +657,56 @@ if (-not (Test-Path $ytdlp)) {
       </Setter>
     </Style>
 
+    <!-- compact accent button for the title bar (same look as Primary, smaller) -->
+    <Style x:Key="PrimarySm" TargetType="Button">
+      <Setter Property="Foreground" Value="{DynamicResource TAccentFg}"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Height" Value="28"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="bd" CornerRadius="8" Padding="13,0" Background="{DynamicResource TAccent}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bd" Property="Opacity" Value="0.88"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="bd" Property="Opacity" Value="0.3"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- title-bar glyph as a Button (keyboard + UI Automation), same look as IconBtn -->
+    <Style x:Key="GlyphBtn" TargetType="Button">
+      <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+      <Setter Property="FontSize" Value="15"/>
+      <Setter Property="Foreground" Value="{DynamicResource TGlyphDim}"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border Background="Transparent" Padding="2,0">
+              <ContentPresenter VerticalAlignment="Center"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Foreground" Value="{DynamicResource TFg}"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
     <Style x:Key="Ghost" TargetType="Button">
       <Setter Property="Foreground" Value="{DynamicResource TFg}"/>
       <Setter Property="FontSize" Value="13"/>
@@ -818,6 +882,8 @@ if (-not (Test-Path $ytdlp)) {
                            VerticalAlignment="Center"/>
               </StackPanel>
               <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,18,0">
+                <Button x:Name="signInBtn" Content="" Style="{StaticResource PrimarySm}" Margin="0,0,18,0"/>
+                <Button x:Name="accountBtn" Content="&#xE77B;" Style="{StaticResource GlyphBtn}" Margin="0,0,18,0" Visibility="Collapsed"/>
                 <Border x:Name="ytLogoBtn" Background="Transparent" Cursor="Hand" VerticalAlignment="Center" Margin="0,0,18,0" >
                   <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Border Width="26" Height="18" CornerRadius="5" Background="#E5484D" VerticalAlignment="Center">
@@ -1151,6 +1217,8 @@ $qualityPanel = $window.FindName('qualityPanel')
 $audioTracksContainer = $window.FindName('audioTracksContainer')
 $audioTracksPanel = $window.FindName('audioTracksPanel')
 $cookiesPanel = $window.FindName('cookiesPanel')
+$signInBtn = $window.FindName('signInBtn')
+$accountBtn = $window.FindName('accountBtn')
 $playlistToggle = $window.FindName('playlistToggle')
 $playlistRangeBox = $window.FindName('playlistRangeBox')
 $playlistRangeHint = $window.FindName('playlistRangeHint')
@@ -1718,10 +1786,10 @@ function Get-AudioLabel($code) {
   switch ($code) {
     'default' { return (T 'audio_original') }
     'ru' { return (T 'audio_ru') }
-    'en' { return '🇺🇸 English' }
-    'es' { return '🇪🇸 Español' }
-    'de' { return '🇩🇪 Deutsch' }
-    'fr' { return '🇫🇷 Français' }
+    'en' { return 'EN' }
+    'es' { return 'ES' }
+    'de' { return 'DE' }
+    'fr' { return 'FR' }
     'all' { return (T 'audio_all') }
     default { return ([string]$code).ToUpper() }
   }
@@ -1760,6 +1828,9 @@ function Apply-Language {
   # top-bar language toggle
   $langRu.ToolTip = T 'lang_ru'; $langEn.ToolTip = T 'lang_en'
   Update-LangSwitch
+  # sign-in button / account glyph
+  $signInBtn.Content = T 'btn_signin'; $signInBtn.ToolTip = T 'tip_signin'; $accountBtn.ToolTip = T 'tip_signed_in'
+  if ($script:siWin) { try { $script:siWin.Title = T 'ttl_signin' } catch {} }
   # history overlay
   $historyTitle.Text = T 'ttl_history'; $clearHistoryBtn.Content = T 'btn_clear_all'
   $historySearchHint.Text = T 'hint_hist_search'; $historyCloseBtn.Content = T 'btn_close'
@@ -1790,6 +1861,137 @@ function Apply-Language {
 # Buttons (not TextBlocks): Click also fires from keyboard and UI Automation, and it does not start the title-bar drag
 $langRu.Add_Click({ Set-Language 'ru' })
 $langEn.Add_Click({ Set-Language 'en' })
+
+# ---------------- YouTube sign-in (WebView2) ----------------
+# The sign-in window is a WebView2 with its own persistent profile (<app>\wv2-profile). After Google
+# redirects to youtube.com the cookie jar is read through CoreWebView2.CookieManager and written to
+# <app>\cookies.txt in Netscape format, which yt-dlp consumes with --cookies. The async cookie calls are
+# polled by a DispatcherTimer: blocking on Task.Result on the UI thread would deadlock WebView2.
+$script:cookiesPath = Join-Path $root 'cookies.txt'
+$script:wv2Profile = Join-Path $root 'wv2-profile'
+$script:siWin = $null; $script:siWv = $null; $script:siTasks = $null
+function Test-SignedIn {
+  if (-not (Test-Path $script:cookiesPath)) { return $false }
+  try {
+    $raw = [System.IO.File]::ReadAllText($script:cookiesPath)
+    return [bool]($raw -match "`t(LOGIN_INFO|SID|__Secure-3PSID)`t")
+  }
+  catch { return $false }
+}
+function Update-SignInUI {
+  if (Test-SignedIn) { $signInBtn.Visibility = 'Collapsed'; $accountBtn.Visibility = 'Visible' }
+  else { $signInBtn.Visibility = 'Visible'; $accountBtn.Visibility = 'Collapsed' }
+}
+function Test-YtHost($uri) {
+  try { $h = ([System.Uri]$uri).Host; return ($h -eq 'youtube.com' -or $h.EndsWith('.youtube.com')) } catch { return $false }
+}
+function Write-NetscapeCookies($cookies) {
+  $sb = New-Object System.Text.StringBuilder
+  [void]$sb.Append("# Netscape HTTP Cookie File`n# Written by Deviload after signing in to YouTube. Keep this file private.`n`n")
+  $seen = @{}
+  foreach ($c in $cookies) {
+    $dom = [string]$c.Domain
+    if ($dom -notmatch '(youtube\.com|google\.com)$') { continue }
+    $k = "$dom|$($c.Path)|$($c.Name)"
+    if ($seen.ContainsKey($k)) { continue }
+    $seen[$k] = $true
+    $flag = $(if ($dom.StartsWith('.')) { 'TRUE' } else { 'FALSE' })
+    $sec = $(if ($c.IsSecure) { 'TRUE' } else { 'FALSE' })
+    $exp = [int64]0
+    if (-not $c.IsSession) {
+      try { $exp = [int64]([System.DateTimeOffset]$c.Expires).ToUnixTimeSeconds(); if ($exp -lt 0) { $exp = 0 } } catch { $exp = 0 }
+    }
+    [void]$sb.Append("$dom`t$flag`t$($c.Path)`t$sec`t$exp`t$($c.Name)`t$($c.Value)`n")
+  }
+  [System.IO.File]::WriteAllText($script:cookiesPath, $sb.ToString(), (New-Object System.Text.UTF8Encoding $false))
+}
+$script:siTimer = New-Object System.Windows.Threading.DispatcherTimer
+$script:siTimer.Interval = [TimeSpan]::FromMilliseconds(250)
+$script:siTimer.Add_Tick({
+    if (-not $script:siTasks) { $script:siTimer.Stop(); return }
+    foreach ($t in $script:siTasks) { if (-not $t.IsCompleted) { return } }
+    $script:siTimer.Stop()
+    Finish-SignInCheck
+  })
+function Start-SignInCheck {
+  if ($script:siTasks -or -not $script:siWv -or -not $script:siWv.CoreWebView2) { return }
+  try {
+    $cm = $script:siWv.CoreWebView2.CookieManager
+    $script:siTasks = @($cm.GetCookiesAsync('https://www.youtube.com'), $cm.GetCookiesAsync('https://accounts.google.com'), $cm.GetCookiesAsync('https://www.google.com'))
+    $script:siTimer.Start()
+  }
+  catch { $script:siTasks = $null }
+}
+function Finish-SignInCheck {
+  $tasks = $script:siTasks; $script:siTasks = $null
+  $all = New-Object System.Collections.Generic.List[object]
+  foreach ($t in $tasks) {
+    try { if ($t.Status -eq 'RanToCompletion') { foreach ($c in $t.Result) { $all.Add($c) } } } catch {}
+  }
+  $ok = $false
+  foreach ($c in $all) {
+    if ((([string]$c.Domain) -like '*youtube.com') -and ($c.Name -eq 'LOGIN_INFO' -or $c.Name -eq 'SID' -or $c.Name -eq '__Secure-3PSID')) { $ok = $true; break }
+  }
+  if (-not $ok) { return }
+  try { Write-NetscapeCookies $all.ToArray() } catch { Set-StateK 'err_signin_save' '#FF5C5C'; return }
+  Set-Sel $cookiesPanel 1   # "cookies.txt file"
+  Save-Settings
+  Update-SignInUI
+  Set-StateK 'st_signed_in' '#34C759'
+  Notify (T 'ttl_signin') (T 'msg_signed_in')
+  if ($script:siWin) { try { $script:siWin.Close() } catch {} }
+}
+function Open-SignIn {
+  if (-not $script:hasWV2) {
+    [System.Windows.MessageBox]::Show((T 'msg_wv2_missing'), (T 'ttl_signin'), 'OK', 'Information') | Out-Null
+    return
+  }
+  try {
+    if ($script:siWin -and $script:siWin.IsLoaded) { $script:siWin.Activate(); return }
+    $script:siWin = New-Object System.Windows.Window
+    $script:siWin.Title = T 'ttl_signin'
+    $script:siWin.Width = 560; $script:siWin.Height = 720
+    $script:siWin.WindowStartupLocation = 'CenterScreen'
+    $script:siWin.Background = $window.FindResource('TBar')
+    try { $script:siWin.Icon = $window.Icon } catch {}
+    $script:siWv = New-Object Microsoft.Web.WebView2.Wpf.WebView2
+    $cp = New-Object Microsoft.Web.WebView2.Wpf.CoreWebView2CreationProperties
+    $cp.UserDataFolder = $script:wv2Profile
+    $script:siWv.CreationProperties = $cp
+    $script:siWv.Add_NavigationCompleted({ param($s, $e) if (Test-YtHost $s.Source) { Start-SignInCheck } })
+    $script:siWv.Add_SourceChanged({ param($s, $e) if (Test-YtHost $s.Source) { Start-SignInCheck } })
+    $script:siWin.Content = $script:siWv
+    $script:siWin.Add_Closed({
+        try { $script:siTimer.Stop() } catch {}
+        $script:siTasks = $null
+        try { $script:siWv.Dispose() } catch {}
+        $script:siWv = $null; $script:siWin = $null
+      })
+    $script:siWv.Source = New-Object System.Uri 'https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F'
+    $script:siWin.Show(); $script:siWin.Activate()
+  }
+  catch { Set-StateK 'err_wv2' '#FF5C5C' }
+}
+function Clear-Wv2Profile {
+  # the browser processes release the profile folder shortly after Dispose — retry a few times
+  for ($i = 0; $i -lt 5; $i++) {
+    if (-not (Test-Path $script:wv2Profile)) { return }
+    try { Remove-Item $script:wv2Profile -Recurse -Force -ErrorAction Stop; return } catch { Start-Sleep -Milliseconds 400 }
+  }
+}
+function Invoke-SignOut {
+  $r = [System.Windows.MessageBox]::Show((T 'ask_signout'), (T 'ttl_signout'), 'YesNo', 'Question')
+  if ($r -ne 'Yes') { return }
+  if ($script:siWin) { try { $script:siWin.Close() } catch {} }
+  try { if (Test-Path $script:cookiesPath) { Remove-Item $script:cookiesPath -Force } } catch {}
+  Clear-Wv2Profile
+  Set-Sel $cookiesPanel 0   # "None"
+  Save-Settings
+  Update-SignInUI
+  Set-StateK 'st_signed_out' '#7A7A83'
+}
+$signInBtn.Add_Click({ Open-SignIn })
+$accountBtn.Add_Click({ Invoke-SignOut })
 
 if ($saved) {
   if ($saved.folder -and (Test-Path $saved.folder)) { $folderBox.Text = $saved.folder }
@@ -1923,6 +2125,7 @@ function Refresh-StateText {
 }
 
 Apply-Language   # first render of all texts (after the state helpers above are defined)
+Update-SignInUI  # sign-in button vs. account glyph, from cookies.txt
 
 function Set-Progress($v) {
   $anim = New-Object System.Windows.Media.Animation.DoubleAnimation
@@ -3517,6 +3720,7 @@ $window.Add_Closing({
     if ($script:notify) { try { $script:notify.Visible = $false; $script:notify.Dispose() } catch {} }
     if ($script:vidWin) { try { $script:vidWin.Close() } catch {} }
     if ($script:wvWin) { try { $script:wvWin.Close() } catch {} }
+    if ($script:siWin) { try { $script:siWin.Close() } catch {} }
     if ($script:torWin) { try { $script:torWin.Close() } catch {} }
     Stop-Torrent
     Save-Settings

@@ -1,0 +1,47 @@
+# Deviload
+
+A small Windows desktop front-end for [yt-dlp](https://github.com/yt-dlp/yt-dlp). Paste a link, pick a quality, press Download. Playlists, chapters, trimming, GIFs, MP3/FLAC extraction, subtitles, SponsorBlock, a one-click YouTube sign-in — in one portable folder, no installer. Interface in English and Russian.
+
+![Deviload main window](docs/img/main-en.png)
+
+Full guide with screenshots: [docs/guide-en.md](docs/guide-en.md) · Русская версия: [docs/guide-ru.md](docs/guide-ru.md)
+
+## Install
+
+1. Download `Deviload-portable.zip` from Releases.
+2. Unzip anywhere. Keep the folder together — the app looks for `yt-dlp.exe`, `ffmpeg.exe` and the WebView2 DLLs next to `Deviload.exe`.
+3. Run `Deviload.exe`. Nothing is installed; settings and history stay in the folder.
+
+Requirements: Windows 10/11 with the WebView2 Runtime (part of Windows 11 and of Windows 10 with Edge).
+
+## Sign in to YouTube
+
+Age-restricted, private and members-only videos, and the "Sign in to confirm you're not a bot" refusal all need a signed-in account. Press **Sign in to YouTube** in the title bar, log into Google in the window that opens, done: Deviload saves the session to `cookies.txt` next to the app and passes it to yt-dlp automatically. The account glyph that replaces the button signs you out again (deletes `cookies.txt` and the `wv2-profile` browser profile). `cookies.txt` is your account — never share it. Details: [guide, "Sign in to YouTube"](docs/guide-en.md#sign-in-to-youtube).
+
+## Build from source
+
+The app is a single Windows PowerShell 5.1 script, `YT-Downloader.ps1` (WPF). Binaries are not in the repository.
+
+```
+git clone <this repo>
+setup.bat            # downloads yt-dlp, ffmpeg, deno, WebView2 SDK DLLs next to the script
+Deviload.vbs         # run the script (no console window)
+build.bat            # ps2exe -> Deviload.exe, Deviload-portable\ and Deviload-portable.zip
+```
+
+`setup-torrent.bat` installs the optional torrent engine (needs Node.js).
+
+## Licenses
+
+- **Deviload** — MIT, © 2026 Samvel Avetisyan ([LICENSE](LICENSE)).
+- **yt-dlp** — [Unlicense](https://github.com/yt-dlp/yt-dlp/blob/master/LICENSE) (public domain).
+- **FFmpeg** (`ffmpeg.exe`, `ffprobe.exe`) — LGPL v2.1+ with GPL v3 components; the shipped builds are GPL v3 ([gyan.dev](https://www.gyan.dev/ffmpeg/builds/) or [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds), source at [github.com/FFmpeg/FFmpeg](https://github.com/FFmpeg/FFmpeg)). FFmpeg is a trademark of Fabrice Bellard.
+- **Deno** — [MIT](https://github.com/denoland/deno/blob/main/LICENSE.md).
+- **Microsoft Edge WebView2 SDK** — Microsoft Software License Terms, obtained through `setup-webview2.bat` from [NuGet](https://www.nuget.org/packages/Microsoft.Web.WebView2).
+- **ps2exe** (host stub inside `Deviload.exe`) — [Microsoft Limited Public License](https://github.com/MScholtes/PS2EXE/blob/master/LICENSE).
+
+The binaries are shipped only in the Releases zip, together with their licence texts in `LICENSES/`; the repository contains only the source and the setup scripts that fetch them.
+
+## Для русскоязычных
+
+Deviload — портативная оболочка для yt-dlp: вставил ссылку, выбрал качество, нажал «Скачать». Интерфейс переключается на русский кнопкой `RU` в заголовке окна. Установка: скачать `Deviload-portable.zip` из Releases, распаковать, запустить `Deviload.exe`. Кнопка **Войти в YouTube** решает проблемы с приватными видео, 18+ и проверкой «не робот». Подробное руководство со скриншотами — [docs/guide-ru.md](docs/guide-ru.md).
