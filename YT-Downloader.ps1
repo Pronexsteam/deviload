@@ -1699,7 +1699,6 @@ function Render-History($filter) {
 }
 
 # ---------------- language switching ----------------
-$script:readyText = ''
 # Top-bar "RU | EN" toggle: Tag="on" switches the LangBtn style trigger to the accent colour
 # (DynamicResource inside the trigger, so a theme change recolours it too).
 function Update-LangSwitch {
@@ -1729,7 +1728,6 @@ function Get-AudioLabel($code) {
 }
 # Re-applies every user-visible string in the current language (callable at runtime, no restart needed)
 function Apply-Language {
-  $wasReady = (-not $statusText.Text) -or ($statusText.Text -eq $script:readyText)
   # title bar
   $ytLogoBtn.ToolTip = T 'tip_ytsearch'; $historyBtn.ToolTip = T 'tip_history'; $searchBtn.ToolTip = T 'tip_search'
   $gearBtn.ToolTip = T 'tip_settings'; $dotMin.ToolTip = T 'tip_min'; $dotClose.ToolTip = T 'tip_close'
@@ -1776,9 +1774,8 @@ function Apply-Language {
   Set-PillLabels $ratePanel (Get-RateOpts)
   Set-PillLabels $codecPanel (Get-CodecOpts)
   foreach ($c in $audioTracksPanel.Children) { try { $c.Content = Get-AudioLabel ([string]$c.Tag) } catch {} }
-  # status line
-  $script:readyText = T 'st_ready'
-  if ($wasReady) { $statusText.Text = $script:readyText }
+  # status / detail line: re-render the remembered key in the new language
+  Refresh-StateText
   # dynamic labels
   if (@($script:chapterData).Count -gt 1) { Update-ChaptersBtn }
   else { $chaptersBtn.Content = T 'btn_chapters'; Update-TrimFromTrack }
@@ -1894,12 +1891,38 @@ $script:hBase = 770
 $script:hQueue = 870
 $script:selectedChapters = @()
 $script:chapterData = @()
-Apply-Language
 
 function Set-State($text, $dotHex) {
   $statusText.Text = $text
   try { $statusDot.Fill = $brushConv.ConvertFromString($dotHex) } catch {}
 }
+# Status line / detail line by string-table key: the key (+ format args) is remembered, so a language
+# switch re-renders whatever is currently shown instead of leaving it in the previous language.
+$script:stateKey = 'st_ready'; $script:stateArgs = @(); $script:stateDot = '#7A7A83'
+$script:detailKey = ''
+function Set-StateK($key, $dotHex, $fmtArgs = @()) {
+  $script:stateKey = $key; $script:stateArgs = @($fmtArgs); $script:stateDot = $dotHex
+  $txt = T $key
+  if (@($fmtArgs).Count -gt 0) { try { $txt = $txt -f @($fmtArgs) } catch {} }
+  Set-State $txt $dotHex
+}
+$script:detailTxt = ''
+function Set-DetailK($key) {
+  $script:detailKey = $key
+  $script:detailTxt = T $key
+  $detailText.Text = $script:detailTxt
+}
+function Refresh-StateText {
+  if ($script:stateKey) {
+    $txt = T $script:stateKey
+    if (@($script:stateArgs).Count -gt 0) { try { $txt = $txt -f @($script:stateArgs) } catch {} }
+    $statusText.Text = $txt
+  }
+  # only while the detail line still shows the keyed text (progress lines overwrite it with raw data)
+  if ($script:detailKey -and $detailText.Text -eq $script:detailTxt) { Set-DetailK $script:detailKey }
+}
+
+Apply-Language   # first render of all texts (after the state helpers above are defined)
 
 function Set-Progress($v) {
   $anim = New-Object System.Windows.Media.Animation.DoubleAnimation
@@ -1962,14 +1985,14 @@ function Process-Output($text) {
     if ($fn -notmatch '[\p{L}\p{N}]') { $fn = T 'fb_video' }   # name made of symbols only -> placeholder
     $itemTitle.Text = $fn
     $itemTitle.Visibility = 'Visible'
-    if ($script:phase -ne 'merge') { $script:phase = 'download'; Set-State (T 'st_downloading') '#8F8F97' }
+    if ($script:phase -ne 'merge') { $script:phase = 'download'; Set-StateK 'st_downloading' '#8F8F97' }
   }
 
   if ($text -match '\[ExtractAudio\]|Extracting audio') {
-    $script:phase = 'audio'; Set-State (T 'st_convert_mp3') '#8F8F97'; Set-Progress 100
+    $script:phase = 'audio'; Set-StateK 'st_convert_mp3' '#8F8F97'; Set-Progress 100
   }
   if ($text -match 'Merging formats') {
-    $script:phase = 'merge'; Set-State (T 'st_merging') '#8F8F97'; Set-Progress 100
+    $script:phase = 'merge'; Set-StateK 'st_merging' '#8F8F97'; Set-Progress 100
     $detailText.Text = ''
   }
   if ($text -match 'Deleting original file|has already been downloaded|\[download\]\s+100% of') {
@@ -1993,7 +2016,7 @@ function Process-Output($text) {
   if ($pm.Count -gt 0) {
     $m = $pm[$pm.Count - 1]
     $pct = [double]$m.Groups[1].Value
-    if ($script:phase -eq 'idle' -or $script:phase -eq 'start') { $script:phase = 'download'; Set-State (T 'st_downloading') '#8F8F97' }
+    if ($script:phase -eq 'idle' -or $script:phase -eq 'start') { $script:phase = 'download'; Set-StateK 'st_downloading' '#8F8F97' }
     if ($script:phase -eq 'download') {
       Set-Progress $pct
       $parts = @(('{0:0}%' -f $pct))
@@ -2029,7 +2052,7 @@ function Kill-Tree($procId, [switch]$Wait) {
   catch {}
 }
 
-function Start-YtDlp($argStr, $statusStr, $op = 'op') {
+function Start-YtDlp($argStr, $statusKey, $op = 'op') {
   Remove-Item $outLog, $errLog -ErrorAction SilentlyContinue
   $script:outPos = 0; $script:errPos = 0
   $script:sawSuccess = $false; $script:cookieStale = $false; $script:cancelled = $false
@@ -2048,7 +2071,7 @@ function Start-YtDlp($argStr, $statusStr, $op = 'op') {
   $progress.Visibility = 'Visible'
   $detailText.Visibility = 'Visible'
   Reset-Progress
-  Set-State $statusStr '#8F8F97'
+  Set-StateK $statusKey '#8F8F97'
   Set-Busy $true
   try {
     $script:proc = Start-Hidden $ytdlp $argStr $outLog $errLog
@@ -2056,7 +2079,7 @@ function Start-YtDlp($argStr, $statusStr, $op = 'op') {
   catch {
     Set-Busy $false
     $script:singleOp = ''
-    Set-State (T 'err_ytdlp_start') '#FF5C5C'
+    Set-StateK 'err_ytdlp_start' '#FF5C5C'
   }
 }
 
@@ -2234,16 +2257,16 @@ function Process-WorkerOutput($w, $text) {
     $w.Item.Name.Text = $fn
     if ($w.Phase -ne 'merge') {
       $w.Phase = 'download'
-      if ($script:queueTotal -eq 1) { Set-State (T 'st_downloading') '#8F8F97' }
+      if ($script:queueTotal -eq 1) { Set-StateK 'st_downloading' '#8F8F97' }
     }
   }
   if ($text -match '\[ExtractAudio\]|Extracting audio') {
     $w.Phase = 'audio'; $w.Pct = 100; $w.Item.St.Text = T 'q_processing'
-    if ($script:queueTotal -eq 1) { Set-State (T 'st_convert_mp3') '#8F8F97' }
+    if ($script:queueTotal -eq 1) { Set-StateK 'st_convert_mp3' '#8F8F97' }
   }
   if ($text -match 'Merging formats') {
     $w.Phase = 'merge'; $w.Pct = 100; $w.Item.St.Text = T 'q_processing'; $w.Detail = ''
-    if ($script:queueTotal -eq 1) { Set-State (T 'st_merging') '#8F8F97' }
+    if ($script:queueTotal -eq 1) { Set-StateK 'st_merging' '#8F8F97' }
   }
   if ($text -match 'Deleting original file|has already been downloaded|has already been recorded in|\[download\]\s+100% of') {
     $w.SawSuccess = $true
@@ -2267,7 +2290,7 @@ function Process-WorkerOutput($w, $text) {
     $pct = [double]$m.Groups[1].Value
     if ($w.Phase -eq 'start') {
       $w.Phase = 'download'
-      if ($script:queueTotal -eq 1) { Set-State (T 'st_downloading') '#8F8F97' }
+      if ($script:queueTotal -eq 1) { Set-StateK 'st_downloading' '#8F8F97' }
     }
     if ($w.Phase -eq 'download') {
       $w.Pct = $pct
@@ -2300,7 +2323,7 @@ function Update-QueueUI {
     $detailText.Text = ((T 'st_parallel') -f $script:workers.Count) + $(if ($waiting -gt 0) { (T 'st_queued') -f $waiting } else { '' })
     $detailText.Visibility = 'Visible'
   }
-  if ($script:queueTotal -gt 1) { Set-State ((T 'st_dl_progress') -f $done, $script:queueTotal) '#8F8F97' }
+  if ($script:queueTotal -gt 1) { Set-StateK 'st_dl_progress' '#8F8F97' @($done, $script:queueTotal) }
 }
 
 function Make-ShortName($url) {
@@ -2391,8 +2414,11 @@ $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromMilliseconds(200)
 $timer.Add_Tick({
     # --- single operations: yt-dlp update, thumbnail, local conversion ---
-    Process-Output (Read-NewText $outLog ([ref]$script:outPos))
-    Process-Output (Read-NewText $errLog ([ref]$script:errPos))
+    # poll the single-op logs only while such a process exists (never replay old %TEMP% output into the status line)
+    if ($script:proc) {
+      Process-Output (Read-NewText $outLog ([ref]$script:outPos))
+      Process-Output (Read-NewText $errLog ([ref]$script:errPos))
+    }
     if ($script:proc -and $script:proc.HasExited) {
       $code = $script:proc.ExitCode
       $script:proc = $null
@@ -2402,28 +2428,28 @@ $timer.Add_Tick({
       try { Set-Content -Path $logFile -Value $script:logBuffer.ToString() -Encoding UTF8 } catch {}
 
       if ($script:cancelled) {
-        Set-State (T 'st_cancelled') '#FFB340'; $detailText.Text = ''
+        Set-StateK 'st_cancelled' '#FFB340'; $detailText.Text = ''
         Reset-Progress
         Set-TaskProgress 'None' -1
       }
       elseif ($script:singleOp -eq 'convert') {
         if ($code -eq 0 -and $script:lastFile -and (Test-Path $script:lastFile)) {
-          Set-State (T 'st_done') '#34C759'
-          $detailText.Text = T 'det_file_saved'
+          Set-StateK 'st_done' '#34C759'
+          Set-DetailK 'det_file_saved'
           Add-HistoryItem ([System.IO.Path]::GetFileNameWithoutExtension($script:lastFile)) '' $script:lastFile
           $openFileBtn.Visibility = 'Visible'
           Notify 'Deviload' (T 'ntf_convert_done')
         }
-        else { Set-State ((T 'st_convert_err') -f $code) '#FF5C5C' }
+        else { Set-StateK 'st_convert_err' '#FF5C5C' @($code) }
         Set-Progress 100
         Set-TaskProgress 'None' -1
       }
       else {
         if ($code -eq 0 -or $script:sawSuccess) {
-          Set-State (T 'st_done') '#34C759'
+          Set-StateK 'st_done' '#34C759'
           if ($script:singleOp -eq 'thumb' -and $script:lastFile -and (Test-Path $script:lastFile)) { $openFileBtn.Visibility = 'Visible' }
         }
-        else { Set-State ((T 'st_err_code') -f $code) '#FF5C5C' }
+        else { Set-StateK 'st_err_code' '#FF5C5C' @($code) }
         Set-TaskProgress 'None' -1
       }
       $script:singleOp = ''
@@ -2470,7 +2496,7 @@ $timer.Add_Tick({
       elseif ($script:cancelled) {
         $script:queueActive = $false
         try { Set-Content -Path $logFile -Value $script:logBuffer.ToString() -Encoding UTF8 } catch {}
-        Set-State (T 'st_cancelled') '#FFB340'; $detailText.Text = ''
+        Set-StateK 'st_cancelled' '#FFB340'; $detailText.Text = ''
         Reset-Progress
         Set-TaskProgress 'None' -1
         Set-Busy $false
@@ -2487,25 +2513,25 @@ $timer.Add_Tick({
           Set-Progress 100
           Set-TaskProgress 'None' -1
           if ($script:queueTotal -gt 1) {
-            if ($script:queueFail -eq 0) { Set-State ((T 'st_dl_all') -f $script:queueOk, $script:queueTotal) '#34C759' }
-            else { Set-State ((T 'st_dl_partial') -f $script:queueOk, $script:queueTotal, $script:queueFail) '#FFB340' }
-            $detailText.Text = T 'det_files_saved'
+            if ($script:queueFail -eq 0) { Set-StateK 'st_dl_all' '#34C759' @($script:queueOk, $script:queueTotal) }
+            else { Set-StateK 'st_dl_partial' '#FFB340' @($script:queueOk, $script:queueTotal, $script:queueFail) }
+            Set-DetailK 'det_files_saved'
             Notify 'Deviload' ((T 'ntf_done_n') -f $script:queueOk, $script:queueTotal)
           }
           elseif ($script:queueFail -eq 0) {
-            if ($script:cookieStale) { Set-State (T 'st_dl_cookies_stale') '#34C759' }
-            else { Set-State (T 'st_downloaded') '#34C759' }
-            $detailText.Text = T 'det_file_saved'
+            if ($script:cookieStale) { Set-StateK 'st_dl_cookies_stale' '#34C759' }
+            else { Set-StateK 'st_downloaded' '#34C759' }
+            Set-DetailK 'det_file_saved'
             Notify 'Deviload' (T 'st_downloaded')
           }
           else {
             if ($script:cookieBrowserFail) {
-              Set-State (T 'st_cookie_browser_fail') '#FF5C5C'
-              $detailText.Text = T 'det_cookie_browser_fail'
+              Set-StateK 'st_cookie_browser_fail' '#FF5C5C'
+              Set-DetailK 'det_cookie_browser_fail'
             }
             else {
-              Set-State (T 'st_dl_failed') '#FF5C5C'
-              $detailText.Text = T 'det_see_log'
+              Set-StateK 'st_dl_failed' '#FF5C5C'
+              Set-DetailK 'det_see_log'
             }
             Notify 'Deviload' (T 'st_dl_failed')
           }
@@ -2617,13 +2643,13 @@ $timer.Add_Tick({
       $script:gifProc = $null
       Set-Busy $false
       if (Test-Path $script:gifOut) {
-        Set-State (T 'st_gif_done') '#34C759'
-        $detailText.Text = T 'det_gif_saved'; $detailText.Visibility = 'Visible'
+        Set-StateK 'st_gif_done' '#34C759'
+        Set-DetailK 'det_gif_saved'; $detailText.Visibility = 'Visible'
         $script:lastFile = $script:gifOut; $script:playerSrc = ''; $openFileBtn.Visibility = 'Visible'
       }
       else {
-        Set-State (T 'st_gif_failed') '#FF5C5C'
-        $detailText.Text = T 'det_gif_log'; $detailText.Visibility = 'Visible'
+        Set-StateK 'st_gif_failed' '#FF5C5C'
+        Set-DetailK 'det_gif_log'; $detailText.Visibility = 'Visible'
         try { if (Test-Path $gifLog) { Start-Process notepad.exe $gifLog } } catch {}
       }
     }
@@ -2713,9 +2739,9 @@ $clipTimer.Start()
 
 function Start-LocalConvert($file) {
   if (-not (Test-Path $file)) { return }
-  if ($script:queueActive -or ($script:proc -and -not $script:proc.HasExited)) { Set-State (T 'st_busy') '#FFB340'; return }
+  if ($script:queueActive -or ($script:proc -and -not $script:proc.HasExited)) { Set-StateK 'st_busy' '#FFB340'; return }
   $ffmpegExe = Join-Path $root 'ffmpeg.exe'
-  if (-not (Test-Path $ffmpegExe)) { Set-State (T 'err_no_ffmpeg') '#FF5C5C'; return }
+  if (-not (Test-Path $ffmpegExe)) { Set-StateK 'err_no_ffmpeg' '#FF5C5C'; return }
   $folder = $folderBox.Text.Trim(); if (-not $folder) { $folder = $defaultFolder }
   if (-not (Test-Path $folder)) { try { New-Item -ItemType Directory -Path $folder -Force | Out-Null } catch {} }
   $baseName = [System.IO.Path]::GetFileNameWithoutExtension($file)
@@ -2726,9 +2752,9 @@ function Start-LocalConvert($file) {
   $itemTitle.Text = (T 'st_convert_title') -f $baseName
   $itemTitle.Visibility = 'Visible'
   $progress.Visibility = 'Visible'
-  $detailText.Text = T 'det_convert_local'
+  Set-DetailK 'det_convert_local'
   $detailText.Visibility = 'Visible'
-  Set-State (T 'st_converting') '#8F8F97'
+  Set-StateK 'st_converting' '#8F8F97'
 
   if ($idx -eq 4) {
     $out = Join-Path $folder "$baseName.mp3"
@@ -2752,7 +2778,7 @@ function Start-LocalConvert($file) {
     $script:proc = Start-Hidden $ffmpegExe $args $outLog $errLog
   }
   catch {
-    Set-State (T 'err_convert_start') '#FF5C5C'
+    Set-StateK 'err_convert_start' '#FF5C5C'
     $script:singleOp = ''
     Set-Busy $false
   }
@@ -2810,15 +2836,15 @@ $playlistRangeBox.Add_TextChanged({
 $downloadThumbBtn.Add_MouseLeftButtonDown({
     param($s, $e)
     $e.Handled = $true
-    if ($script:queueActive -or $script:proc) { Set-State (T 'st_busy') '#FFB340'; return }
+    if ($script:queueActive -or $script:proc) { Set-StateK 'st_busy' '#FFB340'; return }
     $u = @($urlBox.Text -split "[\r\n\s]+" | ForEach-Object { $_.Trim() } | Where-Object { $_ })[0]
-    if (-not $u) { Set-State (T 'st_need_url') '#FFB340'; return }
+    if (-not $u) { Set-StateK 'st_need_url' '#FFB340'; return }
     $folder = $folderBox.Text.Trim(); if (-not $folder) { $folder = $defaultFolder }
     if (-not (Test-Path $folder)) { try { New-Item -ItemType Directory -Path $folder -Force | Out-Null } catch {} }
-    Set-State (T 'st_thumb_dl') '#8F8F97'
+    Set-StateK 'st_thumb_dl' '#8F8F97'
     $tpl = Join-Path $folder '%(title)s.%(ext)s'
     $argStr = "--write-thumbnail --skip-download --convert-thumbnails png -o `"$tpl`" `"$u`""
-    Start-YtDlp $argStr (T 'st_thumb_dl') 'thumb'
+    Start-YtDlp $argStr 'st_thumb_dl' 'thumb'
   })
 
 $presetDownloads.Add_MouseLeftButtonDown({ param($s, $e) $folderBox.Text = Join-Path ([Environment]::GetFolderPath('UserProfile')) 'Downloads' })
@@ -2866,9 +2892,9 @@ $torrentBtn.Add_Click({
       $dlg = New-Object System.Windows.Forms.OpenFileDialog
       $dlg.Filter = T 'dlg_torrent_filter'
       if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Start-Torrent $dlg.FileName }
-      else { Set-State (T 'st_magnet_hint') '#FFB340' }
+      else { Set-StateK 'st_magnet_hint' '#FFB340' }
     }
-    catch { Set-State (T 'st_magnet_hint2') '#FFB340' }
+    catch { Set-StateK 'st_magnet_hint2' '#FFB340' }
   })
 
 $browseBtn.Add_Click({
@@ -2886,7 +2912,7 @@ $urlBox.Add_TextChanged({
 
 $logBtn.Add_Click({
     if (Test-Path $logFile) { Start-Process notepad.exe $logFile }
-    else { Set-State (T 'st_log_empty') '#FFB340' }
+    else { Set-StateK 'st_log_empty' '#FFB340' }
   })
 
 function Fetch-Preview {
@@ -2937,12 +2963,12 @@ $openFileBtn.Add_Click({
 
 $gifBtn.Add_Click({
     $u = @($urlBox.Text -split "[\r\n\s]+" | ForEach-Object { $_.Trim() } | Where-Object { $_ })[0]
-    if (-not $u) { Set-State (T 'st_gif_need_url') '#FFB340'; return }
+    if (-not $u) { Set-StateK 'st_gif_need_url' '#FFB340'; return }
     if ($u -notmatch '^https?://') {
-      if ($u -match '^[\w-]+\.[\w-]+') { $u = "https://$u" } else { Set-State (T 'st_not_url') '#FFB340'; return }
+      if ($u -match '^[\w-]+\.[\w-]+') { $u = "https://$u" } else { Set-StateK 'st_not_url' '#FFB340'; return }
     }
     $folder = $folderBox.Text.Trim(); if (-not $folder) { $folder = $defaultFolder }
-    if (-not (Test-Path $folder)) { try { New-Item -ItemType Directory -Path $folder -Force | Out-Null } catch { Set-State (T 'err_folder') '#FF5C5C'; return } }
+    if (-not (Test-Path $folder)) { try { New-Item -ItemType Directory -Path $folder -Force | Out-Null } catch { Set-StateK 'err_folder' '#FF5C5C'; return } }
     # cut points in seconds + duration cap: a short GIF is faster and more reliable
     $ss = $(if ($script:trimS) { Parse-Time $script:trimS } else { 0.0 })
     $ee = $(if ($script:trimE) { Parse-Time $script:trimE } else { $ss + 8 })
@@ -2961,9 +2987,9 @@ $gifBtn.Add_Click({
     $bat = "@echo off`r`nchcp 65001 >nul`r`n`"$ytdlp`" --no-playlist --no-mtime $cookiesArg --remote-components ejs:github --download-sections `"*$st-$et`" -f `"$fmtSel`" -S `"res:480`" --ffmpeg-location `"$root`" -o `"$clip`" `"$u`"`r`nif not exist `"$clip`" exit /b 1`r`n`"$ffmpeg`" -y -i `"$clip`" -vf `"$vf`" `"$($script:gifOut)`"`r`n"
     Set-Content -Path $gifBat -Value $bat -Encoding OEM
     Remove-Item $clip -ErrorAction SilentlyContinue
-    Set-State (T 'st_gif_making') '#8F8F97'; $detailText.Text = ''; Set-Busy $true
+    Set-StateK 'st_gif_making' '#8F8F97'; $detailText.Text = ''; Set-Busy $true
     try { $script:gifProc = Start-Hidden $gifBat '' $gifLog ($gifLog + '.err') }
-    catch { Set-Busy $false; Set-State (T 'err_gif_start') '#FF5C5C' }
+    catch { Set-Busy $false; Set-StateK 'err_gif_start' '#FF5C5C' }
   })
 
 function Toggle-Play {
@@ -3018,7 +3044,7 @@ function Open-TorrentStream($url, $name) {
   $script:torUrl = $url
   $script:torVlc = @("$env:ProgramFiles\VideoLAN\VLC\vlc.exe", "${env:ProgramFiles(x86)}\VideoLAN\VLC\vlc.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
   if (-not $script:hasWV2) {
-    if ($script:torVlc) { Start-Process $script:torVlc $url } else { Set-State (T 'err_need_wv2') '#FF5C5C' }
+    if ($script:torVlc) { Start-Process $script:torVlc $url } else { Set-StateK 'err_need_wv2' '#FF5C5C' }
     return
   }
   try {
@@ -3054,19 +3080,19 @@ function Open-TorrentStream($url, $name) {
     $script:torWin = $tw
   }
   catch {
-    if ($script:torVlc) { Start-Process $script:torVlc $url } else { Set-State (T 'err_player') '#FF5C5C' }
+    if ($script:torVlc) { Start-Process $script:torVlc $url } else { Set-StateK 'err_player' '#FF5C5C' }
   }
 }
 
 function Install-TorrentEngine {
   # auto-install the engine on first use (requires Node.js + internet)
   $script:torInstalling = $true
-  Set-State (T 'st_tor_install') '#8F8F97'
+  Set-StateK 'st_tor_install' '#8F8F97'
   $bat = "@echo off`r`ncd /d `"$teDir`"`r`nif not exist package.json call npm init -y`r`nif exist node_modules rmdir /s /q node_modules`r`ncall npm install webtorrent@1 --no-optional --no-audit --no-fund`r`n"
   Set-Content -Path $torInstBat -Value $bat -Encoding OEM
   Remove-Item $torInstLog, ($torInstLog + '.err') -ErrorAction SilentlyContinue
   try { $script:torInstProc = Start-Hidden $torInstBat '' $torInstLog ($torInstLog + '.err') }
-  catch { $script:torInstalling = $false; Set-State (T 'err_no_node') '#FF5C5C'; return }
+  catch { $script:torInstalling = $false; Set-StateK 'err_no_node' '#FF5C5C'; return }
   if ($script:torInstTimer) { try { $script:torInstTimer.Stop() } catch {} }
   $script:torInstTimer = New-Object System.Windows.Threading.DispatcherTimer
   $script:torInstTimer.Interval = [TimeSpan]::FromMilliseconds(1000)
@@ -3075,17 +3101,17 @@ function Install-TorrentEngine {
       $script:torInstTries++
       if (Test-Path $wtDir) {
         $script:torInstTimer.Stop(); $script:torInstalling = $false
-        Set-State (T 'st_tor_installed') '#34C759'
+        Set-StateK 'st_tor_installed' '#34C759'
         if ($script:torPendingId) { Start-Torrent $script:torPendingId }
       }
       elseif (($script:torInstProc -and $script:torInstProc.HasExited) -or ($script:torInstTries -gt 180)) {
         $script:torInstTimer.Stop(); $script:torInstalling = $false
         $e = ''
         try { if (Test-Path ($torInstLog + '.err')) { $e = [System.IO.File]::ReadAllText($torInstLog + '.err') } } catch {}
-        $msg = T 'err_tor_install'
+        $msgKey = 'err_tor_install'
         # npm error text from cmd.exe may be localized (English "not recognized", or the Russian equivalent written as \u escapes)
-        if ("$e" -match 'not recognized|\u043D\u0435 \u044F\u0432\u043B\u044F\u0435\u0442\u0441\u044F') { $msg = T 'err_no_node' }
-        Set-State $msg '#FF5C5C'
+        if ("$e" -match 'not recognized|\u043D\u0435 \u044F\u0432\u043B\u044F\u0435\u0442\u0441\u044F') { $msgKey = 'err_no_node' }
+        Set-StateK $msgKey '#FF5C5C'
       }
     })
   $script:torInstTimer.Start()
@@ -3093,14 +3119,14 @@ function Install-TorrentEngine {
 
 function Start-Torrent($id) {
   $qb = Find-Qbittorrent
-  if (-not $qb) { Set-State (T 'err_no_qb') '#FF5C5C'; return }
+  if (-not $qb) { Set-StateK 'err_no_qb' '#FF5C5C'; return }
   $vlc = Get-VlcPath
-  if (-not $vlc) { Set-State (T 'err_no_vlc') '#FF5C5C'; return }
+  if (-not $vlc) { Set-StateK 'err_no_vlc' '#FF5C5C'; return }
   Stop-Torrent
   $arg = ''
   if ($id -match '^magnet:') { $arg = $id }
   elseif (Test-Path $id) { $arg = $id }
-  else { Set-State (T 'st_not_torrent') '#FFB340'; return }
+  else { Set-StateK 'st_not_torrent' '#FFB340'; return }
   # dedicated cache folder for this session (inside the app folder — visible and easy to clean)
   $script:qbSave = Join-Path $root ('torrent-cache\' + (Get-Date -Format 'HHmmss'))
   try { New-Item -ItemType Directory -Force -Path $script:qbSave | Out-Null } catch {}
@@ -3109,12 +3135,12 @@ function Start-Torrent($id) {
   $sp = $script:qbSave
   $script:torStart = Get-Date
   $script:qbDirs = @($sp, (Get-QbDefaultSave)) | Where-Object { $_ } | Select-Object -Unique
-  Set-State (T 'st_qb_adding') '#8F8F97'
+  Set-StateK 'st_qb_adding' '#8F8F97'
   try {
     Start-Process -FilePath $qb -ArgumentList @("--save-path=$sp", "--sequential", "--skip-dialog=true", $arg)
   }
-  catch { Set-State (T 'err_qb_start') '#FF5C5C'; return }
-  Set-State (T 'st_tor_buffering') '#8F8F97'
+  catch { Set-StateK 'err_qb_start' '#FF5C5C'; return }
+  Set-StateK 'st_tor_buffering' '#8F8F97'
   if ($script:torWait) { try { $script:torWait.Stop() } catch {} }
   $script:torWait = New-Object System.Windows.Threading.DispatcherTimer
   $script:torWait.Interval = [TimeSpan]::FromMilliseconds(1500)
@@ -3128,13 +3154,13 @@ function Start-Torrent($id) {
         if ($vid -and $vid.Length -gt 5MB -and -not $script:torOpened) {
           $script:torOpened = $true
           $script:torWait.Stop()
-          Set-State (T 'st_tor_playing') '#34C759'
+          Set-StateK 'st_tor_playing' '#34C759'
           try { Start-Process -FilePath $script:torVlcPath -ArgumentList @('--file-caching=8000', $vid.FullName) }
           catch { try { Start-Process $script:torVlcPath $vid.FullName } catch {} }
         }
         elseif ($script:torTries -gt 100) {
           $script:torWait.Stop()
-          Set-State (T 'err_tor_nodata') '#FF5C5C'
+          Set-StateK 'err_tor_nodata' '#FF5C5C'
         }
       }
       catch {}
@@ -3165,7 +3191,7 @@ function Open-VideoWV2($id) {
     $script:wv.Source = New-Object System.Uri ("https://www.youtube.com/watch?v=$($id)")
     $script:wvWin.Show(); $script:wvWin.Activate()
   }
-  catch { Set-State (T 'err_wv2') '#FF5C5C' }
+  catch { Set-StateK 'err_wv2' '#FF5C5C' }
 }
 function Open-Video {
   $vurl = $(if ($script:lastPreviewUrl) { $script:lastPreviewUrl } else { (@($urlBox.Text -split "[\r\n\s]+" | Where-Object { $_ }))[0] })
@@ -3178,11 +3204,11 @@ function Open-Video {
   }
   $hasFile = ($script:lastFile -and (Test-Path $script:lastFile))
   if ($id -and -not $hasFile) {
-    Set-State (T 'st_need_wv2') '#FFB340'
+    Set-StateK 'st_need_wv2' '#FFB340'
     return
   }
   $src = $(if ($hasFile) { $script:lastFile } elseif ($script:streamUrl) { $script:streamUrl } else { '' })
-  if (-not $src) { Set-State (T 'st_need_link') '#FFB340'; return }
+  if (-not $src) { Set-StateK 'st_need_link' '#FFB340'; return }
   try { $script:mp.Pause() } catch {}
   $script:playing = $false; $playGlyph.Text = [char]0xE768
   try {
@@ -3250,7 +3276,7 @@ function Open-Video {
     $script:vplay.Text = [char]0xE769
     $script:vidWin.Show(); $script:vidWin.Activate()
   }
-  catch { Set-State (T 'err_video') '#FF5C5C' }
+  catch { Set-StateK 'err_video' '#FF5C5C' }
 }
 $btnPlay.Add_MouseLeftButtonDown({ param($s, $e) $e.Handled = $true; Open-Video })
 $btnRew.Add_MouseLeftButtonDown({ param($s, $e) $e.Handled = $true; if ($script:playerSrc) { try { $script:mp.Position = $script:mp.Position.Subtract([TimeSpan]::FromSeconds(10)) } catch {} } })
@@ -3377,7 +3403,7 @@ $searchGo.Add_Click({ Run-Search })
 $searchBox.Add_KeyDown({ param($s, $e) if ($e.Key -eq 'Return') { Run-Search; $e.Handled = $true } })
 
 function Start-Download {
-  if ($script:queueActive -or $script:proc) { Set-State (T 'st_busy') '#FFB340'; return }
+  if ($script:queueActive -or $script:proc) { Set-StateK 'st_busy' '#FFB340'; return }
   $urls = @($urlBox.Text -split "[\r\n\s]+" |
     ForEach-Object { $_.Trim() } |
     Where-Object { $_ } |
@@ -3387,12 +3413,12 @@ function Start-Download {
       else { $null }
     } |
     Where-Object { $_ })
-  if ($urls.Count -eq 0) { Set-State (T 'st_paste_link') '#FF5C5C'; return }
+  if ($urls.Count -eq 0) { Set-StateK 'st_paste_link' '#FF5C5C'; return }
   $folder = $folderBox.Text.Trim()
   if (-not $folder) { $folder = $defaultFolder; $folderBox.Text = $folder }
   if (-not (Test-Path $folder)) {
     try { New-Item -ItemType Directory -Path $folder -Force | Out-Null }
-    catch { Set-State (T 'err_folder') '#FF5C5C'; return }
+    catch { Set-StateK 'err_folder' '#FF5C5C'; return }
   }
 
   # cookies check (once)
@@ -3403,7 +3429,7 @@ function Start-Download {
       $alt = Join-Path $root 'cookies.txt.txt'
       if (Test-Path $alt) { Move-Item -Path $alt -Destination $cookiesFile -Force }
     }
-    if (-not (Test-Path $cookiesFile)) { Set-State (T 'err_no_cookies') '#FF5C5C'; return }
+    if (-not (Test-Path $cookiesFile)) { Set-StateK 'err_no_cookies' '#FF5C5C'; return }
   }
 
   Save-Settings
@@ -3431,7 +3457,7 @@ function Start-Download {
   $progress.Visibility = 'Visible'
   $detailText.Visibility = 'Visible'
   Reset-Progress
-  Set-State (T 'st_preparing') '#8F8F97'
+  Set-StateK 'st_preparing' '#8F8F97'
   Set-Busy $true
   $script:queueActive = $true
   $maxPar = [math]::Min((Get-Sel $parallelPanel) + 1, $script:queueTotal)
@@ -3450,7 +3476,7 @@ $cancelBtn.Add_Click({
     }
   })
 
-$updateBtn.Add_Click({ Start-YtDlp '-U' (T 'st_updating') 'update' })
+$updateBtn.Add_Click({ Start-YtDlp '-U' 'st_updating' 'update' })
 
 $titleBar.Add_MouseLeftButtonDown({ try { $window.DragMove() } catch {} })
 $dotClose.Add_MouseLeftButtonDown({ param($s, $e) $e.Handled = $true; $window.Close() })
