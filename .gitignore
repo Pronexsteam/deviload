@@ -1,0 +1,33 @@
+# binaries: downloaded by setup scripts, never committed (ffmpeg is GPL, WebView2 is Microsoft-licensed)
+*.exe
+*.dll
+*.exe.old
+*.rar
+*.zip
+# personal data
+cookies.txt
+*_cookies.txt
+cookies-backup.txt
+history.json
+ui-settings.json
+*.log
+*.tmp
+fix-log.txt
+# build output
+Deviload-portable/
+YT-Downloader-portable/
+# torrent engine (installed by setup-torrent.ps1)
+torrent-engine/node_modules/
+torrent-engine/package-lock.json
+torrent-cache/
+# media
+*.mp3
+*.mp4
+*.webm
+*.m4a
+*.jpg
+*.jpeg
+*.webp
+# scratch
+_old/
+.work/
