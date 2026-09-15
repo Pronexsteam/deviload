@@ -1,5 +1,7 @@
 # Deviload
 
+[![check](https://github.com/Pronexsteam/deviload/actions/workflows/check.yml/badge.svg)](https://github.com/Pronexsteam/deviload/actions/workflows/check.yml)
+
 A small Windows desktop front-end for [yt-dlp](https://github.com/yt-dlp/yt-dlp). Paste a link, pick a quality, press Download. Playlists, chapters, trimming, GIFs, MP3/FLAC extraction, subtitles, SponsorBlock, a one-click YouTube sign-in — in one portable folder, no installer. Interface in English and Russian.
 
 ![Deviload main window](docs/img/main-en.png)
@@ -28,6 +30,8 @@ setup.bat            # downloads yt-dlp, ffmpeg, deno, WebView2 SDK DLLs next to
 Deviload.vbs         # run the script (no console window)
 build.bat            # ps2exe -> Deviload.exe, Deviload-portable\ and Deviload-portable.zip
 ```
+
+Releases are built by GitHub Actions: pushing a tag `vX.Y.Z` runs `setup.ps1` + `build.ps1` on a Windows runner and attaches `Deviload-portable.zip` to the release.
 
 `setup-torrent.bat` installs the optional torrent engine (needs Node.js).
 

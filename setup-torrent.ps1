@@ -14,7 +14,7 @@ if (-not $nv) {
     Write-Host 'ERROR: Node.js not found.'
     Write-Host 'Install Node.js (LTS) from https://nodejs.org/ , reboot and run this again.'
     Write-Host ''
-    pause; exit 1
+    if (-not $env:CI) { pause }; exit 1
 }
 Write-Host "Node.js: $nv"
 
@@ -40,4 +40,4 @@ if (Test-Path (Join-Path $te 'node_modules\webtorrent')) {
     Write-Host 'ERROR: webtorrent did not install. Check your internet connection and retry.'
 }
 Write-Host ''
-pause
+if (-not $env:CI) { pause }

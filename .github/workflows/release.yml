@@ -1,0 +1,33 @@
+name: release
+
+# Push a tag like v1.1.0 → this job downloads the dependencies (setup.ps1), builds the exe and the
+# portable zip (build.ps1) and attaches the zip to the GitHub release for that tag.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  portable:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      CI: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download dependencies (yt-dlp, ffmpeg, deno, WebView2 SDK)
+        shell: powershell
+        run: .\setup.ps1
+      - name: Build exe and portable zip
+        shell: powershell
+        run: |
+          Install-Module ps2exe -Scope CurrentUser -Force -AllowClobber
+          .\build.ps1
+          "zip: {0:N1} MB" -f ((Get-Item .\Deviload-portable.zip).Length / 1MB)
+      - name: Attach the zip to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Deviload-portable.zip
+          generate_release_notes: false

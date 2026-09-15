@@ -1,4 +1,4 @@
-# build.ps1 - build Deviload to .exe and portable folder
+﻿# build.ps1 - build Deviload to .exe and portable folder
 $ErrorActionPreference = 'Stop'
 $dir = $PSScriptRoot
 
@@ -42,7 +42,7 @@ Invoke-ps2exe @params
 
 if (-not (Test-Path $exe)) {
     Write-Host "ERROR: exe build failed."
-    pause
+    if (-not $env:CI) { pause }
     exit 1
 }
 Write-Host "Built exe: $exe"

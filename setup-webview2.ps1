@@ -24,7 +24,7 @@ function Find-Dll($name) {
 }
 $core = Find-Dll 'Microsoft.Web.WebView2.Core.dll'
 $wpf  = Find-Dll 'Microsoft.Web.WebView2.Wpf.dll'
-if (-not $core -or -not $wpf) { Write-Host 'ERROR: managed DLLs not found in the package.'; pause; exit 1 }
+if (-not $core -or -not $wpf) { Write-Host 'ERROR: managed DLLs not found in the package.'; if (-not $env:CI) { pause }; exit 1 }
 Copy-Item $core.FullName $dir -Force
 Copy-Item $wpf.FullName $dir -Force
 Write-Host ("  Core: " + $core.FullName)
@@ -52,4 +52,4 @@ if (-not $rtOk) {
 }
 Write-Host 'Done. Restart Deviload — videos will open in HD via YouTube.'
 Write-Host ''
-pause
+if (-not $env:CI) { pause }

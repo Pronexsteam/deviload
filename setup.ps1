@@ -96,4 +96,4 @@ else { Write-Host '  WebView2 not installed (optional)' }
 Write-Host ''
 Write-Host 'Done. Launch Deviload.bat (or Deviload.exe).'
 Write-Host ''
-pause
+if (-not $env:CI) { pause }
