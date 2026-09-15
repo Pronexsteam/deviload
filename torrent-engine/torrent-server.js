@@ -1,8 +1,8 @@
 'use strict';
-// Стримит видео из торрента по HTTP (последовательно, в temp — без хранения полного файла).
-// Запуск: node torrent-server.js <argPath> <port>
-//   <argPath> = путь к .torrent ЛИБО путь к .txt с magnet-ссылкой внутри
-// В stdout печатает: "STREAM <url>" и "NAME <имя файла>".
+// Streams a torrent's video over HTTP (sequential download into %TEMP%, the full file is not kept).
+// Run: node torrent-server.js <argPath> <port>
+//   <argPath> = path to a .torrent OR path to a .txt that contains a magnet link
+// Prints to stdout: "STREAM <url>" and "NAME <file name>".
 const WebTorrent = require('webtorrent');
 const fs = require('fs');
 const os = require('os');
@@ -25,14 +25,14 @@ try { fs.mkdirSync(tmp, { recursive: true }); } catch (e) {}
 const VIDEO_EXT = ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.m4v', '.flv', '.wmv', '.ts', '.m2ts', '.mpg', '.mpeg'];
 
 let serving = false;
-// не падаем на некритичных ошибках — иначе HTTP-сервер умирает и плеер ловит "отказано в подключении"
+// do not crash on non-critical errors — otherwise the HTTP server dies and the player gets "connection refused"
 process.on('uncaughtException', e => { console.error('WARN uncaught: ' + (e && e.message ? e.message : e)); });
 process.on('unhandledRejection', e => { console.error('WARN rejection: ' + e); });
 
 const client = new WebTorrent();
 client.on('error', err => {
   const m = (err && err.message) ? err.message : ('' + err);
-  if (serving) { console.error('WARN client: ' + m); return; } // уже стримим — не валимся
+  if (serving) { console.error('WARN client: ' + m); return; } // already streaming — keep going
   console.error('ERR ' + m);
   process.exit(1);
 });
@@ -59,8 +59,8 @@ client.add(id, { path: tmp }, torrent => {
   } catch (e) { console.error('ERR server: ' + e.message); process.exit(1); }
 });
 
-// таймаут только пока НЕТ метаданных/стрима (нет пиров)
+// timeout applies only while there is NO metadata/stream yet (no peers)
 setTimeout(() => { if (!serving) { console.error('ERR timeout (no peers?)'); process.exit(1); } }, 150000);
 
-// держим процесс живым, пока приложение само его не закроет
+// keep the process alive until the app closes it
 setInterval(() => {}, 1 << 30);

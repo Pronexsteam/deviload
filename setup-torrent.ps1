@@ -1,18 +1,18 @@
-# setup-torrent.ps1 — ставит движок WebTorrent для просмотра торрентов. Нужен Node.js + интернет.
-# Запуск: дабл-клик по "setup-torrent.bat".
+﻿# setup-torrent.ps1 — installs the WebTorrent engine used for torrent playback. Requires Node.js + internet.
+# Run: double-click "setup-torrent.bat".
 $ErrorActionPreference = 'Stop'
 $dir = $PSScriptRoot
 $te = Join-Path $dir 'torrent-engine'
 
-Write-Host '=== Установка движка торрентов (WebTorrent) ==='
+Write-Host '=== Torrent engine setup (WebTorrent) ==='
 
-# проверка Node.js
+# Node.js check
 $nv = $null
 try { $nv = (& node --version) 2>$null } catch {}
 if (-not $nv) {
     Write-Host ''
-    Write-Host 'ОШИБКА: Node.js не найден.'
-    Write-Host 'Поставь Node.js (LTS) с https://nodejs.org/ , перезагрузись и запусти заново.'
+    Write-Host 'ERROR: Node.js not found.'
+    Write-Host 'Install Node.js (LTS) from https://nodejs.org/ , reboot and run this again.'
     Write-Host ''
     pause; exit 1
 }
@@ -22,10 +22,10 @@ New-Item -ItemType Directory -Force -Path $te | Out-Null
 Push-Location $te
 try {
     if (-not (Test-Path (Join-Path $te 'package.json'))) {
-        Write-Host 'Создаю package.json...'
+        Write-Host 'Creating package.json...'
         & npm init -y | Out-Null
     }
-    Write-Host 'Ставлю webtorrent (нужен интернет, может занять минуту)...'
+    Write-Host 'Installing webtorrent (internet required, may take a minute)...'
     & npm install webtorrent@1 --no-optional --no-audit --no-fund
 } finally {
     Pop-Location
@@ -33,11 +33,11 @@ try {
 
 if (Test-Path (Join-Path $te 'node_modules\webtorrent')) {
     Write-Host ''
-    Write-Host 'Готово! WebTorrent установлен.'
-    Write-Host 'Перезапусти YT Downloader — кнопка «Смотреть торрент» заработает.'
+    Write-Host 'Done! WebTorrent installed.'
+    Write-Host 'Restart Deviload — the "Watch torrent" button will work.'
 } else {
     Write-Host ''
-    Write-Host 'ОШИБКА: webtorrent не установился. Проверь интернет и повтори.'
+    Write-Host 'ERROR: webtorrent did not install. Check your internet connection and retry.'
 }
 Write-Host ''
 pause

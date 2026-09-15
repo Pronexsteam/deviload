@@ -1,5 +1,5 @@
-﻿# Deviload — Dark glassmorphism UI (WPF) + Devil Mascot
-# Запускается через "Deviload.bat"
+﻿# Deviload — WPF front-end for yt-dlp (Windows PowerShell 5.1, single file)
+# Launched via "Deviload.bat" (or compiled to Deviload.exe by build.ps1)
 
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
@@ -7,7 +7,7 @@ Add-Type -AssemblyName WindowsBase
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-# настоящий acrylic-блюр окна (Windows 10 1803+/11) + фоновый запуск процессов без cmd.exe искажений
+# Real acrylic window blur (Windows 10 1803+/11) + hidden process launcher that avoids cmd.exe argument mangling
 if (-not ('Win32.Acrylic' -as [type])) {
   Add-Type @'
 using System;
@@ -41,6 +41,12 @@ namespace Win32 {
       int round = 2;
       try { DwmSetWindowAttribute(hwnd, 33, ref round, 4); } catch {}
     }
+  }
+
+  public class AppId {
+    // Own taskbar identity: without it the window is grouped under powershell.exe (pinned PowerShell icon instead of ours)
+    [DllImport("shell32.dll")]
+    public static extern int SetCurrentProcessExplicitAppUserModelID([MarshalAs(UnmanagedType.LPWStr)] string id);
   }
 
   public class ProcessRunner {
@@ -117,6 +123,8 @@ namespace Win32 {
 }
 '@
 }
+# must run before the window exists so the taskbar shows the app icon (not the PowerShell host icon)
+try { [Win32.AppId]::SetCurrentProcessExplicitAppUserModelID('Deviload.App') | Out-Null } catch {}
 
 $env:PYTHONUTF8 = '1'
 $env:PYTHONIOENCODING = 'utf-8'
@@ -127,7 +135,228 @@ if (-not $root) { try { $root = Split-Path -Parent ([System.Diagnostics.Process]
 if (-not $root) { $root = (Get-Location).Path }
 $env:PATH = "$root;$env:PATH"
 
-# WebView2 (HD-просмотр) — загружаем DLL, если установлены setup-webview2.bat
+# ---------------- UI strings (RU / EN) ----------------
+# Every user-visible string lives here. T 'key' resolves in the current language,
+# falls back to English, then to the key itself. Apply-Language re-applies all texts at runtime.
+$script:L = @{
+  ru = @{
+    # window / title bar
+    tip_ytsearch = 'Поиск на YouTube'; tip_history = 'История скачиваний'; tip_search = 'Поиск YouTube'; tip_settings = 'Настройки'
+    tip_min = 'Свернуть'; tip_close = 'Закрыть'; ttl_error = 'Ошибка'
+    err_no_ytdlp = "Не найден yt-dlp.exe рядом со скриптом:`n{0}"
+    # main form
+    lbl_links = 'Ссылки — по одной в строке (можно несколько)'
+    hint_url = 'Вставь ссылку на видео…  можно несколько, по одной в строке'
+    btn_paste = 'Вставить'; btn_clear = 'Очистить'
+    btn_torrent = 'Смотреть торрент  ·  magnet или .torrent (через qBittorrent → VLC)'
+    lbl_quality = 'Качество'; lbl_audio = 'Аудиодорожка / Дубляж (в ролике несколько озвучек)'
+    lbl_trim = 'Обрезка — перетащи маркеры (появится после превью)'
+    trim_all = 'весь ролик'; trim_all_after = 'весь ролик (появится после превью)'
+    trim_start = 'начало'; trim_end = 'конец'; trim_range = 'с {0} по {1}'
+    trim_chapters = 'скачаются выбранные главы ({0}) отдельными файлами'
+    btn_chapters = 'Главы'; btn_chapters_n = 'Главы ({0})'; btn_chapters_sel = 'Главы: выбрано {0}'
+    btn_gif = 'GIF из выделенного'
+    tg_playlist = 'Плейлист'; hint_range = 'Диапазон: 1-10, 15'
+    tg_split = 'Нарезать по главам'; tip_split = 'Автоматически разрезать видео/альбом по главам/таймкодам'
+    lbl_folder = 'Папка сохранения'
+    preset_dl = 'Загрузки'; preset_music = 'Музыка'; preset_desktop = 'Рабочий стол'
+    tip_preset_dl = 'Папка Загрузки'; tip_preset_music = 'Папка Музыка'; tip_preset_desktop = 'Рабочий стол'
+    btn_browse = 'Обзор'; btn_download = 'Скачать'; btn_cancel = 'Отмена'; btn_log = 'Лог'; btn_folder = 'Папка'; btn_update = 'Обновить'
+    st_ready = 'Готов к работе'; btn_clear_queue = 'Очистить очередь'; btn_open_file = 'Открыть файл'
+    # preview card
+    tip_watch = 'Смотреть видео'; tip_thumb = 'Скачать HD-обложку'
+    pv_loading = 'Загрузка превью…'; pv_untitled = 'Без названия'; pv_failed = 'Не удалось получить превью'
+    audio_original = 'Оригинал'; audio_ru = '🇷🇺 Русский дубляж'; audio_all = '🌐 Все дорожки (Multi-Audio)'
+    # search overlay
+    ttl_search = 'Поиск на YouTube'; btn_find = 'Найти'; btn_close = 'Закрыть'
+    st_searching = 'Поиск…'; err_search_start = 'Не удалось запустить поиск'; none_found = 'Ничего не найдено'
+    # settings overlay
+    ttl_settings = 'Настройки'; btn_done = 'Готово'
+    set_parallel = 'Параллельные загрузки'; set_rate = 'Лимит скорости'; set_codec = 'Видеокодек'
+    set_archive = 'Пропускать уже скачанное (архив загрузок)'; set_clip = 'Автодобавление ссылок из буфера обмена'
+    set_cookies = 'Cookies из браузера'; set_sb = 'SponsorBlock (YouTube)'; set_sb_tg = 'Вырезать рекламу и спонсорские интеграции'
+    set_tagger = 'Smart Music Tagger (MP3 / FLAC)'; set_tagger_tg = 'Авто-очистка названий треков от мусора и запись тегов'
+    set_subs = 'Субтитры'; set_subs_tg = 'Скачивать и вшивать субтитры'
+    set_theme = 'Тема'; set_opacity = 'Прозрачность окна'
+    lang_ru = 'Русский интерфейс'; lang_en = 'English interface'
+    # option pills
+    q_max = 'Максимальное (4K/2K/1080p)'; q_1080 = '1080p (Full HD)'; q_720 = '720p (HD)'; q_480 = '480p'
+    q_mp3 = 'MP3 320 kbps (Аудио)'; q_flac = 'WAV / FLAC (Без сжатия)'
+    c_none = 'Нет'; c_file = 'Файл cookies.txt'
+    s_ru = 'Рус'; s_en = 'Англ'; s_both = 'Рус+Англ'
+    t_dark = 'Тёмная'; t_light = 'Светлая'
+    rate_none = 'Без лимита'; rate_fmt = '{0} МБ/с'
+    codec_auto = 'Авто'; codec_h264 = 'H.264 (совместимость)'; codec_av1 = 'AV1/VP9 (меньше вес)'
+    # history overlay
+    ttl_history = 'История скачиваний'; btn_clear_all = 'Очистить всё'; hint_hist_search = 'Поиск по истории…'
+    hist_empty = 'История пока пуста'; btn_again = 'Скачать снова'; btn_open = 'Открыть'
+    # chapters overlay
+    ttl_chapters = 'Главы ролика'; btn_all = 'Все'; btn_none = 'Сброс'; btn_apply = 'Применить'
+    hint_chapters = 'Отметь главы — скачаются отдельными файлами'
+    # units
+    unit_gb = 'ГБ'; unit_mb = 'МБ'; unit_kb = 'КБ'
+    # download states
+    fb_video = 'Видео'
+    st_downloading = 'Скачивание'; st_convert_mp3 = 'Конвертация в MP3'; st_merging = 'Объединение видео и звука'
+    err_ytdlp_start = 'Не удалось запустить yt-dlp'
+    q_done = 'Готово'; q_error = 'Ошибка'; q_wait = 'Ожидание'; q_processing = 'Обработка'; q_cancelled = 'Отменено'
+    st_parallel = 'Параллельно: {0}'; st_queued = ' · в очереди: {0}'; st_dl_progress = 'Скачивание · готово {0} из {1}'
+    st_cancelled = 'Отменено'; st_done = '✓ Готово'
+    det_file_saved = 'Файл сохранён в выбранную папку'; det_files_saved = 'Файлы сохранены в выбранную папку'
+    ntf_convert_done = 'Конвертация завершена'
+    st_convert_err = 'Ошибка конвертации (код {0}) — смотри лог'; st_err_code = 'Ошибка (код {0}) — смотри лог'
+    st_dl_all = 'Скачано: {0} из {1}'; st_dl_partial = 'Готово: {0} из {1}, ошибок {2}'; ntf_done_n = 'Готово: {0} из {1}'
+    st_dl_cookies_stale = 'Скачано — cookies устарели, обнови файл'; st_downloaded = 'Скачано!'
+    st_cookie_browser_fail = 'Браузер не отдал cookies — нужен файл cookies.txt'
+    det_cookie_browser_fail = 'Chrome/Edge шифруют cookies. Экспортируй расширением «Get cookies.txt LOCALLY» и выбери «Файл cookies.txt»'
+    st_dl_failed = 'Не удалось скачать'; det_see_log = 'Подробности — кнопка «Лог»'
+    st_busy = 'Занят — дождись окончания текущей задачи'; st_preparing = 'Подготовка…'
+    st_paste_link = 'Вставь ссылку!'; err_no_cookies = 'Нет файла cookies.txt рядом с yt-dlp.exe'; err_folder = 'Папка недоступна'
+    st_log_empty = 'Лог пока пуст'; st_updating = 'Обновление yt-dlp...'
+    # GIF
+    st_gif_done = 'GIF готов!'; det_gif_saved = 'GIF сохранён в выбранную папку'
+    st_gif_failed = 'Не удалось сделать GIF'; det_gif_log = 'Подробности — в открытом логе'
+    st_gif_making = 'Создаю GIF...'; err_gif_start = 'Не удалось запустить GIF'
+    st_gif_need_url = 'Вставь ссылку для GIF'; st_not_url = 'Это не похоже на ссылку'
+    # local convert
+    err_no_ffmpeg = 'ffmpeg.exe не найден'; st_convert_title = 'Конвертация: {0}'
+    det_convert_local = 'Обработка локального файла через FFmpeg…'; st_converting = 'Конвертация файла…'
+    err_convert_start = 'Ошибка запуска конвертера'
+    # thumbnail
+    st_need_url = 'Вставь ссылку на ролик'; st_thumb_dl = 'Скачивание HD-обложки…'
+    # torrent
+    dlg_torrent_filter = 'Торрент (*.torrent)|*.torrent|Все файлы (*.*)|*.*'
+    st_magnet_hint = 'Вставь magnet-ссылку в поле или выбери .torrent'; st_magnet_hint2 = 'Вставь magnet-ссылку в поле'
+    err_need_wv2 = 'Нужен WebView2 (setup-webview2.bat) или VLC'; ttl_torrent = 'Торрент'
+    btn_vlc = 'Открыть в VLC'; btn_vlc_none = 'VLC не найден'; hint_vlc = 'Чёрный экран (mkv/x265)? Жми «Открыть в VLC».'
+    err_player = 'Не удалось открыть плеер'
+    st_tor_install = 'Ставлю движок торрентов (один раз, ~минута)…'; err_no_node = 'Node.js не найден — поставь с nodejs.org'
+    st_tor_installed = 'Движок установлен — подключаюсь…'; err_tor_install = 'Не удалось поставить движок (нужен Node.js + интернет)'
+    err_no_qb = 'qBittorrent не найден — поставь его'; err_no_vlc = 'VLC не найден — поставь VLC'
+    st_not_torrent = 'Это не magnet и не .torrent'; st_qb_adding = 'Добавляю в qBittorrent (последовательно)…'
+    err_qb_start = 'Не удалось запустить qBittorrent'; st_tor_buffering = 'Качаю начало… VLC откроется через пару секунд'
+    st_tor_playing = 'Открываю VLC — смотри (качается на лету)'; err_tor_nodata = 'Долго нет данных — нет пиров или торрент приватный'
+    # video window
+    ttl_video = 'Видео'; err_wv2 = 'WebView2 не запустился'
+    st_need_wv2 = 'Для просмотра до скачивания запусти setup-webview2.bat'; st_need_link = 'Сначала вставь ссылку на видео'
+    vid_failed = 'Видео — не удалось воспроизвести (скачай файл)'; tip_fullscreen = 'Во весь экран'; err_video = 'Не удалось открыть видео'
+    # tray
+    tray_open = 'Открыть'; tray_exit = 'Выход'
+  }
+  en = @{
+    # window / title bar
+    tip_ytsearch = 'Search YouTube'; tip_history = 'Download history'; tip_search = 'YouTube search'; tip_settings = 'Settings'
+    tip_min = 'Minimize'; tip_close = 'Close'; ttl_error = 'Error'
+    err_no_ytdlp = "yt-dlp.exe not found next to the script:`n{0}"
+    # main form
+    lbl_links = 'Links — one per line (several allowed)'
+    hint_url = 'Paste a video link…  several allowed, one per line'
+    btn_paste = 'Paste'; btn_clear = 'Clear'
+    btn_torrent = 'Watch torrent  ·  magnet or .torrent (via qBittorrent → VLC)'
+    lbl_quality = 'Quality'; lbl_audio = 'Audio track / dub (this video has several)'
+    lbl_trim = 'Trim — drag the handles (available after preview)'
+    trim_all = 'whole video'; trim_all_after = 'whole video (available after preview)'
+    trim_start = 'start'; trim_end = 'end'; trim_range = 'from {0} to {1}'
+    trim_chapters = 'selected chapters ({0}) will be saved as separate files'
+    btn_chapters = 'Chapters'; btn_chapters_n = 'Chapters ({0})'; btn_chapters_sel = 'Chapters: {0} selected'
+    btn_gif = 'GIF from selection'
+    tg_playlist = 'Playlist'; hint_range = 'Range: 1-10, 15'
+    tg_split = 'Split by chapters'; tip_split = 'Automatically split the video/album by chapters/timestamps'
+    lbl_folder = 'Save folder'
+    preset_dl = 'Downloads'; preset_music = 'Music'; preset_desktop = 'Desktop'
+    tip_preset_dl = 'Downloads folder'; tip_preset_music = 'Music folder'; tip_preset_desktop = 'Desktop'
+    btn_browse = 'Browse'; btn_download = 'Download'; btn_cancel = 'Cancel'; btn_log = 'Log'; btn_folder = 'Folder'; btn_update = 'Update'
+    st_ready = 'Ready'; btn_clear_queue = 'Clear queue'; btn_open_file = 'Open file'
+    # preview card
+    tip_watch = 'Watch video'; tip_thumb = 'Download HD thumbnail'
+    pv_loading = 'Loading preview…'; pv_untitled = 'Untitled'; pv_failed = 'Could not fetch preview'
+    audio_original = 'Original'; audio_ru = '🇷🇺 Russian dub'; audio_all = '🌐 All tracks (multi-audio)'
+    # search overlay
+    ttl_search = 'Search YouTube'; btn_find = 'Search'; btn_close = 'Close'
+    st_searching = 'Searching…'; err_search_start = 'Could not start search'; none_found = 'Nothing found'
+    # settings overlay
+    ttl_settings = 'Settings'; btn_done = 'Done'
+    set_parallel = 'Parallel downloads'; set_rate = 'Speed limit'; set_codec = 'Video codec'
+    set_archive = 'Skip already downloaded (download archive)'; set_clip = 'Auto-add links from clipboard'
+    set_cookies = 'Cookies from browser'; set_sb = 'SponsorBlock (YouTube)'; set_sb_tg = 'Cut ads and sponsor segments'
+    set_tagger = 'Smart Music Tagger (MP3 / FLAC)'; set_tagger_tg = 'Auto-clean track titles and write tags'
+    set_subs = 'Subtitles'; set_subs_tg = 'Download and embed subtitles'
+    set_theme = 'Theme'; set_opacity = 'Window transparency'
+    lang_ru = 'Russian interface'; lang_en = 'English interface'
+    # option pills
+    q_max = 'Best (4K/2K/1080p)'; q_1080 = '1080p (Full HD)'; q_720 = '720p (HD)'; q_480 = '480p'
+    q_mp3 = 'MP3 320 kbps (Audio)'; q_flac = 'WAV / FLAC (Lossless)'
+    c_none = 'None'; c_file = 'cookies.txt file'
+    s_ru = 'Russian'; s_en = 'English'; s_both = 'Russian + English'
+    t_dark = 'Dark'; t_light = 'Light'
+    rate_none = 'No limit'; rate_fmt = '{0} MB/s'
+    codec_auto = 'Auto'; codec_h264 = 'H.264 (compatibility)'; codec_av1 = 'AV1/VP9 (smaller files)'
+    # history overlay
+    ttl_history = 'Download history'; btn_clear_all = 'Clear all'; hint_hist_search = 'Search history…'
+    hist_empty = 'History is empty'; btn_again = 'Download again'; btn_open = 'Open'
+    # chapters overlay
+    ttl_chapters = 'Video chapters'; btn_all = 'All'; btn_none = 'Reset'; btn_apply = 'Apply'
+    hint_chapters = 'Tick chapters — they will be saved as separate files'
+    # units
+    unit_gb = 'GB'; unit_mb = 'MB'; unit_kb = 'KB'
+    # download states
+    fb_video = 'Video'
+    st_downloading = 'Downloading'; st_convert_mp3 = 'Converting to MP3'; st_merging = 'Merging video and audio'
+    err_ytdlp_start = 'Could not start yt-dlp'
+    q_done = 'Done'; q_error = 'Error'; q_wait = 'Waiting'; q_processing = 'Processing'; q_cancelled = 'Cancelled'
+    st_parallel = 'Parallel: {0}'; st_queued = ' · queued: {0}'; st_dl_progress = 'Downloading · {0} of {1} done'
+    st_cancelled = 'Cancelled'; st_done = '✓ Done'
+    det_file_saved = 'File saved to the selected folder'; det_files_saved = 'Files saved to the selected folder'
+    ntf_convert_done = 'Conversion finished'
+    st_convert_err = 'Conversion error (code {0}) — see log'; st_err_code = 'Error (code {0}) — see log'
+    st_dl_all = 'Downloaded: {0} of {1}'; st_dl_partial = 'Done: {0} of {1}, {2} failed'; ntf_done_n = 'Done: {0} of {1}'
+    st_dl_cookies_stale = 'Downloaded — cookies are stale, refresh the file'; st_downloaded = 'Downloaded!'
+    st_cookie_browser_fail = 'Browser did not provide cookies — a cookies.txt file is needed'
+    det_cookie_browser_fail = 'Chrome/Edge encrypt cookies. Export them with the "Get cookies.txt LOCALLY" extension and pick "cookies.txt file"'
+    st_dl_failed = 'Download failed'; det_see_log = 'Details — the "Log" button'
+    st_busy = 'Busy — wait for the current task to finish'; st_preparing = 'Preparing…'
+    st_paste_link = 'Paste a link!'; err_no_cookies = 'No cookies.txt next to yt-dlp.exe'; err_folder = 'Folder is not accessible'
+    st_log_empty = 'Log is empty'; st_updating = 'Updating yt-dlp...'
+    # GIF
+    st_gif_done = 'GIF ready!'; det_gif_saved = 'GIF saved to the selected folder'
+    st_gif_failed = 'Could not create GIF'; det_gif_log = 'Details — in the opened log'
+    st_gif_making = 'Creating GIF...'; err_gif_start = 'Could not start GIF'
+    st_gif_need_url = 'Paste a link for the GIF'; st_not_url = 'That does not look like a link'
+    # local convert
+    err_no_ffmpeg = 'ffmpeg.exe not found'; st_convert_title = 'Converting: {0}'
+    det_convert_local = 'Processing local file with FFmpeg…'; st_converting = 'Converting file…'
+    err_convert_start = 'Could not start converter'
+    # thumbnail
+    st_need_url = 'Paste a video link'; st_thumb_dl = 'Downloading HD thumbnail…'
+    # torrent
+    dlg_torrent_filter = 'Torrent (*.torrent)|*.torrent|All files (*.*)|*.*'
+    st_magnet_hint = 'Paste a magnet link or pick a .torrent'; st_magnet_hint2 = 'Paste a magnet link'
+    err_need_wv2 = 'WebView2 (setup-webview2.bat) or VLC is required'; ttl_torrent = 'Torrent'
+    btn_vlc = 'Open in VLC'; btn_vlc_none = 'VLC not found'; hint_vlc = 'Black screen (mkv/x265)? Click "Open in VLC".'
+    err_player = 'Could not open player'
+    st_tor_install = 'Installing torrent engine (once, ~1 minute)…'; err_no_node = 'Node.js not found — install it from nodejs.org'
+    st_tor_installed = 'Engine installed — connecting…'; err_tor_install = 'Could not install the engine (Node.js + internet required)'
+    err_no_qb = 'qBittorrent not found — install it'; err_no_vlc = 'VLC not found — install VLC'
+    st_not_torrent = 'Not a magnet link or a .torrent'; st_qb_adding = 'Adding to qBittorrent (sequential)…'
+    err_qb_start = 'Could not start qBittorrent'; st_tor_buffering = 'Downloading the start… VLC opens in a few seconds'
+    st_tor_playing = 'Opening VLC — streaming while downloading'; err_tor_nodata = 'No data for a long time — no peers or private torrent'
+    # video window
+    ttl_video = 'Video'; err_wv2 = 'WebView2 failed to start'
+    st_need_wv2 = 'To watch before downloading, run setup-webview2.bat'; st_need_link = 'Paste a video link first'
+    vid_failed = 'Video — playback failed (download the file)'; tip_fullscreen = 'Full screen'; err_video = 'Could not open video'
+    # tray
+    tray_open = 'Open'; tray_exit = 'Exit'
+  }
+}
+$script:lang = 'en'
+function T($key) {
+  $v = $script:L[$script:lang][$key]
+  if ($null -eq $v) { $v = $script:L['en'][$key] }
+  if ($null -eq $v) { return $key }
+  return $v
+}
+
+# WebView2 (HD playback) — load the DLLs if setup-webview2.bat installed them
 $script:hasWV2 = $false
 try {
   $wvc = Join-Path $root 'Microsoft.Web.WebView2.Core.dll'
@@ -154,25 +383,37 @@ $errLog = Join-Path $env:TEMP 'ytui_err.log'
 $previewJson = Join-Path $env:TEMP 'ytui_preview.json'
 $searchJson = Join-Path $env:TEMP 'ytui_search.json'
 
-if (-not (Test-Path $ytdlp)) {
-  [System.Windows.MessageBox]::Show("Не найден yt-dlp.exe рядом со скриптом:`n$ytdlp", 'Ошибка') | Out-Null
-  exit 1
-}
-
 $defaultFolder = Join-Path ([Environment]::GetFolderPath('UserProfile')) 'Downloads'
-$qOpts = @('Максимальное (4K/2K/1080p)', '1080p (Full HD)', '720p (HD)', '480p', 'MP3 320 kbps (Аудио)', 'WAV / FLAC (Без сжатия)')
-$cOpts = @('Нет', 'Файл cookies.txt', 'Chrome', 'Edge', 'Firefox', 'Opera', 'Brave')
-$sOpts = @('Рус', 'Англ', 'Рус+Англ')
+# option pill labels (functions so Apply-Language can re-read them in the current language)
+function Get-QOpts { @((T 'q_max'), (T 'q_1080'), (T 'q_720'), (T 'q_480'), (T 'q_mp3'), (T 'q_flac')) }
+function Get-COpts { @((T 'c_none'), (T 'c_file'), 'Chrome', 'Edge', 'Firefox', 'Opera', 'Brave') }
+function Get-SOpts { @((T 's_ru'), (T 's_en'), (T 's_both')) }
+function Get-TOpts { @((T 't_dark'), (T 't_light')) }
+function Get-RateOpts { @((T 'rate_none'), ((T 'rate_fmt') -f 1), ((T 'rate_fmt') -f 3), ((T 'rate_fmt') -f 5), ((T 'rate_fmt') -f 10)) }
+function Get-CodecOpts { @((T 'codec_auto'), (T 'codec_h264'), (T 'codec_av1')) }
+$qOpts = Get-QOpts
+$cOpts = Get-COpts
+$cBrowsers = @('', '', 'chrome', 'edge', 'firefox', 'opera', 'brave')
+$sOpts = Get-SOpts
 $sLangs = @('ru', 'en', 'ru,en')
-$tOpts = @('Тёмная', 'Светлая')
+$tOpts = Get-TOpts
 $parOpts = @('1', '2', '3')
-$rateOpts = @('Без лимита', '1 МБ/с', '3 МБ/с', '5 МБ/с', '10 МБ/с')
+$rateOpts = Get-RateOpts
 $rateVals = @('', '1M', '3M', '5M', '10M')
-$codecOpts = @('Авто', 'H.264 (совместимость)', 'AV1/VP9 (меньше вес)')
+$codecOpts = Get-CodecOpts
 
 $saved = $null
 if (Test-Path $settingsPath) {
   try { $saved = Get-Content $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $saved = $null }
+}
+
+# UI language: saved setting, otherwise Russian for a ru-* system UI culture, English elsewhere
+$script:lang = $(if ([System.Globalization.CultureInfo]::CurrentUICulture.Name -like 'ru*') { 'ru' } else { 'en' })
+if ($saved -and $saved.lang -and ($saved.lang -eq 'ru' -or $saved.lang -eq 'en')) { $script:lang = [string]$saved.lang }
+
+if (-not (Test-Path $ytdlp)) {
+  [System.Windows.MessageBox]::Show(((T 'err_no_ytdlp') -f $ytdlp), (T 'ttl_error')) | Out-Null
+  exit 1
 }
 
 # ---------------- XAML ----------------
@@ -218,6 +459,34 @@ if (Test-Path $settingsPath) {
       <Style.Triggers>
         <Trigger Property="IsMouseOver" Value="True">
           <Setter Property="Foreground" Value="{DynamicResource TFg}"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <!-- title-bar language toggle: plain text button, the active one is recoloured from code -->
+    <Style x:Key="LangBtn" TargetType="Button">
+      <Setter Property="Foreground" Value="{DynamicResource TGlyphDim}"/>
+      <Setter Property="FontSize" Value="11.5"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Padding" Value="2,0"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+              <ContentPresenter VerticalAlignment="Center"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Foreground" Value="{DynamicResource TFg}"/>
+        </Trigger>
+        <!-- Tag="on" marks the active language (set by Update-LangSwitch) -->
+        <Trigger Property="Tag" Value="on">
+          <Setter Property="Foreground" Value="{DynamicResource TAccent}"/>
         </Trigger>
       </Style.Triggers>
     </Style>
@@ -539,14 +808,17 @@ if (Test-Path $settingsPath) {
           <Border x:Name="titleBar" DockPanel.Dock="Top" Height="46" Background="#01FFFFFF">
             <Grid>
               <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0,0,0">
-                <Border Width="20" Height="20" CornerRadius="5" Margin="0,0,9,0" ClipToBounds="True" Background="{DynamicResource TGlass}">
-                  <Image x:Name="headerLogo" Stretch="UniformToFill"/>
+                <Border Width="24" Height="24" CornerRadius="6" Margin="0,0,10,0" BorderBrush="{DynamicResource TGlassBrd}" BorderThickness="1" Background="{DynamicResource TGlass}">
+                  <Border.Clip>
+                    <RectangleGeometry Rect="0,0,24,24" RadiusX="6" RadiusY="6"/>
+                  </Border.Clip>
+                  <Image x:Name="headerLogo" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
                 </Border>
                 <TextBlock Text="Deviload" Foreground="{DynamicResource TFg}" FontSize="13" FontWeight="SemiBold"
                            VerticalAlignment="Center"/>
               </StackPanel>
               <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,18,0">
-                <Border x:Name="ytLogoBtn" Background="Transparent" Cursor="Hand" VerticalAlignment="Center" Margin="0,0,18,0" ToolTip="Поиск на YouTube">
+                <Border x:Name="ytLogoBtn" Background="Transparent" Cursor="Hand" VerticalAlignment="Center" Margin="0,0,18,0" >
                   <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Border Width="26" Height="18" CornerRadius="5" Background="#E5484D" VerticalAlignment="Center">
                       <Viewbox Width="8" Height="8" HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -556,43 +828,48 @@ if (Test-Path $settingsPath) {
                     <TextBlock Text="YouTube" Foreground="{DynamicResource TFgDim}" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center" Margin="7,0,0,0"/>
                   </StackPanel>
                 </Border>
-                <TextBlock x:Name="historyBtn" Text="&#xE81C;" Style="{StaticResource IconBtn}" Margin="0,0,16,0" ToolTip="История скачиваний"/>
-                <TextBlock x:Name="searchBtn" Text="&#xE721;" Style="{StaticResource IconBtn}" Margin="0,0,16,0" ToolTip="Поиск YouTube"/>
-                <TextBlock x:Name="gearBtn" Text="&#xE713;" Style="{StaticResource IconBtn}" ToolTip="Настройки"/>
+                <StackPanel x:Name="langSwitch" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,18,0">
+                  <Button x:Name="langRu" Content="RU" Style="{StaticResource LangBtn}"/>
+                  <TextBlock Text="|" Foreground="{DynamicResource TFgSub}" FontSize="11" VerticalAlignment="Center" Margin="6,0,6,1"/>
+                  <Button x:Name="langEn" Content="EN" Style="{StaticResource LangBtn}"/>
+                </StackPanel>
+                <TextBlock x:Name="historyBtn" Text="&#xE81C;" Style="{StaticResource IconBtn}" Margin="0,0,16,0"/>
+                <TextBlock x:Name="searchBtn" Text="&#xE721;" Style="{StaticResource IconBtn}" Margin="0,0,16,0"/>
+                <TextBlock x:Name="gearBtn" Text="&#xE713;" Style="{StaticResource IconBtn}"/>
                 <Border Width="1" Height="16" Background="{DynamicResource TGlassBrd}" Margin="16,0,16,0"/>
-                <TextBlock x:Name="dotMin" Text="&#xE949;" Style="{StaticResource IconBtn}" FontSize="11.5" Margin="0,0,16,0" ToolTip="Свернуть"/>
-                <TextBlock x:Name="dotClose" Text="&#xE8BB;" Style="{StaticResource IconBtn}" FontSize="11.5" ToolTip="Закрыть"/>
+                <TextBlock x:Name="dotMin" Text="&#xE949;" Style="{StaticResource IconBtn}" FontSize="11.5" Margin="0,0,16,0"/>
+                <TextBlock x:Name="dotClose" Text="&#xE8BB;" Style="{StaticResource IconBtn}" FontSize="11.5"/>
               </StackPanel>
             </Grid>
           </Border>
 
           <ScrollViewer VerticalScrollBarVisibility="Auto">
           <StackPanel Margin="28,10,28,22">
-            <TextBlock Text="Ссылки — по одной в строке (можно несколько)" Style="{StaticResource Lbl}"/>
+            <TextBlock x:Name="lblLinks" Text="" Style="{StaticResource Lbl}"/>
             <Grid>
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
               </Grid.ColumnDefinitions>
               <TextBox x:Name="urlBox" Grid.Column="0" Style="{StaticResource MultiInput}" Height="74" VerticalAlignment="Top"/>
-              <TextBlock x:Name="urlHint" Grid.Column="0" Text="Вставь ссылку на видео…  можно несколько, по одной в строке" Foreground="{DynamicResource TFgSub}" FontSize="13" Margin="14,10,0,0" VerticalAlignment="Top" IsHitTestVisible="False"/>
+              <TextBlock x:Name="urlHint" Grid.Column="0" Text="" Foreground="{DynamicResource TFgSub}" FontSize="13" Margin="14,10,0,0" VerticalAlignment="Top" IsHitTestVisible="False"/>
               <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Top">
-                <Button x:Name="pasteBtn" Content="Вставить" Style="{StaticResource Ghost}" Width="104" Height="34"/>
-                <Button x:Name="clearBtn" Content="Очистить" Style="{StaticResource Ghost}" Width="104" Height="34" Margin="0,6,0,0"/>
+                <Button x:Name="pasteBtn" Content="" Style="{StaticResource Ghost}" Width="104" Height="34"/>
+                <Button x:Name="clearBtn" Content="" Style="{StaticResource Ghost}" Width="104" Height="34" Margin="0,6,0,0"/>
               </StackPanel>
             </Grid>
 
-            <Button x:Name="torrentBtn" Content="Смотреть торрент  ·  magnet или .torrent (через qBittorrent → VLC)" Style="{StaticResource Ghost}" Height="34" HorizontalAlignment="Left" Margin="0,10,0,0"/>
+            <Button x:Name="torrentBtn" Content="" Style="{StaticResource Ghost}" Height="34" HorizontalAlignment="Left" Margin="0,10,0,0"/>
 
-            <TextBlock Text="Качество" Style="{StaticResource Lbl}" Margin="2,16,0,7"/>
+            <TextBlock x:Name="lblQuality" Text="" Style="{StaticResource Lbl}" Margin="2,16,0,7"/>
             <WrapPanel x:Name="qualityPanel"/>
 
             <StackPanel x:Name="audioTracksContainer" Visibility="Collapsed" Margin="0,10,0,0">
-              <TextBlock Text="Аудиодорожка / Дубляж (в ролике несколько озвучек)" Style="{StaticResource Lbl}" Margin="2,0,0,6"/>
+              <TextBlock x:Name="lblAudio" Text="" Style="{StaticResource Lbl}" Margin="2,0,0,6"/>
               <WrapPanel x:Name="audioTracksPanel"/>
             </StackPanel>
 
-            <TextBlock Text="Обрезка — перетащи маркеры (появится после превью)" Style="{StaticResource Lbl}" Margin="2,14,0,8"/>
+            <TextBlock x:Name="lblTrim" Text="" Style="{StaticResource Lbl}" Margin="2,14,0,8"/>
             <Canvas x:Name="trimTrack" Height="30" Width="700" HorizontalAlignment="Left">
               <Border Canvas.Left="0" Canvas.Top="11" Width="700" Height="8" CornerRadius="4" Background="{DynamicResource TTrack}"/>
               <Border x:Name="trimSel" Canvas.Left="6" Canvas.Top="11" Width="688" Height="8" CornerRadius="4" Background="{DynamicResource TAccentSoft}"/>
@@ -605,9 +882,9 @@ if (Test-Path $settingsPath) {
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
               </Grid.ColumnDefinitions>
-              <TextBlock x:Name="trimLabel" Grid.Column="0" Text="весь ролик" Foreground="{DynamicResource TFgDim}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="2,0,8,0"/>
-              <Button x:Name="chaptersBtn" Grid.Column="1" Content="Главы" Style="{StaticResource Ghost}" Height="32" Margin="0,0,8,0" Visibility="Collapsed"/>
-              <Button x:Name="gifBtn" Grid.Column="2" Content="GIF из выделенного" Style="{StaticResource Ghost}" Height="32" Width="200"/>
+              <TextBlock x:Name="trimLabel" Grid.Column="0" Text="" Foreground="{DynamicResource TFgDim}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="2,0,8,0"/>
+              <Button x:Name="chaptersBtn" Grid.Column="1" Content="" Style="{StaticResource Ghost}" Height="32" Margin="0,0,8,0" Visibility="Collapsed"/>
+              <Button x:Name="gifBtn" Grid.Column="2" Content="" Style="{StaticResource Ghost}" Height="32" Width="200"/>
             </Grid>
 
             <Grid Margin="2,14,0,0">
@@ -616,20 +893,20 @@ if (Test-Path $settingsPath) {
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
               </Grid.ColumnDefinitions>
-              <CheckBox x:Name="playlistToggle" Grid.Column="0" Content="Плейлист" Style="{StaticResource Toggle}" VerticalAlignment="Center"/>
+              <CheckBox x:Name="playlistToggle" Grid.Column="0" Content="" Style="{StaticResource Toggle}" VerticalAlignment="Center"/>
               <Grid Grid.Column="1" Margin="12,0,12,0">
                 <TextBox x:Name="playlistRangeBox" Style="{StaticResource GlassInput}" Height="30" Visibility="Collapsed"/>
-                <TextBlock x:Name="playlistRangeHint" Text="Диапазон: 1-10, 15" Foreground="{DynamicResource TFgSub}" FontSize="11" Margin="14,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" Visibility="Collapsed"/>
+                <TextBlock x:Name="playlistRangeHint" Text="" Foreground="{DynamicResource TFgSub}" FontSize="11" Margin="14,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" Visibility="Collapsed"/>
               </Grid>
-              <CheckBox x:Name="splitChaptersToggle" Grid.Column="2" Content="Нарезать по главам" Style="{StaticResource Toggle}" VerticalAlignment="Center" ToolTip="Автоматически разрезать видео/альбом по главам/таймкодам"/>
+              <CheckBox x:Name="splitChaptersToggle" Grid.Column="2" Content="" Style="{StaticResource Toggle}" VerticalAlignment="Center"/>
             </Grid>
 
             <Grid Margin="2,16,0,7">
-              <TextBlock Text="Папка сохранения" Style="{StaticResource Lbl}" VerticalAlignment="Center"/>
+              <TextBlock x:Name="lblFolder" Text="" Style="{StaticResource Lbl}" VerticalAlignment="Center"/>
               <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <TextBlock x:Name="presetDownloads" Text="Загрузки" Foreground="{DynamicResource TFgDim}" FontSize="11" Margin="0,0,12,0" Cursor="Hand" ToolTip="Папка Загрузки"/>
-                <TextBlock x:Name="presetMusic" Text="Музыка" Foreground="{DynamicResource TFgDim}" FontSize="11" Margin="0,0,12,0" Cursor="Hand" ToolTip="Папка Музыка"/>
-                <TextBlock x:Name="presetDesktop" Text="Рабочий стол" Foreground="{DynamicResource TFgDim}" FontSize="11" Cursor="Hand" ToolTip="Рабочий стол"/>
+                <TextBlock x:Name="presetDownloads" Text="" Foreground="{DynamicResource TFgDim}" FontSize="11" Margin="0,0,12,0" Cursor="Hand"/>
+                <TextBlock x:Name="presetMusic" Text="" Foreground="{DynamicResource TFgDim}" FontSize="11" Margin="0,0,12,0" Cursor="Hand"/>
+                <TextBlock x:Name="presetDesktop" Text="" Foreground="{DynamicResource TFgDim}" FontSize="11" Cursor="Hand"/>
               </StackPanel>
             </Grid>
             <Grid>
@@ -638,7 +915,7 @@ if (Test-Path $settingsPath) {
                 <ColumnDefinition Width="Auto"/>
               </Grid.ColumnDefinitions>
               <TextBox x:Name="folderBox" Grid.Column="0" Style="{StaticResource GlassInput}"/>
-              <Button x:Name="browseBtn" Grid.Column="1" Content="Обзор" Style="{StaticResource Ghost}" Width="104" Margin="10,0,0,0"/>
+              <Button x:Name="browseBtn" Grid.Column="1" Content="" Style="{StaticResource Ghost}" Width="104" Margin="10,0,0,0"/>
             </Grid>
 
             <Grid Margin="0,18,0,0">
@@ -649,11 +926,11 @@ if (Test-Path $settingsPath) {
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
               </Grid.ColumnDefinitions>
-              <Button x:Name="downloadBtn" Grid.Column="0" Content="Скачать" Style="{StaticResource Primary}"/>
-              <Button x:Name="cancelBtn" Grid.Column="1" Content="Отмена" Style="{StaticResource Ghost}" Width="92" Margin="10,0,0,0" IsEnabled="False"/>
-              <Button x:Name="logBtn" Grid.Column="2" Content="Лог" Style="{StaticResource Ghost}" Width="72" Margin="10,0,0,0"/>
-              <Button x:Name="openBtn" Grid.Column="3" Content="Папка" Style="{StaticResource Ghost}" Width="88" Margin="10,0,0,0"/>
-              <Button x:Name="updateBtn" Grid.Column="4" Content="Обновить" Style="{StaticResource Ghost}" Width="104" Margin="10,0,0,0"/>
+              <Button x:Name="downloadBtn" Grid.Column="0" Content="" Style="{StaticResource Primary}"/>
+              <Button x:Name="cancelBtn" Grid.Column="1" Content="" Style="{StaticResource Ghost}" Width="92" Margin="10,0,0,0" IsEnabled="False"/>
+              <Button x:Name="logBtn" Grid.Column="2" Content="" Style="{StaticResource Ghost}" Width="72" Margin="10,0,0,0"/>
+              <Button x:Name="openBtn" Grid.Column="3" Content="" Style="{StaticResource Ghost}" Width="88" Margin="10,0,0,0"/>
+              <Button x:Name="updateBtn" Grid.Column="4" Content="" Style="{StaticResource Ghost}" Width="104" Margin="10,0,0,0"/>
             </Grid>
 
             <Border CornerRadius="12" Background="{DynamicResource TPanel}" BorderBrush="{DynamicResource TPanelBrd}" BorderThickness="1" Padding="18,14" Margin="0,16,0,0">
@@ -664,14 +941,14 @@ if (Test-Path $settingsPath) {
                 <Grid>
                   <StackPanel Orientation="Horizontal">
                     <Ellipse x:Name="statusDot" Width="9" Height="9" Fill="#7A7A83" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                    <TextBlock x:Name="statusText" Text="Готов к работе" Foreground="{DynamicResource TFg}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="statusText" Text="" Foreground="{DynamicResource TFg}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
                   </StackPanel>
-                  <TextBlock x:Name="clearQueueBtn" Text="Очистить очередь" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{DynamicResource TFgDim}" FontSize="12" Cursor="Hand" Visibility="Collapsed"/>
+                  <TextBlock x:Name="clearQueueBtn" Text="" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{DynamicResource TFgDim}" FontSize="12" Cursor="Hand" Visibility="Collapsed"/>
                 </Grid>
                 <TextBlock x:Name="itemTitle" Text="" Foreground="{DynamicResource TFgDim}" FontSize="12" Margin="19,5,0,0" TextTrimming="CharacterEllipsis" Visibility="Collapsed"/>
                 <ProgressBar x:Name="progress" Style="{StaticResource GlassBar}" Minimum="0" Maximum="100" Value="0" Margin="0,12,0,0" Visibility="Collapsed"/>
                 <TextBlock x:Name="detailText" Text="" Foreground="{DynamicResource TFgDim}" FontSize="12" FontWeight="Medium" Margin="2,8,0,0" Visibility="Collapsed"/>
-                <Button x:Name="openFileBtn" Content="Открыть файл" Style="{StaticResource Ghost}" Height="36" Width="170" HorizontalAlignment="Left" Margin="0,10,0,0" Visibility="Collapsed"/>
+                <Button x:Name="openFileBtn" Content="" Style="{StaticResource Ghost}" Height="36" Width="170" HorizontalAlignment="Left" Margin="0,10,0,0" Visibility="Collapsed"/>
               </StackPanel>
             </Border>
           </StackPanel>
@@ -680,7 +957,7 @@ if (Test-Path $settingsPath) {
       </Grid>
     </Border>
 
-    <!-- мини-плеер превью (Spotify-style, внизу слева) -->
+    <!-- preview mini-player (Spotify-style, bottom) -->
     <Border x:Name="previewCard" CornerRadius="12" Background="{DynamicResource TBar}" BorderBrush="{DynamicResource TGlassBrd}" BorderThickness="1"
             HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="14,0,14,14" Padding="12,10" Visibility="Collapsed">
       <Grid>
@@ -690,7 +967,7 @@ if (Test-Path $settingsPath) {
           <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
 
-        <Border x:Name="artBtn" Grid.Column="0" Width="56" Height="56" CornerRadius="8" ClipToBounds="True" Background="#33000000" VerticalAlignment="Center" Cursor="Hand" ToolTip="Смотреть видео">
+        <Border x:Name="artBtn" Grid.Column="0" Width="56" Height="56" CornerRadius="8" ClipToBounds="True" Background="#33000000" VerticalAlignment="Center" Cursor="Hand">
           <Grid>
             <Image x:Name="previewImg" Stretch="UniformToFill"/>
             <Border Background="#50000000"/>
@@ -730,12 +1007,12 @@ if (Test-Path $settingsPath) {
 
         <StackPanel Grid.Column="2" VerticalAlignment="Stretch" Margin="8,0,2,0">
           <TextBlock x:Name="previewClose" Text="✕" Foreground="#80FFFFFF" FontSize="12" HorizontalAlignment="Right" Cursor="Hand"/>
-          <TextBlock x:Name="downloadThumbBtn" Text="&#xEB9F;" FontFamily="Segoe MDL2 Assets" Foreground="{DynamicResource TGlyph}" FontSize="14" HorizontalAlignment="Right" VerticalAlignment="Bottom" Cursor="Hand" ToolTip="Скачать HD-обложку" Margin="0,22,0,0"/>
+          <TextBlock x:Name="downloadThumbBtn" Text="&#xEB9F;" FontFamily="Segoe MDL2 Assets" Foreground="{DynamicResource TGlyph}" FontSize="14" HorizontalAlignment="Right" VerticalAlignment="Bottom" Cursor="Hand" Margin="0,22,0,0"/>
         </StackPanel>
       </Grid>
     </Border>
 
-    <!-- видео -->
+    <!-- video -->
     <Grid x:Name="videoOverlay" Visibility="Collapsed" Background="#CC000000">
       <Border CornerRadius="12" Background="#FF080810" BorderBrush="#33FFFFFF" BorderThickness="1" Width="600" Height="360" VerticalAlignment="Center" HorizontalAlignment="Center">
         <Grid>
@@ -745,7 +1022,7 @@ if (Test-Path $settingsPath) {
       </Border>
     </Grid>
 
-    <!-- поиск YouTube -->
+    <!-- YouTube search -->
     <Grid x:Name="searchOverlay" Visibility="Collapsed" Background="#A6000000">
       <Border Width="640" Height="520" CornerRadius="16" Background="{DynamicResource TOverlay}" BorderBrush="{DynamicResource TGlassBrd}" BorderThickness="1" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="22,20">
         <DockPanel>
@@ -755,7 +1032,7 @@ if (Test-Path $settingsPath) {
                 <Path Data="M0,0 L10,6 L0,12 Z" Fill="White"/>
               </Viewbox>
             </Border>
-            <TextBlock Text="Поиск на YouTube" Foreground="{DynamicResource TFg}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Margin="10,0,0,0"/>
+            <TextBlock x:Name="searchTitle" Text="" Foreground="{DynamicResource TFg}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Margin="10,0,0,0"/>
           </StackPanel>
           <Grid DockPanel.Dock="Top" Margin="0,0,0,14">
             <Grid.ColumnDefinitions>
@@ -763,9 +1040,9 @@ if (Test-Path $settingsPath) {
               <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <TextBox x:Name="searchBox" Grid.Column="0" Style="{StaticResource GlassInput}"/>
-            <Button x:Name="searchGo" Grid.Column="1" Content="Найти" Style="{StaticResource Primary}" Width="110" Margin="10,0,0,0"/>
+            <Button x:Name="searchGo" Grid.Column="1" Content="" Style="{StaticResource Primary}" Width="110" Margin="10,0,0,0"/>
           </Grid>
-          <Button x:Name="searchCloseBtn" DockPanel.Dock="Bottom" Content="Закрыть" Style="{StaticResource Ghost}" Width="130" HorizontalAlignment="Right" Margin="0,14,0,0"/>
+          <Button x:Name="searchCloseBtn" DockPanel.Dock="Bottom" Content="" Style="{StaticResource Ghost}" Width="130" HorizontalAlignment="Right" Margin="0,14,0,0"/>
           <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel x:Name="searchResults"/>
           </ScrollViewer>
@@ -773,35 +1050,35 @@ if (Test-Path $settingsPath) {
       </Border>
     </Grid>
 
-    <!-- оверлей настроек -->
+    <!-- settings overlay -->
     <Grid x:Name="settingsOverlay" Visibility="Collapsed" Background="#A6000000">
       <Border Width="620" CornerRadius="16" Background="{DynamicResource TOverlay}" BorderBrush="{DynamicResource TGlassBrd}" BorderThickness="1"
               VerticalAlignment="Center" HorizontalAlignment="Center" Padding="26,22">
         <DockPanel>
-          <TextBlock DockPanel.Dock="Top" Text="Настройки" Foreground="{DynamicResource TFg}" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,14"/>
-          <Button x:Name="settingsClose" DockPanel.Dock="Bottom" Content="Готово" Style="{StaticResource Primary}" Width="150" HorizontalAlignment="Right" Margin="0,16,0,0"/>
+          <TextBlock x:Name="settingsTitle" DockPanel.Dock="Top" Text="" Foreground="{DynamicResource TFg}" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,14"/>
+          <Button x:Name="settingsClose" DockPanel.Dock="Bottom" Content="" Style="{StaticResource Primary}" Width="150" HorizontalAlignment="Right" Margin="0,16,0,0"/>
           <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="540">
             <StackPanel Margin="0,0,10,0">
-              <TextBlock Text="Параллельные загрузки" Style="{StaticResource Lbl}"/>
+              <TextBlock x:Name="lblParallel" Text="" Style="{StaticResource Lbl}"/>
               <WrapPanel x:Name="parallelPanel"/>
-              <TextBlock Text="Лимит скорости" Style="{StaticResource Lbl}" Margin="2,12,0,7"/>
+              <TextBlock x:Name="lblRate" Text="" Style="{StaticResource Lbl}" Margin="2,12,0,7"/>
               <WrapPanel x:Name="ratePanel"/>
-              <TextBlock Text="Видеокодек" Style="{StaticResource Lbl}" Margin="2,12,0,7"/>
+              <TextBlock x:Name="lblCodec" Text="" Style="{StaticResource Lbl}" Margin="2,12,0,7"/>
               <WrapPanel x:Name="codecPanel"/>
-              <CheckBox x:Name="archiveToggle" Content="Пропускать уже скачанное (архив загрузок)" Style="{StaticResource Toggle}" Margin="0,14,0,0"/>
-              <CheckBox x:Name="clipWatchToggle" Content="Автодобавление ссылок из буфера обмена" Style="{StaticResource Toggle}" IsChecked="True" Margin="0,12,0,0"/>
-              <TextBlock Text="Cookies из браузера" Style="{StaticResource Lbl}" Margin="2,16,0,7"/>
+              <CheckBox x:Name="archiveToggle" Content="" Style="{StaticResource Toggle}" Margin="0,14,0,0"/>
+              <CheckBox x:Name="clipWatchToggle" Content="" Style="{StaticResource Toggle}" IsChecked="True" Margin="0,12,0,0"/>
+              <TextBlock x:Name="lblCookies" Text="" Style="{StaticResource Lbl}" Margin="2,16,0,7"/>
               <WrapPanel x:Name="cookiesPanel"/>
-              <TextBlock Text="SponsorBlock (YouTube)" Style="{StaticResource Lbl}" Margin="2,12,0,9"/>
-              <CheckBox x:Name="sponsorblockToggle" Content="Вырезать рекламу и спонсорские интеграции" Style="{StaticResource Toggle}"/>
-              <TextBlock Text="Smart Music Tagger (MP3 / FLAC)" Style="{StaticResource Lbl}" Margin="2,14,0,9"/>
-              <CheckBox x:Name="smartTaggerToggle" Content="Авто-очистка названий треков от мусора и запись тегов" Style="{StaticResource Toggle}" IsChecked="True"/>
-              <TextBlock Text="Субтитры" Style="{StaticResource Lbl}" Margin="2,14,0,9"/>
-              <CheckBox x:Name="subsToggle" Content="Скачивать и вшивать субтитры" Style="{StaticResource Toggle}"/>
+              <TextBlock x:Name="lblSb" Text="" Style="{StaticResource Lbl}" Margin="2,12,0,9"/>
+              <CheckBox x:Name="sponsorblockToggle" Content="" Style="{StaticResource Toggle}"/>
+              <TextBlock x:Name="lblTagger" Text="" Style="{StaticResource Lbl}" Margin="2,14,0,9"/>
+              <CheckBox x:Name="smartTaggerToggle" Content="" Style="{StaticResource Toggle}" IsChecked="True"/>
+              <TextBlock x:Name="lblSubs" Text="" Style="{StaticResource Lbl}" Margin="2,14,0,9"/>
+              <CheckBox x:Name="subsToggle" Content="" Style="{StaticResource Toggle}"/>
               <WrapPanel x:Name="subsLangPanel" Margin="0,12,0,0"/>
-              <TextBlock Text="Тема" Style="{StaticResource Lbl}" Margin="2,14,0,9"/>
+              <TextBlock x:Name="lblTheme" Text="" Style="{StaticResource Lbl}" Margin="2,14,0,9"/>
               <WrapPanel x:Name="themePanel"/>
-              <TextBlock Text="Прозрачность окна" Style="{StaticResource Lbl}" Margin="2,14,0,8"/>
+              <TextBlock x:Name="lblOpacity" Text="" Style="{StaticResource Lbl}" Margin="2,14,0,8"/>
               <Slider x:Name="opacitySlider" Minimum="0" Maximum="100" Value="50" Width="320" HorizontalAlignment="Left"/>
             </StackPanel>
           </ScrollViewer>
@@ -809,19 +1086,19 @@ if (Test-Path $settingsPath) {
       </Border>
     </Grid>
 
-    <!-- оверлей истории -->
+    <!-- history overlay -->
     <Grid x:Name="historyOverlay" Visibility="Collapsed" Background="#A6000000">
       <Border Width="680" Height="540" CornerRadius="16" Background="{DynamicResource TOverlay}" BorderBrush="{DynamicResource TGlassBrd}" BorderThickness="1" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="24,22">
         <DockPanel>
           <Grid DockPanel.Dock="Top" Margin="0,0,0,16">
-            <TextBlock Text="История скачиваний" Foreground="{DynamicResource TFg}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
-            <Button x:Name="clearHistoryBtn" Content="Очистить всё" Style="{StaticResource Ghost}" Height="34" Width="130" HorizontalAlignment="Right"/>
+            <TextBlock x:Name="historyTitle" Text="" Foreground="{DynamicResource TFg}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+            <Button x:Name="clearHistoryBtn" Content="" Style="{StaticResource Ghost}" Height="34" Width="130" HorizontalAlignment="Right"/>
           </Grid>
           <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
             <TextBox x:Name="historySearchBox" Style="{StaticResource GlassInput}" Height="36"/>
-            <TextBlock x:Name="historySearchHint" Text="Поиск по истории…" Foreground="{DynamicResource TFgSub}" FontSize="12.5" Margin="14,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
+            <TextBlock x:Name="historySearchHint" Text="" Foreground="{DynamicResource TFgSub}" FontSize="12.5" Margin="14,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
           </Grid>
-          <Button x:Name="historyCloseBtn" DockPanel.Dock="Bottom" Content="Закрыть" Style="{StaticResource Primary}" Width="140" HorizontalAlignment="Right" Margin="0,14,0,0"/>
+          <Button x:Name="historyCloseBtn" DockPanel.Dock="Bottom" Content="" Style="{StaticResource Primary}" Width="140" HorizontalAlignment="Right" Margin="0,14,0,0"/>
           <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel x:Name="historyList"/>
           </ScrollViewer>
@@ -829,22 +1106,22 @@ if (Test-Path $settingsPath) {
       </Border>
     </Grid>
 
-    <!-- оверлей выбора глав -->
+    <!-- chapter picker overlay -->
     <Grid x:Name="chaptersOverlay" Visibility="Collapsed" Background="#A6000000">
       <Border Width="620" Height="540" CornerRadius="16" Background="{DynamicResource TOverlay}" BorderBrush="{DynamicResource TGlassBrd}" BorderThickness="1" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="24,22">
         <DockPanel>
           <Grid DockPanel.Dock="Top" Margin="0,0,0,14">
-            <TextBlock Text="Главы ролика" Foreground="{DynamicResource TFg}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+            <TextBlock x:Name="chaptersTitle" Text="" Foreground="{DynamicResource TFg}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-              <Button x:Name="chaptersAllBtn" Content="Все" Style="{StaticResource Ghost}" Height="32" Width="70" Margin="0,0,8,0"/>
-              <Button x:Name="chaptersNoneBtn" Content="Сброс" Style="{StaticResource Ghost}" Height="32" Width="80"/>
+              <Button x:Name="chaptersAllBtn" Content="" Style="{StaticResource Ghost}" Height="32" Width="70" Margin="0,0,8,0"/>
+              <Button x:Name="chaptersNoneBtn" Content="" Style="{StaticResource Ghost}" Height="32" Width="80"/>
             </StackPanel>
           </Grid>
           <Grid DockPanel.Dock="Bottom" Margin="0,14,0,0">
-            <TextBlock x:Name="chaptersHint" Text="Отметь главы — скачаются отдельными файлами" Foreground="{DynamicResource TFgDim}" FontSize="12" VerticalAlignment="Center"/>
+            <TextBlock x:Name="chaptersHint" Text="" Foreground="{DynamicResource TFgDim}" FontSize="12" VerticalAlignment="Center"/>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-              <Button x:Name="chaptersCloseBtn" Content="Закрыть" Style="{StaticResource Ghost}" Width="110" Margin="0,0,10,0"/>
-              <Button x:Name="chaptersApplyBtn" Content="Применить" Style="{StaticResource Primary}" Width="140"/>
+              <Button x:Name="chaptersCloseBtn" Content="" Style="{StaticResource Ghost}" Width="110" Margin="0,0,10,0"/>
+              <Button x:Name="chaptersApplyBtn" Content="" Style="{StaticResource Primary}" Width="140"/>
             </StackPanel>
           </Grid>
           <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -860,10 +1137,10 @@ if (Test-Path $settingsPath) {
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 $window = [Windows.Markup.XamlReader]::Load($reader)
 
-# страховка: не падать от необработанных исключений в UI
+# Safety net: do not crash on unhandled UI exceptions
 try { $window.Dispatcher.add_UnhandledException({ param($s, $ev) $ev.Handled = $true }) } catch {}
 
-# элементы
+# elements
 $urlBox = $window.FindName('urlBox')
 $pasteBtn = $window.FindName('pasteBtn')
 $titleBar = $window.FindName('titleBar')
@@ -962,6 +1239,11 @@ $trimSel = $window.FindName('trimSel')
 $trimH1 = $window.FindName('trimH1')
 $trimH2 = $window.FindName('trimH2')
 $trimLabel = $window.FindName('trimLabel')
+$chaptersHint = $window.FindName('chaptersHint')
+foreach ($n in @('lblLinks', 'lblQuality', 'lblAudio', 'lblTrim', 'lblFolder', 'searchTitle', 'settingsTitle', 'lblParallel', 'lblRate', 'lblCodec',
+    'lblCookies', 'lblSb', 'lblTagger', 'lblSubs', 'lblTheme', 'lblOpacity', 'langRu', 'langEn', 'historyTitle', 'chaptersTitle')) {
+  Set-Variable -Name $n -Value $window.FindName($n)
+}
 $script:mp = New-Object System.Windows.Media.MediaPlayer
 $script:mp.Volume = 1
 try {
@@ -974,14 +1256,15 @@ try {
 }
 catch {}
 
-# ---- иконка приложения (рисуем) ----
+# ---- application icon (drawn at runtime when no icon file exists) ----
 function New-AppIcon {
   $bmp = New-Object System.Drawing.Bitmap 64, 64
   $g = [System.Drawing.Graphics]::FromImage($bmp)
   $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
   $rect = New-Object System.Drawing.Rectangle 3, 3, 58, 58
-  $grad = New-Object System.Drawing.Drawing2D.LinearGradientBrush $rect, ([System.Drawing.Color]::FromArgb(192, 132, 252)), ([System.Drawing.Color]::FromArgb(147, 51, 234)), 90
-  $g.FillEllipse($grad, $rect)
+  # neutral monochrome fallback: dark disc, white download arrow (matches the app palette, no hue)
+  $disc = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(26, 26, 30))
+  $g.FillEllipse($disc, $rect)
   $white = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::White)
   $g.FillRectangle($white, 29, 17, 6, 16)
   $arrow = @((New-Object System.Drawing.Point 22, 31), (New-Object System.Drawing.Point 42, 31), (New-Object System.Drawing.Point 32, 46))
@@ -996,10 +1279,36 @@ try {
   $iconCustom = $null
   foreach ($n in @('icon.ico', 'ico.ico', 'icon.png', 'mascot.png', 'deviload.png')) { $p = Join-Path $root $n; if (Test-Path $p) { $iconCustom = $p; break } }
   if ($iconCustom) {
-    $bi = New-Object System.Windows.Media.Imaging.BitmapImage
-    $bi.BeginInit(); $bi.CacheOption = 'OnLoad'; $bi.UriSource = New-Object System.Uri $iconCustom; $bi.EndInit()
-    $window.Icon = $bi
-    if ($headerLogo) { $headerLogo.Source = $bi }
+    $bi = $null
+    if ($iconCustom -like '*.ico') {
+      # multi-size .ico: take the largest frame, WPF scales it for the taskbar / Alt-Tab
+      try {
+        $dec = New-Object System.Windows.Media.Imaging.IconBitmapDecoder ((New-Object System.Uri $iconCustom), 'None', 'OnLoad')
+        foreach ($fr in $dec.Frames) { if ($null -eq $bi -or $fr.PixelWidth -gt $bi.PixelWidth) { $bi = $fr } }
+      }
+      catch { $bi = $null }
+    }
+    if ($null -eq $bi) {
+      $bi = New-Object System.Windows.Media.Imaging.BitmapImage
+      $bi.BeginInit(); $bi.CacheOption = 'OnLoad'; $bi.UriSource = New-Object System.Uri $iconCustom; $bi.EndInit()
+    }
+    $window.Icon = $bi   # taskbar / Alt-Tab icon (the window has no system title bar)
+    if ($headerLogo) {
+      # title-bar logo: prefer the high-resolution PNG so the 24 px image is crisp, fall back to the .ico frame
+      $logoSrc = $bi
+      foreach ($n in @('mascot.png', 'icon.png', 'deviload.png')) {
+        $p = Join-Path $root $n
+        if (Test-Path $p) {
+          try {
+            $li = New-Object System.Windows.Media.Imaging.BitmapImage
+            $li.BeginInit(); $li.CacheOption = 'OnLoad'; $li.DecodePixelWidth = 96; $li.UriSource = New-Object System.Uri $p; $li.EndInit()
+            $logoSrc = $li; break
+          }
+          catch {}
+        }
+      }
+      $headerLogo.Source = $logoSrc
+    }
     if ($iconCustom -like '*.ico') { $script:appIcon = New-Object System.Drawing.Icon $iconCustom }
     else { $cb = New-Object System.Drawing.Bitmap $iconCustom; $script:appIcon = [System.Drawing.Icon]::FromHandle($cb.GetHicon()) }
   }
@@ -1082,9 +1391,9 @@ function Apply-Theme($light) {
 
 function Format-Bytes($b) {
   $b = [double]$b
-  if ($b -ge 1GB) { return ('{0:0.0} ГБ' -f ($b / 1GB)) }
-  if ($b -ge 1MB) { return ('{0:0} МБ' -f ($b / 1MB)) }
-  if ($b -gt 0) { return ('{0:0} КБ' -f ($b / 1KB)) }
+  if ($b -ge 1GB) { return ('{0:0.0} ' -f ($b / 1GB)) + (T 'unit_gb') }
+  if ($b -ge 1MB) { return ('{0:0} ' -f ($b / 1MB)) + (T 'unit_mb') }
+  if ($b -gt 0) { return ('{0:0} ' -f ($b / 1KB)) + (T 'unit_kb') }
   return ''
 }
 function Format-Time($sec) {
@@ -1095,7 +1404,7 @@ function Format-Time($sec) {
   return ('{0}:{1:d2}' -f [int]$ts.TotalMinutes, $ts.Seconds)
 }
 function Parse-Time($s) {
-  # "SS" / "M:SS" / "H:MM:SS" -> секунды
+  # "SS" / "M:SS" / "H:MM:SS" -> seconds
   if (-not $s) { return 0.0 }
   [double]$sec = 0
   foreach ($p in ("$s".Trim() -split ':')) { if ($p -ne '') { $sec = $sec * 60 + [double]$p } }
@@ -1116,21 +1425,21 @@ function Update-TrimFromTrack {
   if ([double]::IsNaN($b)) { $b = 688 }
   [System.Windows.Controls.Canvas]::SetLeft($trimSel, $a + 6)
   $trimSel.Width = [math]::Max(0, $b - $a)
-  if ($script:vidDur -le 0) { $script:trimS = ''; $script:trimE = ''; $trimLabel.Text = 'весь ролик (появится после превью)'; return }
+  if ($script:vidDur -le 0) { $script:trimS = ''; $script:trimE = ''; $trimLabel.Text = T 'trim_all_after'; return }
   $fa = $a / 688.0
   $fb = $b / 688.0
   $script:trimS = $(if ($fa -le 0.006) { '' } else { Format-Time ($fa * $script:vidDur) })
   $script:trimE = $(if ($fb -ge 0.994) { '' } else { Format-Time ($fb * $script:vidDur) })
   if (-not $script:trimS -and -not $script:trimE) {
-    $trimLabel.Text = 'весь ролик'
+    $trimLabel.Text = T 'trim_all'
   }
   else {
-    $sl = $(if ($script:trimS) { $script:trimS } else { 'начало' })
-    $el = $(if ($script:trimE) { $script:trimE } else { 'конец' })
-    $trimLabel.Text = "с $sl по $el"
+    $sl = $(if ($script:trimS) { $script:trimS } else { T 'trim_start' })
+    $el = $(if ($script:trimE) { $script:trimE } else { T 'trim_end' })
+    $trimLabel.Text = (T 'trim_range') -f $sl, $el
   }
   if (@($script:selectedChapters).Count -gt 0) {
-    $trimLabel.Text = "скачаются выбранные главы ($(@($script:selectedChapters).Count)) отдельными файлами"
+    $trimLabel.Text = (T 'trim_chapters') -f @($script:selectedChapters).Count
   }
 }
 function Set-Chapters($chaps, $dur) {
@@ -1197,17 +1506,17 @@ function Run-Search {
   }
   $searchResults.Children.Clear()
   $loading = New-Object System.Windows.Controls.TextBlock
-  $loading.Text = 'Поиск…'; $loading.Foreground = $window.FindResource('TFgDim')
+  $loading.Text = T 'st_searching'; $loading.Foreground = $window.FindResource('TFgDim')
   $loading.Margin = New-Object System.Windows.Thickness 4, 8, 0, 0
   [void]$searchResults.Children.Add($loading)
   Remove-Item $searchJson, ($searchJson + '.err') -ErrorAction SilentlyContinue
   $cIdx = Get-Sel $cookiesPanel
   $cookiesArg = ''
   if ($cIdx -eq 1) { $cf = Join-Path $root 'cookies.txt'; if (Test-Path $cf) { $cookiesArg = "--cookies `"$cf`"" } }
-  elseif ($cIdx -ge 2) { $cookiesArg = "--cookies-from-browser $($cOpts[$cIdx].ToLower())" }
+  elseif ($cIdx -ge 2) { $cookiesArg = "--cookies-from-browser $($cBrowsers[$cIdx])" }
   $argStr = "`"ytsearch15:$q`" --flat-playlist --dump-json --no-warnings $cookiesArg"
   try { $script:searchProc = Start-Hidden $ytdlp $argStr $searchJson ($searchJson + '.err') }
-  catch { $searchResults.Children.Clear(); $loading.Text = 'Не удалось запустить поиск' }
+  catch { $searchResults.Children.Clear(); $loading.Text = T 'err_search_start' }
 }
 $pillStyle = $window.FindResource('Pill')
 $brushConv = New-Object System.Windows.Media.BrushConverter
@@ -1298,7 +1607,7 @@ function Render-History($filter) {
   }
   if ($items.Count -eq 0) {
     $tb = New-Object System.Windows.Controls.TextBlock
-    $tb.Text = $(if ($filter) { 'Ничего не найдено' } else { 'История пока пуста' })
+    $tb.Text = $(if ($filter) { T 'none_found' } else { T 'hist_empty' })
     $tb.Foreground = $window.FindResource('TFgDim'); $tb.Margin = New-Object System.Windows.Thickness 8, 12, 0, 0
     [void]$historyList.Children.Add($tb)
     return
@@ -1319,7 +1628,7 @@ function Render-History($filter) {
       $c2 = New-Object System.Windows.Controls.ColumnDefinition; $c2.Width = [System.Windows.GridLength]::Auto
       $g.ColumnDefinitions.Add($c0); $g.ColumnDefinitions.Add($c1); $g.ColumnDefinitions.Add($c2)
 
-      # миниатюра
+      # thumbnail
       $tbrd = New-Object System.Windows.Controls.Border
       $tbrd.Width = 64; $tbrd.Height = 36
       $tbrd.CornerRadius = New-Object System.Windows.CornerRadius 6
@@ -1357,7 +1666,7 @@ function Render-History($filter) {
 
       $btns = New-Object System.Windows.Controls.StackPanel; $btns.Orientation = 'Horizontal'; $btns.VerticalAlignment = 'Center'; $btns.Margin = New-Object System.Windows.Thickness 12, 0, 0, 0
       if ($it.url -and "$($it.url)" -match '^(https?://|magnet:)') {
-        $bAgain = New-Object System.Windows.Controls.Button; $bAgain.Content = 'Скачать снова'; $bAgain.Style = $window.FindResource('Ghost'); $bAgain.Height = 28; $bAgain.Padding = New-Object System.Windows.Thickness 10, 0, 10, 0; $bAgain.Margin = New-Object System.Windows.Thickness 0, 0, 8, 0
+        $bAgain = New-Object System.Windows.Controls.Button; $bAgain.Content = T 'btn_again'; $bAgain.Style = $window.FindResource('Ghost'); $bAgain.Height = 28; $bAgain.Padding = New-Object System.Windows.Thickness 10, 0, 10, 0; $bAgain.Margin = New-Object System.Windows.Thickness 0, 0, 8, 0
         $bAgain.Tag = [string]$it.url
         $bAgain.Add_Click({
             param($s, $e)
@@ -1367,7 +1676,7 @@ function Render-History($filter) {
           })
         [void]$btns.Children.Add($bAgain)
       }
-      $bPlay = New-Object System.Windows.Controls.Button; $bPlay.Content = 'Открыть'; $bPlay.Style = $window.FindResource('Ghost'); $bPlay.Height = 28; $bPlay.Padding = New-Object System.Windows.Thickness 10, 0, 10, 0
+      $bPlay = New-Object System.Windows.Controls.Button; $bPlay.Content = T 'btn_open'; $bPlay.Style = $window.FindResource('Ghost'); $bPlay.Height = 28; $bPlay.Padding = New-Object System.Windows.Thickness 10, 0, 10, 0
       $bPlay.Tag = [string]$it.path
       $bPlay.Add_Click({
           param($s, $e)
@@ -1388,6 +1697,102 @@ function Render-History($filter) {
   }
   catch {}
 }
+
+# ---------------- language switching ----------------
+$script:readyText = ''
+# Top-bar "RU | EN" toggle: Tag="on" switches the LangBtn style trigger to the accent colour
+# (DynamicResource inside the trigger, so a theme change recolours it too).
+function Update-LangSwitch {
+  $langRu.Tag = $(if ($script:lang -eq 'ru') { 'on' } else { 'off' })
+  $langEn.Tag = $(if ($script:lang -eq 'en') { 'on' } else { 'off' })
+}
+function Set-Language($code) {
+  if ($code -ne 'ru' -and $code -ne 'en') { return }
+  $script:lang = $code
+  Apply-Language
+  Save-Settings
+}
+function Set-PillLabels($panel, $labels) {
+  foreach ($c in $panel.Children) { $i = [int]$c.Tag; if ($i -lt $labels.Count) { $c.Content = $labels[$i] } }
+}
+function Get-AudioLabel($code) {
+  switch ($code) {
+    'default' { return (T 'audio_original') }
+    'ru' { return (T 'audio_ru') }
+    'en' { return '🇺🇸 English' }
+    'es' { return '🇪🇸 Español' }
+    'de' { return '🇩🇪 Deutsch' }
+    'fr' { return '🇫🇷 Français' }
+    'all' { return (T 'audio_all') }
+    default { return ([string]$code).ToUpper() }
+  }
+}
+# Re-applies every user-visible string in the current language (callable at runtime, no restart needed)
+function Apply-Language {
+  $wasReady = (-not $statusText.Text) -or ($statusText.Text -eq $script:readyText)
+  # title bar
+  $ytLogoBtn.ToolTip = T 'tip_ytsearch'; $historyBtn.ToolTip = T 'tip_history'; $searchBtn.ToolTip = T 'tip_search'
+  $gearBtn.ToolTip = T 'tip_settings'; $dotMin.ToolTip = T 'tip_min'; $dotClose.ToolTip = T 'tip_close'
+  # main form
+  $lblLinks.Text = T 'lbl_links'; $urlHint.Text = T 'hint_url'
+  $pasteBtn.Content = T 'btn_paste'; $clearBtn.Content = T 'btn_clear'; $torrentBtn.Content = T 'btn_torrent'
+  $lblQuality.Text = T 'lbl_quality'; $lblAudio.Text = T 'lbl_audio'; $lblTrim.Text = T 'lbl_trim'
+  $gifBtn.Content = T 'btn_gif'
+  $playlistToggle.Content = T 'tg_playlist'; $playlistRangeHint.Text = T 'hint_range'
+  $splitChaptersToggle.Content = T 'tg_split'; $splitChaptersToggle.ToolTip = T 'tip_split'
+  $lblFolder.Text = T 'lbl_folder'
+  $presetDownloads.Text = T 'preset_dl'; $presetDownloads.ToolTip = T 'tip_preset_dl'
+  $presetMusic.Text = T 'preset_music'; $presetMusic.ToolTip = T 'tip_preset_music'
+  $presetDesktop.Text = T 'preset_desktop'; $presetDesktop.ToolTip = T 'tip_preset_desktop'
+  $browseBtn.Content = T 'btn_browse'; $downloadBtn.Content = T 'btn_download'; $cancelBtn.Content = T 'btn_cancel'
+  $logBtn.Content = T 'btn_log'; $openBtn.Content = T 'btn_folder'; $updateBtn.Content = T 'btn_update'
+  $clearQueueBtn.Text = T 'btn_clear_queue'; $openFileBtn.Content = T 'btn_open_file'
+  # preview card
+  $artBtn.ToolTip = T 'tip_watch'; $downloadThumbBtn.ToolTip = T 'tip_thumb'
+  # search overlay
+  $searchTitle.Text = T 'ttl_search'; $searchGo.Content = T 'btn_find'; $searchCloseBtn.Content = T 'btn_close'
+  # settings overlay
+  $settingsTitle.Text = T 'ttl_settings'; $settingsClose.Content = T 'btn_done'
+  $lblParallel.Text = T 'set_parallel'; $lblRate.Text = T 'set_rate'; $lblCodec.Text = T 'set_codec'
+  $archiveToggle.Content = T 'set_archive'; $clipWatchToggle.Content = T 'set_clip'
+  $lblCookies.Text = T 'set_cookies'; $lblSb.Text = T 'set_sb'; $sponsorblockToggle.Content = T 'set_sb_tg'
+  $lblTagger.Text = T 'set_tagger'; $smartTaggerToggle.Content = T 'set_tagger_tg'
+  $lblSubs.Text = T 'set_subs'; $subsToggle.Content = T 'set_subs_tg'
+  $lblTheme.Text = T 'set_theme'; $lblOpacity.Text = T 'set_opacity'
+  # top-bar language toggle
+  $langRu.ToolTip = T 'lang_ru'; $langEn.ToolTip = T 'lang_en'
+  Update-LangSwitch
+  # history overlay
+  $historyTitle.Text = T 'ttl_history'; $clearHistoryBtn.Content = T 'btn_clear_all'
+  $historySearchHint.Text = T 'hint_hist_search'; $historyCloseBtn.Content = T 'btn_close'
+  # chapters overlay
+  $chaptersTitle.Text = T 'ttl_chapters'; $chaptersAllBtn.Content = T 'btn_all'; $chaptersNoneBtn.Content = T 'btn_none'
+  $chaptersHint.Text = T 'hint_chapters'; $chaptersCloseBtn.Content = T 'btn_close'; $chaptersApplyBtn.Content = T 'btn_apply'
+  # option pills
+  Set-PillLabels $qualityPanel (Get-QOpts)
+  Set-PillLabels $cookiesPanel (Get-COpts)
+  Set-PillLabels $subsLangPanel (Get-SOpts)
+  Set-PillLabels $themePanel (Get-TOpts)
+  Set-PillLabels $ratePanel (Get-RateOpts)
+  Set-PillLabels $codecPanel (Get-CodecOpts)
+  foreach ($c in $audioTracksPanel.Children) { try { $c.Content = Get-AudioLabel ([string]$c.Tag) } catch {} }
+  # status line
+  $script:readyText = T 'st_ready'
+  if ($wasReady) { $statusText.Text = $script:readyText }
+  # dynamic labels
+  if (@($script:chapterData).Count -gt 1) { Update-ChaptersBtn }
+  else { $chaptersBtn.Content = T 'btn_chapters'; Update-TrimFromTrack }
+  foreach ($it in $script:queueItems.ToArray()) { if ($it.Status -ne 'now') { Set-ItemStatus $it $it.Status } }
+  if ($historyOverlay.Visibility -eq 'Visible') { Render-History $historySearchBox.Text.Trim() }
+  # tray menu
+  if ($script:miOpen) { try { $script:miOpen.Text = T 'tray_open'; $script:miExit.Text = T 'tray_exit' } catch {} }
+  # secondary windows
+  if ($script:vidWin) { try { $script:vidWin.Title = T 'ttl_video'; $script:vfull.ToolTip = T 'tip_fullscreen' } catch {} }
+  if ($script:wvWin) { try { $script:wvWin.Title = T 'ttl_video' } catch {} }
+}
+# Buttons (not TextBlocks): Click also fires from keyboard and UI Automation, and it does not start the title-bar drag
+$langRu.Add_Click({ Set-Language 'ru' })
+$langEn.Add_Click({ Set-Language 'en' })
 
 if ($saved) {
   if ($saved.folder -and (Test-Path $saved.folder)) { $folderBox.Text = $saved.folder }
@@ -1433,10 +1838,11 @@ function Save-Settings {
     codec         = Get-Sel $codecPanel
     archive       = [bool]$archiveToggle.IsChecked
     clipWatch     = [bool]$clipWatchToggle.IsChecked
+    lang          = $script:lang
   } | ConvertTo-Json | Set-Content -Path $settingsPath -Encoding UTF8
 }
 
-# ---------------- состояние ----------------
+# ---------------- state ----------------
 $script:proc = $null
 $script:previewProc = $null
 $script:lastFile = ''
@@ -1468,10 +1874,13 @@ $script:cookieBrowserFail = $false
 $script:phase = 'idle'
 $script:outPos = 0
 $script:errPos = 0
+# skip stale output left in %TEMP% by a previous (killed) session, otherwise the status line replays it at startup
+try { if (Test-Path $outLog) { $script:outPos = (Get-Item $outLog).Length } } catch {}
+try { if (Test-Path $errLog) { $script:errPos = (Get-Item $errLog).Length } } catch {}
 $script:logBuffer = New-Object System.Text.StringBuilder
 $script:singleOp = ''
 
-# очередь загрузок (пул параллельных воркеров)
+# download queue (pool of parallel workers)
 $script:queueItems = New-Object System.Collections.Generic.List[object]
 $script:workers = New-Object System.Collections.Generic.List[object]
 $script:queueTotal = 0
@@ -1485,6 +1894,7 @@ $script:hBase = 770
 $script:hQueue = 870
 $script:selectedChapters = @()
 $script:chapterData = @()
+Apply-Language
 
 function Set-State($text, $dotHex) {
   $statusText.Text = $text
@@ -1549,24 +1959,24 @@ function Process-Output($text) {
     $fn = Split-Path ($dm.Groups[1].Value.Trim()) -Leaf
     $fn = $fn -replace '\.f\d+\.[A-Za-z0-9]+$', '' -replace '\.[A-Za-z0-9]+$', ''
     $fn = $fn.Trim()
-    if ($fn -notmatch '[\p{L}\p{N}]') { $fn = 'Видео' }   # имя из одних символов → заглушка
+    if ($fn -notmatch '[\p{L}\p{N}]') { $fn = T 'fb_video' }   # name made of symbols only -> placeholder
     $itemTitle.Text = $fn
     $itemTitle.Visibility = 'Visible'
-    if ($script:phase -ne 'merge') { $script:phase = 'download'; Set-State 'Скачивание' '#8F8F97' }
+    if ($script:phase -ne 'merge') { $script:phase = 'download'; Set-State (T 'st_downloading') '#8F8F97' }
   }
 
   if ($text -match '\[ExtractAudio\]|Extracting audio') {
-    $script:phase = 'audio'; Set-State 'Конвертация в MP3' '#8F8F97'; Set-Progress 100
+    $script:phase = 'audio'; Set-State (T 'st_convert_mp3') '#8F8F97'; Set-Progress 100
   }
   if ($text -match 'Merging formats') {
-    $script:phase = 'merge'; Set-State 'Объединение видео и звука' '#8F8F97'; Set-Progress 100
+    $script:phase = 'merge'; Set-State (T 'st_merging') '#8F8F97'; Set-Progress 100
     $detailText.Text = ''
   }
   if ($text -match 'Deleting original file|has already been downloaded|\[download\]\s+100% of') {
     $script:sawSuccess = $true
   }
 
-  # путь итогового файла
+  # final file path
   $fm = [regex]::Match($text, '\[Merger\] Merging formats into "(.+?)"')
   if ($fm.Success) { $script:lastFile = $fm.Groups[1].Value.Trim() }
   $am = [regex]::Match($text, '\[ExtractAudio\] Destination: (.+)')
@@ -1583,7 +1993,7 @@ function Process-Output($text) {
   if ($pm.Count -gt 0) {
     $m = $pm[$pm.Count - 1]
     $pct = [double]$m.Groups[1].Value
-    if ($script:phase -eq 'idle' -or $script:phase -eq 'start') { $script:phase = 'download'; Set-State 'Скачивание' '#8F8F97' }
+    if ($script:phase -eq 'idle' -or $script:phase -eq 'start') { $script:phase = 'download'; Set-State (T 'st_downloading') '#8F8F97' }
     if ($script:phase -eq 'download') {
       Set-Progress $pct
       $parts = @(('{0:0}%' -f $pct))
@@ -1597,7 +2007,7 @@ function Process-Output($text) {
 }
 
 function Start-Hidden($exe, $argStr, $outFile, $errFile) {
-  # Прямой запуск без cmd.exe — URL с & и спецсимволы не ломаются
+  # Direct launch without cmd.exe — URLs with & and special characters survive intact
   if ($exe -match 'yt-dlp(\.exe)?$' -and $argStr -notmatch '--encoding') {
     $argStr = "--encoding utf-8 $argStr"
   }
@@ -1605,7 +2015,7 @@ function Start-Hidden($exe, $argStr, $outFile, $errFile) {
 }
 
 function Kill-Tree($procId, [switch]$Wait) {
-  # Завершить процесс и его дочерние (yt-dlp + ffmpeg) без мелькающего окна
+  # Kill the process and its children (yt-dlp + ffmpeg) without a flashing console window
   try {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = 'taskkill.exe'
@@ -1646,7 +2056,7 @@ function Start-YtDlp($argStr, $statusStr, $op = 'op') {
   catch {
     Set-Busy $false
     $script:singleOp = ''
-    Set-State 'Не удалось запустить yt-dlp' '#FF5C5C'
+    Set-State (T 'err_ytdlp_start') '#FF5C5C'
   }
 }
 
@@ -1671,11 +2081,11 @@ function Build-Args($url) {
   }
   $idx = Get-Sel $qualityPanel
   if ($idx -eq 4) {
-    # MP3 320 kbps (скачиваем ТОЛЬКО чистый звук, мгновенно без выкачивания видео)
+    # MP3 320 kbps (audio ONLY — no video stream is downloaded)
     $fmt = '-f "bestaudio/best" -x --audio-format mp3 --audio-quality 320K --embed-thumbnail --add-metadata'
   }
   elseif ($idx -eq 5) {
-    # FLAC / Lossless (чистый звук без сжатия)
+    # FLAC / lossless (uncompressed audio)
     $fmt = '-f "bestaudio/best" -x --audio-format flac --embed-thumbnail --add-metadata'
   }
   elseif ($idx -eq 1) {
@@ -1691,7 +2101,7 @@ function Build-Args($url) {
     $fmt = '-f "bestvideo[height<=480]+bestaudio/best[height<=480]/best" --merge-output-format mp4'
   }
   else {
-    # 0: Максимальное
+    # 0: best available
     $fmt = '-f "bestvideo+bestaudio/best" --merge-output-format mp4'
   }
   $cIdx = Get-Sel $cookiesPanel
@@ -1700,7 +2110,7 @@ function Build-Args($url) {
     $cookiesArg = "--cookies `"$(Join-Path $root 'cookies.txt')`""
   }
   elseif ($cIdx -ge 2) {
-    $cookiesArg = "--cookies-from-browser $($cOpts[$cIdx].ToLower())"
+    $cookiesArg = "--cookies-from-browser $($cBrowsers[$cIdx])"
   }
   $subsArg = ''
   if ($subsToggle.IsChecked -and $idx -lt 4) {
@@ -1713,13 +2123,13 @@ function Build-Args($url) {
   }
   $splitArg = ''
   if ($splitChaptersToggle.IsChecked) {
-    # шаблон вывода для глав, иначе yt-dlp кладёт нарезку в рабочую папку программы
+    # output template for chapters, otherwise yt-dlp drops the pieces into the app's working folder
     $chTpl = Join-Path $folder '%(title)s - %(section_number)02d %(section_title)s.%(ext)s'
     $splitArg = "--split-chapters -o `"chapter:$chTpl`""
   }
   $trimArg = ''
   if ($script:selectedChapters -and @($script:selectedChapters).Count -gt 0) {
-    # выбранные главы: каждая скачивается отдельным файлом (совпадение по названию главы)
+    # selected chapters: each one is downloaded as a separate file (matched by chapter title)
     $secs = @($script:selectedChapters | ForEach-Object {
         $rx = [regex]::Escape([string]$_.Title) -replace '"', '.'
         "--download-sections `"^$rx$`""
@@ -1760,11 +2170,11 @@ function Build-Args($url) {
 
   $taggerArg = ''
   if ($smartTaggerToggle.IsChecked -and ($idx -eq 4 -or $idx -eq 5)) {
-    # сначала артист = канал (запасной вариант), потом «Артист - Название» из заголовка поверх
+    # first artist = channel (fallback), then "Artist - Title" parsed from the title on top
     $taggerArg = '--parse-metadata "%(uploader)s:%(meta_artist)s" --parse-metadata "%(title)s:%(meta_artist)s - %(meta_title)s"'
   }
 
-  # Многопоточная выгрузка фрагментов для ускорения отдачи видео
+  # Multi-threaded fragment download to speed things up
   $speedArgs = '--concurrent-fragments 4 --buffer-size 16K'
   return "--newline --no-mtime --remote-components ejs:github --ffmpeg-location `"$root`" $speedArgs $rateArg $archArg $cookiesArg $subsArg $sbArg $splitArg $audioArg $taggerArg $trimArg $plFlag $fmt -o `"$tpl`" `"$url`""
 }
@@ -1772,10 +2182,10 @@ function Build-Args($url) {
 function Set-ItemStatus($item, $status) {
   $item.Status = $status
   switch ($status) {
-    'now' { $item.Dot.Fill = $window.FindResource('TFg'); $item.St.Text = 'Скачивание' }
-    'done' { $item.Dot.Fill = $brushConv.ConvertFromString('#34C759'); $item.St.Text = 'Готово' }
-    'error' { $item.Dot.Fill = $brushConv.ConvertFromString('#FF5C5C'); $item.St.Text = 'Ошибка' }
-    default { $item.Dot.Fill = $window.FindResource('TFgSub'); $item.St.Text = 'Ожидание' }
+    'now' { $item.Dot.Fill = $window.FindResource('TFg'); $item.St.Text = T 'st_downloading' }
+    'done' { $item.Dot.Fill = $brushConv.ConvertFromString('#34C759'); $item.St.Text = T 'q_done' }
+    'error' { $item.Dot.Fill = $brushConv.ConvertFromString('#FF5C5C'); $item.St.Text = T 'q_error' }
+    default { $item.Dot.Fill = $window.FindResource('TFgSub'); $item.St.Text = T 'q_wait' }
   }
   if ($status -ne 'wait') { $item.X.Visibility = 'Collapsed' }
   Update-ClearVis
@@ -1819,21 +2229,21 @@ function Process-WorkerOutput($w, $text) {
     $fn = Split-Path ($dm.Groups[1].Value.Trim()) -Leaf
     $fn = $fn -replace '\.f\d+\.[A-Za-z0-9]+$', '' -replace '\.[A-Za-z0-9]+$', ''
     $fn = $fn.Trim()
-    if ($fn -notmatch '[\p{L}\p{N}]') { $fn = 'Видео' }
+    if ($fn -notmatch '[\p{L}\p{N}]') { $fn = T 'fb_video' }
     $w.Title = $fn
     $w.Item.Name.Text = $fn
     if ($w.Phase -ne 'merge') {
       $w.Phase = 'download'
-      if ($script:queueTotal -eq 1) { Set-State 'Скачивание' '#8F8F97' }
+      if ($script:queueTotal -eq 1) { Set-State (T 'st_downloading') '#8F8F97' }
     }
   }
   if ($text -match '\[ExtractAudio\]|Extracting audio') {
-    $w.Phase = 'audio'; $w.Pct = 100; $w.Item.St.Text = 'Обработка'
-    if ($script:queueTotal -eq 1) { Set-State 'Конвертация в MP3' '#8F8F97' }
+    $w.Phase = 'audio'; $w.Pct = 100; $w.Item.St.Text = T 'q_processing'
+    if ($script:queueTotal -eq 1) { Set-State (T 'st_convert_mp3') '#8F8F97' }
   }
   if ($text -match 'Merging formats') {
-    $w.Phase = 'merge'; $w.Pct = 100; $w.Item.St.Text = 'Обработка'; $w.Detail = ''
-    if ($script:queueTotal -eq 1) { Set-State 'Объединение видео и звука' '#8F8F97' }
+    $w.Phase = 'merge'; $w.Pct = 100; $w.Item.St.Text = T 'q_processing'; $w.Detail = ''
+    if ($script:queueTotal -eq 1) { Set-State (T 'st_merging') '#8F8F97' }
   }
   if ($text -match 'Deleting original file|has already been downloaded|has already been recorded in|\[download\]\s+100% of') {
     $w.SawSuccess = $true
@@ -1857,7 +2267,7 @@ function Process-WorkerOutput($w, $text) {
     $pct = [double]$m.Groups[1].Value
     if ($w.Phase -eq 'start') {
       $w.Phase = 'download'
-      if ($script:queueTotal -eq 1) { Set-State 'Скачивание' '#8F8F97' }
+      if ($script:queueTotal -eq 1) { Set-State (T 'st_downloading') '#8F8F97' }
     }
     if ($w.Phase -eq 'download') {
       $w.Pct = $pct
@@ -1887,10 +2297,10 @@ function Update-QueueUI {
   elseif ($script:workers.Count -gt 1) {
     $itemTitle.Visibility = 'Collapsed'
     $waiting = @($script:queueItems | Where-Object { $_.Status -eq 'wait' }).Count
-    $detailText.Text = "Параллельно: $($script:workers.Count)" + $(if ($waiting -gt 0) { " · в очереди: $waiting" } else { '' })
+    $detailText.Text = ((T 'st_parallel') -f $script:workers.Count) + $(if ($waiting -gt 0) { (T 'st_queued') -f $waiting } else { '' })
     $detailText.Visibility = 'Visible'
   }
-  if ($script:queueTotal -gt 1) { Set-State "Скачивание · готово $done из $($script:queueTotal)" '#8F8F97' }
+  if ($script:queueTotal -gt 1) { Set-State ((T 'st_dl_progress') -f $done, $script:queueTotal) '#8F8F97' }
 }
 
 function Make-ShortName($url) {
@@ -1929,7 +2339,7 @@ function Add-QueueRow($url) {
   [System.Windows.Controls.Grid]::SetColumn($name, 1)
 
   $st = New-Object System.Windows.Controls.TextBlock
-  $st.Text = 'Ожидание'; $st.Foreground = $window.FindResource('TFgDim')
+  $st.Text = T 'q_wait'; $st.Foreground = $window.FindResource('TFgDim')
   $st.FontSize = 11; $st.VerticalAlignment = 'Center'; $st.Margin = New-Object System.Windows.Thickness 8, 0, 8, 0
   [System.Windows.Controls.Grid]::SetColumn($st, 2)
 
@@ -1976,11 +2386,11 @@ function Clear-WaitingQueue {
   foreach ($it in $toRemove) { Remove-QueueItem $it }
 }
 
-# таймер чтения вывода
+# output polling timer
 $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromMilliseconds(200)
 $timer.Add_Tick({
-    # --- одиночные операции: обновление yt-dlp, обложка, локальная конвертация ---
+    # --- single operations: yt-dlp update, thumbnail, local conversion ---
     Process-Output (Read-NewText $outLog ([ref]$script:outPos))
     Process-Output (Read-NewText $errLog ([ref]$script:errPos))
     if ($script:proc -and $script:proc.HasExited) {
@@ -1992,35 +2402,35 @@ $timer.Add_Tick({
       try { Set-Content -Path $logFile -Value $script:logBuffer.ToString() -Encoding UTF8 } catch {}
 
       if ($script:cancelled) {
-        Set-State 'Отменено' '#FFB340'; $detailText.Text = ''
+        Set-State (T 'st_cancelled') '#FFB340'; $detailText.Text = ''
         Reset-Progress
         Set-TaskProgress 'None' -1
       }
       elseif ($script:singleOp -eq 'convert') {
         if ($code -eq 0 -and $script:lastFile -and (Test-Path $script:lastFile)) {
-          Set-State '✓ Готово' '#34C759'
-          $detailText.Text = 'Файл сохранён в выбранную папку'
+          Set-State (T 'st_done') '#34C759'
+          $detailText.Text = T 'det_file_saved'
           Add-HistoryItem ([System.IO.Path]::GetFileNameWithoutExtension($script:lastFile)) '' $script:lastFile
           $openFileBtn.Visibility = 'Visible'
-          Notify 'Deviload' 'Конвертация завершена'
+          Notify 'Deviload' (T 'ntf_convert_done')
         }
-        else { Set-State "Ошибка конвертации (код $code) — смотри лог" '#FF5C5C' }
+        else { Set-State ((T 'st_convert_err') -f $code) '#FF5C5C' }
         Set-Progress 100
         Set-TaskProgress 'None' -1
       }
       else {
         if ($code -eq 0 -or $script:sawSuccess) {
-          Set-State '✓ Готово' '#34C759'
+          Set-State (T 'st_done') '#34C759'
           if ($script:singleOp -eq 'thumb' -and $script:lastFile -and (Test-Path $script:lastFile)) { $openFileBtn.Visibility = 'Visible' }
         }
-        else { Set-State "Ошибка (код $code) — смотри лог" '#FF5C5C' }
+        else { Set-State ((T 'st_err_code') -f $code) '#FF5C5C' }
         Set-TaskProgress 'None' -1
       }
       $script:singleOp = ''
       Set-Busy $false
     }
 
-    # --- пул параллельных загрузок ---
+    # --- parallel download pool ---
     if ($script:queueActive) {
       foreach ($w in $script:workers.ToArray()) {
         $p = $w.OutPos; $t = Read-NewText $w.Out ([ref]$p); $w.OutPos = $p
@@ -2036,7 +2446,7 @@ $timer.Add_Tick({
           [void]$script:workers.Remove($w)
           if ($script:cancelled) {
             Set-ItemStatus $w.Item 'error'
-            $w.Item.St.Text = 'Отменено'
+            $w.Item.St.Text = T 'q_cancelled'
           }
           else {
             $ok = ($w.Proc.ExitCode -eq 0 -or $w.SawSuccess)
@@ -2060,7 +2470,7 @@ $timer.Add_Tick({
       elseif ($script:cancelled) {
         $script:queueActive = $false
         try { Set-Content -Path $logFile -Value $script:logBuffer.ToString() -Encoding UTF8 } catch {}
-        Set-State 'Отменено' '#FFB340'; $detailText.Text = ''
+        Set-State (T 'st_cancelled') '#FFB340'; $detailText.Text = ''
         Reset-Progress
         Set-TaskProgress 'None' -1
         Set-Busy $false
@@ -2068,7 +2478,7 @@ $timer.Add_Tick({
       else {
         $waiting = @($script:queueItems | Where-Object { $_.Status -eq 'wait' }).Count
         if ($waiting -gt 0) {
-          # страховка: воркер не стартовал — пробуем следующий
+          # safety net: a worker did not start — try the next one
           Start-NextWorker
         }
         else {
@@ -2077,27 +2487,27 @@ $timer.Add_Tick({
           Set-Progress 100
           Set-TaskProgress 'None' -1
           if ($script:queueTotal -gt 1) {
-            if ($script:queueFail -eq 0) { Set-State "Скачано: $($script:queueOk) из $($script:queueTotal)" '#34C759' }
-            else { Set-State "Готово: $($script:queueOk) из $($script:queueTotal), ошибок $($script:queueFail)" '#FFB340' }
-            $detailText.Text = 'Файлы сохранены в выбранную папку'
-            Notify 'Deviload' "Готово: $($script:queueOk) из $($script:queueTotal)"
+            if ($script:queueFail -eq 0) { Set-State ((T 'st_dl_all') -f $script:queueOk, $script:queueTotal) '#34C759' }
+            else { Set-State ((T 'st_dl_partial') -f $script:queueOk, $script:queueTotal, $script:queueFail) '#FFB340' }
+            $detailText.Text = T 'det_files_saved'
+            Notify 'Deviload' ((T 'ntf_done_n') -f $script:queueOk, $script:queueTotal)
           }
           elseif ($script:queueFail -eq 0) {
-            if ($script:cookieStale) { Set-State 'Скачано — cookies устарели, обнови файл' '#34C759' }
-            else { Set-State 'Скачано!' '#34C759' }
-            $detailText.Text = 'Файл сохранён в выбранную папку'
-            Notify 'Deviload' 'Скачано!'
+            if ($script:cookieStale) { Set-State (T 'st_dl_cookies_stale') '#34C759' }
+            else { Set-State (T 'st_downloaded') '#34C759' }
+            $detailText.Text = T 'det_file_saved'
+            Notify 'Deviload' (T 'st_downloaded')
           }
           else {
             if ($script:cookieBrowserFail) {
-              Set-State 'Браузер не отдал cookies — нужен файл cookies.txt' '#FF5C5C'
-              $detailText.Text = 'Chrome/Edge шифруют cookies. Экспортируй расширением «Get cookies.txt LOCALLY» и выбери «Файл cookies.txt»'
+              Set-State (T 'st_cookie_browser_fail') '#FF5C5C'
+              $detailText.Text = T 'det_cookie_browser_fail'
             }
             else {
-              Set-State 'Не удалось скачать' '#FF5C5C'
-              $detailText.Text = 'Подробности — кнопка «Лог»'
+              Set-State (T 'st_dl_failed') '#FF5C5C'
+              $detailText.Text = T 'det_see_log'
             }
-            Notify 'Deviload' 'Не удалось скачать'
+            Notify 'Deviload' (T 'st_dl_failed')
           }
           if ($script:lastFile -and (Test-Path $script:lastFile)) {
             $openFileBtn.Visibility = 'Visible'
@@ -2107,7 +2517,7 @@ $timer.Add_Tick({
               $script:playing = $false
               $playGlyph.Text = [char]0xE768
               $playerBar.Value = 0; $curTime.Text = '0:00'
-              if (-not $previewTitle.Text -or $previewTitle.Text -eq 'Загрузка превью…') {
+              if (-not $previewTitle.Text -or $previewTitle.Text -eq (T 'pv_loading')) {
                 $previewTitle.Text = [System.IO.Path]::GetFileNameWithoutExtension($script:lastFile)
               }
               $previewCard.Visibility = 'Visible'
@@ -2125,7 +2535,7 @@ $timer.Add_Tick({
         try {
           $raw = Get-Content $previewJson -Raw -Encoding UTF8 -ErrorAction Stop
           $j = $raw | ConvertFrom-Json
-          if ($j.title) { $previewTitle.Text = $j.title } else { $previewTitle.Text = 'Без названия' }
+          if ($j.title) { $previewTitle.Text = $j.title } else { $previewTitle.Text = T 'pv_untitled' }
           if ($null -ne $j.duration) {
             $script:vidDur = [double]$j.duration
             $ts = [TimeSpan]::FromSeconds([double]$j.duration)
@@ -2133,7 +2543,7 @@ $timer.Add_Tick({
             $curTime.Text = '0:00'
           }
           else { $script:vidDur = 0.0; $totalTime.Text = '0:00' }
-          # примерный размер файла
+          # approximate file size
           $szBytes = 0.0
           try {
             if ($j.requested_formats) {
@@ -2158,18 +2568,9 @@ $timer.Add_Tick({
           }
           if ($langs.Count -gt 1) {
             $script:availableAudioLangs = @('default') + @($langs) + @('all')
-            $langNames = @{
-              'default' = 'Оригинал'
-              'ru'      = '🇷🇺 Русский дубляж'
-              'en'      = '🇺🇸 English'
-              'es'      = '🇪🇸 Español'
-              'de'      = '🇩🇪 Deutsch'
-              'fr'      = '🇫🇷 Français'
-              'all'     = '🌐 Все дорожки (Multi-Audio)'
-            }
             for ($k = 0; $k -lt $script:availableAudioLangs.Count; $k++) {
               $code = $script:availableAudioLangs[$k]
-              $lbl = $(if ($langNames.ContainsKey($code)) { $langNames[$code] } else { $code.ToUpper() })
+              $lbl = Get-AudioLabel $code
               $rb = New-Object System.Windows.Controls.RadioButton
               $rb.Content = $lbl; $rb.GroupName = 'audioTrack'; $rb.Style = $pillStyle; $rb.Tag = $code
               if ($code -eq 'ru') { $rb.IsChecked = $true }
@@ -2184,7 +2585,7 @@ $timer.Add_Tick({
           Update-TrimFromTrack
           Set-Chapters $j.chapters $script:vidDur
           if (@($script:chapterData).Count -gt 1) {
-            $chaptersBtn.Content = "Главы ($(@($script:chapterData).Count))"
+            $chaptersBtn.Content = (T 'btn_chapters_n') -f @($script:chapterData).Count
             $chaptersBtn.Visibility = 'Visible'
           }
           else { $chaptersBtn.Visibility = 'Collapsed' }
@@ -2202,12 +2603,12 @@ $timer.Add_Tick({
           }
         }
         catch {
-          $previewTitle.Text = 'Не удалось получить превью'
+          $previewTitle.Text = T 'pv_failed'
           $totalTime.Text = '0:00'
         }
       }
       else {
-        $previewTitle.Text = 'Не удалось получить превью'
+        $previewTitle.Text = T 'pv_failed'
         $totalTime.Text = '0:00'
       }
     }
@@ -2216,13 +2617,13 @@ $timer.Add_Tick({
       $script:gifProc = $null
       Set-Busy $false
       if (Test-Path $script:gifOut) {
-        Set-State 'GIF готов!' '#34C759'
-        $detailText.Text = 'GIF сохранён в выбранную папку'; $detailText.Visibility = 'Visible'
+        Set-State (T 'st_gif_done') '#34C759'
+        $detailText.Text = T 'det_gif_saved'; $detailText.Visibility = 'Visible'
         $script:lastFile = $script:gifOut; $script:playerSrc = ''; $openFileBtn.Visibility = 'Visible'
       }
       else {
-        Set-State 'Не удалось сделать GIF' '#FF5C5C'
-        $detailText.Text = 'Подробности — в открытом логе'; $detailText.Visibility = 'Visible'
+        Set-State (T 'st_gif_failed') '#FF5C5C'
+        $detailText.Text = T 'det_gif_log'; $detailText.Visibility = 'Visible'
         try { if (Test-Path $gifLog) { Start-Process notepad.exe $gifLog } } catch {}
       }
     }
@@ -2241,7 +2642,7 @@ $timer.Add_Tick({
           }
           if ($count -eq 0) {
             $tb = New-Object System.Windows.Controls.TextBlock
-            $tb.Text = 'Ничего не найдено'; $tb.Foreground = $window.FindResource('TFgDim')
+            $tb.Text = T 'none_found'; $tb.Foreground = $window.FindResource('TFgDim')
             $tb.Margin = New-Object System.Windows.Thickness 4, 8, 0, 0
             [void]$searchResults.Children.Add($tb)
           }
@@ -2250,7 +2651,7 @@ $timer.Add_Tick({
       }
       else {
         $tb = New-Object System.Windows.Controls.TextBlock
-        $tb.Text = 'Ничего не найдено'; $tb.Foreground = $window.FindResource('TFgDim')
+        $tb.Text = T 'none_found'; $tb.Foreground = $window.FindResource('TFgDim')
         $tb.Margin = New-Object System.Windows.Thickness 4, 8, 0, 0
         [void]$searchResults.Children.Add($tb)
       }
@@ -2266,12 +2667,12 @@ $timer.Add_Tick({
   })
 $timer.Start()
 
-# дебаунс авто-превью
+# auto-preview debounce
 $previewDebounce = New-Object System.Windows.Threading.DispatcherTimer
 $previewDebounce.Interval = [TimeSpan]::FromMilliseconds(700)
 $previewDebounce.Add_Tick({ $previewDebounce.Stop(); Fetch-Preview })
 
-# события плеера
+# player events
 $script:mp.Add_MediaOpened({
     try { $script:playerDur = $script:mp.NaturalDuration.TimeSpan.TotalSeconds } catch { $script:playerDur = 0 }
     try { $totalTime.Text = Format-Time $script:playerDur } catch {}
@@ -2286,8 +2687,8 @@ $script:mp.Add_MediaEnded({
     }
   })
 
-# ---------------- события ----------------
-# вотчер буфера обмена: скопировал ссылку — она сама встала в очередь
+# ---------------- events ----------------
+# clipboard watcher: copy a link and it lands in the queue by itself
 $script:lastClipSeen = ''
 $clipTimer = New-Object System.Windows.Threading.DispatcherTimer
 $clipTimer.Interval = [TimeSpan]::FromMilliseconds(1000)
@@ -2312,9 +2713,9 @@ $clipTimer.Start()
 
 function Start-LocalConvert($file) {
   if (-not (Test-Path $file)) { return }
-  if ($script:queueActive -or ($script:proc -and -not $script:proc.HasExited)) { Set-State 'Занят — дождись окончания текущей задачи' '#FFB340'; return }
+  if ($script:queueActive -or ($script:proc -and -not $script:proc.HasExited)) { Set-State (T 'st_busy') '#FFB340'; return }
   $ffmpegExe = Join-Path $root 'ffmpeg.exe'
-  if (-not (Test-Path $ffmpegExe)) { Set-State 'ffmpeg.exe не найден' '#FF5C5C'; return }
+  if (-not (Test-Path $ffmpegExe)) { Set-State (T 'err_no_ffmpeg') '#FF5C5C'; return }
   $folder = $folderBox.Text.Trim(); if (-not $folder) { $folder = $defaultFolder }
   if (-not (Test-Path $folder)) { try { New-Item -ItemType Directory -Path $folder -Force | Out-Null } catch {} }
   $baseName = [System.IO.Path]::GetFileNameWithoutExtension($file)
@@ -2322,12 +2723,12 @@ function Start-LocalConvert($file) {
   Set-Busy $true
   Reset-Progress
   $script:phase = 'convert'
-  $itemTitle.Text = "Конвертация: $baseName"
+  $itemTitle.Text = (T 'st_convert_title') -f $baseName
   $itemTitle.Visibility = 'Visible'
   $progress.Visibility = 'Visible'
-  $detailText.Text = 'Обработка локального файла через FFmpeg…'
+  $detailText.Text = T 'det_convert_local'
   $detailText.Visibility = 'Visible'
-  Set-State 'Конвертация файла…' '#8F8F97'
+  Set-State (T 'st_converting') '#8F8F97'
 
   if ($idx -eq 4) {
     $out = Join-Path $folder "$baseName.mp3"
@@ -2351,7 +2752,7 @@ function Start-LocalConvert($file) {
     $script:proc = Start-Hidden $ffmpegExe $args $outLog $errLog
   }
   catch {
-    Set-State 'Ошибка запуска конвертера' '#FF5C5C'
+    Set-State (T 'err_convert_start') '#FF5C5C'
     $script:singleOp = ''
     Set-Busy $false
   }
@@ -2409,15 +2810,15 @@ $playlistRangeBox.Add_TextChanged({
 $downloadThumbBtn.Add_MouseLeftButtonDown({
     param($s, $e)
     $e.Handled = $true
-    if ($script:queueActive -or $script:proc) { Set-State 'Занят — дождись окончания текущей задачи' '#FFB340'; return }
+    if ($script:queueActive -or $script:proc) { Set-State (T 'st_busy') '#FFB340'; return }
     $u = @($urlBox.Text -split "[\r\n\s]+" | ForEach-Object { $_.Trim() } | Where-Object { $_ })[0]
-    if (-not $u) { Set-State 'Вставь ссылку на ролик' '#FFB340'; return }
+    if (-not $u) { Set-State (T 'st_need_url') '#FFB340'; return }
     $folder = $folderBox.Text.Trim(); if (-not $folder) { $folder = $defaultFolder }
     if (-not (Test-Path $folder)) { try { New-Item -ItemType Directory -Path $folder -Force | Out-Null } catch {} }
-    Set-State 'Скачивание HD-обложки…' '#8F8F97'
+    Set-State (T 'st_thumb_dl') '#8F8F97'
     $tpl = Join-Path $folder '%(title)s.%(ext)s'
     $argStr = "--write-thumbnail --skip-download --convert-thumbnails png -o `"$tpl`" `"$u`""
-    Start-YtDlp $argStr 'Скачивание обложки...' 'thumb'
+    Start-YtDlp $argStr (T 'st_thumb_dl') 'thumb'
   })
 
 $presetDownloads.Add_MouseLeftButtonDown({ param($s, $e) $folderBox.Text = Join-Path ([Environment]::GetFolderPath('UserProfile')) 'Downloads' })
@@ -2463,11 +2864,11 @@ $torrentBtn.Add_Click({
     if ($t) { Start-Torrent $t; return }
     try {
       $dlg = New-Object System.Windows.Forms.OpenFileDialog
-      $dlg.Filter = 'Торрент (*.torrent)|*.torrent|Все файлы (*.*)|*.*'
+      $dlg.Filter = T 'dlg_torrent_filter'
       if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Start-Torrent $dlg.FileName }
-      else { Set-State 'Вставь magnet-ссылку в поле или выбери .torrent' '#FFB340' }
+      else { Set-State (T 'st_magnet_hint') '#FFB340' }
     }
-    catch { Set-State 'Вставь magnet-ссылку в поле' '#FFB340' }
+    catch { Set-State (T 'st_magnet_hint2') '#FFB340' }
   })
 
 $browseBtn.Add_Click({
@@ -2485,7 +2886,7 @@ $urlBox.Add_TextChanged({
 
 $logBtn.Add_Click({
     if (Test-Path $logFile) { Start-Process notepad.exe $logFile }
-    else { Set-State 'Лог пока пуст' '#FFB340' }
+    else { Set-State (T 'st_log_empty') '#FFB340' }
   })
 
 function Fetch-Preview {
@@ -2503,13 +2904,13 @@ function Fetch-Preview {
   $cIdx = Get-Sel $cookiesPanel
   $cookiesArg = ''
   if ($cIdx -eq 1) { $cf = Join-Path $root 'cookies.txt'; if (Test-Path $cf) { $cookiesArg = "--cookies `"$cf`"" } }
-  elseif ($cIdx -ge 2) { $cookiesArg = "--cookies-from-browser $($cOpts[$cIdx].ToLower())" }
+  elseif ($cIdx -ge 2) { $cookiesArg = "--cookies-from-browser $($cBrowsers[$cIdx])" }
   Remove-Item $previewJson, ($previewJson + '.err') -ErrorAction SilentlyContinue
-  $previewTitle.Text = 'Загрузка превью…'; $previewImg.Source = $null
+  $previewTitle.Text = T 'pv_loading'; $previewImg.Source = $null
   $previewSize.Text = ''
   $script:vidDur = 0.0
   $script:selectedChapters = @()
-  $chaptersBtn.Content = 'Главы'
+  $chaptersBtn.Content = T 'btn_chapters'
   $chaptersBtn.Visibility = 'Collapsed'
   try { $script:mp.Stop() } catch {}
   $script:playing = $false; $script:playerSrc = ''; $script:lastFile = ''
@@ -2520,7 +2921,7 @@ function Fetch-Preview {
   try {
     $script:previewProc = Start-Hidden $ytdlp $argStr $previewJson ($previewJson + '.err')
   }
-  catch { $previewTitle.Text = 'Не удалось получить превью' }
+  catch { $previewTitle.Text = T 'pv_failed' }
 }
 
 $previewClose.Add_MouseLeftButtonDown({ param($s, $e) $e.Handled = $true; $previewCard.Visibility = 'Collapsed' })
@@ -2536,33 +2937,33 @@ $openFileBtn.Add_Click({
 
 $gifBtn.Add_Click({
     $u = @($urlBox.Text -split "[\r\n\s]+" | ForEach-Object { $_.Trim() } | Where-Object { $_ })[0]
-    if (-not $u) { Set-State 'Вставь ссылку для GIF' '#FFB340'; return }
+    if (-not $u) { Set-State (T 'st_gif_need_url') '#FFB340'; return }
     if ($u -notmatch '^https?://') {
-      if ($u -match '^[\w-]+\.[\w-]+') { $u = "https://$u" } else { Set-State 'Это не похоже на ссылку' '#FFB340'; return }
+      if ($u -match '^[\w-]+\.[\w-]+') { $u = "https://$u" } else { Set-State (T 'st_not_url') '#FFB340'; return }
     }
     $folder = $folderBox.Text.Trim(); if (-not $folder) { $folder = $defaultFolder }
-    if (-not (Test-Path $folder)) { try { New-Item -ItemType Directory -Path $folder -Force | Out-Null } catch { Set-State 'Папка недоступна' '#FF5C5C'; return } }
-    # секунды среза + кап длительности: GIF короткий => быстрее и надёжнее
+    if (-not (Test-Path $folder)) { try { New-Item -ItemType Directory -Path $folder -Force | Out-Null } catch { Set-State (T 'err_folder') '#FF5C5C'; return } }
+    # cut points in seconds + duration cap: a short GIF is faster and more reliable
     $ss = $(if ($script:trimS) { Parse-Time $script:trimS } else { 0.0 })
     $ee = $(if ($script:trimE) { Parse-Time $script:trimE } else { $ss + 8 })
     if ($ee -le $ss) { $ee = $ss + 8 }
-    if (($ee - $ss) -gt 15) { $ee = $ss + 15 }     # максимум 15 сек на GIF
+    if (($ee - $ss) -gt 15) { $ee = $ss + 15 }     # 15 s max per GIF
     $st = ('{0:0.##}' -f $ss); $et = ('{0:0.##}' -f $ee)
     $cIdx = Get-Sel $cookiesPanel
     $cookiesArg = ''
     if ($cIdx -eq 1) { $cf = Join-Path $root 'cookies.txt'; if (Test-Path $cf) { $cookiesArg = "--cookies `"$cf`"" } }
-    elseif ($cIdx -ge 2) { $cookiesArg = "--cookies-from-browser $($cOpts[$cIdx].ToLower())" }
+    elseif ($cIdx -ge 2) { $cookiesArg = "--cookies-from-browser $($cBrowsers[$cIdx])" }
     $clip = Join-Path $env:TEMP 'ytui_clip.mp4'
     $script:gifOut = Join-Path $folder ('gif_' + (Get-Date -Format 'yyyyMMdd_HHmmss') + '.gif')
     $vf = 'fps=12,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse'
-    # -f предпочитает готовый прогрессивный формат <=480 (быстро, без вызова), без --force-keyframes (без медленного перекодирования)
+    # -f prefers a ready progressive format <=480 (fast, no merge), no --force-keyframes (no slow re-encode)
     $fmtSel = 'b[height<=480]/bv*[height<=480]/bv*/b'
     $bat = "@echo off`r`nchcp 65001 >nul`r`n`"$ytdlp`" --no-playlist --no-mtime $cookiesArg --remote-components ejs:github --download-sections `"*$st-$et`" -f `"$fmtSel`" -S `"res:480`" --ffmpeg-location `"$root`" -o `"$clip`" `"$u`"`r`nif not exist `"$clip`" exit /b 1`r`n`"$ffmpeg`" -y -i `"$clip`" -vf `"$vf`" `"$($script:gifOut)`"`r`n"
     Set-Content -Path $gifBat -Value $bat -Encoding OEM
     Remove-Item $clip -ErrorAction SilentlyContinue
-    Set-State 'Создаю GIF...' '#8F8F97'; $detailText.Text = ''; Set-Busy $true
+    Set-State (T 'st_gif_making') '#8F8F97'; $detailText.Text = ''; Set-Busy $true
     try { $script:gifProc = Start-Hidden $gifBat '' $gifLog ($gifLog + '.err') }
-    catch { Set-Busy $false; Set-State 'Не удалось запустить GIF' '#FF5C5C' }
+    catch { Set-Busy $false; Set-State (T 'err_gif_start') '#FF5C5C' }
   })
 
 function Toggle-Play {
@@ -2594,7 +2995,7 @@ function Get-VlcPath {
   return @("$env:ProgramFiles\VideoLAN\VLC\vlc.exe", "${env:ProgramFiles(x86)}\VideoLAN\VLC\vlc.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
 }
 function Get-QbDefaultSave {
-  # читаем папку загрузок qBittorrent из его конфига (на случай если --save-path игнорируется)
+  # read the qBittorrent download folder from its config (in case --save-path is ignored)
   $ini = Join-Path $env:APPDATA 'qBittorrent\qBittorrent.ini'
   if (Test-Path $ini) {
     try {
@@ -2617,12 +3018,12 @@ function Open-TorrentStream($url, $name) {
   $script:torUrl = $url
   $script:torVlc = @("$env:ProgramFiles\VideoLAN\VLC\vlc.exe", "${env:ProgramFiles(x86)}\VideoLAN\VLC\vlc.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
   if (-not $script:hasWV2) {
-    if ($script:torVlc) { Start-Process $script:torVlc $url } else { Set-State 'Нужен WebView2 (setup-webview2.bat) или VLC' '#FF5C5C' }
+    if ($script:torVlc) { Start-Process $script:torVlc $url } else { Set-State (T 'err_need_wv2') '#FF5C5C' }
     return
   }
   try {
     $tw = New-Object System.Windows.Window
-    $tw.Title = $(if ($name) { $name } else { 'Торрент' })
+    $tw.Title = $(if ($name) { $name } else { T 'ttl_torrent' })
     $tw.Width = 1000; $tw.Height = 650
     $tw.WindowStartupLocation = 'CenterScreen'
     $tw.Background = [System.Windows.Media.Brushes]::Black
@@ -2632,12 +3033,12 @@ function Open-TorrentStream($url, $name) {
     $bar.LastChildFill = $false
     $bar.Margin = '10,8,10,8'
     $vbtn = New-Object System.Windows.Controls.Button
-    $vbtn.Content = $(if ($script:torVlc) { 'Открыть в VLC' } else { 'VLC не найден' })
+    $vbtn.Content = $(if ($script:torVlc) { T 'btn_vlc' } else { T 'btn_vlc_none' })
     $vbtn.Padding = '14,6'; $vbtn.IsEnabled = [bool]$script:torVlc
     [System.Windows.Controls.DockPanel]::SetDock($vbtn, 'Right')
     $vbtn.Add_Click({ try { if ($script:torVlc) { Start-Process $script:torVlc $script:torUrl } } catch {} })
     $hint = New-Object System.Windows.Controls.TextBlock
-    $hint.Text = 'Чёрный экран (mkv/x265)? Жми «Открыть в VLC».'
+    $hint.Text = T 'hint_vlc'
     $hint.Foreground = [System.Windows.Media.Brushes]::DarkGray
     $hint.VerticalAlignment = 'Center'
     [void]$bar.Children.Add($vbtn)
@@ -2653,19 +3054,19 @@ function Open-TorrentStream($url, $name) {
     $script:torWin = $tw
   }
   catch {
-    if ($script:torVlc) { Start-Process $script:torVlc $url } else { Set-State 'Не удалось открыть плеер' '#FF5C5C' }
+    if ($script:torVlc) { Start-Process $script:torVlc $url } else { Set-State (T 'err_player') '#FF5C5C' }
   }
 }
 
 function Install-TorrentEngine {
-  # авто-установка движка при первом запуске (нужен Node.js + интернет)
+  # auto-install the engine on first use (requires Node.js + internet)
   $script:torInstalling = $true
-  Set-State 'Ставлю движок торрентов (один раз, ~минута)…' '#8F8F97'
+  Set-State (T 'st_tor_install') '#8F8F97'
   $bat = "@echo off`r`ncd /d `"$teDir`"`r`nif not exist package.json call npm init -y`r`nif exist node_modules rmdir /s /q node_modules`r`ncall npm install webtorrent@1 --no-optional --no-audit --no-fund`r`n"
   Set-Content -Path $torInstBat -Value $bat -Encoding OEM
   Remove-Item $torInstLog, ($torInstLog + '.err') -ErrorAction SilentlyContinue
   try { $script:torInstProc = Start-Hidden $torInstBat '' $torInstLog ($torInstLog + '.err') }
-  catch { $script:torInstalling = $false; Set-State 'Нет Node.js — поставь с nodejs.org' '#FF5C5C'; return }
+  catch { $script:torInstalling = $false; Set-State (T 'err_no_node') '#FF5C5C'; return }
   if ($script:torInstTimer) { try { $script:torInstTimer.Stop() } catch {} }
   $script:torInstTimer = New-Object System.Windows.Threading.DispatcherTimer
   $script:torInstTimer.Interval = [TimeSpan]::FromMilliseconds(1000)
@@ -2674,15 +3075,16 @@ function Install-TorrentEngine {
       $script:torInstTries++
       if (Test-Path $wtDir) {
         $script:torInstTimer.Stop(); $script:torInstalling = $false
-        Set-State 'Движок установлен — подключаюсь…' '#34C759'
+        Set-State (T 'st_tor_installed') '#34C759'
         if ($script:torPendingId) { Start-Torrent $script:torPendingId }
       }
       elseif (($script:torInstProc -and $script:torInstProc.HasExited) -or ($script:torInstTries -gt 180)) {
         $script:torInstTimer.Stop(); $script:torInstalling = $false
         $e = ''
         try { if (Test-Path ($torInstLog + '.err')) { $e = [System.IO.File]::ReadAllText($torInstLog + '.err') } } catch {}
-        $msg = 'Не удалось поставить движок (нужен Node.js + интернет)'
-        if ("$e" -match 'not recognized|не является') { $msg = 'Node.js не найден — поставь с nodejs.org' }
+        $msg = T 'err_tor_install'
+        # npm error text from cmd.exe may be localized (English "not recognized", or the Russian equivalent written as \u escapes)
+        if ("$e" -match 'not recognized|\u043D\u0435 \u044F\u0432\u043B\u044F\u0435\u0442\u0441\u044F') { $msg = T 'err_no_node' }
         Set-State $msg '#FF5C5C'
       }
     })
@@ -2691,15 +3093,15 @@ function Install-TorrentEngine {
 
 function Start-Torrent($id) {
   $qb = Find-Qbittorrent
-  if (-not $qb) { Set-State 'qBittorrent не найден — поставь его' '#FF5C5C'; return }
+  if (-not $qb) { Set-State (T 'err_no_qb') '#FF5C5C'; return }
   $vlc = Get-VlcPath
-  if (-not $vlc) { Set-State 'VLC не найден — поставь VLC' '#FF5C5C'; return }
+  if (-not $vlc) { Set-State (T 'err_no_vlc') '#FF5C5C'; return }
   Stop-Torrent
   $arg = ''
   if ($id -match '^magnet:') { $arg = $id }
   elseif (Test-Path $id) { $arg = $id }
-  else { Set-State 'Это не magnet и не .torrent' '#FFB340'; return }
-  # своя папка-кэш под этот просмотр (в папке программы — видно и легко чистить)
+  else { Set-State (T 'st_not_torrent') '#FFB340'; return }
+  # dedicated cache folder for this session (inside the app folder — visible and easy to clean)
   $script:qbSave = Join-Path $root ('torrent-cache\' + (Get-Date -Format 'HHmmss'))
   try { New-Item -ItemType Directory -Force -Path $script:qbSave | Out-Null } catch {}
   $script:torOpened = $false
@@ -2707,12 +3109,12 @@ function Start-Torrent($id) {
   $sp = $script:qbSave
   $script:torStart = Get-Date
   $script:qbDirs = @($sp, (Get-QbDefaultSave)) | Where-Object { $_ } | Select-Object -Unique
-  Set-State 'Добавляю в qBittorrent (последовательно)…' '#8F8F97'
+  Set-State (T 'st_qb_adding') '#8F8F97'
   try {
     Start-Process -FilePath $qb -ArgumentList @("--save-path=$sp", "--sequential", "--skip-dialog=true", $arg)
   }
-  catch { Set-State 'Не удалось запустить qBittorrent' '#FF5C5C'; return }
-  Set-State 'Качаю начало… VLC откроется через пару секунд' '#8F8F97'
+  catch { Set-State (T 'err_qb_start') '#FF5C5C'; return }
+  Set-State (T 'st_tor_buffering') '#8F8F97'
   if ($script:torWait) { try { $script:torWait.Stop() } catch {} }
   $script:torWait = New-Object System.Windows.Threading.DispatcherTimer
   $script:torWait.Interval = [TimeSpan]::FromMilliseconds(1500)
@@ -2726,13 +3128,13 @@ function Start-Torrent($id) {
         if ($vid -and $vid.Length -gt 5MB -and -not $script:torOpened) {
           $script:torOpened = $true
           $script:torWait.Stop()
-          Set-State 'Открываю VLC — смотри (качается на лету)' '#34C759'
+          Set-State (T 'st_tor_playing') '#34C759'
           try { Start-Process -FilePath $script:torVlcPath -ArgumentList @('--file-caching=8000', $vid.FullName) }
           catch { try { Start-Process $script:torVlcPath $vid.FullName } catch {} }
         }
         elseif ($script:torTries -gt 100) {
           $script:torWait.Stop()
-          Set-State 'Долго нет данных — нет пиров или торрент приватный' '#FF5C5C'
+          Set-State (T 'err_tor_nodata') '#FF5C5C'
         }
       }
       catch {}
@@ -2744,7 +3146,7 @@ function Open-VideoWV2($id) {
   try {
     if (-not $script:wvWin -or -not $script:wvWin.IsLoaded) {
       $script:wvWin = New-Object System.Windows.Window
-      $script:wvWin.Title = 'Видео'
+      $script:wvWin.Title = T 'ttl_video'
       $script:wvWin.Width = 980; $script:wvWin.Height = 620
       $script:wvWin.WindowStartupLocation = 'CenterScreen'
       $script:wvWin.Background = [System.Windows.Media.Brushes]::Black
@@ -2758,12 +3160,12 @@ function Open-VideoWV2($id) {
       $script:wvWin.Content = $script:wv
       $script:wvWin.Add_Closed({ try { $script:wv.Dispose() } catch {} })
     }
-    # грузим полноценную страницу просмотра — играет ЛЮБОЕ видео (в т.ч. с запретом встраивания),
-    # в отличие от /embed/, который даёт «Ошибка 153» при открытии верхним окном
+    # load the full watch page — it plays ANY video (including embed-restricted ones),
+    # unlike /embed/, which yields "Error 153" when opened as a top-level window
     $script:wv.Source = New-Object System.Uri ("https://www.youtube.com/watch?v=$($id)")
     $script:wvWin.Show(); $script:wvWin.Activate()
   }
-  catch { Set-State 'WebView2 не запустился' '#FF5C5C' }
+  catch { Set-State (T 'err_wv2') '#FF5C5C' }
 }
 function Open-Video {
   $vurl = $(if ($script:lastPreviewUrl) { $script:lastPreviewUrl } else { (@($urlBox.Text -split "[\r\n\s]+" | Where-Object { $_ }))[0] })
@@ -2776,11 +3178,11 @@ function Open-Video {
   }
   $hasFile = ($script:lastFile -and (Test-Path $script:lastFile))
   if ($id -and -not $hasFile) {
-    Set-State 'Для просмотра до скачивания запусти setup-webview2.bat' '#FFB340'
+    Set-State (T 'st_need_wv2') '#FFB340'
     return
   }
   $src = $(if ($hasFile) { $script:lastFile } elseif ($script:streamUrl) { $script:streamUrl } else { '' })
-  if (-not $src) { Set-State 'Сначала вставь ссылку на видео' '#FFB340'; return }
+  if (-not $src) { Set-State (T 'st_need_link') '#FFB340'; return }
   try { $script:mp.Pause() } catch {}
   $script:playing = $false; $playGlyph.Text = [char]0xE768
   try {
@@ -2788,7 +3190,7 @@ function Open-Video {
       [xml]$vx = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Видео" Width="900" Height="560" Background="#FF0B0B10"
+        Title="" Width="900" Height="560" Background="#FF0B0B10"
         WindowStartupLocation="CenterScreen" FontFamily="Segoe UI">
   <Grid>
     <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -2805,7 +3207,7 @@ function Open-Video {
         <TextBlock x:Name="vtot" Grid.Column="3" Text="0:00" Foreground="#CCFFFFFF" FontSize="12" VerticalAlignment="Center" Margin="10,0,14,0"/>
         <TextBlock Grid.Column="4" Text="&#xE767;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="#CCFFFFFF" VerticalAlignment="Center" Margin="0,0,6,0"/>
         <Slider x:Name="vvol" Grid.Column="5" Minimum="0" Maximum="1" Value="1" Width="90" VerticalAlignment="Center" Margin="0,0,16,0"/>
-        <TextBlock x:Name="vfull" Grid.Column="6" Text="&#xE740;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="White" VerticalAlignment="Center" Cursor="Hand" ToolTip="Во весь экран"/>
+        <TextBlock x:Name="vfull" Grid.Column="6" Text="&#xE740;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="White" VerticalAlignment="Center" Cursor="Hand"/>
       </Grid>
     </Border>
   </Grid>
@@ -2819,7 +3221,10 @@ function Open-Video {
       $script:vcur = $script:vidWin.FindName('vcur')
       $script:vtot = $script:vidWin.FindName('vtot')
       $script:vvol = $script:vidWin.FindName('vvol')
-      $vfull = $script:vidWin.FindName('vfull')
+      $script:vfull = $script:vidWin.FindName('vfull')
+      $vfull = $script:vfull
+      $script:vidWin.Title = T 'ttl_video'
+      $vfull.ToolTip = T 'tip_fullscreen'
       $script:vdur = 0.0
       $script:vseeking = $false
 
@@ -2828,7 +3233,7 @@ function Open-Video {
       $script:vidme.Add_MouseLeftButtonDown($vtoggle)
       $script:vidme.Add_MediaOpened({ try { if ($script:vidme.NaturalDuration.HasTimeSpan) { $script:vdur = $script:vidme.NaturalDuration.TimeSpan.TotalSeconds; $script:vtot.Text = (Format-Time $script:vdur) } } catch {} })
       $script:vidme.Add_MediaEnded({ try { $script:vidme.Position = [TimeSpan]::Zero; $script:vidme.Pause(); $script:vidPlaying = $false; $script:vplay.Text = [char]0xE768 } catch {} })
-      $script:vidme.Add_MediaFailed({ try { $script:vidWin.Title = 'Видео — не удалось воспроизвести (скачай файл)' } catch {} })
+      $script:vidme.Add_MediaFailed({ try { $script:vidWin.Title = T 'vid_failed' } catch {} })
       $script:vvol.Add_ValueChanged({ try { $script:vidme.Volume = $script:vvol.Value } catch {} })
       $script:vseek.Add_PreviewMouseDown({ $script:vseeking = $true })
       $script:vseek.Add_PreviewMouseUp({ try { if ($script:vdur -gt 0) { $script:vidme.Position = [TimeSpan]::FromSeconds(($script:vseek.Value / 1000.0) * $script:vdur) } } catch {}; $script:vseeking = $false })
@@ -2845,7 +3250,7 @@ function Open-Video {
     $script:vplay.Text = [char]0xE769
     $script:vidWin.Show(); $script:vidWin.Activate()
   }
-  catch { Set-State 'Не удалось открыть видео' '#FF5C5C' }
+  catch { Set-State (T 'err_video') '#FF5C5C' }
 }
 $btnPlay.Add_MouseLeftButtonDown({ param($s, $e) $e.Handled = $true; Open-Video })
 $btnRew.Add_MouseLeftButtonDown({ param($s, $e) $e.Handled = $true; if ($script:playerSrc) { try { $script:mp.Position = $script:mp.Position.Subtract([TimeSpan]::FromSeconds(10)) } catch {} } })
@@ -2917,7 +3322,7 @@ $trimH2.Add_DragDelta({
 
 $clearQueueBtn.Add_MouseLeftButtonDown({ param($s, $e) $e.Handled = $true; Clear-WaitingQueue })
 
-# --- выбор глав ---
+# --- chapter picker ---
 function Render-Chapters {
   $chaptersList.Children.Clear()
   $selTitles = @($script:selectedChapters | ForEach-Object { $_.Title })
@@ -2935,11 +3340,11 @@ function Render-Chapters {
 function Update-ChaptersBtn {
   $k = @($script:selectedChapters).Count
   if ($k -gt 0) {
-    $chaptersBtn.Content = "Главы: выбрано $k"
-    $trimLabel.Text = "скачаются выбранные главы ($k) отдельными файлами"
+    $chaptersBtn.Content = (T 'btn_chapters_sel') -f $k
+    $trimLabel.Text = (T 'trim_chapters') -f $k
   }
   else {
-    $chaptersBtn.Content = "Главы ($(@($script:chapterData).Count))"
+    $chaptersBtn.Content = (T 'btn_chapters_n') -f @($script:chapterData).Count
     Update-TrimFromTrack
   }
 }
@@ -2972,7 +3377,7 @@ $searchGo.Add_Click({ Run-Search })
 $searchBox.Add_KeyDown({ param($s, $e) if ($e.Key -eq 'Return') { Run-Search; $e.Handled = $true } })
 
 function Start-Download {
-  if ($script:queueActive -or $script:proc) { Set-State 'Занят — дождись окончания текущей задачи' '#FFB340'; return }
+  if ($script:queueActive -or $script:proc) { Set-State (T 'st_busy') '#FFB340'; return }
   $urls = @($urlBox.Text -split "[\r\n\s]+" |
     ForEach-Object { $_.Trim() } |
     Where-Object { $_ } |
@@ -2982,15 +3387,15 @@ function Start-Download {
       else { $null }
     } |
     Where-Object { $_ })
-  if ($urls.Count -eq 0) { Set-State 'Вставь ссылку!' '#FF5C5C'; return }
+  if ($urls.Count -eq 0) { Set-State (T 'st_paste_link') '#FF5C5C'; return }
   $folder = $folderBox.Text.Trim()
   if (-not $folder) { $folder = $defaultFolder; $folderBox.Text = $folder }
   if (-not (Test-Path $folder)) {
     try { New-Item -ItemType Directory -Path $folder -Force | Out-Null }
-    catch { Set-State 'Папка недоступна' '#FF5C5C'; return }
+    catch { Set-State (T 'err_folder') '#FF5C5C'; return }
   }
 
-  # проверка cookies (один раз)
+  # cookies check (once)
   $cIdx = Get-Sel $cookiesPanel
   if ($cIdx -eq 1) {
     $cookiesFile = Join-Path $root 'cookies.txt'
@@ -2998,7 +3403,7 @@ function Start-Download {
       $alt = Join-Path $root 'cookies.txt.txt'
       if (Test-Path $alt) { Move-Item -Path $alt -Destination $cookiesFile -Force }
     }
-    if (-not (Test-Path $cookiesFile)) { Set-State 'Нет файла cookies.txt рядом с yt-dlp.exe' '#FF5C5C'; return }
+    if (-not (Test-Path $cookiesFile)) { Set-State (T 'err_no_cookies') '#FF5C5C'; return }
   }
 
   Save-Settings
@@ -3026,7 +3431,7 @@ function Start-Download {
   $progress.Visibility = 'Visible'
   $detailText.Visibility = 'Visible'
   Reset-Progress
-  Set-State 'Подготовка…' '#8F8F97'
+  Set-State (T 'st_preparing') '#8F8F97'
   Set-Busy $true
   $script:queueActive = $true
   $maxPar = [math]::Min((Get-Sel $parallelPanel) + 1, $script:queueTotal)
@@ -3045,18 +3450,19 @@ $cancelBtn.Add_Click({
     }
   })
 
-$updateBtn.Add_Click({ Start-YtDlp '-U' 'Обновление yt-dlp...' 'update' })
+$updateBtn.Add_Click({ Start-YtDlp '-U' (T 'st_updating') 'update' })
 
 $titleBar.Add_MouseLeftButtonDown({ try { $window.DragMove() } catch {} })
 $dotClose.Add_MouseLeftButtonDown({ param($s, $e) $e.Handled = $true; $window.Close() })
 $dotMin.Add_MouseLeftButtonDown({ param($s, $e) $e.Handled = $true; $window.WindowState = 'Minimized' })
 
-# трей
+# tray
 if ($script:notify) {
   try {
     $script:trayMenu = New-Object System.Windows.Forms.ContextMenuStrip
-    $miOpen = $script:trayMenu.Items.Add('Открыть')
-    $miExit = $script:trayMenu.Items.Add('Выход')
+    $script:miOpen = $script:trayMenu.Items.Add((T 'tray_open'))
+    $script:miExit = $script:trayMenu.Items.Add((T 'tray_exit'))
+    $miOpen = $script:miOpen; $miExit = $script:miExit
     $miOpen.add_Click({ $window.Dispatcher.Invoke([action] { $window.Show(); $window.WindowState = 'Normal'; $window.Activate(); $script:notify.Visible = $false }) })
     $miExit.add_Click({ $window.Dispatcher.Invoke([action] { $window.Close() }) })
     $script:notify.ContextMenuStrip = $script:trayMenu
@@ -3140,7 +3546,7 @@ $window.Add_Loaded({
     }
     catch {}
 
-    # тихая фоновая проверка обновлений yt-dlp раз в 3 дня
+    # silent background yt-dlp update check every 3 days
     try {
       $lastCheckFile = Join-Path $root 'last-update-check.tmp'
       $shouldCheck = $true

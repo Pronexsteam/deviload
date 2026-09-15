@@ -48,7 +48,7 @@ if (-not (Test-Path $exe)) {
 Write-Host "Built exe: $exe"
 Write-Host ""
 
-# 4) portable folder (WITHOUT cookies)
+# 4) portable folder — whitelist copy only: cookies*.txt, history.json, ui-settings.json and logs never get in
 $port = Join-Path $dir 'Deviload-portable'
 if (Test-Path $port) {
     Remove-Item $port -Recurse -Force
@@ -57,7 +57,7 @@ New-Item -ItemType Directory -Path $port | Out-Null
 
 $include = @('Deviload.exe', 'yt-dlp.exe', 'ffmpeg.exe', 'ffprobe.exe', 'ffplay.exe', 'deno.exe', 'icon.ico', 'ico.ico', 'mascot.png',
     'Microsoft.Web.WebView2.Core.dll', 'Microsoft.Web.WebView2.Wpf.dll', 'WebView2Loader.dll',
-    'setup-webview2.bat', 'setup-webview2.ps1', 'setup-torrent.bat', 'setup-torrent.ps1')
+    'setup.bat', 'setup.ps1', 'setup-webview2.bat', 'setup-webview2.ps1', 'setup-torrent.bat', 'setup-torrent.ps1')
 
 foreach ($f in $include) {
     $p = Join-Path $dir $f
