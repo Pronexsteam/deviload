@@ -97,3 +97,4 @@ Write-Host ''
 Write-Host 'Done. Launch Deviload.bat (or Deviload.exe).'
 Write-Host ''
 if (-not $env:CI) { pause }
+exit 0   # the version checks above leave $LASTEXITCODE set by the last tool; the setup itself succeeded
