@@ -1,6 +1,6 @@
 # Deviload
 
-[![check](https://github.com/Pronexsteam/deviload/actions/workflows/check.yml/badge.svg)](https://github.com/Pronexsteam/deviload/actions/workflows/check.yml)
+[![check](https://github.com/Pronexsteam/deviload/actions/workflows/check.yml/badge.svg)](https://github.com/Pronexsteam/deviload/actions/workflows/check.yml) [![downloads](https://img.shields.io/github/downloads/Pronexsteam/deviload/total?label=downloads)](https://github.com/Pronexsteam/deviload/releases) [![latest](https://img.shields.io/github/v/release/Pronexsteam/deviload?label=latest)](https://github.com/Pronexsteam/deviload/releases/latest)
 
 A small Windows desktop front-end for [yt-dlp](https://github.com/yt-dlp/yt-dlp). Paste a link, pick a quality, press Download. Playlists, chapters, trimming, GIFs, MP3/FLAC extraction, subtitles, SponsorBlock, a one-click YouTube sign-in — in one portable folder, no installer. Interface in English and Russian.
 
