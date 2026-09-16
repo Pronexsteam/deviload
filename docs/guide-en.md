@@ -21,7 +21,7 @@ Windows 10/11 with the WebView2 Runtime (already part of Windows 11 and of every
 
 ![Finished download](img/download-done-en-v2.png)
 
-**Log** opens the yt-dlp output of the last run, **Folder** opens the save folder, **Update** updates yt-dlp itself.
+**Log** opens the yt-dlp output of the last run, **Folder** opens the save folder, **Update** updates yt-dlp itself to the latest *nightly* build (YouTube changes weekly and the stable yt-dlp release lags behind; the app also reminds you once a day when the bundled yt-dlp is older than two weeks).
 
 ## Sign in to YouTube
 
@@ -87,14 +87,25 @@ Paste a link and wait for the preview card. The trim slider under the Quality pi
 - **SponsorBlock** cuts sponsor segments; **Smart Music Tagger** cleans MP3/FLAC titles and writes tags; **Subtitles** downloads and embeds them.
 - **Theme** (dark / light) and window transparency.
 
-## Troubleshooting
+## If a download fails
 
-| Symptom | What to do |
+The failed item in the queue shows a short reason; hover it (or the status line) for the full hint. The raw yt-dlp output is still under **Log**.
+
+| Message | What it means / what to do |
 |---|---|
-| `HTTP Error 403`, "Sign in to confirm you're not a bot", "This video is private" | Press **Sign in to YouTube** (see above). If you are already signed in and it still fails, sign out and sign in again — the session may have expired. |
-| "This content is age-restricted" while signed in | YouTube is asking the account to verify its age. Do that on youtube.com in a normal browser, then sign out and sign in again in Deviload. |
-| Status says *Downloaded — cookies are stale* | Same: sign out, sign in again. |
-| `ffmpeg not found` / audio and video are not merged | `ffmpeg.exe` and `ffprobe.exe` must sit next to `Deviload.exe`. Re-unzip the release, or run `setup.bat` in a source checkout. |
-| Downloads suddenly fail for every video | YouTube changed something; press **Update** to get the newest yt-dlp, then retry. |
+| **No JavaScript runtime** | `deno.exe` must sit next to `yt-dlp.exe` — YouTube needs it to solve its player challenges. Re-unzip the release, or run `setup.bat` in a source checkout. |
+| **Sign-in required** | YouTube wants a signed-in session — press **Sign in to YouTube**. If you are already signed in: sign out and sign in again, the session may be stale. |
+| **Age check** | This video needs an age-verified Google account. Sign in; if it still fails, verify age on youtube.com once in a normal browser. |
+| **Private video** | Only accounts the owner has granted access can download it — sign in with such an account. |
+| **Members only** | Sign in with an account that has a membership on that channel. |
+| **Not available in your region** | Geo-blocked — a VPN or proxy is needed. |
+| **Video unavailable** | Removed or unavailable — check the link in a browser. |
+| **Rate limited** | YouTube rate-limited this network (HTTP 429) — wait a few minutes or sign in. |
+| **ffmpeg missing** | `ffmpeg.exe` and `ffprobe.exe` must sit next to `Deviload.exe`. Re-unzip the release, or run `setup.bat`. |
+| **Format not available** | Pick a lower quality — this video has no such format. |
+| **Unsupported link** | yt-dlp does not support this site or link — check the address. |
+| **Network error** | The connection was reset or timed out — check the internet and retry. |
+| Status says *Downloaded — cookies are stale* | Sign out, sign in again. |
+| Downloads suddenly fail for every video | YouTube changed something; press **Update** to get the newest yt-dlp nightly, then retry. |
+| *yt-dlp is N days old* in the status line | Just a reminder (shown once a day): press **Update**. Nothing is downloaded until you do. |
 | The sign-in button shows a WebView2 message | Run `setup-webview2.bat` (source checkout only), restart. |
-| Nothing happens after Download | Open **Log** — the last yt-dlp output explains the reason. |

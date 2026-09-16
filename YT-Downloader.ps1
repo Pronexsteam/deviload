@@ -248,6 +248,22 @@ $script:L = @{
     ask_signout = 'Выйти из аккаунта YouTube? Файл cookies.txt и профиль браузера будут удалены.'
     msg_signed_in = 'Вход выполнен — cookies сохранены в cookies.txt'; st_signed_in = 'Вход в YouTube выполнен'; st_signed_out = 'Вы вышли из YouTube'
     err_signin_save = 'Не удалось сохранить cookies.txt'
+    # yt-dlp update / readable download errors
+    st_updated = 'yt-dlp обновлён: {0}'; st_update_failed = 'Обновление не удалось (код {0}) — смотри лог'
+    upd_hint = 'yt-dlp старше {0} дней — нажмите Обновить (nightly)'
+    err_nodeno = 'Нет JavaScript-движка'; err_nodeno_hint = 'Нет JavaScript-движка — deno.exe должен лежать рядом с yt-dlp.exe. Запустите setup.bat.'
+    err_botcheck = 'Нужен вход в YouTube'; err_botcheck_hint = 'YouTube требует вход в аккаунт — нажмите «Войти в YouTube».'
+    err_botcheck_hint2 = 'YouTube требует вход в аккаунт — выйдите и войдите заново, сессия могла устареть.'
+    err_age = 'Проверка возраста'; err_age_hint = 'Видео требует Google-аккаунт с подтверждённым возрастом. Войдите; если не помогло, подтвердите возраст на youtube.com один раз.'
+    err_private = 'Приватное видео'; err_private_hint = 'Видео приватное — доступно только тем, кому владелец открыл доступ. Войдите под таким аккаунтом.'
+    err_members = 'Только для спонсоров'; err_members_hint = 'Видео только для спонсоров канала — нужен вход под аккаунтом со спонсорством.'
+    err_geo = 'Недоступно в регионе'; err_geo_hint = 'Видео недоступно в вашей стране — нужен VPN или прокси.'
+    err_gone = 'Видео недоступно'; err_gone_hint = 'Видео удалено или недоступно — проверьте ссылку в браузере.'
+    err_ratelimit = 'Лимит запросов'; err_ratelimit_hint = 'YouTube ограничил эту сеть — подождите несколько минут или войдите в аккаунт.'
+    err_noffmpeg = 'Нет ffmpeg'; err_noffmpeg_hint = 'ffmpeg.exe не найден — запустите setup.bat.'
+    err_format = 'Нет такого формата'; err_format_hint = 'Выберите качество ниже — у этого видео нет такого формата.'
+    err_unsupported = 'Ссылка не поддерживается'; err_unsupported_hint = 'yt-dlp не поддерживает этот сайт или ссылку — проверьте адрес.'
+    err_network = 'Ошибка сети'; err_network_hint = 'Соединение оборвалось или истекло — проверьте интернет и повторите.'
     msg_wv2_missing = "Для входа нужен WebView2 (встроенный браузер).`n`nЗапусти setup-webview2.bat рядом с приложением — он скачает нужные библиотеки — и открой Deviload заново."
   }
   en = @{
@@ -359,6 +375,22 @@ $script:L = @{
     ask_signout = 'Sign out of YouTube? cookies.txt and the browser profile will be deleted.'
     msg_signed_in = 'Signed in — cookies saved to cookies.txt'; st_signed_in = 'Signed in to YouTube'; st_signed_out = 'Signed out of YouTube'
     err_signin_save = 'Could not save cookies.txt'
+    # yt-dlp update / readable download errors
+    st_updated = 'yt-dlp updated: {0}'; st_update_failed = 'Update failed (code {0}) — see log'
+    upd_hint = 'yt-dlp is {0} days old — press Update (nightly)'
+    err_nodeno = 'No JavaScript runtime'; err_nodeno_hint = 'JavaScript runtime missing — deno.exe must sit next to yt-dlp.exe. Run setup.bat.'
+    err_botcheck = 'Sign-in required'; err_botcheck_hint = 'YouTube wants a signed-in session — press Sign in to YouTube.'
+    err_botcheck_hint2 = 'YouTube wants a signed-in session — sign out and sign in again, the session may be stale.'
+    err_age = 'Age check'; err_age_hint = 'This video needs an age-verified Google account. Sign in; if it still fails, verify age on youtube.com once.'
+    err_private = 'Private video'; err_private_hint = 'This video is private — only accounts the owner has granted access can download it. Sign in with such an account.'
+    err_members = 'Members only'; err_members_hint = 'Members-only video — sign in with an account that has a channel membership.'
+    err_geo = 'Not available in your region'; err_geo_hint = 'This video is not available in your country — a VPN or proxy is needed.'
+    err_gone = 'Video unavailable'; err_gone_hint = 'The video was removed or is unavailable — check the link in a browser.'
+    err_ratelimit = 'Rate limited'; err_ratelimit_hint = 'YouTube rate-limited this network — wait a few minutes or sign in.'
+    err_noffmpeg = 'ffmpeg missing'; err_noffmpeg_hint = 'ffmpeg.exe missing — run setup.bat.'
+    err_format = 'Format not available'; err_format_hint = 'Pick a lower quality — this video has no such format.'
+    err_unsupported = 'Unsupported link'; err_unsupported_hint = 'yt-dlp does not support this site or link — check the address.'
+    err_network = 'Network error'; err_network_hint = 'The connection was reset or timed out — check the internet and retry.'
     msg_wv2_missing = "Signing in needs WebView2 (the embedded browser).`n`nRun setup-webview2.bat next to the app — it downloads the required libraries — then open Deviload again."
   }
 }
@@ -368,6 +400,33 @@ function T($key) {
   if ($null -eq $v) { $v = $script:L['en'][$key] }
   if ($null -eq $v) { return $key }
   return $v
+}
+
+# Map yt-dlp / ffmpeg output to a short status key and a longer hint key (first match wins); $null when unknown.
+function Explain-Error($log, $signedIn = $false) {
+  if (-not $log) { return $null }
+  $rules = @(
+    @('JS runtimes: none|n challenge solving failed|Signature solving failed', 'err_nodeno'),
+    @("Sign in to confirm you.re not a bot", 'err_botcheck'),
+    @('age-restricted|Sign in to confirm your age|age.verification', 'err_age'),
+    @('Private video', 'err_private'),
+    @('members-only|Join this channel', 'err_members'),
+    @('available in your country|geo.?restrict|geo.?block|from your location', 'err_geo'),
+    @('[Vv]ideo (is )?unavailable|has been removed|been terminated|no longer available|does not exist', 'err_gone'),
+    @('HTTP Error 429|Too Many Requests', 'err_ratelimit'),
+    @('ffmpeg not found|ffprobe not found|ffmpeg is not installed|ffprobe and ffmpeg not found', 'err_noffmpeg'),
+    @('Requested format is not available', 'err_format'),
+    @('Unsupported URL', 'err_unsupported'),
+    @('WinError 10054|Connection reset|timed out|Connection aborted|getaddrinfo failed|Name or service not known|Network is unreachable', 'err_network')
+  )
+  foreach ($r in $rules) {
+    if ($log -match $r[0]) {
+      $hint = $r[1] + '_hint'
+      if ($r[1] -eq 'err_botcheck' -and $signedIn) { $hint = 'err_botcheck_hint2' }
+      return @{ key = $r[1]; hint = $hint }
+    }
+  }
+  return $null
 }
 
 # WebView2 (HD playback) — load the DLLs if setup-webview2.bat installed them
@@ -1850,7 +1909,7 @@ function Apply-Language {
   # dynamic labels
   if (@($script:chapterData).Count -gt 1) { Update-ChaptersBtn }
   else { $chaptersBtn.Content = T 'btn_chapters'; Update-TrimFromTrack }
-  foreach ($it in $script:queueItems.ToArray()) { if ($it.Status -ne 'now') { Set-ItemStatus $it $it.Status } }
+  foreach ($it in $script:queueItems) { if ($it.Status -ne 'now') { Set-ItemStatus $it $it.Status } }
   if ($historyOverlay.Visibility -eq 'Visible') { Render-History $historySearchBox.Text.Trim() }
   # tray menu
   if ($script:miOpen) { try { $script:miOpen.Text = T 'tray_open'; $script:miExit.Text = T 'tray_exit' } catch {} }
@@ -1924,7 +1983,7 @@ function Start-SignInCheck {
 }
 function Finish-SignInCheck {
   $tasks = $script:siTasks; $script:siTasks = $null
-  $all = New-Object System.Collections.Generic.List[object]
+  $all = [System.Collections.Generic.List[object]]::new()
   foreach ($t in $tasks) {
     try { if ($t.Status -eq 'RanToCompletion') { foreach ($c in $t.Result) { $all.Add($c) } } } catch {}
   }
@@ -1933,7 +1992,7 @@ function Finish-SignInCheck {
     if ((([string]$c.Domain) -like '*youtube.com') -and ($c.Name -eq 'LOGIN_INFO' -or $c.Name -eq 'SID' -or $c.Name -eq '__Secure-3PSID')) { $ok = $true; break }
   }
   if (-not $ok) { return }
-  try { Write-NetscapeCookies $all.ToArray() } catch { Set-StateK 'err_signin_save' '#FF5C5C'; return }
+  try { Write-NetscapeCookies $all } catch { Set-StateK 'err_signin_save' '#FF5C5C'; return }
   Set-Sel $cookiesPanel 1   # "cookies.txt file"
   Save-Settings
   Update-SignInUI
@@ -2070,6 +2129,7 @@ $script:cancelled = $false
 $script:sawSuccess = $false
 $script:cookieStale = $false
 $script:cookieBrowserFail = $false
+$script:lastErr = $null
 $script:phase = 'idle'
 $script:outPos = 0
 $script:errPos = 0
@@ -2080,8 +2140,8 @@ $script:logBuffer = New-Object System.Text.StringBuilder
 $script:singleOp = ''
 
 # download queue (pool of parallel workers)
-$script:queueItems = New-Object System.Collections.Generic.List[object]
-$script:workers = New-Object System.Collections.Generic.List[object]
+$script:queueItems = [System.Collections.Generic.List[object]]::new()
+$script:workers = [System.Collections.Generic.List[object]]::new()
 $script:queueTotal = 0
 $script:queueOk = 0
 $script:queueFail = 0
@@ -2255,6 +2315,57 @@ function Kill-Tree($procId, [switch]$Wait) {
   catch {}
 }
 
+# Days since the build date in a yt-dlp version string (YYYY.MM.DD[.hhmmss]); -1 when it cannot be parsed.
+function Get-YtDlpVersionAge($ver) {
+  $m = [regex]::Match([string]$ver, '(\d{4})\.(\d{2})\.(\d{2})')
+  if (-not $m.Success) { return -1 }
+  try {
+    $d = New-Object DateTime ([int]$m.Groups[1].Value), ([int]$m.Groups[2].Value), ([int]$m.Groups[3].Value)
+    return [int][math]::Floor(((Get-Date).Date - $d).TotalDays)
+  }
+  catch { return -1 }
+}
+
+# Runs "yt-dlp --version" hidden and polls it from the UI thread; $done gets the version string ('' on failure).
+$script:verProc = $null
+$script:verDone = $null
+$script:verTimer = New-Object System.Windows.Threading.DispatcherTimer
+$script:verTimer.Interval = [TimeSpan]::FromMilliseconds(300)
+$script:verTimer.Add_Tick({
+    $p = $script:verProc
+    if (-not $p) { $script:verTimer.Stop(); return }
+    $timedOut = ((Get-Date) - $script:verStart).TotalSeconds -gt 30
+    if (-not $p.HasExited -and -not $timedOut) { return }
+    $script:verTimer.Stop()
+    $script:verProc = $null
+    $ver = ''
+    if ($timedOut) { try { Kill-Tree $p.Id } catch {} }
+    else {
+      try {
+        Start-Sleep -Milliseconds 100
+        $txt = [System.IO.File]::ReadAllText((Join-Path $env:TEMP 'ytui_ver_out.log'))
+        $m = [regex]::Match($txt, '\d{4}\.\d{2}\.\d{2}(\.\d+)?')
+        if ($m.Success) { $ver = $m.Value }
+      }
+      catch {}
+    }
+    $cb = $script:verDone; $script:verDone = $null
+    if ($cb) { try { & $cb $ver } catch {} }
+  })
+function Start-VersionProbe([scriptblock]$done) {
+  if ($script:verProc) { return }
+  $out = Join-Path $env:TEMP 'ytui_ver_out.log'
+  $err = Join-Path $env:TEMP 'ytui_ver_err.log'
+  Remove-Item $out, $err -ErrorAction SilentlyContinue
+  try {
+    $script:verProc = Start-Hidden $ytdlp '--version' $out $err
+    $script:verDone = $done
+    $script:verStart = Get-Date
+    $script:verTimer.Start()
+  }
+  catch { $script:verProc = $null; & $done '' }
+}
+
 function Start-YtDlp($argStr, $statusKey, $op = 'op') {
   Remove-Item $outLog, $errLog -ErrorAction SilentlyContinue
   $script:outPos = 0; $script:errPos = 0
@@ -2410,7 +2521,11 @@ function Set-ItemStatus($item, $status) {
   switch ($status) {
     'now' { $item.Dot.Fill = $window.FindResource('TFg'); $item.St.Text = T 'st_downloading' }
     'done' { $item.Dot.Fill = $brushConv.ConvertFromString('#34C759'); $item.St.Text = T 'q_done' }
-    'error' { $item.Dot.Fill = $brushConv.ConvertFromString('#FF5C5C'); $item.St.Text = T 'q_error' }
+    'error' {
+      $item.Dot.Fill = $brushConv.ConvertFromString('#FF5C5C')
+      if ($item.ErrKey) { $item.St.Text = T $item.ErrKey; $item.St.ToolTip = T $item.HintKey; $item.Row.ToolTip = T $item.HintKey }
+      else { $item.St.Text = T 'q_error' }
+    }
     default { $item.Dot.Fill = $window.FindResource('TFgSub'); $item.St.Text = T 'q_wait' }
   }
   if ($status -ne 'wait') { $item.X.Visibility = 'Collapsed' }
@@ -2427,7 +2542,7 @@ function Start-Worker($item) {
     Item = $item; Url = $item.Url; Proc = $null
     Out = $out; Err = $err; OutPos = [long]0; ErrPos = [long]0
     Pct = 0.0; Phase = 'start'; LastFile = ''; SawSuccess = $false
-    Title = ''; Detail = ''
+    Title = ''; Detail = ''; Log = (New-Object System.Text.StringBuilder)
   }
   try {
     $w.Proc = Start-Hidden $ytdlp (Build-Args $item.Url) $out $err
@@ -2447,6 +2562,8 @@ function Start-NextWorker {
 
 function Process-WorkerOutput($w, $text) {
   if (-not $text) { return }
+  if ($w.Log.Length -gt 200000) { [void]$w.Log.Remove(0, 100000) }
+  [void]$w.Log.Append($text)
   if ($text -match 'no longer valid') { $script:cookieStale = $true }
   if ($text -match 'Failed to decrypt|failed to decrypt|could not copy .*[Cc]ookie|Could not copy .*[Cc]ookie') { $script:cookieBrowserFail = $true }
 
@@ -2577,7 +2694,7 @@ function Add-QueueRow($url) {
   $grid.Children.Add($dot); $grid.Children.Add($name); $grid.Children.Add($st); $grid.Children.Add($x)
   $row.Child = $grid
 
-  $item = [PSCustomObject]@{ Url = $url; Row = $row; Dot = $dot; Name = $name; St = $st; X = $x; Status = 'wait' }
+  $item = [PSCustomObject]@{ Url = $url; Row = $row; Dot = $dot; Name = $name; St = $st; X = $x; Status = 'wait'; ErrKey = ''; HintKey = '' }
   $x.Tag = $item
   $x.Add_MouseLeftButtonDown({ param($s, $e) $e.Handled = $true; Remove-QueueItem $s.Tag })
   [void]$queuePanel.Children.Add($row)
@@ -2647,6 +2764,15 @@ $timer.Add_Tick({
         Set-Progress 100
         Set-TaskProgress 'None' -1
       }
+      elseif ($script:singleOp -eq 'update') {
+        if ($code -eq 0) {
+          # the status line keeps "Updating…" until the new binary reports its version
+          Start-VersionProbe { param($ver) if ($ver) { Set-StateK 'st_updated' '#34C759' @($ver) } else { Set-StateK 'st_done' '#34C759' } }
+        }
+        else { Set-StateK 'st_update_failed' '#FF5C5C' @($code) }
+        Set-Progress 100
+        Set-TaskProgress 'None' -1
+      }
       else {
         if ($code -eq 0 -or $script:sawSuccess) {
           Set-StateK 'st_done' '#34C759'
@@ -2679,6 +2805,10 @@ $timer.Add_Tick({
           }
           else {
             $ok = ($w.Proc.ExitCode -eq 0 -or $w.SawSuccess)
+            if (-not $ok) {
+              $ex = Explain-Error $w.Log.ToString() (Test-Path (Join-Path $root 'cookies.txt'))
+              if ($ex) { $w.Item.ErrKey = $ex.key; $w.Item.HintKey = $ex.hint; $script:lastErr = $ex }
+            }
             Set-ItemStatus $w.Item $(if ($ok) { 'done' } else { 'error' })
             if ($ok) {
               $script:queueOk++
@@ -2731,6 +2861,10 @@ $timer.Add_Tick({
             if ($script:cookieBrowserFail) {
               Set-StateK 'st_cookie_browser_fail' '#FF5C5C'
               Set-DetailK 'det_cookie_browser_fail'
+            }
+            elseif ($script:lastErr) {
+              Set-StateK $script:lastErr.key '#FF5C5C'
+              Set-DetailK $script:lastErr.hint
             }
             else {
               Set-StateK 'st_dl_failed' '#FF5C5C'
@@ -2787,7 +2921,7 @@ $timer.Add_Tick({
           catch {}
           $previewSize.Text = $(if ($szBytes -gt 0) { '≈ ' + (Format-Bytes $szBytes) } else { '' })
           $audioTracksPanel.Children.Clear()
-          $langs = New-Object System.Collections.Generic.HashSet[string]
+          $langs = [System.Collections.Generic.HashSet[string]]::new()
           if ($j.formats) {
             foreach ($f in $j.formats) {
               if ($f.acodec -and $f.acodec -ne 'none' -and $f.language) {
@@ -3646,6 +3780,7 @@ function Start-Download {
   $script:sawSuccess = $false
   $script:cookieStale = $false
   $script:cookieBrowserFail = $false
+  $script:lastErr = $null
   $script:lastFile = ''
   $script:lastAggPct = -1.0
   [void]$script:logBuffer.Clear()
@@ -3673,13 +3808,13 @@ $cancelBtn.Add_Click({
     if (($script:proc -and -not $script:proc.HasExited) -or $script:workers.Count -gt 0) {
       $script:cancelled = $true
       if ($script:proc -and -not $script:proc.HasExited) { Kill-Tree $script:proc.Id -Wait }
-      foreach ($w in $script:workers.ToArray()) {
+      foreach ($w in $script:workers) {
         if ($w.Proc -and -not $w.Proc.HasExited) { Kill-Tree $w.Proc.Id }
       }
     }
   })
 
-$updateBtn.Add_Click({ Start-YtDlp '-U' 'st_updating' 'update' })
+$updateBtn.Add_Click({ Start-YtDlp '--update-to nightly' 'st_updating' 'update' })
 
 $titleBar.Add_MouseLeftButtonDown({ try { $window.DragMove() } catch {} })
 $dotClose.Add_MouseLeftButtonDown({ param($s, $e) $e.Handled = $true; $window.Close() })
@@ -3714,7 +3849,7 @@ $window.Add_Closing({
     if ($script:proc -and -not $script:proc.HasExited) {
       Kill-Tree $script:proc.Id
     }
-    foreach ($w in $script:workers.ToArray()) {
+    foreach ($w in $script:workers) {
       if ($w.Proc -and -not $w.Proc.HasExited) { Kill-Tree $w.Proc.Id }
     }
     if ($script:notify) { try { $script:notify.Visible = $false; $script:notify.Dispose() } catch {} }
@@ -3776,27 +3911,20 @@ $window.Add_Loaded({
     }
     catch {}
 
-    # silent background yt-dlp update check every 3 days
+    # once a day: read the yt-dlp version and hint when the build is older than 14 days (never downloads by itself)
     try {
       $lastCheckFile = Join-Path $root 'last-update-check.tmp'
       $shouldCheck = $true
       if (Test-Path $lastCheckFile) {
-        $lastTime = (Get-Item $lastCheckFile).LastWriteTime
-        if ((Get-Date) - $lastTime -lt (New-TimeSpan -Days 3)) { $shouldCheck = $false }
+        if ((Get-Date) - (Get-Item $lastCheckFile).LastWriteTime -lt (New-TimeSpan -Hours 24)) { $shouldCheck = $false }
       }
       if ($shouldCheck) {
         Set-Content -Path $lastCheckFile -Value (Get-Date).ToString() -Encoding UTF8
-        [System.Threading.Tasks.Task]::Run([Action] {
-            try {
-              $psi = New-Object System.Diagnostics.ProcessStartInfo
-              $psi.FileName = $ytdlp
-              $psi.Arguments = '-U'
-              $psi.CreateNoWindow = $true
-              $psi.UseShellExecute = $false
-              [System.Diagnostics.Process]::Start($psi) | Out-Null
-            }
-            catch {}
-          }) | Out-Null
+        Start-VersionProbe {
+          param($ver)
+          $age = Get-YtDlpVersionAge $ver
+          if ($age -gt 14 -and $script:stateKey -eq 'st_ready') { Set-StateK 'upd_hint' '#FFB340' @($age) }
+        }
       }
     }
     catch {}

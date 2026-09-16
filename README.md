@@ -14,6 +14,8 @@ Full guide with screenshots: [docs/guide-en.md](docs/guide-en.md) · Русск�
 2. Unzip anywhere. Keep the folder together — the app looks for `yt-dlp.exe`, `ffmpeg.exe` and the WebView2 DLLs next to `Deviload.exe`.
 3. Run `Deviload.exe`. Nothing is installed; settings and history stay in the folder.
 
+The **Update** button tracks the yt-dlp *nightly* channel: YouTube changes weekly and the stable yt-dlp release lags behind, so the app reminds you once a day when its yt-dlp is older than two weeks (nothing is downloaded until you press the button).
+
 Requirements: Windows 10/11 with the WebView2 Runtime (part of Windows 11 and of Windows 10 with Edge).
 
 ## Sign in to YouTube
@@ -39,7 +41,7 @@ Releases are built by GitHub Actions: pushing a tag `vX.Y.Z` runs `setup.ps1` + 
 
 - **Deviload** — MIT, © 2026 Samvel Avetisyan ([LICENSE](LICENSE)).
 - **yt-dlp** — [Unlicense](https://github.com/yt-dlp/yt-dlp/blob/master/LICENSE) (public domain).
-- **FFmpeg** (`ffmpeg.exe`, `ffprobe.exe`) — LGPL v2.1+ with GPL v3 components; the shipped builds are GPL v3 ([gyan.dev](https://www.gyan.dev/ffmpeg/builds/) or [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds), source at [github.com/FFmpeg/FFmpeg](https://github.com/FFmpeg/FFmpeg)). FFmpeg is a trademark of Fabrice Bellard.
+- **FFmpeg** (`ffmpeg.exe`, `ffprobe.exe`) — LGPL v2.1+ with GPL v3 components; the shipped build is the [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) `win64-gpl` static build, GPL v3 (source at [github.com/FFmpeg/FFmpeg](https://github.com/FFmpeg/FFmpeg)). FFmpeg is a trademark of Fabrice Bellard.
 - **Deno** — [MIT](https://github.com/denoland/deno/blob/main/LICENSE.md).
 - **Microsoft Edge WebView2 SDK** — Microsoft Software License Terms, obtained through `setup-webview2.bat` from [NuGet](https://www.nuget.org/packages/Microsoft.Web.WebView2).
 - **ps2exe** (host stub inside `Deviload.exe`) — [Microsoft Limited Public License](https://github.com/MScholtes/PS2EXE/blob/master/LICENSE).

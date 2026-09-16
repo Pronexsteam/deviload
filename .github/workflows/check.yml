@@ -18,6 +18,9 @@ jobs:
           [System.Management.Automation.Language.Parser]::ParseFile("$PWD\YT-Downloader.ps1", [ref]$tokens, [ref]$errors) | Out-Null
           if ($errors.Count) { $errors | ForEach-Object { Write-Host $_.ToString() }; exit 1 }
           "parse ok"
+      - name: Error-message mapping (tests/errors.ps1)
+        shell: powershell
+        run: powershell -NoProfile -File tests\errors.ps1
       - name: PSScriptAnalyzer (errors only)
         shell: powershell
         run: |

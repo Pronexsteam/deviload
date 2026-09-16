@@ -8,8 +8,10 @@ yt-dlp.exe            Unlicense (public domain)      yt-dlp.LICENSE.txt
 
 ffmpeg.exe,           GPL v3 (this build; FFmpeg is  ffmpeg.LICENSE.md, ffmpeg.COPYING.GPLv3.txt,
 ffprobe.exe           LGPL v2.1+ with GPL parts)     ffmpeg.COPYING.LGPLv2.1.txt
-                      Binaries: https://www.gyan.dev/ffmpeg/builds/ or https://github.com/BtbN/FFmpeg-Builds
-                      Source:   https://github.com/FFmpeg/FFmpeg (the build pages link the exact source snapshot)
+                      Binaries: https://github.com/BtbN/FFmpeg-Builds, asset ffmpeg-master-latest-win64-gpl.zip
+                      (static GPL build: it carries libx264, which the local MP4 convert needs; the LGPL
+                      build has no x264 and is only ~19 % smaller, so it was not chosen)
+                      Source:   https://github.com/FFmpeg/FFmpeg (the release page links the exact source snapshot)
 
 deno.exe              MIT                            deno.LICENSE.txt
                       https://github.com/denoland/deno

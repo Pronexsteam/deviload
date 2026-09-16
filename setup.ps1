@@ -1,6 +1,6 @@
 ﻿# setup.ps1 — one-shot dependency setup for a fresh machine.
 # Downloads into the app folder (files that already exist are skipped):
-#   yt-dlp.exe, ffmpeg.exe / ffprobe.exe / ffplay.exe (BtbN build), deno.exe,
+#   yt-dlp.exe (switched to the nightly channel), ffmpeg.exe / ffprobe.exe (BtbN GPL build), deno.exe,
 #   then the WebView2 SDK DLLs via setup-webview2.ps1 (HD in-app playback).
 # Run: double-click "setup.bat". Internet connection required.
 $ErrorActionPreference = 'Stop'
@@ -35,11 +35,17 @@ if (Test-Path $ytdlp) { Write-Host 'yt-dlp.exe: present, skipped' }
 else {
     Write-Host 'yt-dlp.exe:'
     Get-File 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe' $ytdlp
+    # the app tracks the nightly channel (YouTube changes weekly; the stable release lags behind)
+    Write-Host '  switching to the nightly channel'
+    $ErrorActionPreference = 'Continue'
+    & $ytdlp --update-to nightly 2>&1 | ForEach-Object { Write-Host "  $_" }
+    $ErrorActionPreference = 'Stop'
 }
 
-# 2) ffmpeg / ffprobe / ffplay (BtbN win64 GPL build, three exes in bin/)
-$ffNeeded = @('ffmpeg.exe', 'ffprobe.exe', 'ffplay.exe') | Where-Object { -not (Test-Path (Join-Path $dir $_)) }
-if ($ffNeeded.Count -eq 0) { Write-Host 'ffmpeg / ffprobe / ffplay: present, skipped' }
+# 2) ffmpeg / ffprobe (BtbN win64 GPL static build: libx264 for the local MP4 convert, libmp3lame for MP3;
+#    the LGPL build has no libx264 and is only ~19 % smaller). ffplay is not used by the app.
+$ffNeeded = @('ffmpeg.exe', 'ffprobe.exe') | Where-Object { -not (Test-Path (Join-Path $dir $_)) }
+if ($ffNeeded.Count -eq 0) { Write-Host 'ffmpeg / ffprobe: present, skipped' }
 else {
     Write-Host ("ffmpeg build (" + ($ffNeeded -join ', ') + "):")
     $ffZip = Join-Path $tmp 'ffmpeg.zip'
@@ -88,7 +94,6 @@ function Show-Version($label, $exe, $flag) {
 Show-Version 'yt-dlp' 'yt-dlp.exe' '--version'
 Show-Version 'ffmpeg' 'ffmpeg.exe' '-version'
 Show-Version 'ffprobe' 'ffprobe.exe' '-version'
-Show-Version 'ffplay' 'ffplay.exe' '-version'
 Show-Version 'deno' 'deno.exe' '--version'
 $wvCore = Join-Path $dir 'Microsoft.Web.WebView2.Core.dll'
 if (Test-Path $wvCore) { Write-Host ("  {0,-8} {1}" -f 'WebView2', (Get-Item $wvCore).VersionInfo.FileVersion) }
