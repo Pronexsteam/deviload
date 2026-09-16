@@ -2,7 +2,7 @@
 
 Deviload is a small Windows front-end for [yt-dlp](https://github.com/yt-dlp/yt-dlp): paste a link, pick a quality, press **Download**. The interface is available in English and Russian (the `RU | EN` switch in the title bar). Russian version of this guide: [guide-ru.md](guide-ru.md).
 
-![Main window](img/main-en.png)
+![Main window](img/main-en-v2.png)
 
 ## Install
 
@@ -19,7 +19,7 @@ Windows 10/11 with the WebView2 Runtime (already part of Windows 11 and of every
 3. Pick a **Save folder** (the Downloads / Music / Desktop presets or Browse).
 4. Press **Download**. The status line shows the stages (*Preparing… → Downloading → Merging video and audio → Downloaded!*), and a mini player appears when the file is ready.
 
-![Finished download](img/download-done-en.png)
+![Finished download](img/download-done-en-v2.png)
 
 **Log** opens the yt-dlp output of the last run, **Folder** opens the save folder, **Update** updates yt-dlp itself.
 
@@ -34,13 +34,13 @@ Some videos need a signed-in account: private videos, members-only content, or s
 1. Press the **Sign in to YouTube** button in the title bar.
 2. A small window with the Google login page opens. Sign in exactly as in a browser (password, two-factor prompt, passkey — everything works, it is a real Microsoft Edge engine).
 
-   ![Sign-in window](img/signin-window.png)
+   ![Sign-in window](img/signin-window-v2.png)
 
 3. As soon as Google redirects to youtube.com, Deviload reads the session cookies, saves them, closes the window and shows *Signed in to YouTube*. The **Cookies** option in Settings switches to *cookies.txt file* automatically.
 
 The button is replaced by an account glyph:
 
-![Signed in](img/signed-in.png)
+![Signed in](img/signed-in-v2.png)
 
 ### Where the cookies are stored — and why you must keep them private
 
@@ -53,13 +53,13 @@ Both files **are your account**. Anyone who has `cookies.txt` can act on YouTube
 
 Click the account glyph in the title bar and confirm. Deviload deletes `cookies.txt`, wipes `wv2-profile\` and resets the Cookies option to *None*. Signing out of YouTube in your normal browser does not affect Deviload's session and vice versa.
 
-![Sign-out confirmation](img/signout-dialog.png)
+![Sign-out confirmation](img/signout-dialog-v2.png)
 
 ### If the button shows a message about WebView2
 
 The sign-in window needs the three WebView2 libraries (`Microsoft.Web.WebView2.*.dll`, `WebView2Loader.dll`). The release zip contains them; if you run from a source checkout, execute `setup-webview2.bat` once and restart Deviload.
 
-![WebView2 missing](img/wv2-missing.png)
+![WebView2 missing](img/wv2-missing-v2.png)
 
 ## Playlists and chapters
 
@@ -78,7 +78,7 @@ Paste a link and wait for the preview card. The trim slider under the Quality pi
 
 ## Settings
 
-![Settings](img/settings-en.png)
+![Settings](img/settings-en-v2.png)
 
 - **Parallel downloads**, **Speed limit**, **Video codec** (H.264 for maximum compatibility, AV1/VP9 for smaller files).
 - **Skip already downloaded** keeps a download archive so re-running a playlist skips finished items.

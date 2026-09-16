@@ -4,7 +4,7 @@
 
 A small Windows desktop front-end for [yt-dlp](https://github.com/yt-dlp/yt-dlp). Paste a link, pick a quality, press Download. Playlists, chapters, trimming, GIFs, MP3/FLAC extraction, subtitles, SponsorBlock, a one-click YouTube sign-in — in one portable folder, no installer. Interface in English and Russian.
 
-![Deviload main window](docs/img/main-en.png)
+![Deviload main window](docs/img/main-en-v2.png)
 
 Full guide with screenshots: [docs/guide-en.md](docs/guide-en.md) · Русская версия: [docs/guide-ru.md](docs/guide-ru.md)
 
