@@ -10,7 +10,9 @@ Full guide with screenshots: [docs/guide-en.md](docs/guide-en.md) · Русск�
 
 ## Install
 
-1. Download `Deviload-portable.zip` from Releases.
+**[⬇ Download Deviload-portable.zip (latest)](https://github.com/Pronexsteam/deviload/releases/latest/download/Deviload-portable.zip)** — everything is inside, nothing else to install.
+
+1. Download the zip above (or pick it on the [Releases](https://github.com/Pronexsteam/deviload/releases) page).
 2. Unzip anywhere. Keep the folder together — the app looks for `yt-dlp.exe`, `ffmpeg.exe` and the WebView2 DLLs next to `Deviload.exe`.
 3. Run `Deviload.exe`. Nothing is installed; settings and history stay in the folder.
 
