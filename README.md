@@ -6,6 +6,8 @@
 
 **[Download Deviload for Windows](https://github.com/Pronexsteam/deviload/releases/latest)**: take `Deviload-<version>-setup.exe` from the latest release.
 
+**[Download Deviload for Mac](https://github.com/Pronexsteam/deviload/releases/latest)** (test build): take `Deviload-<version>-macos-test.zip`, move the app to Applications and run `xattr -cr /Applications/Deviload.app` once, because it is not signed by Apple yet.
+
 ![Deviload: the download queue with a link preview](docs/screenshots/downloads.png)
 
 Desktop app for downloading video and music with [yt-dlp](https://github.com/yt-dlp/yt-dlp), built with Rust and [Tauri 2](https://tauri.app). Windows is the main target; macOS builds come from CI and have not been tested on a real Mac yet. The interface is available in English and Russian and switches instantly with the RU / EN toggle in the top bar.
