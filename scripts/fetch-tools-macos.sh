@@ -8,7 +8,7 @@ mkdir -p bin
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-fetch() { curl -fsSL --retry 3 -o "$2" "$1"; }
+fetch() { curl -fsSL --retry 4 --retry-delay 10 --retry-all-errors -o "$2" "$1"; }
 
 fetch https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp_macos bin/yt-dlp
 

@@ -13,8 +13,18 @@ New-Item -ItemType Directory -Force $temp | Out-Null
 function Need($name) { $Force -or -not (Test-Path (Join-Path $bin $name)) }
 
 function Get-File($url, $target) {
-    Write-Host "Downloading $url"
-    Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $target
+    # GitHub release downloads fail now and then with a server error; try again before giving up.
+    for ($attempt = 1; $attempt -le 4; $attempt++) {
+        Write-Host "Downloading $url"
+        try {
+            Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $target
+            return
+        } catch {
+            if ($attempt -eq 4) { throw }
+            Write-Host "Download failed ($($_.Exception.Message.Split([Environment]::NewLine)[0])), retrying in $($attempt * 10) s"
+            Start-Sleep -Seconds ($attempt * 10)
+        }
+    }
 }
 
 try {
