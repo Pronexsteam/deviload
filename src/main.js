@@ -306,8 +306,12 @@ $("update-auto-toggle").addEventListener("click", () => {
   try { localStorage.setItem("deviload-update-auto", String(next)); } catch { /* storage unavailable */ }
   $("update-auto-toggle").setAttribute("aria-checked", String(next));
 });
+// Signed in-app updates exist for Windows; other systems get the releases page.
+const inAppUpdates = navigator.userAgent.includes("Windows");
+if (!inAppUpdates) $("update-auto-toggle").closest(".setting-row").hidden = true;
 async function checkAppUpdate(manual = false) {
   if (!invoke) { if (manual) message(t("Update checks are available in the app."), true); return; }
+  if (!inAppUpdates) { if (manual) invoke("open_releases").catch(error => message(errorText(error), true)); return; }
   if (!manual) {
     if (!updateAuto()) return;
     try {

@@ -1,7 +1,7 @@
 :root{--accent:#ff6d47;--red:#ed304a;--surface:#171b20;--surface-2:#1b2026;--stroke:#363d46;--ink:#f5f4f1;--muted:#a6aeb9}
 *{box-sizing:border-box}
 html{background:#0e1115}
-body{grid-template-columns:264px minmax(0,1fr);background:#101318;color:var(--ink);font-family:"Segoe UI",Inter,Arial,sans-serif}
+body{grid-template-columns:264px minmax(0,1fr);background:#101318;color:var(--ink);font-family:"Segoe UI",-apple-system,BlinkMacSystemFont,Inter,"Helvetica Neue",Arial,sans-serif}
 .sidebar{height:100vh;min-height:680px;padding:0 16px 16px;background:linear-gradient(180deg,#101318 0%,#121519 52%,#0d1014 100%);border-right:1px solid #5c3531;overflow:hidden}
 .brand-scene{height:282px;margin:0 -16px 14px;width:calc(100% + 32px);border:0;background:linear-gradient(180deg,#151417aa,#0e1115cc),url("assets/hero-embers.svg") 61% 42%/auto 310px no-repeat}
 .brand-scene canvas{top:13px;width:240px;height:212px}
