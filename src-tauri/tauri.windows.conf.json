@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "targets": [
+      "nsis"
+    ],
+    "resources": {
+      "../bin/yt-dlp.exe": "bin/yt-dlp.exe",
+      "../bin/ffmpeg.exe": "bin/ffmpeg.exe",
+      "../bin/ffprobe.exe": "bin/ffprobe.exe",
+      "../bin/deno.exe": "bin/deno.exe",
+      "../LICENSES/*": "LICENSES/"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "English",
+          "Russian"
+        ],
+        "displayLanguageSelector": true,
+        "installerIcon": "icons/icon.ico"
+      }
+    },
+    "createUpdaterArtifacts": true
+  }
+}

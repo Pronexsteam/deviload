@@ -1,0 +1,16 @@
+{
+  "identifier": "default",
+  "description": "Main window and the Devil Cut editor window",
+  "windows": [
+    "main",
+    "devilcut"
+  ],
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "dialog:allow-ask",
+    "notification:default",
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text"
+  ]
+}

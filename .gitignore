@@ -1,35 +1,29 @@
-# binaries: downloaded by setup scripts, never committed (ffmpeg is GPL, WebView2 is Microsoft-licensed)
+# dependencies and build output
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+dist/
+
+# tool binaries, fetched by scripts/fetch-tools.ps1
+bin/
 *.exe
 *.dll
-*.exe.old
-*.rar
 *.zip
+
+# local notes and scratch
+.work/
+.playwright-cli/
+
 # personal data
 cookies.txt
 *_cookies.txt
-cookies-backup.txt
-history.json
-ui-settings.json
+youtube-cookies.txt
+queue.json
+
+# editors and OS
+.vscode/
+.idea/
+.DS_Store
 *.log
-*.tmp
-fix-log.txt
-# build output
-Deviload-portable/
-YT-Downloader-portable/
-# torrent engine (installed by setup-torrent.ps1)
-torrent-engine/node_modules/
-torrent-engine/package-lock.json
-torrent-cache/
-# media
-*.mp3
-*.mp4
-*.webm
-*.m4a
-*.jpg
-*.jpeg
-*.webp
-# scratch
-_old/
-.work/
-# WebView2 sign-in profile (Google session)
-wv2-profile/
+# Updater signing key: never commit it
+keys/

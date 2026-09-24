@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      # The Windows build bundles the engines, so fetch them first.
+      - name: Fetch yt-dlp, FFmpeg and Deno
+        if: runner.os == 'Windows'
+        run: pwsh -File scripts/fetch-tools.ps1
+      # Unit tests run on the host; the build below checks the selected target.
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+      # CI builds are not release builds, so they skip the signed update files.
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        run: npm run tauri build -- --target ${{ matrix.target }} --config src-tauri/tauri.ci.conf.json
+      - name: Build macOS app
+        if: runner.os == 'macOS'
+        run: npm run tauri build -- --target ${{ matrix.target }} --bundles app
+      - name: Archive the macOS app with executable permissions
+        if: runner.os == 'macOS'
+        run: tar -czf Deviload-${{ matrix.target }}.tar.gz -C src-tauri/target/${{ matrix.target }}/release/bundle/macos "Deviload.app"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Deviload-${{ matrix.target }}
+          if-no-files-found: error
+          path: |
+            Deviload-*.tar.gz
+            src-tauri/target/${{ matrix.target }}/release/deviload.exe
+            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*-setup.exe

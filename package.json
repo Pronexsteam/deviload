@@ -1,0 +1,15 @@
+{
+  "name": "deviload",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "test": "node --test tests/*.test.js",
+    "check": "node --check src/main.js && node --check src/i18n.js && node --check src/locales/ru.js && node --check src/view-model.js && node --check src/devil-cut.js && node --check src/cut-main.js && node --check src/motion.js && node --check src/media-pulse.js && node --check src/devil-mascot.js && node --check src/source-brands.js && node --check src/fire-animation.js && node --check src/tour.js && node --check src/mascot-spot.js"
+  },
+  "devDependencies": {
+    "@phosphor-icons/core": "^2.1.1",
+    "@tauri-apps/cli": "^2.11.5"
+  }
+}

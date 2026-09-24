@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Devil Cut · Deviload</title><link rel="icon" href="assets/devil-app-icon-32.png"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="rework.css"><link rel="stylesheet" href="shell.css"><script type="module" src="cut-main.js"></script></head>
+<body class="cut-page">
+<div id="edit-dialog" class="cut-dialog cut-window">
+  <header class="cut-head">
+    <div class="cut-brand"><span class="overline">DEVIL CUT</span><input id="cut-name" class="cut-name" type="text" maxlength="60" aria-label="Project name" placeholder="Untitled project"></div>
+    <div class="cut-canvas" role="group" aria-label="Frame format"><button type="button" data-canvas="16:9" class="selected">16:9</button><button type="button" data-canvas="9:16">9:16</button><button type="button" data-canvas="1:1">1:1</button><button type="button" data-canvas="4:5">4:5</button></div>
+    <div class="cut-fit" role="group" aria-label="How the video fills the frame"><button type="button" data-fit="fit" class="selected" title="The whole video with bars">Fit</button><button type="button" data-fit="fill" title="Crop to fill the frame">Fill</button><button type="button" data-fit="blur" title="The whole video over its blurred copy">Blur</button></div>
+    <button id="cut-fullscreen" class="cut-tool cut-full-toggle" type="button" title="Full screen (F11)" aria-label="Full screen" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    <details id="cut-export-menu" class="cut-export"><summary class="primary"><span class="icon" data-icon="download-simple" aria-hidden="true"></span>Export</summary>
+      <div class="cut-export-body">
+        <span class="cut-label">Format</span><div class="cut-chips" data-chips="format"><button type="button" data-value="mp4" class="selected">MP4</button><button type="button" data-value="gif">GIF</button><button type="button" data-value="mp3">MP3</button></div>
+        <span class="cut-label">Quality</span><div class="cut-chips" data-chips="quality"><button type="button" data-value="1080" class="selected">1080p</button><button type="button" data-value="720">720p</button><button type="button" data-value="480">480p</button></div>
+        <p id="cut-export-summary" class="cut-note"></p>
+        <button id="cut-export" class="primary" type="button"><span class="icon" data-icon="download-simple" aria-hidden="true"></span>Save the video</button>
+      </div>
+    </details>
+  </header>
+  <div class="cut-body">
+    <aside class="cut-media" aria-label="Media">
+      <div class="cut-media-tabs" role="tablist"><button type="button" role="tab" data-media-tab="video" class="selected" aria-selected="true">Videos</button><button type="button" role="tab" data-media-tab="audio" aria-selected="false">Music</button></div>
+      <div id="cut-media-list" class="cut-media-list"></div>
+      <p class="cut-note">Finished downloads appear here. Press + to put a video at the end of the timeline.</p>
+    </aside>
+    <section class="cut-player" aria-label="Preview">
+      <div id="cut-stage" class="cut-stage-box" data-canvas="16:9" data-fit="fit">
+        <video id="cut-backdrop" class="cut-backdrop" muted playsinline aria-hidden="true"></video>
+        <div id="cut-frame" class="cut-frame"><video id="edit-video" playsinline></video></div>
+        <div id="cut-caption-preview" class="cut-caption-preview" hidden></div>
+        <div id="cut-empty" class="cut-empty"><span class="cut-empty-mascot" data-mascot="look"></span><strong>Add a video from the list on the left</strong><span>or open Devil Cut from a finished download</span></div>
+      </div>
+      <audio id="cut-music-player" preload="auto"></audio>
+      <div class="cut-transport">
+        <button id="cut-play" class="cut-round" type="button" aria-label="Play or pause (Space)" title="Play or pause (Space)"><span class="icon" data-icon="play" aria-hidden="true"></span></button>
+        <span id="cut-time" class="cut-time">0:00.0 / 0:00.0</span>
+      </div>
+    </section>
+    <aside id="cut-inspector" class="cut-inspector" aria-label="Clip settings">
+      <div id="cut-inspector-empty" class="cut-inspector-empty"><strong>Select a clip on the timeline</strong><p>Its speed, sound, frame, color and caption settings appear here.</p></div>
+      <div id="cut-inspector-body" hidden>
+        <div class="cut-media-tabs" role="tablist"><button type="button" role="tab" data-look-tab="basic" class="selected" aria-selected="true">Basic</button><button type="button" role="tab" data-look-tab="frame" aria-selected="false">Frame</button><button type="button" role="tab" data-look-tab="color" aria-selected="false">Color</button><button type="button" role="tab" data-look-tab="text" aria-selected="false">Text</button></div>
+        <section class="cut-look" data-look-pane="basic">
+          <span class="cut-label">Speed</span>
+          <div class="cut-chips" data-look="speed"><button type="button" data-value="0.5">0.5×</button><button type="button" data-value="0.75">0.75×</button><button type="button" data-value="1">1×</button><button type="button" data-value="1.25">1.25×</button><button type="button" data-value="1.5">1.5×</button><button type="button" data-value="2">2×</button><button type="button" data-value="3">3×</button></div>
+          <label class="cut-slider" for="cut-volume"><span class="cut-label">Volume <b id="cut-volume-value">100%</b></span><input id="cut-volume" type="range" min="0" max="200" step="5" value="100"></label>
+          <label class="switch-line" for="cut-fade-in"><input id="cut-fade-in" type="checkbox"><span class="switch-ui" aria-hidden="true"></span><span>Smooth start</span></label>
+          <label class="switch-line" for="cut-fade-out"><input id="cut-fade-out" type="checkbox"><span class="switch-ui" aria-hidden="true"></span><span>Smooth end</span></label>
+          <div id="cut-transition-row">
+            <span class="cut-label">Transition from the previous clip</span>
+            <div class="cut-chips" data-look="transition"><button type="button" data-value="none">Cut</button><button type="button" data-value="fade">Crossfade</button><button type="button" data-value="fadeblack">Through black</button><button type="button" data-value="slideleft">Slide</button><button type="button" data-value="wipeleft">Wipe</button><button type="button" data-value="circleopen">Circle</button></div>
+          </div>
+        </section>
+        <section class="cut-look" data-look-pane="frame" hidden>
+          <span class="cut-label">Rotate and mirror</span>
+          <div class="cut-row"><button id="cut-rotate-left" class="outline small" type="button"><span class="icon" data-icon="arrow-clockwise" aria-hidden="true"></span>Rotate left</button><button id="cut-rotate-right" class="outline small" type="button"><span class="icon" data-icon="arrow-clockwise" aria-hidden="true"></span>Rotate right</button><button id="cut-flip" class="outline small" type="button" aria-pressed="false">Mirror</button></div>
+          <p class="cut-note">The frame format and fill are set for the whole project at the top.</p>
+          <button id="edit-save-frame" class="outline small" type="button"><span class="icon" data-icon="download-simple" aria-hidden="true"></span>Save this frame as PNG</button>
+        </section>
+        <section class="cut-look" data-look-pane="color" hidden>
+          <label class="cut-slider" for="cut-brightness"><span class="cut-label">Brightness <b id="cut-brightness-value">0</b></span><input id="cut-brightness" type="range" min="-50" max="50" step="1" value="0"></label>
+          <label class="cut-slider" for="cut-contrast"><span class="cut-label">Contrast <b id="cut-contrast-value">0</b></span><input id="cut-contrast" type="range" min="-50" max="100" step="1" value="0"></label>
+          <label class="cut-slider" for="cut-saturation"><span class="cut-label">Saturation <b id="cut-saturation-value">0</b></span><input id="cut-saturation" type="range" min="-100" max="200" step="5" value="0"></label>
+          <button id="cut-color-reset" class="quiet small" type="button">Reset color</button>
+        </section>
+        <section class="cut-look" data-look-pane="text" hidden>
+          <label for="cut-caption"><span class="cut-label">Caption on this clip</span><textarea id="cut-caption" rows="3" maxlength="120" placeholder="Text over the video"></textarea></label>
+          <span class="cut-label">Position</span>
+          <div class="cut-chips" data-look="captionPosition"><button type="button" data-value="top">Top</button><button type="button" data-value="center">Center</button><button type="button" data-value="bottom">Bottom</button></div>
+          <span class="cut-label">Style</span>
+          <div class="cut-chips" data-look="captionStyle"><button type="button" data-value="outline">Outline</button><button type="button" data-value="box">Plate</button></div>
+        </section>
+      </div>
+    </aside>
+  </div>
+  <div class="cut-toolbar" role="toolbar" aria-label="Timeline tools">
+    <button id="cut-undo" class="cut-tool" type="button" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+    <button id="cut-redo" class="cut-tool" type="button" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button>
+    <span class="cut-sep" aria-hidden="true"></span>
+    <button id="cut-split" class="cut-tool wide" type="button" title="Split at the playhead (Ctrl+B)"><span class="icon" data-icon="scissors" aria-hidden="true"></span>Split</button>
+    <button id="cut-duplicate" class="cut-tool wide" type="button" title="Duplicate (Ctrl+D)"><span class="icon" data-icon="copy" aria-hidden="true"></span>Duplicate</button>
+    <button id="cut-delete" class="cut-tool wide" type="button" title="Delete (Delete)"><span class="icon" data-icon="trash" aria-hidden="true"></span>Delete</button>
+    <span class="cut-sep" aria-hidden="true"></span>
+    <button id="cut-zoom-out" class="cut-tool" type="button" title="Zoom out (−)" aria-label="Zoom out">−</button>
+    <input id="cut-zoom" class="cut-zoom" type="range" min="0" max="100" step="1" value="40" aria-label="Timeline zoom" title="Timeline zoom (Ctrl + mouse wheel)">
+    <button id="cut-zoom-in" class="cut-tool" type="button" title="Zoom in (+)" aria-label="Zoom in">+</button>
+    <button id="cut-zoom-fit" class="cut-tool wide" type="button" title="Fit the whole project (0)">Fit</button>
+    <span id="cut-total" class="cut-total"></span>
+  </div>
+  <div id="cut-timeline" class="cut-timeline" aria-label="Timeline">
+    <div id="cut-scroll" class="cut-scroll">
+      <div id="cut-lane" class="cut-lane">
+        <div id="cut-ruler" class="cut-ruler"></div>
+        <div id="cut-video-track" class="cut-track cut-track-video"></div>
+        <div id="cut-music-track" class="cut-track cut-track-music"></div>
+        <div id="cut-playhead" class="cut-playhead" aria-hidden="true"></div>
+      </div>
+    </div>
+  </div>
+  <footer class="cut-foot"><span id="cut-mascot" class="cut-mascot" data-mascot="front"></span><div id="cut-progress" class="cut-progress" role="progressbar" aria-label="Export progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span></span></div><p id="edit-status" role="status" aria-live="polite">Space plays, Ctrl+B splits, Delete removes, Ctrl+Z undoes. Drag clips to reorder them and their edges to trim.</p></footer>
+</div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+</body></html>
