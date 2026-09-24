@@ -3,6 +3,11 @@
 [![Latest release](https://img.shields.io/github/v/release/Pronexsteam/deviload?label=latest&color=f27050)](https://github.com/Pronexsteam/deviload/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/Pronexsteam/deviload/total?color=f27050)](https://github.com/Pronexsteam/deviload/releases)
 [![CI](https://github.com/Pronexsteam/deviload/actions/workflows/ci.yml/badge.svg)](https://github.com/Pronexsteam/deviload/actions/workflows/ci.yml)
+[![Last commit](https://img.shields.io/github/last-commit/Pronexsteam/deviload)](https://github.com/Pronexsteam/deviload/commits/main)
+[![Stars](https://img.shields.io/github/stars/Pronexsteam/deviload?style=flat)](https://github.com/Pronexsteam/deviload/stargazers)
+[![License: MIT](https://img.shields.io/github/license/Pronexsteam/deviload)](LICENSE)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20test-lightgrey)](https://github.com/Pronexsteam/deviload/releases/latest)
+[![Built with Rust and Tauri 2](https://img.shields.io/badge/built%20with-Rust%20%2B%20Tauri%202-b7410e)](https://tauri.app)
 
 **[Download Deviload for Windows](https://github.com/Pronexsteam/deviload/releases/latest)**: take `Deviload-<version>-setup.exe` from the latest release.
 
