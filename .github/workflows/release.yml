@@ -47,6 +47,19 @@ jobs:
           $notes = ".github/release-notes/${{ github.ref_name }}.md"
           $source = if (Test-Path $notes) { @('--notes-file', $notes) } else { @('--generate-notes') }
           gh release create "${{ github.ref_name }}" --latest --title "Deviload ${{ github.ref_name }}" @source @files
+      # The update feed also lives on the updates branch: files served from there
+      # are not counted as release downloads, so the download badge counts people.
+      - name: Publish the update feed
+        shell: bash
+        run: |
+          cp dist/latest.json "$RUNNER_TEMP/latest.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch origin updates; then git checkout -B updates FETCH_HEAD; else git checkout --orphan updates; git rm -rfq --cached .; fi
+          cp "$RUNNER_TEMP/latest.json" latest.json
+          git add latest.json
+          git commit -m "Update feed for $GITHUB_REF_NAME"
+          git push origin updates
 
   # An unsigned macOS test build with yt-dlp, FFmpeg and Deno inside the app.
   macos:
