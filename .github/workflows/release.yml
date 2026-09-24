@@ -1,7 +1,7 @@
 name: Release
 
 # Pushing a tag like v2.0.0 builds the Windows installer, the portable zip and the
-# update feed on GitHub's runners and attaches them to a draft release.
+# update feed on GitHub's runners and publishes them as the latest release.
 on:
   push:
     tags: ['v*']
@@ -37,13 +37,13 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: ./scripts/package.ps1
-      - name: Attach the files to a draft release
+      - name: Publish the release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $files = Get-ChildItem dist -File | Where-Object { $_.Extension -in '.exe', '.zip', '.json' } | ForEach-Object { $_.FullName }
-          gh release create "${{ github.ref_name }}" --draft --title "Deviload ${{ github.ref_name }}" --generate-notes @files
+          gh release create "${{ github.ref_name }}" --latest --title "Deviload ${{ github.ref_name }}" --generate-notes @files
 
   # An unsigned macOS build for testers; it expects yt-dlp, FFmpeg and Deno from Homebrew.
   macos:
@@ -61,7 +61,7 @@ jobs:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
       - run: npm ci
       - run: npm run tauri build -- --target universal-apple-darwin --bundles app --config src-tauri/tauri.ci.conf.json
-      - name: Attach the app to the draft release
+      - name: Attach the app to the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

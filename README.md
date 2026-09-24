@@ -1,5 +1,13 @@
 # Deviload
 
+[![Latest release](https://img.shields.io/github/v/release/Pronexsteam/deviload?label=latest&color=f27050)](https://github.com/Pronexsteam/deviload/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Pronexsteam/deviload/total?color=f27050)](https://github.com/Pronexsteam/deviload/releases)
+[![CI](https://github.com/Pronexsteam/deviload/actions/workflows/ci.yml/badge.svg)](https://github.com/Pronexsteam/deviload/actions/workflows/ci.yml)
+
+**[Download Deviload for Windows](https://github.com/Pronexsteam/deviload/releases/latest)**: take `Deviload-<version>-setup.exe` from the latest release.
+
+![Deviload: the download queue with a link preview](docs/screenshots/downloads.png)
+
 Desktop app for downloading video and music with [yt-dlp](https://github.com/yt-dlp/yt-dlp), built with Rust and [Tauri 2](https://tauri.app). Windows is the main target; macOS builds come from CI and have not been tested on a real Mac yet. The interface is available in English and Russian and switches instantly with the RU / EN toggle in the top bar.
 
 ## Features
@@ -28,6 +36,14 @@ Desktop app for downloading video and music with [yt-dlp](https://github.com/yt-
 - **Moving from Deviload 1.x**: the history, settings and the list of downloaded videos of the old portable version move over in one click; cookies are not copied.
 - Tray mode and start with Windows, OS notifications, clipboard link suggestions, links from a text file, a copyable yt-dlp command in every task log, keyboard shortcuts (Ctrl/⌘+L links, Ctrl/⌘+K queue search, Ctrl/⌘+Enter download, Escape closes dialogs) and a short guided tour. Only one copy of Deviload runs at a time; starting it again brings the open window forward.
 
+## Screenshots
+
+| Devil Cut | Library |
+|---|---|
+| ![Devil Cut: two clips with a crossfade and music](docs/screenshots/devil-cut.png) | ![Library of finished downloads](docs/screenshots/library.png) |
+| **Watched channels** | **Phone link** |
+| ![Watched channels and playlists](docs/screenshots/watch.png) | <img src="docs/screenshots/phone.png" alt="The phone page of the phone link" width="260"> |
+
 ## Install on Windows
 
 Download `Deviload-<version>-setup.exe` from the releases page and run it. It installs for the current user, adds a Start menu shortcut and brings yt-dlp, FFmpeg and Deno along. Later versions install from inside the app. A portable zip is published next to it.
@@ -53,7 +69,7 @@ In-app updates are signed. The script reads the private key and its password fro
 
 ## Releases
 
-Pushing a tag that matches the version, for example `v2.0.0`, runs `.github/workflows/release.yml`: GitHub builds and tests the app and attaches the installer, the portable zip and `latest.json` to a draft release. The repository needs two secrets: `TAURI_SIGNING_PRIVATE_KEY` (the content of the key file) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Installed copies find the new version through `releases/latest/download/latest.json` once the draft is published. The same run adds an unsigned macOS test build, `Deviload-<version>-macos-test.zip`, which needs `brew install yt-dlp ffmpeg deno` and, because it is not notarized, `xattr -cr Deviload.app` before the first start.
+Pushing a tag that matches the version, for example `v2.0.0`, runs `.github/workflows/release.yml`: GitHub builds and tests the app and publishes the installer, the portable zip and `latest.json` as the latest release. The repository needs two secrets: `TAURI_SIGNING_PRIVATE_KEY` (the content of the key file) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Installed copies find the new version through `releases/latest/download/latest.json`. The same run adds an unsigned macOS test build, `Deviload-<version>-macos-test.zip`, which needs `brew install yt-dlp ffmpeg deno` and, because it is not notarized, `xattr -cr Deviload.app` before the first start.
 
 ## Build from source (macOS)
 
