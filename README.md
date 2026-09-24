@@ -69,18 +69,20 @@ In-app updates are signed. The script reads the private key and its password fro
 
 ## Releases
 
-Pushing a tag that matches the version, for example `v2.0.0`, runs `.github/workflows/release.yml`: GitHub builds and tests the app and publishes the installer, the portable zip and `latest.json` as the latest release. The repository needs two secrets: `TAURI_SIGNING_PRIVATE_KEY` (the content of the key file) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Installed copies find the new version through `releases/latest/download/latest.json`. The same run adds an unsigned macOS test build, `Deviload-<version>-macos-test.zip`, which needs `brew install yt-dlp ffmpeg deno` and, because it is not notarized, `xattr -cr Deviload.app` before the first start.
+Pushing a tag that matches the version, for example `v2.0.0`, runs `.github/workflows/release.yml`: GitHub builds and tests the app and publishes the installer, the portable zip and `latest.json` as the latest release. The repository needs two secrets: `TAURI_SIGNING_PRIVATE_KEY` (the content of the key file) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Installed copies find the new version through `releases/latest/download/latest.json`. The same run adds an unsigned macOS test build, `Deviload-<version>-macos-test.zip`, with yt-dlp, FFmpeg and Deno inside (`scripts/fetch-tools-macos.sh`). It is not notarized, so it needs `xattr -cr /Applications/Deviload.app` once before the first start. `.github/workflows/macos.yml` rebuilds only that file for the release of the current version when the `macos-test` branch is pushed.
 
 ## Build from source (macOS)
 
 Untested on real hardware so far. Install the Xcode Command Line Tools, Rust and Node.js, then:
 
 ```sh
-brew install yt-dlp ffmpeg deno
+bash scripts/fetch-tools-macos.sh   # yt-dlp, FFmpeg, FFprobe, Deno into ./bin
 npm ci
 npm run tauri dev
-npm run tauri build -- --bundles app,dmg
+npm run tauri build -- --target universal-apple-darwin --bundles app --config src-tauri/tauri.macos-bundle.conf.json
 ```
+
+Without the script, engines from `brew install yt-dlp ffmpeg deno` work too.
 
 Public macOS builds would also need a Developer ID signature and notarization.
 

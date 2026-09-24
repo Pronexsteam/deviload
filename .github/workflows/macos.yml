@@ -1,0 +1,43 @@
+name: macOS test build
+
+# Rebuilds the macOS test app and replaces it in the release of the current
+# version, without a new version. Runs when the macos-test branch is pushed, or by hand.
+on:
+  push:
+    branches: [macos-test]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - run: npm ci
+      - name: Fetch yt-dlp, FFmpeg and Deno for macOS
+        run: bash scripts/fetch-tools-macos.sh
+      - run: npm run tauri build -- --target universal-apple-darwin --bundles app --config src-tauri/tauri.macos-bundle.conf.json
+      - name: Replace the app in the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The release of this version may still be building on Windows; wait for it.
+          version="$(node -p "require('./package.json').version")"
+          tag="v${version}"
+          for attempt in $(seq 1 40); do
+            gh release view "$tag" > /dev/null 2>&1 && break
+            sleep 30
+          done
+          gh release view "$tag" > /dev/null || { echo "release $tag not found"; exit 1; }
+          ditto -c -k --keepParent "src-tauri/target/universal-apple-darwin/release/bundle/macos/Deviload.app" "Deviload-${version}-macos-test.zip"
+          gh release upload "$tag" "Deviload-${version}-macos-test.zip" --clobber

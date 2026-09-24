@@ -75,7 +75,13 @@ fn binary(name: &str) -> Result<PathBuf, String> {
     let filename = if cfg!(windows) { format!("{name}.exe") } else { name.into() };
     let mut dirs: Vec<PathBuf> = vec![];
     if let Ok(exe) = std::env::current_exe() {
-        if let Some(p) = exe.parent() { dirs.push(p.into()); dirs.push(p.join("bin")); }
+        if let Some(p) = exe.parent() {
+            dirs.push(p.into());
+            dirs.push(p.join("bin"));
+            // A macOS app keeps the bundled engines in Contents/Resources/bin.
+            #[cfg(target_os = "macos")]
+            if let Some(contents) = p.parent() { dirs.push(contents.join("Resources").join("bin")); }
+        }
     }
     // Development builds also look in the checkout's bin folder.
     #[cfg(debug_assertions)]

@@ -1,0 +1,12 @@
+{
+  "bundle": {
+    "createUpdaterArtifacts": false,
+    "resources": {
+      "../bin/yt-dlp": "bin/yt-dlp",
+      "../bin/ffmpeg": "bin/ffmpeg",
+      "../bin/ffprobe": "bin/ffprobe",
+      "../bin/deno": "bin/deno",
+      "../LICENSES/*": "LICENSES/"
+    }
+  }
+}

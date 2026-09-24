@@ -45,7 +45,7 @@ jobs:
           $files = Get-ChildItem dist -File | Where-Object { $_.Extension -in '.exe', '.zip', '.json' } | ForEach-Object { $_.FullName }
           gh release create "${{ github.ref_name }}" --latest --title "Deviload ${{ github.ref_name }}" --generate-notes @files
 
-  # An unsigned macOS build for testers; it expects yt-dlp, FFmpeg and Deno from Homebrew.
+  # An unsigned macOS test build with yt-dlp, FFmpeg and Deno inside the app.
   macos:
     needs: windows
     runs-on: macos-latest
@@ -60,7 +60,9 @@ jobs:
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
       - run: npm ci
-      - run: npm run tauri build -- --target universal-apple-darwin --bundles app --config src-tauri/tauri.ci.conf.json
+      - name: Fetch yt-dlp, FFmpeg and Deno for macOS
+        run: bash scripts/fetch-tools-macos.sh
+      - run: npm run tauri build -- --target universal-apple-darwin --bundles app --config src-tauri/tauri.macos-bundle.conf.json
       - name: Attach the app to the release
         env:
           GH_TOKEN: ${{ github.token }}
