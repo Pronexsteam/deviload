@@ -43,7 +43,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $files = Get-ChildItem dist -File | Where-Object { $_.Extension -in '.exe', '.zip', '.json' } | ForEach-Object { $_.FullName }
-          gh release create "${{ github.ref_name }}" --latest --title "Deviload ${{ github.ref_name }}" --generate-notes @files
+          # Hand-written notes in .github/release-notes/<tag>.md win over generated ones.
+          $notes = ".github/release-notes/${{ github.ref_name }}.md"
+          $source = if (Test-Path $notes) { @('--notes-file', $notes) } else { @('--generate-notes') }
+          gh release create "${{ github.ref_name }}" --latest --title "Deviload ${{ github.ref_name }}" @source @files
 
   # An unsigned macOS test build with yt-dlp, FFmpeg and Deno inside the app.
   macos:

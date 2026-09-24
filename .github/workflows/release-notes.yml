@@ -1,0 +1,31 @@
+name: Release notes
+
+# Copies .github/release-notes/<tag>.md into the description of that release
+# whenever such a file changes on main.
+on:
+  push:
+    branches: [main]
+    paths: ['.github/release-notes/**']
+
+permissions:
+  contents: write
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Update the release descriptions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for file in $(git diff --name-only HEAD~1 HEAD -- .github/release-notes); do
+            [ -f "$file" ] || continue
+            tag="$(basename "$file" .md)"
+            if gh release view "$tag" > /dev/null 2>&1; then
+              gh release edit "$tag" --notes-file "$file"
+              echo "updated $tag"
+            fi
+          done
