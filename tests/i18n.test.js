@@ -56,7 +56,7 @@ const normalize = text => text.replace(/\{[^}]*\}/g, "{}");
 
 function rustMessages() {
   const found = [];
-  for (const file of ["lib.rs", "model.rs", "share.rs", "watch.rs", "convert.rs"]) {
+  for (const file of ["lib.rs", "model.rs", "share.rs", "watch.rs", "convert.rs", "power.rs"]) {
     const source = read(join("src-tauri/src", file)).split("#[cfg(test)]")[0];
     for (const [, text] of source.matchAll(RUST_MESSAGE)) {
       if (/^(?:[A-Z{]|yt-dlp )/.test(text)) found.push({file, text});

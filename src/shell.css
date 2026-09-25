@@ -548,6 +548,17 @@ select:disabled, input:disabled { opacity: .5; }
 .cut-foot { display: flex; align-items: center; }
 .cut-empty-mascot { --mascot: 92px; }
 
+/* After the downloads */
+.icon[data-icon="power"] { --glyph: url("assets/icons/power.svg"); }
+.after-downloads { position: relative; display: inline-flex; align-items: center; }
+.after-downloads .icon { position: absolute; left: 10px; width: 14px; height: 14px; color: #aeb8c0; pointer-events: none; }
+.after-downloads select { width: auto; margin: 0; padding: 7px 10px 7px 30px; font-size: 12px; background: #1d2126; }
+.power-dialog { width: min(380px, 90vw); text-align: center; }
+.power-body { display: grid; justify-items: center; gap: 10px; padding: 8px 4px 4px; }
+.power-body .icon { width: 34px; height: 34px; color: var(--accent); }
+.power-body h2 { margin: 0; font-size: 18px; }
+.power-body p { margin: 0 0 6px; color: #c7ced3; font-size: 13px; }
+
 /* Converter window */
 .icon[data-icon="arrows-left-right"] { --glyph: url("assets/icons/arrows-left-right.svg"); }
 body.convert-page { display: block; min-width: 0; height: 100vh; margin: 0; padding: 0; overflow: hidden; background: #101318; }

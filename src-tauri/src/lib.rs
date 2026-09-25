@@ -1,5 +1,6 @@
 mod convert;
 mod model;
+mod power;
 mod share;
 mod watch;
 use model::{Job, Options};
@@ -2165,6 +2166,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(CloseToTray::default())
         .manage(convert::Converter::default())
+        .manage(power::AfterDownloads::default())
         .manage(PendingUpdate::default())
         .setup(|app| {
             #[cfg(windows)]
@@ -2238,17 +2240,21 @@ pub fn run() {
             app.manage(engine.clone());
             app.manage(share::ShareState::default());
             watch::start(app.handle().clone());
+            let handle = app.handle().clone();
             thread::spawn(move || loop {
                 if engine.shutdown.load(Ordering::Relaxed) { break; }
-                let id = {
+                let (id, busy) = {
                     let mut d = engine.data.lock().unwrap();
                     let active = d.jobs.iter().filter(|j| ["running", "cancelling", "pausing"].contains(&j.status.as_str())).count();
-                    if active < d.parallel {
+                    let waiting = d.jobs.iter().any(|j| ready_to_run(j, now_seconds()));
+                    let id = if active < d.parallel {
                         if let Some(j) = d.jobs.iter_mut().find(|j| ready_to_run(j, now_seconds())) {
                             j.status = "running".into(); j.scheduled_at = None; j.archived = 0; let id = j.id; engine.persist(&mut d); Some(id)
                         } else { None }
-                    } else { None }
+                    } else { None };
+                    (id, active > 0 || waiting)
                 };
+                power::observe(&handle, busy);
                 if let Some(id) = id {
                     let worker = engine.clone(); thread::spawn(move || worker.run_job(id));
                 }
@@ -2266,7 +2272,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_releases, window_action, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, search_media, inspect_media, playlist_entries, enqueue, change_job, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
+        .invoke_handler(tauri::generate_handler![set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_releases, window_action, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, search_media, inspect_media, playlist_entries, enqueue, change_job, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
         .build(tauri::generate_context!()).expect("failed to start Deviload")
         .run(|app, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event { app.state::<Engine>().stop(); }

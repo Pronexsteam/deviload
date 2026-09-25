@@ -956,6 +956,37 @@ function openConverter(files = []) {
   invoke("open_converter", {files}).catch(error => message(errorText(error), true));
 }
 $("converter-tab").addEventListener("click", () => openConverter());
+// Sleep or shut down after the downloads: Rust waits for the queue and counts down a minute.
+$("after-downloads").addEventListener("change", async () => {
+  const action = $("after-downloads").value;
+  try {
+    await invoke("set_after_downloads", {action});
+    const busy = jobs.some(job => ["running", "queued"].includes(job.status));
+    if (action !== "none") message(t(action === "sleep"
+      ? (busy ? "The computer goes to sleep when the current downloads finish." : "The computer goes to sleep after the next downloads.")
+      : (busy ? "The computer shuts down when the current downloads finish." : "The computer shuts down after the next downloads.")));
+  } catch (error) { $("after-downloads").value = "none"; message(errorText(error), true); }
+});
+let powerTimer = 0;
+function closePower() {
+  clearInterval(powerTimer);
+  $("after-downloads").value = "none";
+  if ($("power-dialog").open) $("power-dialog").close();
+}
+window.__TAURI__?.event?.listen?.("power-countdown", event => {
+  const {action, seconds} = event.payload;
+  let left = seconds;
+  const text = () => t(action === "sleep" ? "The computer goes to sleep in {seconds} s." : "The computer shuts down in {seconds} s.", {seconds:left});
+  $("power-text").textContent = text();
+  clearInterval(powerTimer);
+  powerTimer = setInterval(() => { left = Math.max(0, left - 1); $("power-text").textContent = text(); }, 1000);
+  if (!$("power-dialog").open) $("power-dialog").showModal();
+});
+window.__TAURI__?.event?.listen?.("power-cancelled", () => { closePower(); message(t("Cancelled. The computer stays on.")); });
+window.__TAURI__?.event?.listen?.("power-simulated", () => { closePower(); message(t("Test copy: the computer was not turned off.")); });
+window.__TAURI__?.event?.listen?.("power-failed", event => { closePower(); message(errorText(event.payload), true); });
+$("power-cancel").addEventListener("click", () => invoke("cancel_power").catch(() => {}));
+$("power-dialog").addEventListener("cancel", event => { event.preventDefault(); invoke("cancel_power").catch(() => {}); });
 let searchRequest = 0;
 $("media-search-form").addEventListener("submit", async event => {
   event.preventDefault();
