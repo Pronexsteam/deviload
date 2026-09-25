@@ -34,7 +34,7 @@ try {
     }
     if ((Need 'ffmpeg.exe') -or (Need 'ffprobe.exe')) {
         $zip = Join-Path $temp 'ffmpeg.zip'
-        Get-File 'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip' $zip
+        Get-File 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' $zip
         Expand-Archive -Path $zip -DestinationPath (Join-Path $temp 'ffmpeg') -Force
         foreach ($name in 'ffmpeg.exe', 'ffprobe.exe') {
             $file = Get-ChildItem -Path (Join-Path $temp 'ffmpeg') -Recurse -Filter $name | Select-Object -First 1

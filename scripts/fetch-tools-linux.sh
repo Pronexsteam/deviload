@@ -12,7 +12,7 @@ fetch() { curl -fsSL --retry 4 --retry-delay 10 --retry-all-errors -o "$2" "$1";
 # Nightly builds follow YouTube changes faster than the stable channel.
 fetch https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp_linux bin/yt-dlp
 
-fetch https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-linux64-gpl.tar.xz "$work/ffmpeg.tar.xz"
+fetch https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz "$work/ffmpeg.tar.xz"
 tar -xJf "$work/ffmpeg.tar.xz" -C "$work"
 cp "$work"/ffmpeg-master-latest-linux64-gpl/bin/ffmpeg "$work"/ffmpeg-master-latest-linux64-gpl/bin/ffprobe bin/
 
