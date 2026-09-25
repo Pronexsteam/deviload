@@ -470,6 +470,11 @@ function message(value, error = false) {
   toast.append(icon, node("p", "", value), close);
   box.append(toast);
   while (box.children.length > 4) box.firstElementChild.remove();
+  // The strip lives in the top layer; showing it again puts it above a dialog opened since.
+  if (box.showPopover) {
+    if (box.matches(":popover-open")) box.hidePopover();
+    box.showPopover();
+  }
   toast.dataset.timer = String(setTimeout(() => dismissToast(toast), error ? 9000 : 4500));
 }
 function clearToasts() { $("toasts").replaceChildren(); }

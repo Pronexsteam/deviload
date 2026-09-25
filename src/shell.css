@@ -211,7 +211,8 @@ main, .custom-window main { padding-top: 0; }
 .job-help span { font-size: 11px; line-height: 1.4; color: #d3c9c4; }
 .fix-action { border-color: #ff6d4799 !important; color: #ffd4c4 !important; }
 
-/* Toasts */
+/* Toasts. As a popover the strip shows above open dialogs; the resets undo the browser's popover look. */
+.toasts[popover] { inset: auto 18px 18px auto; margin: 0; padding: 0; border: 0; background: transparent; color: inherit; overflow: visible; }
 .toasts {
   position: fixed;
   right: 18px;
