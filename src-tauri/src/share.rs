@@ -73,7 +73,7 @@ struct Offer { id: u64, name: String, size: u64, state: OfferState, received: Ar
 #[derive(Clone, Default, Deserialize)]
 pub(super) struct PhonePage { lang: String, strings: HashMap<String, String> }
 
-const PAGE_KEYS: [&str; 20] = ["heading", "fromComputer", "nothingYet", "download", "toComputer", "sendFiles",
+const PAGE_KEYS: [&str; 21] = ["heading", "fromComputer", "nothingYet", "download", "open", "toComputer", "sendFiles",
     "waiting", "accepted", "declined", "sending", "sent", "failed", "linkTitle", "linkPlaceholder", "linkButton",
     "linkAdded", "homeHint", "kilobytes", "megabytes", "offline"];
 
@@ -321,6 +321,28 @@ fn encoded_name(value: &str) -> String {
     encoded
 }
 
+// Names for a file saved on a phone. Browsers that ignore filename* fall back to the
+// plain one, so it keeps the extension; both are cut to what phone file systems take.
+fn download_names(name: &str) -> (String, String) {
+    let extension = Path::new(name).extension().and_then(|e| e.to_str())
+        .filter(|e| e.len() <= 5 && e.chars().all(|c| c.is_ascii_alphanumeric())).unwrap_or("");
+    let stem = if extension.is_empty() { name } else { &name[..name.len() - extension.len() - 1] };
+    let dot = if extension.is_empty() { "" } else { "." };
+    let mut plain = String::new();
+    for c in stem.chars() {
+        let c = if c.is_ascii_alphanumeric() || " -_.()[]".contains(c) { c } else { '_' };
+        if !(c == '_' && plain.ends_with('_')) { plain.push(c); }
+    }
+    let plain: String = plain.trim_matches(|c: char| c == '_' || c == ' ').chars().take(80).collect();
+    let plain = if plain.is_empty() { "deviload".to_owned() } else { plain };
+    let mut full = String::new();
+    for c in stem.chars() {
+        if full.len() + c.len_utf8() > 150 { break; }
+        full.push(c);
+    }
+    (format!("{plain}{dot}{extension}"), format!("{}{dot}{extension}", full.trim_end()))
+}
+
 fn media_type(file: &Path) -> &'static str {
     match file.extension().and_then(|s| s.to_str()).unwrap_or("").to_ascii_lowercase().as_str() {
         "mp4" | "m4v" => "video/mp4", "webm" => "video/webm", "mov" => "video/quicktime", "mkv" => "video/x-matroska",
@@ -530,9 +552,14 @@ fn send_file(stream: &mut TcpStream, state: &ShareState, token: &str, file: &Out
     let (start, end) = bounds.unwrap_or((0, file.size.saturating_sub(1)));
     let length = if file.size == 0 { 0 } else { end - start + 1 };
     let status = if bounds.is_some() { "206 Partial Content" } else { "200 OK" };
-    write!(stream, "HTTP/1.1 {status}\r\nContent-Type: {}\r\nContent-Length: {length}\r\nAccept-Ranges: bytes\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n", media_type(&file.path))?;
+    // A download is plain bytes: some phone browsers refuse to save a video type they cannot play.
+    let content_type = if download { "application/octet-stream" } else { media_type(&file.path) };
+    write!(stream, "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {length}\r\nAccept-Ranges: bytes\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n")?;
     if bounds.is_some() { write!(stream, "Content-Range: bytes {start}-{end}/{}\r\n", file.size)?; }
-    if download { write!(stream, "Content-Disposition: attachment; filename=\"deviload-download\"; filename*=UTF-8''{}\r\n", encoded_name(&file.name))?; }
+    if download {
+        let (plain, full) = download_names(&file.name);
+        write!(stream, "Content-Disposition: attachment; filename=\"{plain}\"; filename*=UTF-8''{}\r\n", encoded_name(&full))?;
+    }
     stream.write_all(b"\r\n")?;
     if head { return Ok(()); }
     let mut source = File::open(&file.path)?;
@@ -624,7 +651,7 @@ section{{background:#1b2127;border:1px solid #33404a;border-radius:16px;padding:
 .item{{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #2a333b}}.item:first-of-type{{border-top:0}}.item div{{flex:1;min-width:0}}.item strong{{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}}.item small{{color:#9aa4ac}}
 a.button,button,label.button{{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 16px;border:0;border-radius:10px;background:#f27050;color:#17191c;font:700 15px system-ui,sans-serif;text-decoration:none;cursor:pointer}}
 .quiet{{background:#2a333b!important;color:#e7ecef!important}}.bar{{height:6px;margin-top:6px;border-radius:6px;background:#303940;overflow:hidden}}.bar i{{display:block;height:100%;width:0;background:linear-gradient(90deg,#f86d45,#ffc07a);transition:width .3s}}
-.empty{{color:#9aa4ac;font-size:14px}}input[type=url]{{width:100%;min-height:44px;margin:0 0 10px;padding:0 12px;border:1px solid #3a4650;border-radius:10px;background:#11161a;color:#f4f1ee;font-size:15px}}
+.actions{{display:flex;gap:8px;flex:none}}.empty{{color:#9aa4ac;font-size:14px}}input[type=url]{{width:100%;min-height:44px;margin:0 0 10px;padding:0 12px;border:1px solid #3a4650;border-radius:10px;background:#11161a;color:#f4f1ee;font-size:15px}}
 #link-result{{margin:8px 0 0;color:#9aa4ac;font-size:14px}}.hint{{color:#7f8a92;font-size:13px;text-align:center}}.offline{{display:none;margin:0 0 14px;padding:10px 12px;border-radius:10px;background:#3a1f1c;color:#ffb4a4}}body.off .offline{{display:block}}
 </style>
 <main><header><div class="mascot" id="mascot" data-pose="front"><img data-pose="front" src="{root}/mascot/front.png" alt=""><img data-pose="look" src="{root}/mascot/look.png" alt=""><img data-pose="working" src="{root}/mascot/working.png" alt=""><img data-pose="victory" src="{root}/mascot/victory.png" alt=""><img data-pose="error" src="{root}/mascot/error.png" alt=""></div><div><b>DEVILOAD</b><span>{heading}</span></div></header>
@@ -647,7 +674,9 @@ function render(state){{
   var files=$("files");files.innerHTML="";
   if(!state.files.length)files.appendChild(el("p","empty",T.nothingYet));
   state.files.forEach(function(f){{var row=el("div","item"),text=el("div");text.appendChild(el("strong","",f.name));text.appendChild(el("small","",size(f.size)));
-    var a=el("a","button",T.download);a.href=B+"/file/"+f.id;a.setAttribute("download","");row.appendChild(text);row.appendChild(a);files.appendChild(row)}});
+    var a=el("a","button",T.download);a.href=B+"/file/"+f.id;a.setAttribute("download","");
+    var o=el("a","button quiet",T.open);o.href=B+"/media/"+f.id;o.target="_blank";o.rel="noopener";
+    var actions=el("div","actions");actions.appendChild(o);actions.appendChild(a);row.appendChild(text);row.appendChild(actions);files.appendChild(row)}});
   state.offers.forEach(function(o){{var u=uploads[o.id];if(!u)return;u.state=o.state;
     if(o.state==="accepted"&&!u.started)start(o.id);
     paint(o.id)}});
@@ -677,6 +706,17 @@ poll();
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn phones_get_names_with_the_extension() {
+        assert_eq!(download_names("Me at the zoo [jNQXAC9IVRw].mkv"), ("Me at the zoo [jNQXAC9IVRw].mkv".into(), "Me at the zoo [jNQXAC9IVRw].mkv".into()));
+        let (plain, full) = download_names("\u{41f}\u{440}\u{438}\u{432}\u{435}\u{442} | clip: \"one\".mp4");
+        assert_eq!(plain, "clip_ _one.mp4");
+        assert!(full.starts_with('\u{41f}') && full.ends_with(".mp4"));
+        let (plain, full) = download_names(&format!("{}.mp3", "\u{44f}".repeat(200)));
+        assert_eq!(plain, "deviload.mp3");
+        assert!(full.len() <= 154 && full.ends_with(".mp3"));
+    }
 
     #[derive(Default)]
     struct TestHost { dir: PathBuf, events: Mutex<Vec<String>>, links: Mutex<Vec<String>>, files: Mutex<Vec<PathBuf>> }
@@ -734,6 +774,7 @@ mod tests {
         assert!(response.starts_with("HTTP/1.1 206 Partial Content") && response.ends_with("\r\ncde"), "{response}");
         let response = exchange(&state, b"GET /p/secret/file/3 HTTP/1.1\r\n\r\n");
         assert!(response.contains("filename*=UTF-8''clip.mp4") && response.ends_with("\r\nabcdefgh"));
+        assert!(response.contains("filename=\"clip.mp4\"") && response.contains("Content-Type: application/octet-stream"));
         assert!(exchange(&state, b"GET /p/secret/mascot/victory.png HTTP/1.1\r\n\r\n").starts_with("HTTP/1.1 200 OK\r\nContent-Type: image/png"));
         assert!(exchange(&state, b"GET /p/secret/mascot/../../x.png HTTP/1.1\r\n\r\n").starts_with("HTTP/1.1 404"));
         assert!(outgoing.done.load(Ordering::Relaxed));

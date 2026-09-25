@@ -2024,7 +2024,7 @@ async function pollPhone() {
 }
 function phonePageText() {
   return {lang:language(), strings:{heading:t("Phone link"), fromComputer:t("From the computer"),
-    nothingYet:t("Nothing yet. In Deviload press “To phone” next to a file."), download:t("Save to phone"),
+    nothingYet:t("Nothing yet. In Deviload press “To phone” next to a file."), download:t("Save to phone"), open:t("Open"),
     toComputer:t("To the computer"), sendFiles:t("Send files"), waiting:t("Waiting for the computer to accept"),
     accepted:t("Starting…"), declined:t("Declined on the computer"), sending:t("Sending"), sent:t("Sent"), failed:t("Failed"),
     linkTitle:t("Download by link"), linkPlaceholder:t("Paste a video link"), linkButton:t("Add to downloads"),

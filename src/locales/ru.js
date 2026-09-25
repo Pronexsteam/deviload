@@ -1001,4 +1001,5 @@ export default {
   "Download the new .deb from the releases page and install it over the old one.": "Скачайте новый .deb со страницы выпусков и установите его поверх старого.",
   "No folder for the engines": "Нет папки для движков",
   "Could not prepare {}: {e}": "Не удалось подготовить {}: {e}",
+  "Open": "Открыть",
 };
