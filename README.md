@@ -30,9 +30,9 @@ Desktop app for downloading video and music with [yt-dlp](https://github.com/yt-
 - **Queue** with 1 to 8 parallel downloads, pause, resume, reorder, delayed start, automatic retry of temporary network errors, a per-task log and readable error hints. The queue survives restarts; interrupted tasks resume only when you ask. It can put the computer to sleep or shut it down when the downloads finish, after a minute you can cancel.
 - **Self-healing downloads**: known failures are fixed once before a task gives up: your Deviload sign-in when YouTube asks to sign in, the usual quality when an exact stream is gone, a yt-dlp update (when nothing is downloading) when YouTube changes its protection, and a pause after rate limiting.
 - **Readable errors** with a fix button: sign in for age-restricted, private or members-only videos, update yt-dlp when YouTube changes its protection.
-- **Download archive that says so**: when yt-dlp skips videos it downloaded before, the task says how many, and "Download again" brings back files that were deleted since.
+- **Download archive that follows the disk**: a file deleted from the disk downloads again next time, and when yt-dlp still skips something it downloaded before, the task says how many and "Download again" brings it back.
 - **Pre-flight check** before adding: engines present, save folder writable, free disk space, links already downloaded.
-- **Library** of finished files with favorites, collections, tags, search, a duplicate finder and a built-in player that remembers the position and shows chapters and subtitles.
+- **Library** of finished files with favorites, collections, tags, search, a duplicate finder and a built-in player that remembers the position and shows chapters and subtitles. Sort it by date, size, length or name, group it by channel, and show it as large tiles, small tiles or a list; each file shows its length and size.
 - **Devil Cut**, a video editor in its own window, in the spirit of CapCut:
   - media from your downloads on the left, a live preview in the middle, clip settings on the right, and a timeline you can make taller, with the clips' sound, separate sounds and music on their own rows;
   - split at the playhead, delete, duplicate, drag to reorder, drag edges to trim, undo and redo, zoom from a two-hour project down to single frames, full screen; long videos stay smooth;

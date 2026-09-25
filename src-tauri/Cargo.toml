@@ -1,6 +1,6 @@
 [package]
 name = "deviload"
-version = "2.2.0"
+version = "2.3.0"
 description = "Deviload: desktop front-end for yt-dlp and FFmpeg"
 authors = ["Samvel Avetisyan"]
 edition = "2021"
