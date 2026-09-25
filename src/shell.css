@@ -718,4 +718,9 @@ body { font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Ub
 [data-view="list"] .media-library-actions { grid-area: actions; }
 [data-view="list"] .media-library-actions > button { justify-content: center; min-width: 108px; }
 @media (max-width: 760px) { [data-view="list"] .media-library-info { grid-template-columns: 1fr; grid-template-areas: "name" "meta" "tags" "actions"; } }
-.media-library-filters select { height: 36px; margin-top: 0; padding-top: 0; padding-bottom: 0; }
+/* The filter row: every control 36 px tall on one line. */
+.media-library-filters { align-items: center; gap: 8px; }
+.media-library-filters > button { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; font-size: 12px; }
+.media-library-filters select { height: 36px; margin: 0; padding: 0 30px 0 12px; border-radius: 8px; background-color: #13181d; font-size: 12px; }
+.media-library-filters #library-collection { margin-left: auto; }
+.media-library-filters .library-view { align-items: center; height: 36px; }
