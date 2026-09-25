@@ -2819,7 +2819,7 @@ mod engine_tests {
         let server = thread::spawn(move || {
             while !flag.load(Ordering::Relaxed) {
                 if let Ok((mut stream, _)) = listener.accept() {
-                    // Accepted sockets inherit non-blocking mode on Windows; a read before the request arrives would drop it.
+                    // Accepted sockets inherit non-blocking mode on macOS and Windows; a read before the request arrives would drop it.
                     let _ = stream.set_nonblocking(false);
                     let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
                     let mut req = [0u8; 4096];

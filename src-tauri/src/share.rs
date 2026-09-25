@@ -439,6 +439,9 @@ fn read_json(reader: &mut BufReader<TcpStream>, length: Option<u64>) -> Option<s
 }
 
 fn serve(stream: TcpStream, state: &ShareState, token: &str) -> std::io::Result<()> {
+    // Accepted sockets inherit the listener's non-blocking mode on macOS and Windows; a full send
+    // buffer would then end a download to a slower phone after about 128 KB.
+    stream.set_nonblocking(false)?;
     stream.set_read_timeout(Some(Duration::from_secs(30)))?;
     stream.set_write_timeout(Some(Duration::from_secs(30)))?;
     let mut reader = BufReader::new(stream);
@@ -781,6 +784,40 @@ mod tests {
         assert!(exchange(&state, b"GET /p/other/state HTTP/1.1\r\n\r\n").starts_with("HTTP/1.1 404"));
         *state.0.lock().unwrap() = None;
         assert!(exchange(&state, b"GET /p/secret/file/3 HTTP/1.1\r\n\r\n").starts_with("HTTP/1.1 410 Gone"));
+    }
+
+    #[test]
+    fn large_files_reach_a_slow_phone_through_a_non_blocking_listener() {
+        // The real listener is non-blocking, and accepted sockets inherit that on macOS and Windows:
+        // a full send buffer must wait for the phone instead of ending the download.
+        let size = 8 * 1024 * 1024;
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        file.write_all(&vec![7u8; size]).unwrap();
+        let outgoing = Outgoing { id: 4, path: file.path().to_path_buf(), name: "big.mp4".into(), size: size as u64,
+            sent: Arc::new(AtomicU64::new(0)), done: Arc::new(AtomicBool::new(false)) };
+        let state = hub(Arc::new(TestHost::default()), vec![outgoing.clone()]);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let address = listener.local_addr().unwrap();
+        let server_state = state.clone();
+        let server = thread::spawn(move || {
+            let stream = loop {
+                match listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(_) => thread::sleep(Duration::from_millis(10)),
+                }
+            };
+            serve(stream, &server_state, "secret")
+        });
+        let mut client = TcpStream::connect(address).unwrap();
+        client.write_all(b"GET /p/secret/file/4 HTTP/1.1\r\n\r\n").unwrap();
+        thread::sleep(Duration::from_millis(300));
+        let mut response = Vec::new();
+        client.read_to_end(&mut response).unwrap();
+        server.join().unwrap().unwrap();
+        let body = response.windows(4).position(|w| w == b"\r\n\r\n").map_or(0, |at| response.len() - at - 4);
+        assert_eq!(body, size);
+        assert!(outgoing.done.load(Ordering::Relaxed));
     }
 
     #[test]
