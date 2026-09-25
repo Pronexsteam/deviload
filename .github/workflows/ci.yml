@@ -49,12 +49,15 @@ jobs:
       - name: Fetch yt-dlp, FFmpeg and Deno for Linux
         if: runner.os == 'Linux'
         run: bash scripts/fetch-tools-linux.sh
-      # Unit tests run on the host; the build below checks the selected target.
+      # Unit tests run on the host; the build below checks the selected target. Where the engines
+      # were fetched, the tests on generated media run too (recording, converter, Devil Cut, audio).
       - name: Run the Rust tests
         shell: bash
         run: |
           set -o pipefail
-          cargo test --manifest-path src-tauri/Cargo.toml --locked 2>&1 | tee cargo-test.log
+          media=""
+          if [ "$RUNNER_OS" != "macOS" ]; then media="--include-ignored"; fi
+          cargo test --manifest-path src-tauri/Cargo.toml --locked -- $media 2>&1 | tee cargo-test.log
       # Job logs need a GitHub sign-in; annotations do not, so a failure shows its end there.
       - name: Show the end of a failed test run
         if: failure()

@@ -27,14 +27,36 @@ function Get-File($url, $target) {
     }
 }
 
+# Every download is checked against the SHA-256 its own project publishes. A mismatch deletes the
+# file and stops the build, so nothing unverified reaches a release. $Name picks the file in a
+# list of checksums; without it the checksum file holds just the one.
+function Confirm-Checksum($File, $SumsUrl, $Name) {
+    $sums = Join-Path $temp ('sums-' + [guid]::NewGuid())
+    Get-File $SumsUrl $sums
+    $list = Get-Content -Raw -Path $sums
+    $line = if ($Name) {
+        $list -split "`r?`n" | Where-Object { $_ -match ('^\s*[0-9a-fA-F]{64}\s+\*?' + [regex]::Escape($Name) + '\s*$') } | Select-Object -First 1
+    } else { $list }
+    $expected = [regex]::Match([string]$line, '[0-9a-fA-F]{64}').Value.ToLower()
+    if (-not $expected) { throw "No checksum for $Name in $SumsUrl" }
+    $actual = (Get-FileHash -Algorithm SHA256 -Path $File).Hash.ToLower()
+    if ($actual -ne $expected) {
+        Remove-Item -Force $File
+        throw "Checksum mismatch for $(Split-Path -Leaf $File): expected $expected, got $actual"
+    }
+    Write-Host "checked  $(if ($Name) { $Name } else { Split-Path -Leaf $File })"
+}
+
 try {
     if (Need 'yt-dlp.exe') {
         # Nightly builds follow YouTube changes faster than the stable channel.
         Get-File 'https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp.exe' (Join-Path $bin 'yt-dlp.exe')
+        Confirm-Checksum (Join-Path $bin 'yt-dlp.exe') 'https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/SHA2-256SUMS' 'yt-dlp.exe'
     }
     if ((Need 'ffmpeg.exe') -or (Need 'ffprobe.exe')) {
         $zip = Join-Path $temp 'ffmpeg.zip'
         Get-File 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' $zip
+        Confirm-Checksum $zip 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/checksums.sha256' 'ffmpeg-master-latest-win64-gpl.zip'
         Expand-Archive -Path $zip -DestinationPath (Join-Path $temp 'ffmpeg') -Force
         foreach ($name in 'ffmpeg.exe', 'ffprobe.exe') {
             $file = Get-ChildItem -Path (Join-Path $temp 'ffmpeg') -Recurse -Filter $name | Select-Object -First 1
@@ -44,6 +66,7 @@ try {
     if (Need 'deno.exe') {
         $zip = Join-Path $temp 'deno.zip'
         Get-File 'https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip' $zip
+        Confirm-Checksum $zip 'https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip.sha256sum'
         Expand-Archive -Path $zip -DestinationPath $bin -Force
     }
 } finally {
