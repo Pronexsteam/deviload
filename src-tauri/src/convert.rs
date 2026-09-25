@@ -1,7 +1,7 @@
 // The converter: a video or audio file from the disk becomes MP4, MP3 or a GIF,
 // or a video squeezed under a size limit for messengers and mail. The source file
 // is never changed; results are written next to it under a new name.
-use super::{binary, command, ffmpeg_command, kill_tree, run_ffmpeg_tracked};
+use super::{binary, command, ffmpeg_command, finish_part, kill_tree, run_ffmpeg_tracked, write_to};
 use serde::{Deserialize, Serialize};
 use std::{
     fs, path::{Path, PathBuf}, process::Command,
@@ -103,8 +103,10 @@ fn convert(state: &Converter, job: &Conversion, progress: &dyn Fn(f64)) -> Resul
             if !file.audio { return Err("This file has no sound".into()); }
             let output = output_path(&source, "MP3", "mp3")?;
             let mut cmd = ffmpeg_command()?;
-            cmd.arg("-i").arg(&source).args(["-map", "0:a:0", "-vn", "-c:a", "libmp3lame", "-b:a", "320k", "-map_metadata", "0"]).arg(&output);
-            run(state, cmd, seconds, Some(&output), progress)?;
+            cmd.arg("-i").arg(&source).args(["-map", "0:a:0", "-vn", "-c:a", "libmp3lame", "-b:a", "320k", "-map_metadata", "0"]);
+            let part = write_to(&mut cmd, &output);
+            run(state, cmd, seconds, Some(&part), progress)?;
+            finish_part(&part, &output)?;
             Ok(output)
         }
         "mp4" => {
@@ -113,8 +115,10 @@ fn convert(state: &Converter, job: &Conversion, progress: &dyn Fn(f64)) -> Resul
             let mut cmd = ffmpeg_command()?;
             cmd.arg("-i").arg(&source).args(["-map", "0:v:0", "-map", "0:a:0?", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
                 "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
-                "-movflags", "+faststart"]).arg(&output);
-            run(state, cmd, seconds, Some(&output), progress)?;
+                "-movflags", "+faststart"]);
+            let part = write_to(&mut cmd, &output);
+            run(state, cmd, seconds, Some(&part), progress)?;
+            finish_part(&part, &output)?;
             Ok(output)
         }
         "gif" => {
@@ -123,8 +127,10 @@ fn convert(state: &Converter, job: &Conversion, progress: &dyn Fn(f64)) -> Resul
             let output = output_path(&source, "GIF", "gif")?;
             let mut cmd = ffmpeg_command()?;
             cmd.arg("-i").arg(&source).args(["-vf", "fps=12,scale='min(480,iw)':-2:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse",
-                "-an", "-loop", "0"]).arg(&output);
-            run(state, cmd, seconds, Some(&output), progress)?;
+                "-an", "-loop", "0"]);
+            let part = write_to(&mut cmd, &output);
+            run(state, cmd, seconds, Some(&part), progress)?;
+            finish_part(&part, &output)?;
             Ok(output)
         }
         "size" => squeeze_to_size(state, &source, &file, job.megabytes, progress),
@@ -143,8 +149,10 @@ fn squeeze_to_size(state: &Converter, source: &Path, file: &MediaFile, megabytes
         if kbps < 32.0 { return Err("The audio is too long for this size. Pick a bigger size".into()); }
         let output = output_path(source, &label, "mp3")?;
         let mut cmd = ffmpeg_command()?;
-        cmd.arg("-i").arg(source).args(["-map", "0:a:0", "-vn", "-c:a", "libmp3lame", "-b:a", &format!("{kbps}k"), "-map_metadata", "0"]).arg(&output);
-        run(state, cmd, file.duration, Some(&output), progress)?;
+        cmd.arg("-i").arg(source).args(["-map", "0:a:0", "-vn", "-c:a", "libmp3lame", "-b:a", &format!("{kbps}k"), "-map_metadata", "0"]);
+        let part = write_to(&mut cmd, &output);
+        run(state, cmd, file.duration, Some(&part), progress)?;
+        finish_part(&part, &output)?;
         return Ok(output);
     }
     let (mut video_kbps, audio_kbps, height) = squeeze(total, file.audio)?;
@@ -161,11 +169,12 @@ fn squeeze_to_size(state: &Converter, source: &Path, file: &MediaFile, megabytes
         let mut second = ffmpeg_command()?;
         second.arg("-i").arg(source).args(["-map", "0:v:0", "-map", "0:a:0?", "-vf", &scale, "-c:v", "libx264", "-preset", "medium",
             "-b:v", &format!("{video_kbps}k"), "-pass", "2", "-passlogfile"]).arg(&log)
-            .args(["-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", &format!("{audio_kbps}k"), "-movflags", "+faststart"]).arg(&output);
-        run(state, second, file.duration, Some(&output), &|share| progress(0.5 + share * 0.5))?;
-        let bytes = fs::metadata(&output).map(|meta| meta.len()).unwrap_or(0);
-        if bytes <= limit { return Ok(output); }
-        let _ = fs::remove_file(&output);
+            .args(["-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", &format!("{audio_kbps}k"), "-movflags", "+faststart"]);
+        let part = write_to(&mut second, &output);
+        run(state, second, file.duration, Some(&part), &|share| progress(0.5 + share * 0.5))?;
+        let bytes = fs::metadata(&part).map(|meta| meta.len()).unwrap_or(0);
+        if bytes <= limit { finish_part(&part, &output)?; return Ok(output); }
+        let _ = fs::remove_file(&part);
         // Rarely the encoder overshoots; one more try with a rate lowered by the miss.
         video_kbps = (video_kbps * limit as f64 / bytes as f64 * 0.93).floor();
         if attempt == 1 || video_kbps < 60.0 { break; }

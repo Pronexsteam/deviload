@@ -1236,15 +1236,18 @@ fn save_audio_tags(file: &Path, tags: AudioTags) -> Result<PathBuf, String> {
     let ext = file.extension().and_then(|s| s.to_str()).unwrap_or("mp3");
     let output = new_output_path(file, "Tagged", ext)?;
     let ffmpeg = binary("ffmpeg")?;
-    let result = command(&ffmpeg).args(["-hide_banner", "-loglevel", "error", "-nostdin", "-n", "-i"])
+    let mut cmd = command(&ffmpeg);
+    cmd.args(["-hide_banner", "-loglevel", "error", "-nostdin", "-n", "-i"])
         .arg(file).args(["-map", "0", "-c", "copy", "-metadata", &format!("title={title}"),
             "-metadata", &format!("artist={artist}"), "-metadata", &format!("album={album}"),
-            "-metadata", &format!("track={track}")])
-        .arg(&output).output().map_err(|e| e.to_string())?;
+            "-metadata", &format!("track={track}")]);
+    let part = write_to(&mut cmd, &output);
+    let result = cmd.output().map_err(|e| e.to_string())?;
     if !result.status.success() {
-        let _ = fs::remove_file(&output);
+        let _ = fs::remove_file(&part);
         return Err(format!("Could not save the tags: {}", String::from_utf8_lossy(&result.stderr).chars().take(400).collect::<String>()));
     }
+    finish_part(&part, &output)?;
     Ok(output)
 }
 
@@ -1256,14 +1259,17 @@ fn normalize_audio(file: &Path) -> Result<PathBuf, String> {
     };
     let output = new_output_path(file, "Normalized", &ext)?;
     let ffmpeg = binary("ffmpeg")?;
-    let result = command(&ffmpeg).args(["-hide_banner", "-loglevel", "error", "-nostdin", "-n", "-i"])
+    let mut cmd = command(&ffmpeg);
+    cmd.args(["-hide_banner", "-loglevel", "error", "-nostdin", "-n", "-i"])
         .arg(file).args(["-map", "0:a:0", "-map_metadata", "0", "-af",
-            "loudnorm=I=-16:TP=-1.5:LRA=11", "-c:a", codec])
-        .arg(&output).output().map_err(|e| e.to_string())?;
+            "loudnorm=I=-16:TP=-1.5:LRA=11", "-c:a", codec]);
+    let part = write_to(&mut cmd, &output);
+    let result = cmd.output().map_err(|e| e.to_string())?;
     if !result.status.success() {
-        let _ = fs::remove_file(&output);
+        let _ = fs::remove_file(&part);
         return Err(format!("Could not normalize the audio: {}", String::from_utf8_lossy(&result.stderr).chars().take(400).collect::<String>()));
     }
+    finish_part(&part, &output)?;
     Ok(output)
 }
 
@@ -1322,15 +1328,18 @@ fn save_recording(target: &Path) -> Option<Result<PathBuf, String>> {
     if fs::metadata(&part).ok().filter(|meta| meta.is_file() && meta.len() > 0).is_none() { return None; }
     let extension = if target.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("mp4")) { "mp4" } else { "mkv" };
     Some(free_path(target, extension).and_then(|output| {
-        let copied = binary("ffmpeg").ok().and_then(|ffmpeg| command(&ffmpeg)
-            .args(["-hide_banner", "-loglevel", "error", "-nostdin", "-n", "-i"]).arg(&part)
-            .args(["-map", "0:v?", "-map", "0:a?", "-c", "copy"]).arg(&output).output().ok())
-            .is_some_and(|result| result.status.success() && output.is_file());
+        let copied = binary("ffmpeg").ok().and_then(|ffmpeg| {
+            let mut cmd = command(&ffmpeg);
+            cmd.args(["-hide_banner", "-loglevel", "error", "-nostdin", "-n", "-i"]).arg(&part).args(["-map", "0:v?", "-map", "0:a?", "-c", "copy"]);
+            let writing = write_to(&mut cmd, &output);
+            let done = cmd.output().ok().is_some_and(|result| result.status.success()) && finish_part(&writing, &output).is_ok();
+            if !done { let _ = fs::remove_file(&writing); }
+            Some(done)
+        }).unwrap_or(false);
         if copied {
             let _ = fs::remove_file(&part);
             return Ok(output);
         }
-        let _ = fs::remove_file(&output);
         // FFmpeg could not copy it; the raw recording still plays under its real type.
         let mut head = [0u8; 1];
         let raw_type = if fs::File::open(&part).and_then(|mut file| std::io::Read::read_exact(&mut file, &mut head)).is_ok() && head[0] == 0x47 { "ts" } else { "mkv" };
@@ -1615,13 +1624,28 @@ async fn export_options() -> Result<ExportOptions, String> {
 // crash, a cancel or a full disk never leaves a half-written file that looks finished.
 fn muxer_for(output: &Path) -> &'static str {
     match output.extension().and_then(|ext| ext.to_str()).map(str::to_ascii_lowercase).as_deref() {
-        Some("gif") => "gif", Some("mp3") => "mp3", Some("mkv") => "matroska", Some("webm") => "webm", Some("mov") => "mov",
+        Some("gif") => "gif", Some("mp3") => "mp3", Some("mkv" | "mka") => "matroska", Some("webm") => "webm", Some("mov") => "mov", Some("aac") => "adts",
         Some("m4a") => "ipod", Some("flac") => "flac", Some("wav") => "wav", Some("ogg") => "ogg", Some("opus") => "opus",
         Some("ts") => "mpegts", _ => "mp4",
     }
 }
 
-fn finish_part(part: &Path, output: &Path) -> Result<(), String> {
+// "<name>.deviload.part": plainly unfinished, and never the ".part" yt-dlp keeps a recording in.
+pub(crate) fn writing_path(output: &Path) -> PathBuf {
+    let mut part = output.as_os_str().to_owned();
+    part.push(".deviload.part");
+    PathBuf::from(part)
+}
+
+// Points FFmpeg at the unfinished name, with the container the real name asks for.
+pub(crate) fn write_to(cmd: &mut Command, output: &Path) -> PathBuf {
+    let part = writing_path(output);
+    let _ = fs::remove_file(&part);
+    cmd.args(["-f", muxer_for(output)]).arg(&part);
+    part
+}
+
+pub(crate) fn finish_part(part: &Path, output: &Path) -> Result<(), String> {
     let renamed = fs::rename(part, output);
     if renamed.is_err() { let _ = fs::remove_file(part); }
     renamed.map_err(|e| format!("Could not save the file: {e}"))
@@ -1831,9 +1855,7 @@ fn render_project(sources: &[Source], project: &ProjectExport, music: Option<&So
                 .args(["-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"]);
         }
     }
-    let part = recording_part(output);
-    let _ = fs::remove_file(&part);
-    cmd.args(["-f", muxer_for(output)]).arg(&part);
+    let part = write_to(&mut cmd, output);
     let result = run_ffmpeg(cmd, total, progress);
     drop(captions);
     if let Err(detail) = result {
@@ -2836,6 +2858,16 @@ mod engine_tests {
         assert!(report.warnings.iter().any(|warning| warning.contains("history")));
     }
     #[test]
+    fn unfinished_files_never_take_the_name_yt_dlp_records_into() {
+        let target = Path::new("/v/Live [x].mp4");
+        assert_eq!(writing_path(target), PathBuf::from("/v/Live [x].mp4.deviload.part"));
+        assert_ne!(writing_path(target), recording_part(target));
+        let mut cmd = Command::new("ffmpeg");
+        let part = write_to(&mut cmd, Path::new("/v/song.mp3"));
+        let args: Vec<_> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+        assert_eq!(args, ["-f", "mp3", &part.to_string_lossy()]);
+    }
+    #[test]
     fn exports_keep_their_container_while_written_as_part_files() {
         assert_eq!(muxer_for(Path::new("/v/Clip - Devil Cut Video.mp4")), "mp4");
         assert_eq!(muxer_for(Path::new("/v/a.GIF")), "gif");
@@ -3092,7 +3124,7 @@ mod engine_tests {
             let codec = command(&binary("ffprobe").unwrap()).args(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name,codec_tag_string", "-of", "csv=p=0"]).arg(&hevc).output().unwrap();
             assert_eq!(String::from_utf8_lossy(&codec.stdout).trim(), "hevc,hvc1");
             assert_eq!((probe_source(&hevc).unwrap().width, probe_source(&hevc).unwrap().height), (160, 90));
-            assert!(!recording_part(&hevc).exists());
+            assert!(!writing_path(&hevc).exists());
         }
         let mixed_cuts = ProjectExport { clips: vec![clip(0.0, 1.0, ClipLook::default()), clip(0.0, 1.0, ClipLook::default()), clip(0.0, 1.0, enter("fadeblack"))],
             quality: 480, ..ProjectExport::default() };
