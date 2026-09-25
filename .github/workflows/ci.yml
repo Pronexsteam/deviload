@@ -50,7 +50,19 @@ jobs:
         if: runner.os == 'Linux'
         run: bash scripts/fetch-tools-linux.sh
       # Unit tests run on the host; the build below checks the selected target.
-      - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+      - name: Run the Rust tests
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --manifest-path src-tauri/Cargo.toml --locked 2>&1 | tee cargo-test.log
+      # Job logs need a GitHub sign-in; annotations do not, so a failure shows its end there.
+      - name: Show the end of a failed test run
+        if: failure()
+        shell: bash
+        run: |
+          test -f cargo-test.log || exit 0
+          grep -v -e 'Compiling ' -e 'Downloaded ' cargo-test.log | tail -n 60 | tr -d '\r' | sed 's/%/%25/g' | awk 'BEGIN { ORS = "%0A" } { print }' > tail.txt
+          echo "::error title=cargo test (${{ matrix.os }})::$(cat tail.txt)"
       # CI builds are not release builds, so they skip the signed update files.
       - name: Build Windows installer
         if: runner.os == 'Windows'
