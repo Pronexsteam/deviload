@@ -1489,6 +1489,22 @@ $("library-edit-save").addEventListener("click", () => {
 });
 $("library-collection").addEventListener("change", renderMediaLibrary);
 try { $("library-sort").value = localStorage.getItem("deviload-library-sort") || "new"; } catch { /* storage unavailable */ }
+// Large tiles, small tiles or a list: the same cards, laid out by CSS.
+function setLibraryView(view) {
+  $("media-library-grid").dataset.view = view;
+  for (const button of document.querySelectorAll("[data-library-view]")) {
+    button.classList.toggle("selected", button.dataset.libraryView === view);
+    button.setAttribute("aria-pressed", String(button.dataset.libraryView === view));
+  }
+}
+try { setLibraryView(["large", "small", "list"].includes(localStorage.getItem("deviload-library-view")) ? localStorage.getItem("deviload-library-view") : "large"); }
+catch { setLibraryView("large"); }
+for (const button of document.querySelectorAll("[data-library-view]")) {
+  button.addEventListener("click", () => {
+    setLibraryView(button.dataset.libraryView);
+    try { localStorage.setItem("deviload-library-view", button.dataset.libraryView); } catch { /* storage unavailable */ }
+  });
+}
 $("library-sort").addEventListener("change", () => {
   try { localStorage.setItem("deviload-library-sort", $("library-sort").value); } catch { /* storage unavailable */ }
   renderMediaLibrary();
@@ -1552,7 +1568,7 @@ function renderMediaLibrary() {
     const tags = [entry.favorite ? "★" : "", entry.collection, ...(entry.tags || [])].filter(Boolean);
     if (tags.length) info.append(node("p", "library-tags", tags.join(" · ")));
     const buttons = node("div", "media-library-actions");
-    addAction(buttons, t("Watch"), "quiet", () => openPlayer(job.id));
+    addAction(buttons, t("Watch"), "quiet", () => openPlayer(job.id), "", "play");
     addAction(buttons, t("To phone · QR"), "transfer-button", () => startShare(job.id), t("Open a QR code to send this file to a phone"), "phone-transfer");
     const more = node("details", "library-more");
     const moreActions = node("div", "library-more-actions");

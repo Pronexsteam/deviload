@@ -1010,4 +1010,8 @@ export default {
   "Longest first": "Сначала длинные",
   "By name": "По названию",
   "Takes {size}.": "Занимает {size}.",
+  "View": "Вид",
+  "Large tiles": "Крупные значки",
+  "Small tiles": "Мелкие значки",
+  "List": "Список",
 };
