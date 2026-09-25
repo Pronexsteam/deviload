@@ -1291,10 +1291,14 @@ function render(data) {
     currentFilter === "all" ? "Add a link above and the first card appears here." :
     "Cards appear here when task states change.");
   const existing = new Map([...$("jobs").children].map(row => [Number(row.dataset.id), row]));
+  let slot = 0;
   for (const job of visible) {
     let row = existing.get(job.id);
     if (!row) row = createCard(job);
-    $("jobs").append(row);
+    // Move a card only when its place changed: moving it on every refresh swallows a click in progress.
+    const here = $("jobs").children[slot];
+    if (here !== row) $("jobs").insertBefore(row, here || null);
+    slot++;
     existing.delete(job.id);
     taskOrbs.get(job.id)?.setState(job.status);
     taskOrbs.get(job.id)?.setProgress(job.percent);
