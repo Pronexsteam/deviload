@@ -49,17 +49,23 @@ jobs:
           gh release create "${{ github.ref_name }}" --latest --title "Deviload ${{ github.ref_name }}" @source @files
       # The update feed also lives on the updates branch: files served from there
       # are not counted as release downloads, so the download badge counts people.
+      # A separate clone of that branch, so the build workspace cannot get in the way.
       - name: Publish the update feed
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          cp dist/latest.json "$RUNNER_TEMP/latest.json"
+          set -euxo pipefail
+          feed="$RUNNER_TEMP/feed"
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git clone --quiet --depth 1 --branch updates "$remote" "$feed"
+          cp dist/latest.json "$feed/latest.json"
+          cd "$feed"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git fetch origin updates; then git checkout -B updates FETCH_HEAD; else git checkout --orphan updates; git rm -rfq --cached .; fi
-          cp "$RUNNER_TEMP/latest.json" latest.json
           git add latest.json
           git commit -m "Update feed for $GITHUB_REF_NAME"
-          git push origin updates
+          git push origin HEAD:updates
 
   # An unsigned macOS test build with yt-dlp, FFmpeg and Deno inside the app.
   macos:
