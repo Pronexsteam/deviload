@@ -167,7 +167,7 @@ impl PhoneHost for AppHost {
         let options = crate::model::Options { archive: false, ..d.options.clone() };
         let mut job = crate::model::Job { id, url: String::new(), options, status: "done".into(), percent: 100.0,
             speed: String::new(), file: file.to_string_lossy().into_owned(), log: vec![], scheduled_at: None,
-            auto_retry: false, retry_attempts: 0, archived: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
+            auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], pid: None, hidden_in_queue: false, hidden_in_library: false };
         job.log.push("Received from the phone".into());
         d.jobs.push(job);
         crate::save(&self.engine.dir, &d)

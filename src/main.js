@@ -1313,8 +1313,11 @@ function render(data) {
     const issue = job.status === "error" ? diagnoseError(job.log, Boolean(signedInPath)) : null;
     // yt-dlp skips what the download archive lists, even when the file was deleted since.
     const skipped = job.status === "done" && job.archived > 0 ? job.archived : 0;
+    // After a failure Deviload may be trying a fix by itself.
+    const healing = ["queued", "running"].includes(job.status) && job.healed?.length ? job.healed.at(-1) : "";
     const help = row.querySelector(".job-help");
-    const helpKey = issue ? issue.title + issue.message + language() : skipped ? "archived" + skipped + (job.file ? "+" : "") + language() : "";
+    const helpKey = issue ? issue.title + issue.message + language() : skipped ? "archived" + skipped + (job.file ? "+" : "") + language()
+      : healing ? "healing" + healing + language() : "";
     if (help.dataset.key !== helpKey) {
       help.dataset.key = helpKey;
       const text = node("div", "job-help-text");
@@ -1322,9 +1325,15 @@ function render(data) {
       else if (skipped) text.append(node("strong", "", t(job.file ? "Some items were downloaded before" : "Nothing new: downloaded before")),
         node("span", "", tn("{count} item was skipped because it was downloaded before, even if its file was deleted since. “Download again” brings back what is missing.",
           "{count} items were skipped because they were downloaded before, even if their files were deleted since. “Download again” brings back what is missing.", skipped)));
-      help.replaceChildren(...(issue ? [mascotSpot("error", "help-mascot"), text] : skipped ? [mascotSpot("look", "help-mascot"), text] : []));
+      else if (healing) text.append(node("strong", "", t("Deviload is fixing it")), node("span", "", t({
+        "sign-in":"YouTube asked to sign in, so the download runs again with your account.",
+        format:"The chosen stream is gone, so the download runs again with the usual quality choice.",
+        update:"yt-dlp looked outdated. Deviload updates it when the current downloads finish, then tries again.",
+        wait:"YouTube asked to slow down. The download tries again in 10 minutes.",
+      }[healing] || "The download runs again.")));
+      help.replaceChildren(...(issue ? [mascotSpot("error", "help-mascot"), text] : skipped || healing ? [mascotSpot(healing ? "working" : "look", "help-mascot"), text] : []));
     }
-    help.hidden = !issue && !skipped;
+    help.hidden = !issue && !skipped && !healing;
     const controls = row.querySelector(".job-controls");
     const key = actions(job.status).join(",") + (skipped ? "|again" : "") + (issue?.action || "") + (isVideoJob(job) ? "|video" : job.status === "done" && job.file ? "|file" : "");
     if (controls.dataset.actions !== key) {

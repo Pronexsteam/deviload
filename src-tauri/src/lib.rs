@@ -1,4 +1,5 @@
 mod convert;
+mod heal;
 mod media_server;
 mod model;
 mod power;
@@ -186,7 +187,13 @@ impl Engine {
                     Ok(()) => { j.status = "done".into(); j.percent = 100.0; j.scheduled_at = None; }
                     Err(e) => {
                         j.consume(&e);
-                        if !schedule_retry(j) { j.status = "error".into(); }
+                        if !schedule_retry(j) {
+                            let cookies = session_file(&self.dir);
+                            match heal::plan(j, cookies.is_file(), now_seconds()) {
+                                Some(fix) => heal::apply(j, &fix, &cookies, now_seconds()),
+                                None => j.status = "error".into(),
+                            }
+                        }
                     }
                 }
             }
@@ -589,18 +596,20 @@ struct EngineUpdate { before: String, after: String }
 // YouTube changes often; the nightly channel gets fixes first.
 #[tauri::command]
 async fn update_ytdlp() -> Result<EngineUpdate, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        let exe = binary("yt-dlp")?;
-        let before = ytdlp_version(&exe)?;
-        let output = ytdlp_command(&exe).args(["--update-to", "nightly"]).stdin(Stdio::null())
-            .output().map_err(|e| e.to_string())?;
-        if !output.status.success() {
-            let detail = String::from_utf8_lossy(&output.stderr);
-            let detail = detail.lines().rev().find(|line| !line.trim().is_empty()).unwrap_or("").trim();
-            return Err(format!("yt-dlp could not update itself: {}", detail.chars().take(280).collect::<String>()));
-        }
-        Ok(EngineUpdate { before, after: ytdlp_version(&exe)? })
-    }).await.map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(update_engine).await.map_err(|e| e.to_string())?
+}
+
+fn update_engine() -> Result<EngineUpdate, String> {
+    let exe = binary("yt-dlp")?;
+    let before = ytdlp_version(&exe)?;
+    let output = ytdlp_command(&exe).args(["--update-to", "nightly"]).stdin(Stdio::null())
+        .output().map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        let detail = String::from_utf8_lossy(&output.stderr);
+        let detail = detail.lines().rev().find(|line| !line.trim().is_empty()).unwrap_or("").trim();
+        return Err(format!("yt-dlp could not update itself: {}", detail.chars().take(280).collect::<String>()));
+    }
+    Ok(EngineUpdate { before, after: ytdlp_version(&exe)? })
 }
 
 #[tauri::command]
@@ -699,7 +708,7 @@ fn queue_urls(d: &mut Snapshot, urls: Vec<String>, options: &Options, scheduled_
     for url in urls {
         if d.jobs.iter().any(|j| j.url == url && ["queued", "running", "cancelling", "pausing", "paused"].contains(&j.status.as_str())) { continue; }
         d.jobs.push(Job { id: next_id, url, options: options.clone(), status: "queued".into(),
-            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at, auto_retry, retry_attempts: 0, archived: 0, pid: None, hidden_in_queue: false, hidden_in_library: false });
+            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at, auto_retry, retry_attempts: 0, archived: 0, healed: vec![], pid: None, hidden_in_queue: false, hidden_in_library: false });
         next_id += 1; count += 1;
     }
     count
@@ -782,7 +791,7 @@ fn import_legacy_into(legacy: &Path, data: &mut Snapshot, archive_dir: &Path) ->
                 .and_then(|urls| urls.into_iter().next()).unwrap_or_default();
             let options = Options { quality: legacy_quality(file).into(), archive: false, ..data.options.clone() };
             let mut job = Job { id: next_id, url, options, status: "done".into(), percent: 100.0, speed: String::new(),
-                file: file.into(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
+                file: file.into(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], pid: None, hidden_in_queue: false, hidden_in_library: false };
             job.log.push("Moved from Deviload 1.x".into());
             data.jobs.push(job);
             next_id += 1;
@@ -854,11 +863,12 @@ fn change_job(id: u64, action: String, engine: tauri::State<Engine>) -> Result<(
         "cancel" if j.status == "running" => j.status = "cancelling".into(),
         "retry" if ["error", "cancelled", "interrupted"].contains(&j.status.as_str()) => {
             j.status = "queued".into(); j.percent = 0.0; j.log.clear(); j.speed.clear(); j.file.clear(); j.scheduled_at = None; j.retry_attempts = 0;
+            j.healed.clear();
         }
         // Without the archive yt-dlp fetches what it skipped; files still on the disk are not downloaded twice.
         "again" if j.status == "done" && j.archived > 0 => {
             j.status = "queued".into(); j.percent = 0.0; j.log.clear(); j.speed.clear(); j.file.clear(); j.scheduled_at = None;
-            j.retry_attempts = 0; j.archived = 0; j.options.archive = false;
+            j.retry_attempts = 0; j.archived = 0; j.options.archive = false; j.healed.clear();
         }
         _ => return Err("This action is not available in the current state".into()),
     }
@@ -2294,17 +2304,20 @@ pub fn run() {
             let handle = app.handle().clone();
             thread::spawn(move || loop {
                 if engine.shutdown.load(Ordering::Relaxed) { break; }
-                let (id, busy) = {
+                // While yt-dlp waits to be replaced, no new download starts.
+                let updating = heal::engine_update_pending(now_seconds());
+                let (id, busy, active) = {
                     let mut d = engine.data.lock().unwrap();
                     let active = d.jobs.iter().filter(|j| ["running", "cancelling", "pausing"].contains(&j.status.as_str())).count();
                     let waiting = d.jobs.iter().any(|j| ready_to_run(j, now_seconds()));
-                    let id = if active < d.parallel {
+                    let id = if active < d.parallel && !updating {
                         if let Some(j) = d.jobs.iter_mut().find(|j| ready_to_run(j, now_seconds())) {
                             j.status = "running".into(); j.scheduled_at = None; j.archived = 0; let id = j.id; engine.persist(&mut d); Some(id)
                         } else { None }
                     } else { None };
-                    (id, active > 0 || waiting)
+                    (id, active > 0 || waiting || updating, active)
                 };
+                if updating && active == 0 { heal::update_engine_when_idle(|| update_engine().map(|_| ()), now_seconds()); }
                 power::observe(&handle, busy);
                 if let Some(id) = id {
                     let worker = engine.clone(); thread::spawn(move || worker.run_job(id));
@@ -2376,7 +2389,7 @@ mod engine_tests {
         let dir = tempfile::tempdir().unwrap();
         let job = |id: u64, status: &str| Job { id, url: String::new(), options: Options::default(), status: status.into(),
             percent: 0.0, speed: String::new(), file: format!("file{id}.mp4"), log: vec![], scheduled_at: None, auto_retry: false,
-            retry_attempts: 0, archived: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
+            retry_attempts: 0, archived: 0, healed: vec![], pid: None, hidden_in_queue: false, hidden_in_library: false };
         let engine = Engine { dir: dir.path().into(), data: Arc::new(Mutex::new(Snapshot {
             jobs: vec![job(1, "done"), job(2, "done"), job(3, "error"), job(4, "running")], ..Snapshot::default() })),
             shutdown: Arc::new(AtomicBool::new(false)) };
@@ -2462,7 +2475,7 @@ mod engine_tests {
         assert!(!huge.ready);
         let duplicate = Job { id: 1, url: "https://example.com/video".into(), options: options.clone(),
             status: "done".into(), percent: 100.0, speed: String::new(), file: String::new(),
-            log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
+            log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], pid: None, hidden_in_queue: false, hidden_in_library: false };
         let report = check_preflight("https://example.com/video", &options, None, &[duplicate]).unwrap();
         assert!(report.warnings.iter().any(|warning| warning.contains("history")));
     }
@@ -2538,7 +2551,7 @@ mod engine_tests {
         });
         let job = Job { id: 1, url: format!("http://127.0.0.1:{port}/fixture.mp4"),
             options: Options { folder: dir.path().join("downloads").to_string_lossy().into(), quality: "wav".into(), archive: false, ..Options::default() },
-            status: "running".into(), percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
+            status: "running".into(), percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], pid: None, hidden_in_queue: false, hidden_in_library: false };
         let engine = Engine { dir: dir.path().into(), data: Arc::new(Mutex::new(Snapshot { jobs: vec![job.clone()], ..Snapshot::default() })), shutdown: Arc::new(AtomicBool::new(false)) };
         engine.run_job(1);
         let mut mobile_job = job.clone();
@@ -2697,7 +2710,7 @@ mod engine_tests {
     fn scheduled_jobs_wait_and_transient_errors_retry() {
         let mut job = Job { id: 1, url: "https://example.com".into(), options: Options::default(),
             status: "queued".into(), percent: 0.0, speed: String::new(), file: String::new(),
-            log: vec![], scheduled_at: Some(200), auto_retry: true, retry_attempts: 0, archived: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
+            log: vec![], scheduled_at: Some(200), auto_retry: true, retry_attempts: 0, archived: 0, healed: vec![], pid: None, hidden_in_queue: false, hidden_in_library: false };
         assert!(!ready_to_run(&job, 199));
         assert!(ready_to_run(&job, 200));
         job.status = "paused".into();

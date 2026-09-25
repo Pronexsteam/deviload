@@ -992,4 +992,10 @@ export default {
   "New albums": "Новые альбомы",
   "Give a link to the artist's channel on YouTube or YouTube Music": "Дайте ссылку на канал исполнителя на YouTube или YouTube Music",
   "This channel has no releases. Give the link of the artist's own channel": "У этого канала нет релизов. Дайте ссылку на канал самого исполнителя",
+  "Deviload is fixing it": "Deviload чинит сам",
+  "YouTube asked to sign in, so the download runs again with your account.": "YouTube попросил войти, поэтому загрузка повторится с вашим аккаунтом.",
+  "The chosen stream is gone, so the download runs again with the usual quality choice.": "Выбранного потока больше нет, поэтому загрузка повторится с обычным выбором качества.",
+  "yt-dlp looked outdated. Deviload updates it when the current downloads finish, then tries again.": "yt-dlp похож на устаревший. Deviload обновит его, когда закончатся текущие загрузки, и попробует снова.",
+  "YouTube asked to slow down. The download tries again in 10 minutes.": "YouTube попросил не спешить. Загрузка повторится через 10 минут.",
+  "The download runs again.": "Загрузка повторится.",
 };
