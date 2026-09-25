@@ -21,7 +21,8 @@
         ],
         "displayLanguageSelector": true,
         "installerIcon": "icons/icon.ico",
-        "installerHooks": "windows/installer-hooks.nsh"
+        "installerHooks": "windows/installer-hooks.nsh",
+        "startMenuFolder": "Pronexsteam"
       }
     },
     "createUpdaterArtifacts": true

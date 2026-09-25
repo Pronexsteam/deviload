@@ -63,7 +63,7 @@ Desktop app for downloading video and music with [yt-dlp](https://github.com/yt-
 
 ## Install on Windows
 
-Download `Deviload-<version>-setup.exe` from the releases page and run it. It installs for the current user without administrator rights, adds a Start menu shortcut and brings yt-dlp, FFmpeg and Deno along. Any folder you can write to works; folders inside Program Files need administrator rights, so the installer stops and says so. Later versions install from inside the app. A portable zip is published next to it.
+Download `Deviload-<version>-setup.exe` from the releases page and run it. It installs for the current user without administrator rights, adds a Start menu shortcut (in the Pronexsteam folder) and brings yt-dlp, FFmpeg and Deno along. Any folder you can write to works; folders inside Program Files need administrator rights, so the installer stops and says so. Later versions install from inside the app. A portable zip is published next to it.
 
 ## Install on Linux
 
