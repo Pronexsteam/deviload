@@ -8,6 +8,7 @@
 [![License: MIT](https://img.shields.io/github/license/Pronexsteam/deviload)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20test%20%7C%20Linux-lightgrey)](https://github.com/Pronexsteam/deviload/releases/latest)
 [![Built with Rust and Tauri 2](https://img.shields.io/badge/built%20with-Rust%20%2B%20Tauri%202-b7410e)](https://tauri.app)
+[![Support on Ko-fi](https://img.shields.io/badge/support-Ko--fi-f27050?logo=ko-fi&logoColor=white)](https://ko-fi.com/pronexsteam)
 
 **[Download Deviload for Windows](https://github.com/Pronexsteam/deviload/releases/latest)**: take `Deviload-<version>-setup.exe` from the latest release.
 
@@ -140,6 +141,10 @@ The integration tests generate their own media and serve it from a local HTTP se
 ## Translations
 
 English is the source language. Russian strings live in `src/locales/ru.js`, keyed by the English text. Messages from the Rust core are English and are translated in the interface, including messages that carry runtime values (`"Search failed: {detail}"`).
+
+## Support
+
+Deviload is free and stays free. If it saves you time, you can buy me a coffee on [Ko-fi](https://ko-fi.com/pronexsteam); it helps me keep working on it.
 
 ## Licence
 

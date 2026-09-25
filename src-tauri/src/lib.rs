@@ -2358,16 +2358,25 @@ fn set_close_to_tray(enabled: bool, state: tauri::State<'_, CloseToTray>) {
     state.0.store(enabled, Ordering::Relaxed);
 }
 
+// Opens one of Deviload's own pages in the default browser; the address never comes from the UI.
+fn open_in_browser(url: &str) -> std::io::Result<()> {
+    #[cfg(windows)]
+    let result = Command::new("explorer.exe").arg(url).spawn();
+    #[cfg(target_os = "macos")]
+    let result = Command::new("open").arg(url).spawn();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let result = Command::new("xdg-open").arg(url).spawn();
+    result.map(|_| ())
+}
+
 #[tauri::command]
 fn open_releases() -> Result<(), String> {
-    const URL: &str = "https://github.com/Pronexsteam/deviload/releases/latest";
-    #[cfg(windows)]
-    let result = Command::new("explorer.exe").arg(URL).spawn();
-    #[cfg(target_os = "macos")]
-    let result = Command::new("open").arg(URL).spawn();
-    #[cfg(all(unix, not(target_os = "macos")))]
-    let result = Command::new("xdg-open").arg(URL).spawn();
-    result.map(|_| ()).map_err(|e| format!("Could not open the releases page: {e}"))
+    open_in_browser("https://github.com/Pronexsteam/deviload/releases/latest").map_err(|e| format!("Could not open the releases page: {e}"))
+}
+
+#[tauri::command]
+fn open_support() -> Result<(), String> {
+    open_in_browser("https://ko-fi.com/pronexsteam").map_err(|e| format!("Could not open the support page: {e}"))
 }
 
 struct TrayItems {
@@ -2577,7 +2586,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_releases, window_action, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
+        .invoke_handler(tauri::generate_handler![set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_releases, open_support, window_action, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
         .build(tauri::generate_context!()).expect("failed to start Deviload")
         .run(|app, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event { app.state::<Engine>().stop(); }

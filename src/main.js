@@ -349,6 +349,9 @@ async function checkAppUpdate(manual = false) {
     showAppUpdate();
   } catch (error) { if (manual) message(errorText(error), true); }
 }
+$("open-support").addEventListener("click", () => {
+  if (invoke) invoke("open_support").catch(error => message(errorText(error), true));
+});
 $("check-updates").addEventListener("click", async () => {
   const button = $("check-updates");
   button.disabled = true;

@@ -1029,4 +1029,8 @@ export default {
   "The recording has already finished": "Запись уже закончилась",
   "Could not save the recording: {error}": "Не удалось сохранить запись: {error}",
   "Could not pick a name for the recording": "Не удалось подобрать имя для записи",
+  "Support Deviload": "Поддержать Deviload",
+  "Deviload is free. If it helps you, you can support it on Ko-fi.": "Deviload бесплатный. Если он вам помогает, можно поддержать проект на Ko-fi.",
+  "Support on Ko-fi": "Поддержать на Ko-fi",
+  "Could not open the support page: {error}": "Не удалось открыть страницу поддержки: {error}",
 };
