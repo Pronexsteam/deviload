@@ -951,6 +951,11 @@ window.__TAURI__?.event?.listen?.("devilcut-projects", async () => {
   try { devilCut.setProjects((await invoke("ui_store")).projects || {}); } catch { /* keep the current list */ }
 });
 $("devilcut-tab").addEventListener("click", () => navigate("editor"));
+function openConverter(files = []) {
+  if (!invoke) { message(t("The converter works in the Deviload app."), true); return; }
+  invoke("open_converter", {files}).catch(error => message(errorText(error), true));
+}
+$("converter-tab").addEventListener("click", () => openConverter());
 let searchRequest = 0;
 $("media-search-form").addEventListener("submit", async event => {
   event.preventDefault();
@@ -1439,6 +1444,7 @@ function renderMediaLibrary() {
       try { await invoke("reveal_download", {id:job.id}); }
       catch (error) { message(errorText(error), true); }
     }, "", "folder-open");
+    addAction(moreActions, t("Convert"), "quiet", () => openConverter([job.file]), t("MP4, MP3, GIF or a smaller file"), "arrows-left-right");
     if (isAudioJob(job)) addAction(moreActions, t("Audio"), "quiet", () => openAudioTools(job.id));
     else if (isVideoJob(job)) addAction(moreActions, "Devil Cut", "quiet", () => devilCut.open(job.id), "", "scissors");
     addAction(moreActions, t("Remove from library"), "quiet", async () => {

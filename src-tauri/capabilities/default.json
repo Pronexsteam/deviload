@@ -1,9 +1,10 @@
 {
   "identifier": "default",
-  "description": "Main window and the Devil Cut editor window",
+  "description": "Main window, the Devil Cut editor window and the converter window",
   "windows": [
     "main",
-    "devilcut"
+    "devilcut",
+    "converter"
   ],
   "permissions": [
     "core:default",

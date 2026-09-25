@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Converter · Deviload</title><link rel="icon" href="assets/devil-app-icon-32.png"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="rework.css"><link rel="stylesheet" href="shell.css"><script type="module" src="converter.js"></script></head>
+<body class="convert-page">
+<main class="convert-window">
+  <header class="convert-head">
+    <span id="convert-mascot" class="convert-mascot" data-mascot="look"></span>
+    <div><span class="overline">TOOLS</span><h1>Converter</h1><p>Any video or audio file from this computer. The original stays as it is; the result is saved next to it.</p></div>
+  </header>
+  <section id="convert-drop" class="convert-drop">
+    <span class="icon" data-icon="files" aria-hidden="true"></span>
+    <strong>Drop files here</strong>
+    <button id="convert-pick" class="outline small" type="button"><span class="icon" data-icon="folder-open" aria-hidden="true"></span>Choose files</button>
+  </section>
+  <section class="convert-options" aria-label="What to make">
+    <div class="convert-presets" role="group" aria-label="Output format">
+      <button type="button" data-preset="mp4" class="selected" aria-pressed="true"><strong>MP4</strong><small>Plays everywhere</small></button>
+      <button type="button" data-preset="mp3" aria-pressed="false"><strong>MP3</strong><small>Only the sound</small></button>
+      <button type="button" data-preset="gif" aria-pressed="false"><strong>GIF</strong><small>Up to 60 seconds</small></button>
+      <button type="button" data-preset="size" aria-pressed="false"><strong>Smaller file</strong><small>Fits a size limit</small></button>
+    </div>
+    <div id="convert-size-row" class="convert-sizes" hidden>
+      <div class="cut-chips" role="group" aria-label="Size limit"><button type="button" data-size="10" class="selected">Discord · 10 MB</button><button type="button" data-size="16">WhatsApp · 16 MB</button><button type="button" data-size="25">Mail · 25 MB</button><button type="button" data-size="50">50 MB</button></div>
+      <label class="convert-own-size" for="convert-size">Own size <input id="convert-size" type="number" min="1" max="4000" step="1" value="10"> MB</label>
+    </div>
+  </section>
+  <section class="convert-list-wrap" aria-label="Files">
+    <div id="convert-list" class="convert-list"></div>
+    <p id="convert-empty" class="convert-empty">The list is empty. Drop files into this window or press “Choose files”.</p>
+  </section>
+  <footer class="convert-foot">
+    <p id="convert-status" role="status" aria-live="polite"></p>
+    <button id="convert-clear" class="quiet small" type="button">Clear the list</button>
+    <button id="convert-stop" class="outline small" type="button" hidden>Stop</button>
+    <button id="convert-start" class="primary" type="button"><span class="icon" data-icon="arrows-left-right" aria-hidden="true"></span>Convert</button>
+  </footer>
+</main>
+<div id="convert-overlay" class="convert-overlay" hidden><span class="icon" data-icon="files" aria-hidden="true"></span><strong>Drop to add the files</strong></div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+</body></html>
