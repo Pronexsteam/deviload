@@ -12,7 +12,7 @@ const keys = new Set(Object.keys(ru));
 // Brand names, formats and codes read the same in both languages.
 const neutral = new Set(["Deviload", "Devil", "oad", "Devil Cut", "Devil Cut · Deviload", "DEVIL CINEMA", "YouTube", "YouTube Music", "VK", "TikTok",
   "Instagram", "Twitch", "SoundCloud", "1080p", "720p", "480p", "MP3", "FLAC", "WAV", "GIF", "GIF · 480px", "Chrome", "Edge",
-  "Firefox", "Brave", "Safari", "yt-dlp", "RU", "EN", "I", "O", "MP4", "16:9", "9:16", "1:1", "4:5", "00:30", "01:15", "https://youtube.com/watch?v=…", "socks5://127.0.0.1:1080"]);
+  "Firefox", "Brave", "Safari", "yt-dlp", "RU", "EN", "I", "O", "MP4", "16:9", "9:16", "1:1", "4:5", "00:30", "01:15", "https://youtube.com/watch?v=…", "socks5://127.0.0.1:1080", "Plex", "http://192.168.1.10:8096"]);
 
 function missing(strings) {
   return [...strings].filter(text => /[A-Za-z]/.test(text) && !neutral.has(text) && !keys.has(text));
@@ -56,7 +56,7 @@ const normalize = text => text.replace(/\{[^}]*\}/g, "{}");
 
 function rustMessages() {
   const found = [];
-  for (const file of ["lib.rs", "model.rs", "share.rs", "watch.rs", "convert.rs", "power.rs"]) {
+  for (const file of ["lib.rs", "model.rs", "share.rs", "watch.rs", "convert.rs", "power.rs", "media_server.rs"]) {
     const source = read(join("src-tauri/src", file)).split("#[cfg(test)]")[0];
     for (const [, text] of source.matchAll(RUST_MESSAGE)) {
       if (/^(?:[A-Z{]|yt-dlp )/.test(text)) found.push({file, text});

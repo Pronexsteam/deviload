@@ -85,7 +85,7 @@ impl Options {
         if !["", "source", "gif"].contains(&self.clip_format.as_str()) {
             return Err("Unknown clip format".into());
         }
-        if !["", "manual", "media", "source"].contains(&self.folder_rule.as_str()) ||
+        if !["", "manual", "media", "source", "server"].contains(&self.folder_rule.as_str()) ||
             !["", "title", "date", "channel"].contains(&self.name_rule.as_str()) {
             return Err("Unknown save rule".into());
         }
@@ -161,24 +161,45 @@ impl Options {
         if let (Some(start), Some(end)) = (self.clip_start, self.clip_end) {
             a.extend(["--download-sections".into(), format!("*{start:.3}-{end:.3}")]);
         }
-        let folder_prefix = match self.folder_rule.as_str() {
-            "media" => if ["mp3","flac","wav"].contains(&self.quality.as_str()) { "Music/" } else { "Video/" },
-            "source" => "%(extractor_key)s/",
-            _ => "",
-        };
-        let base = match self.name_rule.as_str() {
-            "date" => "%(upload_date)s - %(title)s [%(id)s]",
-            "channel" => "%(uploader)s - %(title)s [%(id)s]",
-            _ => "%(title)s [%(id)s]",
-        };
         let clip_suffix = match (self.clip_start, self.clip_end) {
             (Some(start), Some(end)) => format!(" - clip {start:.1}-{end:.1}"),
             _ => String::new(),
         };
-        let playlist_prefix = if self.playlist { "%(playlist_title)s/%(playlist_index)03d - " } else { "" };
-        let template = format!("{folder_prefix}{playlist_prefix}{base}{clip_suffix}.%(ext)s");
-        a.extend(["-P".into(), self.folder.clone(), "-o".into(), template, "--".into(), url.into()]);
+        let name = if self.folder_rule == "server" { self.server_name() } else {
+            let folder_prefix = match self.folder_rule.as_str() {
+                "media" => if self.audio_only() { "Music/" } else { "Video/" },
+                "source" => "%(extractor_key)s/",
+                _ => "",
+            };
+            let base = match self.name_rule.as_str() {
+                "date" => "%(upload_date)s - %(title)s [%(id)s]",
+                "channel" => "%(uploader)s - %(title)s [%(id)s]",
+                _ => "%(title)s [%(id)s]",
+            };
+            let playlist_prefix = if self.playlist { "%(playlist_title)s/%(playlist_index)03d - " } else { "" };
+            format!("{folder_prefix}{playlist_prefix}{base}")
+        };
+        if self.folder_rule == "server" && !self.audio_only() {
+            // A picture and the video's details next to the file; Deviload turns them into what Jellyfin and Plex read.
+            a.extend(["--write-thumbnail".into(), "--convert-thumbnails".into(), "jpg".into(), "--write-info-json".into(),
+                "--no-write-playlist-metafiles".into(),
+                "-o".into(), format!("thumbnail:{name}{clip_suffix}-thumb.%(ext)s")]);
+        }
+        a.extend(["-P".into(), self.folder.clone(), "-o".into(), format!("{name}{clip_suffix}.%(ext)s"), "--".into(), url.into()]);
         a
+    }
+
+    pub fn audio_only(&self) -> bool { ["mp3", "flac", "wav"].contains(&self.quality.as_str()) }
+
+    // The layout media servers recognise: a video is an episode of its channel, dated
+    // and grouped by year; music goes by artist and album.
+    fn server_name(&self) -> String {
+        if self.audio_only() {
+            let number = if self.playlist { "%(track_number,playlist_index&{:02d} - |)s" } else { "%(track_number&{:02d} - |)s" };
+            return format!("%(artist,creator,uploader|Unknown artist)s/%(album|Singles)s/{number}%(track,title)s");
+        }
+        let channel = "%(channel,uploader|Unknown channel)s";
+        format!("{channel}/Season %(upload_date>%Y|0000)s/{channel} - %(upload_date>%Y-%m-%d|0000-00-00)s - %(title)s [%(id)s]")
     }
 }
 
@@ -362,6 +383,20 @@ mod tests {
         assert!(Options { clip_end: Some(80.0), ..o.clone() }.validate().is_err());
         assert!(Options { playlist: true, ..o.clone() }.validate().is_err());
         assert!(Options { quality: "mp3".into(), ..o }.validate().is_err());
+    }
+    #[test] fn media_server_layout() {
+        let video = Options { folder_rule: "server".into(), ..Default::default() };
+        video.validate().unwrap();
+        let args = video.args("https://example.com/video", std::path::Path::new("/tmp"));
+        let output = args.windows(2).filter(|pair| pair[0] == "-o").map(|pair| pair[1].clone()).collect::<Vec<_>>();
+        assert!(output[1].starts_with("%(channel,uploader|Unknown channel)s/Season %(upload_date>%Y|0000)s/"), "{output:?}");
+        assert!(output[1].ends_with(" - %(title)s [%(id)s].%(ext)s"));
+        assert_eq!(output[0], format!("thumbnail:{}-thumb.%(ext)s", output[1].trim_end_matches(".%(ext)s")));
+        assert!(args.iter().any(|part| part == "--write-info-json"));
+        let music = Options { folder_rule: "server".into(), quality: "mp3".into(), playlist: true, ..Default::default() };
+        let args = music.args("https://example.com/album", std::path::Path::new("/tmp"));
+        assert!(args.iter().any(|part| part == "%(artist,creator,uploader|Unknown artist)s/%(album|Singles)s/%(track_number,playlist_index&{:02d} - |)s%(track,title)s.%(ext)s"));
+        assert!(!args.iter().any(|part| part == "--write-info-json"));
     }
     #[test] fn progress_is_not_completion() {
         let mut j = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(),

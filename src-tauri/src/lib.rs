@@ -1,4 +1,5 @@
 mod convert;
+mod media_server;
 mod model;
 mod power;
 mod share;
@@ -24,9 +25,15 @@ struct Snapshot {
     // Where new downloads go when the app starts; empty means the last used folder.
     #[serde(default)]
     default_folder: String,
+    // Jellyfin, Emby or Plex to notify after downloads laid out for it.
+    #[serde(default)]
+    media_server: media_server::MediaServer,
 }
 impl Default for Snapshot {
-    fn default() -> Self { Self { jobs: vec![], options: Options::default(), parallel: 2, warning: String::new(), default_folder: String::new() } }
+    fn default() -> Self {
+        Self { jobs: vec![], options: Options::default(), parallel: 2, warning: String::new(), default_folder: String::new(),
+            media_server: media_server::MediaServer::default() }
+    }
 }
 
 #[derive(Clone)]
@@ -168,7 +175,7 @@ impl Engine {
             let d = self.data.lock().unwrap();
             match d.jobs.iter().find(|j| j.id == id) { Some(j) => j.clone(), None => return }
         };
-        let result = self.download(&job).and_then(|_| self.finish_clip_gif(&job));
+        let result = self.download(&job).and_then(|_| self.finish_clip_gif(&job)).map(|_| self.finish_media_server(&job));
         let mut d = self.data.lock().unwrap();
         if let Some(j) = d.jobs.iter_mut().find(|j| j.id == id) {
             j.pid = None;
@@ -185,6 +192,31 @@ impl Engine {
             }
         }
         self.persist(&mut d);
+        // When the last download for the media server is done, ask it to scan.
+        let server = d.media_server.clone();
+        let batch_done = !d.jobs.iter().any(|j| j.options.folder_rule == "server" && (["running", "cancelling", "pausing"].contains(&j.status.as_str()) || ready_to_run(j, now_seconds())));
+        let finished = d.jobs.iter().any(|j| j.id == id && j.status == "done");
+        drop(d);
+        if job.options.folder_rule == "server" && finished && batch_done && !server.kind.is_empty() {
+            let engine = self.clone();
+            thread::spawn(move || {
+                if let Err(error) = media_server::refresh(&server) {
+                    let mut d = engine.data.lock().unwrap();
+                    if let Some(j) = d.jobs.iter_mut().find(|j| j.id == id) { j.consume(&format!("Deviload: {error}")); }
+                    engine.persist(&mut d);
+                }
+            });
+        }
+    }
+    // Details for Jellyfin and Plex; a failure here is noted in the log but keeps the download.
+    fn finish_media_server(&self, job: &Job) {
+        if job.options.folder_rule != "server" || job.options.audio_only() { return; }
+        let errors = media_server::describe_all(Path::new(&job.options.folder));
+        if errors.is_empty() { return; }
+        let mut d = self.data.lock().unwrap();
+        if let Some(j) = d.jobs.iter_mut().find(|j| j.id == job.id) {
+            for error in errors { j.consume(&format!("Deviload: no details for the media server: {error}")); }
+        }
     }
     fn finish_clip_gif(&self, job: &Job) -> Result<(), String> {
         if job.options.clip_format != "gif" { return Ok(()); }
@@ -280,6 +312,25 @@ impl Engine {
 
 #[tauri::command]
 fn snapshot(engine: tauri::State<Engine>) -> Snapshot { engine.data.lock().unwrap().clone() }
+
+#[tauri::command]
+fn set_media_server(server: media_server::MediaServer, engine: tauri::State<Engine>) -> Result<(), String> {
+    let server = media_server::MediaServer { kind: server.kind, url: server.url.trim().into(), token: server.token.trim().into() };
+    server.validate()?;
+    let mut d = engine.data.lock().unwrap();
+    let old = d.clone();
+    d.media_server = server;
+    if let Err(e) = save(&engine.dir, &d) { *d = old; return Err(e); }
+    Ok(())
+}
+
+// Asks the saved server to scan now; the settings use it to check the address and the key.
+#[tauri::command]
+async fn check_media_server(engine: tauri::State<'_, Engine>) -> Result<(), String> {
+    let server = engine.data.lock().unwrap().media_server.clone();
+    if server.kind.is_empty() { return Err("Choose a media server first".into()); }
+    tauri::async_runtime::spawn_blocking(move || media_server::refresh(&server)).await.map_err(|e| e.to_string())?
+}
 
 // An empty folder goes back to the last used one.
 #[tauri::command]
@@ -2272,7 +2323,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_releases, window_action, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, search_media, inspect_media, playlist_entries, enqueue, change_job, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
+        .invoke_handler(tauri::generate_handler![set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_releases, window_action, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, search_media, inspect_media, playlist_entries, enqueue, change_job, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
         .build(tauri::generate_context!()).expect("failed to start Deviload")
         .run(|app, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event { app.state::<Engine>().stop(); }

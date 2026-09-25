@@ -548,6 +548,14 @@ select:disabled, input:disabled { opacity: .5; }
 .cut-foot { display: flex; align-items: center; }
 .cut-empty-mascot { --mascot: 92px; }
 
+/* Media server settings */
+.server-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); align-items: end; gap: 8px 10px; margin-top: 8px; }
+.server-form button { justify-self: start; }
+.server-form label { margin: 0; }
+.server-form input, .server-form select { margin: 0; }
+.settings-note { margin: 4px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+@media (max-width: 560px) { .server-form { grid-template-columns: 1fr; } }
+
 /* After the downloads */
 .icon[data-icon="power"] { --glyph: url("assets/icons/power.svg"); }
 .after-downloads { position: relative; display: inline-flex; align-items: center; }

@@ -956,6 +956,32 @@ function openConverter(files = []) {
   invoke("open_converter", {files}).catch(error => message(errorText(error), true));
 }
 $("converter-tab").addEventListener("click", () => openConverter());
+// The Jellyfin / Plex layout names files itself, so the file name choice does not apply.
+function syncNameRule() {
+  const server = $("folder-rule").value === "server";
+  $("name-rule").disabled = server;
+  $("name-rule").title = server ? t("Jellyfin and Plex need the channel, the date and the title in the name") : "";
+}
+$("folder-rule").addEventListener("change", syncNameRule);
+function showMediaServer(server = {}) {
+  $("server-kind").value = server.kind || "";
+  $("server-url").value = server.url || "";
+  $("server-token").value = server.token || "";
+  for (const id of ["server-url", "server-token"]) $(id).disabled = !$("server-kind").value;
+}
+$("server-kind").addEventListener("change", () => { for (const id of ["server-url", "server-token"]) $(id).disabled = !$("server-kind").value; });
+$("server-save").addEventListener("click", async () => {
+  const button = $("server-save");
+  const server = {kind:$("server-kind").value, url:$("server-url").value.trim(), token:$("server-token").value.trim()};
+  button.disabled = true;
+  try {
+    await invoke("set_media_server", {server});
+    if (!server.kind) { message(t("The media server is off.")); return; }
+    await invoke("check_media_server");
+    message(t("Connected: the server is looking for new files."));
+  } catch (error) { message(errorText(error), true); }
+  finally { button.disabled = false; }
+});
 // Sleep or shut down after the downloads: Rust waits for the queue and counts down a minute.
 $("after-downloads").addEventListener("change", async () => {
   const action = $("after-downloads").value;
@@ -1824,6 +1850,8 @@ async function init() {
     $("parallel").value = data.parallel;
     $("folder-rule").value = options.folderRule || "manual";
     $("name-rule").value = options.nameRule || "title";
+    syncNameRule();
+    showMediaServer(data.mediaServer);
     $("clip-enabled").checked = Number.isFinite(options.clipStart) && Number.isFinite(options.clipEnd);
     if ($("clip-enabled").checked) { $("clip-start").value = String(options.clipStart); $("clip-end").value = String(options.clipEnd); }
     $("clip-output").value = options.clipFormat || "source";

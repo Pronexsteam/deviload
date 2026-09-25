@@ -47,7 +47,7 @@
         <div class="folder-input-row"><input id="folder" type="text" placeholder="Full path to the folder"><button id="browse-folder" class="outline" type="button"><span class="icon" data-icon="folder-open" aria-hidden="true"></span>Browse</button></div>
         <div class="drawer-pair"><label for="parallel">Parallel downloads<select id="parallel" title="How many files download at the same time; the queue can be longer"><option value="1">1 download</option><option value="2" selected>2 downloads</option><option value="3">3 downloads</option><option value="4">4 downloads</option><option value="6">6 downloads</option><option value="8">8 downloads</option></select></label>
         <label for="profile">Profile<select id="profile"><option value="custom">Custom</option><option value="music">Music</option><option value="archive">Archive</option><option value="mobile">For phone</option><option value="maximum">Maximum quality</option></select></label></div>
-        <div class="drawer-pair"><label for="folder-rule">Subfolder<select id="folder-rule"><option value="manual">No subfolder</option><option value="media">Video / Music</option><option value="source">By service</option></select></label><label for="name-rule">File name<select id="name-rule"><option value="title">Title</option><option value="date">Date + title</option><option value="channel">Author + title</option></select></label></div>
+        <div class="drawer-pair"><label for="folder-rule">Subfolder<select id="folder-rule"><option value="manual">No subfolder</option><option value="media">Video / Music</option><option value="source">By service</option><option value="server">For Jellyfin / Plex</option></select></label><label for="name-rule">File name<select id="name-rule"><option value="title">Title</option><option value="date">Date + title</option><option value="channel">Author + title</option></select></label></div>
       </section>
       <section class="drawer-card" aria-labelledby="drawer-what"><h3 id="drawer-what">What to download</h3>
         <label class="switch-line" for="clip-enabled"><input id="clip-enabled" type="checkbox"><span class="switch-ui" aria-hidden="true"></span><span>Only a clip of the video</span></label>
@@ -93,6 +93,16 @@
     <label for="cookies-mode">Cookies for downloads<select id="cookies-mode"><option value="account">Deviload sign-in (recommended)</option><option value="none">No cookies</option><option value="firefox">Firefox</option><option value="chrome" data-os="mac">Chrome</option><option value="edge" data-os="mac">Edge</option><option value="brave" data-os="mac">Brave</option><option value="safari" data-os="mac">Safari</option><option value="file">cookies.txt file</option></select></label>
     <div id="cookies-file-wrap" class="folder-input-row" hidden><input id="cookies" type="text" placeholder="Full path to cookies.txt" aria-label="Full path to cookies.txt"><button id="browse-cookies" class="outline" type="button"><span class="icon" data-icon="folder-open" aria-hidden="true"></span>Browse</button></div>
     <p id="auth-hint" class="settings-note"></p>
+  </section>
+  <section class="settings-group"><h3>Media server</h3>
+    <p class="settings-note">Pick “For Jellyfin / Plex” as the subfolder in the download settings: videos go into channel and year folders with a cover and a description, music into artist and album folders. Deviload can also tell the server to look for new files.</p>
+    <div class="server-form">
+      <label for="server-kind">Server<select id="server-kind"><option value="">None</option><option value="jellyfin">Jellyfin or Emby</option><option value="plex">Plex</option></select></label>
+      <label for="server-url">Address<input id="server-url" type="url" placeholder="http://192.168.1.10:8096" autocomplete="off"></label>
+      <label for="server-token">API key<input id="server-token" type="password" placeholder="From the server settings" autocomplete="off"></label>
+      <button id="server-save" class="outline small" type="button">Save and check</button>
+    </div>
+    <p id="server-hint" class="settings-note">Jellyfin: Dashboard → API Keys. Plex: the X-Plex-Token of your account.</p>
   </section>
   <section class="settings-group"><h3>Network</h3>
     <label for="proxy">Proxy</label>
