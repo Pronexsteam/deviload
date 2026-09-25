@@ -332,13 +332,7 @@ $("update-auto-toggle").addEventListener("click", () => {
 });
 async function checkAppUpdate(manual = false) {
   if (!invoke) { if (manual) message(t("Update checks are available in the app."), true); return; }
-  if (!manual) {
-    if (!updateAuto()) return;
-    try {
-      if (Number(localStorage.getItem("deviload-update-checked") || 0) > Date.now() - 86400000) return;
-      localStorage.setItem("deviload-update-checked", String(Date.now()));
-    } catch { /* storage unavailable */ }
-  }
+  if (!manual && !updateAuto()) return;
   try {
     appUpdate = await invoke("check_app_update");
     if (manual) {
@@ -2022,7 +2016,9 @@ async function init() {
     refreshEngineInfo();
     checkLegacy();
     refreshWatches();
+    // At every start, and every 6 hours for a copy that stays open in the tray.
     setTimeout(() => checkAppUpdate(), 4000);
+    setInterval(() => checkAppUpdate(), 6 * 3600000);
     setTimeout(autoUpdateYtdlp, 20000);
     window.__TAURI__?.app?.getVersion?.().then(version => { appVersion = version; $("app-version").textContent = "Deviload " + version; }).catch(() => {});
     await invoke("set_close_to_tray", {enabled:localStorage.getItem("deviload-tray") === "true"});

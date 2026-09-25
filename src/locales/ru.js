@@ -817,7 +817,7 @@ export default {
   "Circle": "Круг",
   "Transition: {name}": "Переход: {name}",
   "Unknown transition": "Неизвестный переход",
-  "Deviload can check GitHub for a new version once a day.": "Deviload может раз в день проверять на GitHub, не вышла ли новая версия.",
+  "Deviload checks GitHub for a new version at start and every 6 hours.": "Deviload проверяет на GitHub новую версию при запуске и каждые 6 часов.",
   "Check for new versions": "Проверять новые версии",
   "Only the version number is requested; nothing about you or your downloads is sent.": "Запрашивается только номер версии; ничего о вас и ваших загрузках не передаётся.",
   "Save to phone": "Скачать",
