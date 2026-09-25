@@ -1003,4 +1003,11 @@ export default {
   "Could not prepare {}: {e}": "Не удалось подготовить {}: {e}",
   "Open": "Открыть",
   "Interface language: press to switch": "Язык интерфейса: нажмите, чтобы переключить",
+  "Sort the library": "Сортировка медиатеки",
+  "Newest first": "Сначала новые",
+  "Oldest first": "Сначала старые",
+  "Largest first": "Сначала большие",
+  "Longest first": "Сначала длинные",
+  "By name": "По названию",
+  "Takes {size}.": "Занимает {size}.",
 };

@@ -65,6 +65,13 @@ function statusLabel(status) { return labels[status] ? t(labels[status]) : statu
 function speedText(value) {
   return /^\d+(?:\.\d+)?$/.test(value || "") ? t("{speed} MB/s", {speed:value}) : (value || "");
 }
+function bigSizeText(bytes) {
+  return bytes >= 1073741824 ? t("{size} GB", {size:(bytes / 1073741824).toFixed(1)}) : sizeText(bytes);
+}
+function lengthText(seconds) {
+  const whole = Math.round(seconds), hours = Math.floor(whole / 3600), minutes = Math.floor(whole % 3600 / 60), rest = String(whole % 60).padStart(2, "0");
+  return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${rest}` : `${minutes}:${rest}`;
+}
 function sizeText(bytes) {
   return bytes < 1048576 ? t("{size} KB", {size:Math.max(1, Math.ceil(bytes / 1024))}) : t("{size} MB", {size:(bytes / 1048576).toFixed(1)});
 }
@@ -1481,6 +1488,18 @@ $("library-edit-save").addEventListener("click", () => {
   renderMediaLibrary();
 });
 $("library-collection").addEventListener("change", renderMediaLibrary);
+try { $("library-sort").value = localStorage.getItem("deviload-library-sort") || "new"; } catch { /* storage unavailable */ }
+$("library-sort").addEventListener("change", () => {
+  try { localStorage.setItem("deviload-library-sort", $("library-sort").value); } catch { /* storage unavailable */ }
+  renderMediaLibrary();
+});
+// Files finished before sizes were recorded get measured once, the first time the library opens.
+let libraryMeasured = false;
+$("library-tab").addEventListener("click", async () => {
+  if (libraryMeasured || !invoke) return;
+  libraryMeasured = true;
+  try { if (await invoke("measure_library")) await refresh(); } catch { libraryMeasured = false; }
+});
 refreshCollections();
 let libraryKey = "";
 function renderMediaLibrary() {
@@ -1495,9 +1514,16 @@ function renderMediaLibrary() {
     if ($("library-collection").value && entry.collection !== $("library-collection").value) return false;
     return [job.file, job.url, entry.collection, ...(entry.tags || [])].join(" ").toLocaleLowerCase().includes(mediaSearch);
   });
+  const order = $("library-sort").value;
+  const name = job => job.file.split(/[\\/]/).pop().toLocaleLowerCase();
+  const compare = {new:(a, b) => b.id - a.id, old:(a, b) => a.id - b.id, size:(a, b) => (b.bytes || 0) - (a.bytes || 0),
+    length:(a, b) => (b.duration || 0) - (a.duration || 0), name:(a, b) => name(a).localeCompare(name(b))}[order] || ((a, b) => b.id - a.id);
+  visible.sort(compare);
+  const total = done.reduce((sum, job) => sum + (job.bytes > 1 ? job.bytes : 0), 0);
+  $("media-library-size").textContent = total ? t("Takes {size}.", {size:bigSizeText(total)}) : "";
   cinemaIds = visible.map(job => job.id);
   // The queue is polled every second; rebuilding unchanged cards resets hover and closes open menus.
-  const key = JSON.stringify([t("More"), done.length, visible.map(job => [job.id, job.file, job.url, libraryEntry(job)])]);
+  const key = JSON.stringify([t("More"), done.length, order, visible.map(job => [job.id, job.file, job.url, job.bytes, job.duration, libraryEntry(job)])]);
   if (key === libraryKey) return;
   libraryKey = key;
   const grid = $("media-library-grid");
@@ -1520,7 +1546,8 @@ function renderMediaLibrary() {
     const name = node("h3", "", job.file.split(/[\\/]/).pop()); name.title = job.file;
     let source = job.url;
     try { source = new URL(job.url).hostname.replace(/^www\./, ""); } catch { /* Keep original source. */ }
-    info.append(name, node("p", "", source));
+    const facts = [job.duration > 0 ? lengthText(job.duration) : "", job.bytes > 1 ? bigSizeText(job.bytes) : ""].filter(Boolean);
+    info.append(name, node("p", "", [source, ...facts].filter(Boolean).join(" · ")));
     const entry = libraryEntry(job);
     const tags = [entry.favorite ? "★" : "", entry.collection, ...(entry.tags || [])].filter(Boolean);
     if (tags.length) info.append(node("p", "library-tags", tags.join(" · ")));

@@ -293,6 +293,11 @@ pub struct Job {
     // dropped once its file is gone.
     #[serde(default)]
     pub downloads: Vec<[String; 2]>,
+    // Size and length of the finished file, for sorting the library; 0 until measured.
+    #[serde(default)]
+    pub bytes: u64,
+    #[serde(default)]
+    pub duration: f64,
     #[serde(skip)]
     pub pid: Option<u32>,
     // The queue and the library can each drop a finished file; the record goes
@@ -338,7 +343,7 @@ mod tests {
     use super::*;
     #[test] fn saved_items_remember_their_archive_key() {
         let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(), percent: 0.0, speed: String::new(),
-            file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], pid: None,
+            file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, pid: None,
             hidden_in_queue: false, hidden_in_library: false };
         job.consume("DEVI_KEY:Youtube abc");
         job.consume(r#"DEVI_FILE:"/music/One.mp3""#);
@@ -352,7 +357,7 @@ mod tests {
     }
     #[test] fn archive_skips_are_counted() {
         let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(), percent: 0.0, speed: String::new(),
-            file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], pid: None,
+            file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, pid: None,
             hidden_in_queue: false, hidden_in_library: false };
         job.consume("[download] Song one has already been recorded in the archive");
         job.consume("[download] Downloading item 2 of 2");
@@ -462,7 +467,7 @@ mod tests {
     }
     #[test] fn progress_is_not_completion() {
         let mut j = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(),
-            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], pid: None, hidden_in_queue: false, hidden_in_library: false };
+            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, pid: None, hidden_in_queue: false, hidden_in_library: false };
         j.consume(r#"DEVI_PROGRESS:{"downloaded_bytes":100,"total_bytes":100,"speed":1048576}"#);
         assert_eq!(j.percent, 100.0);
         assert_eq!(j.status, "running");

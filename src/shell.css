@@ -679,3 +679,5 @@ body { font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Ub
 .editor-home-project .editor-home-item { flex: 1; width: auto; min-width: 0; }
 .editor-home-project > button:last-child { flex: none; }
 .library-more.up .library-more-actions { top: auto; bottom: calc(100% + 6px); }
+#library-sort { width: auto; margin: 0 0 0 auto; }
+#media-library-size { color: var(--ink); }
