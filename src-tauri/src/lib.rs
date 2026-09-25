@@ -1715,7 +1715,8 @@ fn open_downloads(folder: Option<String>, engine: tauri::State<Engine>) -> Resul
 #[tauri::command]
 fn clear_finished(engine: tauri::State<Engine>) -> Result<(), String> {
     change_records(&engine, |jobs| {
-        for job in jobs.iter_mut().filter(|j| j.status == "done") { job.hidden_in_queue = true; }
+        // Cancelled tasks go too: nothing more will happen to them.
+        for job in jobs.iter_mut().filter(|j| ["done", "cancelled"].contains(&j.status.as_str())) { job.hidden_in_queue = true; }
         Ok(())
     })
 }

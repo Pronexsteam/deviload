@@ -1626,7 +1626,7 @@ $("add").addEventListener("click", async () => {
 });
 $("clear").addEventListener("click", async () => {
   if (!invoke) return;
-  try { await invoke("clear_finished"); await refresh(); message(t("Finished tasks left the queue. They stay in the library.")); }
+  try { await invoke("clear_finished"); await refresh(); message(t("Finished and cancelled tasks left the queue. Finished files stay in the library.")); }
   catch (error) { message(errorText(error), true); }
 });
 $("close-log").addEventListener("click", () => $("log-dialog").close());
