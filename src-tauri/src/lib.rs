@@ -2013,10 +2013,14 @@ fn installed_copy() -> bool {
 #[tauri::command]
 async fn check_app_update(app: tauri::AppHandle, pending: tauri::State<'_, PendingUpdate>) -> Result<Option<AppUpdate>, String> {
     use tauri_plugin_updater::UpdaterExt;
-    let update = app.updater().map_err(|e| e.to_string())?.check().await
+    let mut builder = app.updater_builder();
+    // The feed carries only the signed Windows installer. Other systems read the new
+    // version from the same entry and send the user to the releases page.
+    if !cfg!(windows) { builder = builder.target("windows-x86_64"); }
+    let update = builder.build().map_err(|e| e.to_string())?.check().await
         .map_err(|e| format!("Could not check for updates: {e}"))?;
     let info = update.as_ref().map(|update| AppUpdate { version: update.version.clone(),
-        notes: update.body.clone().unwrap_or_default().chars().take(600).collect(), installable: installed_copy() });
+        notes: update.body.clone().unwrap_or_default().chars().take(600).collect(), installable: cfg!(windows) && installed_copy() });
     *pending.0.lock().unwrap() = update;
     Ok(info)
 }
@@ -2047,7 +2051,7 @@ fn set_close_to_tray(enabled: bool, state: tauri::State<'_, CloseToTray>) {
 
 #[tauri::command]
 fn open_releases() -> Result<(), String> {
-    const URL: &str = "https://github.com/Pronexsteam/deviload/releases";
+    const URL: &str = "https://github.com/Pronexsteam/deviload/releases/latest";
     #[cfg(windows)]
     let result = Command::new("explorer.exe").arg(URL).spawn();
     #[cfg(target_os = "macos")]

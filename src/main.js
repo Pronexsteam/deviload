@@ -285,6 +285,8 @@ $("legacy-import").addEventListener("click", async () => {
 });
 // A new Deviload: the installed copy updates itself, the portable one opens the releases page.
 let appUpdate = null, appVersion = "";
+// The Windows installer updates itself; the Mac build learns about new versions and links to the download.
+const onMac = navigator.userAgent.includes("Mac");
 function showAppUpdate() {
   let later = {};
   try { later = JSON.parse(localStorage.getItem("deviload-update-later") || "{}"); } catch { later = {}; }
@@ -294,6 +296,7 @@ function showAppUpdate() {
   $("app-update-title").textContent = t("Deviload {version} is out", {version:appUpdate.version});
   $("app-update-text").textContent = appUpdate.installable
     ? t("The update takes a few seconds, then Deviload restarts. Active downloads can be resumed afterwards.")
+    : onMac ? t("Download the new Mac zip from the releases page and replace Deviload in Applications, the same way as the first time.")
     : t("This is the portable version: download the new zip from the releases page and unpack it over the old one.");
   $("app-update-install-label").textContent = t(appUpdate.installable ? "Update" : "Download");
 }
@@ -306,12 +309,8 @@ $("update-auto-toggle").addEventListener("click", () => {
   try { localStorage.setItem("deviload-update-auto", String(next)); } catch { /* storage unavailable */ }
   $("update-auto-toggle").setAttribute("aria-checked", String(next));
 });
-// Signed in-app updates exist for Windows; other systems get the releases page.
-const inAppUpdates = navigator.userAgent.includes("Windows");
-if (!inAppUpdates) $("update-auto-toggle").closest(".setting-row").hidden = true;
 async function checkAppUpdate(manual = false) {
   if (!invoke) { if (manual) message(t("Update checks are available in the app."), true); return; }
-  if (!inAppUpdates) { if (manual) invoke("open_releases").catch(error => message(errorText(error), true)); return; }
   if (!manual) {
     if (!updateAuto()) return;
     try {

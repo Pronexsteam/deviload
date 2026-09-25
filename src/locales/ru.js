@@ -879,4 +879,5 @@ export default {
   "{count} items were skipped because they were downloaded before, even if their files were deleted since. “Download again” brings back what is missing.": ["{count} файл пропущен, потому что уже скачивался раньше, даже если его потом удалили. «Скачать заново» вернёт недостающее.", "{count} файла пропущено, потому что уже скачивались раньше, даже если их потом удалили. «Скачать заново» вернёт недостающее.", "{count} файлов пропущено, потому что уже скачивались раньше, даже если их потом удалили. «Скачать заново» вернёт недостающее."],
   "Download again": "Скачать заново",
   "Download without the archive check; files still on the disk are not downloaded twice.": "Скачать без проверки архива; файлы, которые ещё на диске, повторно не качаются.",
+  "Download the new Mac zip from the releases page and replace Deviload in Applications, the same way as the first time.": "Скачайте новый архив для Mac со страницы выпусков и замените Deviload в «Программах», так же как в первый раз.",
 };
