@@ -103,7 +103,7 @@ mod tests {
     fn failed(lines: &[&str]) -> Job {
         Job { id: 1, url: "https://www.youtube.com/watch?v=x".into(), options: Options::default(), status: "running".into(), percent: 40.0,
             speed: "2.0".into(), file: String::new(), log: lines.iter().map(|line| line.to_string()).collect(), scheduled_at: None,
-            auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), pid: None, hidden_in_queue: false, hidden_in_library: false }
+            auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, pid: None, hidden_in_queue: false, hidden_in_library: false }
     }
 
     #[test]

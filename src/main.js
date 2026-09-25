@@ -72,6 +72,17 @@ function lengthText(seconds) {
   const whole = Math.round(seconds), hours = Math.floor(whole / 3600), minutes = Math.floor(whole % 3600 / 60), rest = String(whole % 60).padStart(2, "0");
   return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${rest}` : `${minutes}:${rest}`;
 }
+// A live recording: how long it has been going, its limit and its size so far.
+function recordingText(job) {
+  if (job.stopRequested) return t("Saving the recording…");
+  const elapsed = job.liveSince ? Math.max(0, Date.now() / 1000 - job.liveSince) : 0;
+  return [t("Recording"), lengthText(elapsed) + (job.liveLimit ? " / " + lengthText(job.liveLimit) : ""), job.bytes > 0 ? bigSizeText(job.bytes) : ""].filter(Boolean).join(" · ");
+}
+const recordingLimits = [0, 900, 1800, 3600, 7200, 10800, 14400, 21600, 43200, 86400];
+function recordingLimitText(seconds) {
+  if (!seconds) return t("No limit");
+  return t("Limit: {time}", {time:seconds < 3600 ? t("{count} min", {count:seconds / 60}) : t("{count} h", {count:seconds / 3600})});
+}
 function sizeText(bytes) {
   return bytes < 1048576 ? t("{size} KB", {size:Math.max(1, Math.ceil(bytes / 1024))}) : t("{size} MB", {size:(bytes / 1048576).toFixed(1)});
 }
@@ -1322,11 +1333,14 @@ function render(data) {
     taskOrbs.get(job.id)?.setState(job.status);
     taskOrbs.get(job.id)?.setProgress(job.percent);
     changeStatus(row, job.status);
-    row.querySelector(".media-badge").textContent = statusLabel(job.status);
-    const name = job.file ? job.file.split(/[\\/]/).pop() : job.url;
+    const recording = job.status === "running" && job.live;
+    row.querySelector(".media-badge").textContent = recording ? t("Recording") : statusLabel(job.status);
+    // A recording is named after its file from the start.
+    const shown = job.file || job.recording;
+    const name = shown ? shown.split(/[\\/]/).pop() : job.url;
     const title = row.querySelector(".job-title");
     title.textContent = name;
-    title.title = job.file || job.url;
+    title.title = shown || job.url;
     try { row.querySelector(".job-source").textContent = new URL(job.url).hostname.replace(/^www\./, "") + " · " + job.url; }
     catch { row.querySelector(".job-source").textContent = job.url; }
     const meta = row.querySelector(".job-meta");
@@ -1335,7 +1349,7 @@ function render(data) {
         time:new Date(job.scheduledAt * 1000).toLocaleString(locale(), {day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})})
       : null;
     meta.replaceChildren(node("span", "", job.options.quality.toUpperCase()),
-      node("span", "", nextRun || (job.status === "running" ? (job.percent >= 99.95 ? t("Processing the file") : [Math.round(job.percent) + "%", speedText(job.speed)].filter(Boolean).join(" · ")) : statusLabel(job.status))));
+      node("span", recording && !job.stopRequested ? "recording" : "", nextRun || recording && recordingText(job) || (job.status === "running" ? (job.percent >= 99.95 ? t("Processing the file") : [Math.round(job.percent) + "%", speedText(job.speed)].filter(Boolean).join(" · ")) : statusLabel(job.status))));
     const issue = job.status === "error" ? diagnoseError(job.log, Boolean(signedInPath)) : null;
     // yt-dlp skips what the download archive lists, even when the file was deleted since.
     const skipped = job.status === "done" && job.archived > 0 ? job.archived : 0;
@@ -1361,7 +1375,9 @@ function render(data) {
     }
     help.hidden = !issue && !skipped && !healing;
     const controls = row.querySelector(".job-controls");
-    const key = actions(job.status).join(",") + (skipped ? "|again" : "") + (issue?.action || "") + (isVideoJob(job) ? "|video" : job.status === "done" && job.file ? "|file" : "");
+    // A live recording has one way to end: stop and keep what was recorded.
+    const jobActions = recording ? (job.stopRequested ? [] : ["stop"]) : actions(job.status);
+    const key = jobActions.join(",") + (skipped ? "|again" : "") + (issue?.action || "") + (isVideoJob(job) ? "|video" : job.status === "done" && job.file ? "|file" : "");
     if (controls.dataset.actions !== key) {
       controls.dataset.actions = key;
       controls.replaceChildren();
@@ -1369,9 +1385,9 @@ function render(data) {
       const more = node("details", "library-more job-more");
       const menu = node("div", "library-more-actions");
       more.append(node("summary", "", t("More")), menu);
-      for (const action of actions(job.status)) {
-        const title = {retry:"Retry",cancel:"Cancel",pause:"Pause",resume:"Resume"}[action];
-        const icon = {retry:"arrow-clockwise",cancel:"x-circle",pause:"pause",resume:"play"}[action];
+      for (const action of jobActions) {
+        const title = {retry:"Retry",cancel:"Cancel",pause:"Pause",resume:"Resume",stop:"Stop recording"}[action];
+        const icon = {retry:"arrow-clockwise",cancel:"x-circle",pause:"pause",resume:"play",stop:"stop"}[action];
         addAction(controls, t(title), "quiet", async event => {
           const button = event.currentTarget;
           button.disabled = true;
@@ -1379,6 +1395,18 @@ function render(data) {
           catch (error) { message(errorText(error), true); }
           finally { button.disabled = false; }
         }, "", icon);
+      }
+      if (jobActions.includes("stop")) {
+        const limit = node("select", "recording-limit");
+        limit.setAttribute("aria-label", t("Recording limit"));
+        limit.title = t("Recording limit");
+        for (const seconds of recordingLimits) limit.add(new Option(recordingLimitText(seconds), String(seconds)));
+        limit.value = String(job.liveLimit || 0);
+        limit.addEventListener("change", async () => {
+          try { await invoke("set_recording_limit", {id:job.id, seconds:Number(limit.value)}); await refresh(); }
+          catch (error) { message(errorText(error), true); }
+        });
+        controls.append(limit);
       }
       if (["queued","paused"].includes(job.status)) {
         for (const [direction,title,icon] of [["up","Move up","arrow-up"],["down","Move down","arrow-down"]]) {
@@ -1425,6 +1453,8 @@ function render(data) {
       }, "", "list");
       controls.append(more);
     }
+    const limit = controls.querySelector(".recording-limit");
+    if (limit && document.activeElement !== limit) limit.value = String(job.liveLimit || 0);
   }
   existing.forEach((row,id) => { taskOrbs.get(id)?.destroy(); taskOrbs.delete(id); row.remove(); });
   renderMediaLibrary();
@@ -1435,10 +1465,21 @@ function renderLiveDownload(runningJobs) {
   const current = runningJobs[0];
   liveFire.setActive(Boolean(current));
   if (!current) return;
-  const name = current.file ? current.file.split(/[\\/]/).pop() : current.url;
+  const shown = current.file || current.recording;
+  const name = shown ? shown.split(/[\\/]/).pop() : current.url;
   const percent = Math.max(0, Math.min(100, Number(current.percent) || 0));
   $("live-name").textContent = name;
-  $("live-name").title = current.file || current.url;
+  $("live-name").title = shown || current.url;
+  const track = $("live-download").querySelector(".track");
+  if (current.live) {
+    // A recording has no percent: the time recorded, its size and, with a limit, how much of it is done.
+    const elapsed = current.liveSince ? Math.max(0, Date.now() / 1000 - current.liveSince) : 0;
+    $("live-more").textContent = current.stopRequested ? t("Saving the recording…") : [lengthText(elapsed), current.bytes > 0 ? bigSizeText(current.bytes) : ""].filter(Boolean).join(" · ");
+    $("live-percent").textContent = t("REC");
+    track.setAttribute("aria-valuetext", t("Recording"));
+    liveFire.setProgress(current.liveLimit ? 100 * elapsed / current.liveLimit : 0);
+    return;
+  }
   const finalizing = percent >= 99.95;
   const recentLog = (current.log || []).slice(-12).join("\n");
   const phase = t(/Creating a GIF/i.test(recentLog) ? "Creating a GIF" :
@@ -1449,7 +1490,6 @@ function renderLiveDownload(runningJobs) {
     "Finishing the file");
   $("live-more").textContent = finalizing ? phase : runningJobs.length > 1 ? t("+{count} more", {count:runningJobs.length - 1}) : speedText(current.speed);
   $("live-percent").textContent = finalizing ? t("PROCESSING") : Math.round(percent) + "%";
-  const track = $("live-download").querySelector(".track");
   if (finalizing) track.setAttribute("aria-valuetext", phase);
   else track.removeAttribute("aria-valuetext");
   liveFire.setProgress(finalizing ? 98 : percent);

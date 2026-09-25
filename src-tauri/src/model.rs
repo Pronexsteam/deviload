@@ -126,6 +126,7 @@ impl Options {
             "--print", "after_move:DEVI_KEY:%(extractor_key)s %(id)s",
             "--print", "after_move:DEVI_CHANNEL:%(channel,uploader,artist|)s",
             "--print", "after_move:DEVI_FILE:%(filepath)j",
+            "--print", "before_dl:DEVI_LIVE:%(is_live)s %(filename)j",
             "--retries", "5", "--fragment-retries", "5", "--socket-timeout", "30",
             "--concurrent-fragments", "8", "--continue", "--no-overwrites",
         ].iter().map(|s| s.to_string()).collect();
@@ -302,6 +303,21 @@ pub struct Job {
     // The channel or uploader, for grouping the library.
     #[serde(default)]
     pub channel: String,
+    // A live stream: recorded until it is stopped, reaches its limit or goes off the air.
+    #[serde(default)]
+    pub live: bool,
+    // When the recording began, in seconds since 1970; 0 until yt-dlp reports a live stream.
+    #[serde(default)]
+    pub live_since: u64,
+    // The recording stops by itself at this length in seconds; 0 records until stopped.
+    #[serde(default)]
+    pub live_limit: u64,
+    // The file yt-dlp records into, without its ".part" ending.
+    #[serde(default)]
+    pub recording: String,
+    // Stop the recording and keep what was recorded.
+    #[serde(default)]
+    pub stop_requested: bool,
     #[serde(skip)]
     pub pid: Option<u32>,
     // The queue and the library can each drop a finished file; the record goes
@@ -312,6 +328,13 @@ pub struct Job {
     pub hidden_in_library: bool,
 }
 impl Job {
+    // Every run records into a new file; the last one was saved or given up.
+    pub fn forget_recording(&mut self) {
+        self.live = false;
+        self.live_since = 0;
+        self.recording.clear();
+        self.stop_requested = false;
+    }
     pub fn consume(&mut self, line: &str) {
         if let Some(json) = line.strip_prefix("DEVI_PROGRESS:") {
             if let Ok(p) = serde_json::from_str::<serde_json::Value>(json) {
@@ -321,6 +344,11 @@ impl Job {
                 }
                 // MiB per second; the UI adds the unit.
                 self.speed = p["speed"].as_f64().map(|s| format!("{:.1}", s / 1_048_576.0)).unwrap_or_default();
+            }
+        } else if let Some(live) = line.strip_prefix("DEVI_LIVE:") {
+            // "True" and the file yt-dlp writes, for a stream that is on the air right now.
+            if let Some(("True", json)) = live.split_once(' ') {
+                if let Ok(file) = serde_json::from_str::<String>(json) { self.live = true; self.recording = file; }
             }
         } else if let Some(channel) = line.strip_prefix("DEVI_CHANNEL:") {
             let channel = channel.trim();
@@ -350,7 +378,7 @@ mod tests {
     use super::*;
     #[test] fn saved_items_remember_their_archive_key() {
         let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(), percent: 0.0, speed: String::new(),
-            file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), pid: None,
+            file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, pid: None,
             hidden_in_queue: false, hidden_in_library: false };
         job.consume("DEVI_CHANNEL:jawed");
         job.consume("DEVI_CHANNEL:");
@@ -365,9 +393,27 @@ mod tests {
         assert_eq!(prune_archive("youtube abc\nyoutube def\n", &gone).as_deref(), Some("youtube def\n"));
         assert_eq!(prune_archive("youtube def\n", &gone), None);
     }
+    #[test] fn live_streams_name_the_file_they_record_into() {
+        let a = Options::default().args("https://example.com/live", std::path::Path::new("/tmp"));
+        assert!(a.iter().any(|arg| arg == "before_dl:DEVI_LIVE:%(is_live)s %(filename)j"));
+        let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(), percent: 0.0, speed: String::new(),
+            file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, pid: None,
+            hidden_in_queue: false, hidden_in_library: false };
+        job.consume(r#"DEVI_LIVE:False "/video/clip.mp4""#);
+        job.consume(r#"DEVI_LIVE:NA "/video/clip.mp4""#);
+        assert!(!job.live && job.recording.is_empty());
+        job.consume(r#"DEVI_LIVE:True "/video/Channel 2 Live  2026-09-25 19_18 [playlist].mp4""#);
+        assert!(job.live);
+        assert_eq!(job.recording, "/video/Channel 2 Live  2026-09-25 19_18 [playlist].mp4");
+        assert!(job.log.is_empty());
+        job.live_since = 5;
+        job.stop_requested = true;
+        job.forget_recording();
+        assert!(!job.live && job.recording.is_empty() && job.live_since == 0 && !job.stop_requested);
+    }
     #[test] fn archive_skips_are_counted() {
         let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(), percent: 0.0, speed: String::new(),
-            file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), pid: None,
+            file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, pid: None,
             hidden_in_queue: false, hidden_in_library: false };
         job.consume("[download] Song one has already been recorded in the archive");
         job.consume("[download] Downloading item 2 of 2");
@@ -477,7 +523,7 @@ mod tests {
     }
     #[test] fn progress_is_not_completion() {
         let mut j = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(),
-            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), pid: None, hidden_in_queue: false, hidden_in_library: false };
+            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, pid: None, hidden_in_queue: false, hidden_in_library: false };
         j.consume(r#"DEVI_PROGRESS:{"downloaded_bytes":100,"total_bytes":100,"speed":1048576}"#);
         assert_eq!(j.percent, 100.0);
         assert_eq!(j.status, "running");
