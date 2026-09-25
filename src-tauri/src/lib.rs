@@ -9,7 +9,7 @@ use model::{Job, Options};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet}, fs, io::{BufRead, BufReader, Read, Write}, path::{Path, PathBuf},
-    process::{Command, Stdio}, sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}, mpsc},
+    process::{Command, Stdio}, sync::{Arc, Mutex, OnceLock, atomic::{AtomicBool, Ordering}, mpsc},
     thread, time::Duration,
 };
 use tauri::{Emitter, Manager};
@@ -1584,12 +1584,47 @@ const MAX_AUDIO_PIECES: usize = 40;
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-struct ProjectExport { clips: Vec<ProjectClip>, canvas: String, fit: String, music: Option<ProjectMusic>, audio: Vec<ProjectAudio>, format: String, quality: u32 }
+struct ProjectExport { clips: Vec<ProjectClip>, canvas: String, fit: String, music: Option<ProjectMusic>, audio: Vec<ProjectAudio>, format: String, quality: u32, codec: String }
 
 impl Default for ProjectExport {
     fn default() -> Self {
-        Self { clips: vec![], canvas: "16:9".into(), fit: "fit".into(), music: None, audio: vec![], format: "mp4".into(), quality: 1080 }
+        Self { clips: vec![], canvas: "16:9".into(), fit: "fit".into(), music: None, audio: vec![], format: "mp4".into(), quality: 1080, codec: "h264".into() }
     }
+}
+
+// The H.265 encoder this FFmpeg has: x265 in the usual builds, Apple's hardware encoder
+// on a Mac build without it. Asked once per run.
+fn hevc_encoder() -> Option<&'static str> {
+    static FOUND: OnceLock<Option<&'static str>> = OnceLock::new();
+    *FOUND.get_or_init(|| {
+        let output = command(&binary("ffmpeg").ok()?).args(["-hide_banner", "-encoders"]).output().ok()?;
+        let list = String::from_utf8_lossy(&output.stdout);
+        ["libx265", "hevc_videotoolbox"].into_iter().find(|name| list.split_whitespace().any(|word| word == *name))
+    })
+}
+
+#[derive(Serialize)]
+struct ExportOptions { hevc: bool }
+
+#[tauri::command]
+async fn export_options() -> Result<ExportOptions, String> {
+    tauri::async_runtime::spawn_blocking(|| ExportOptions { hevc: hevc_encoder().is_some() }).await.map_err(|e| e.to_string())
+}
+
+// FFmpeg writes a new file as "<name>.part" and it takes its real name only once complete, so a
+// crash, a cancel or a full disk never leaves a half-written file that looks finished.
+fn muxer_for(output: &Path) -> &'static str {
+    match output.extension().and_then(|ext| ext.to_str()).map(str::to_ascii_lowercase).as_deref() {
+        Some("gif") => "gif", Some("mp3") => "mp3", Some("mkv") => "matroska", Some("webm") => "webm", Some("mov") => "mov",
+        Some("m4a") => "ipod", Some("flac") => "flac", Some("wav") => "wav", Some("ogg") => "ogg", Some("opus") => "opus",
+        Some("ts") => "mpegts", _ => "mp4",
+    }
+}
+
+fn finish_part(part: &Path, output: &Path) -> Result<(), String> {
+    let renamed = fs::rename(part, output);
+    if renamed.is_err() { let _ = fs::remove_file(part); }
+    renamed.map_err(|e| format!("Could not save the file: {e}"))
 }
 
 struct Source { path: PathBuf, duration: f64, has_audio: bool, width: u32, height: u32 }
@@ -1615,6 +1650,8 @@ fn probe_source(path: &Path) -> Result<Source, String> {
 fn even(value: f64) -> u32 { ((value / 2.0).round() as u32).max(1) * 2 }
 
 fn canvas_size(canvas: &str, quality: u32, first: &Source) -> Result<(u32, u32), String> {
+    // 0 keeps the first clip's own size: its short side, up to 4K.
+    let quality = if quality == 0 { even(first.width.min(first.height).clamp(240, 2160) as f64) } else { quality };
     let short = quality as f64;
     Ok(match canvas {
         "16:9" => (even(short * 16.0 / 9.0), quality),
@@ -1643,7 +1680,11 @@ fn render_project(sources: &[Source], project: &ProjectExport, music: Option<&So
         return Err("A project holds up to 40 separate sounds".into());
     }
     if !["mp4", "gif", "mp3"].contains(&project.format.as_str()) { return Err("Unknown export format".into()); }
-    if ![480, 720, 1080].contains(&project.quality) { return Err("Unknown export resolution".into()); }
+    if ![0, 480, 720, 1080, 1440, 2160].contains(&project.quality) { return Err("Unknown export resolution".into()); }
+    if !["h264", "h265"].contains(&project.codec.as_str()) { return Err("Unknown video codec".into()); }
+    if project.format == "mp4" && project.codec == "h265" && hevc_encoder().is_none() {
+        return Err("This FFmpeg cannot encode H.265. Choose H.264.".into());
+    }
     if !["fill", "fit", "blur"].contains(&project.fit.as_str()) { return Err("Unknown fit mode".into()); }
     let (width, height) = canvas_size(&project.canvas, project.quality, &sources[0])?;
     let with_video = project.format != "mp3";
@@ -1780,18 +1821,26 @@ fn render_project(sources: &[Source], project: &ProjectExport, music: Option<&So
         }
         "mp3" => { cmd.args(["-filter_complex", &graph, "-map", &audio_label, "-c:a", "libmp3lame", "-q:a", "2"]); }
         _ => {
-            cmd.args(["-filter_complex", &graph, "-map", "[vcat]", "-map", &audio_label,
-                "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"]);
+            // H.265 makes files about half the size; hvc1 lets Apple devices play them.
+            let video: &[&str] = match (project.codec.as_str(), hevc_encoder()) {
+                ("h265", Some("libx265")) => &["-c:v", "libx265", "-preset", "fast", "-crf", "24", "-tag:v", "hvc1"],
+                ("h265", Some(_)) => &["-c:v", "hevc_videotoolbox", "-q:v", "65", "-tag:v", "hvc1"],
+                _ => &["-c:v", "libx264", "-preset", "fast", "-crf", "20"],
+            };
+            cmd.args(["-filter_complex", &graph, "-map", "[vcat]", "-map", &audio_label]).args(video)
+                .args(["-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"]);
         }
     }
-    cmd.arg(output);
+    let part = recording_part(output);
+    let _ = fs::remove_file(&part);
+    cmd.args(["-f", muxer_for(output)]).arg(&part);
     let result = run_ffmpeg(cmd, total, progress);
     drop(captions);
     if let Err(detail) = result {
-        let _ = fs::remove_file(output);
+        let _ = fs::remove_file(&part);
         return Err(format!("FFmpeg did not create the file: {detail}"));
     }
-    Ok(())
+    finish_part(&part, output)
 }
 
 // A transition takes half a second, or less when a neighbouring clip is short.
@@ -2643,7 +2692,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_releases, open_support, window_action, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
+        .invoke_handler(tauri::generate_handler![set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_releases, open_support, window_action, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
         .build(tauri::generate_context!()).expect("failed to start Deviload")
         .run(|app, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event { app.state::<Engine>().stop(); }
@@ -2785,6 +2834,19 @@ mod engine_tests {
             log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
         let report = check_preflight("https://example.com/video", &options, None, &[duplicate]).unwrap();
         assert!(report.warnings.iter().any(|warning| warning.contains("history")));
+    }
+    #[test]
+    fn exports_keep_their_container_while_written_as_part_files() {
+        assert_eq!(muxer_for(Path::new("/v/Clip - Devil Cut Video.mp4")), "mp4");
+        assert_eq!(muxer_for(Path::new("/v/a.GIF")), "gif");
+        assert_eq!(muxer_for(Path::new("/v/song.mp3")), "mp3");
+        assert_eq!(muxer_for(Path::new("/v/film.mkv")), "matroska");
+        let first = Source { path: PathBuf::new(), duration: 1.0, has_audio: true, width: 3840, height: 2160 };
+        assert_eq!(canvas_size("16:9", 0, &first).unwrap(), (3840, 2160));
+        assert_eq!(canvas_size("9:16", 2160, &first).unwrap(), (2160, 3840));
+        let phone = Source { width: 720, height: 1280, ..first };
+        assert_eq!(canvas_size("source", 0, &phone).unwrap(), (720, 1280));
+        assert_eq!(canvas_size("1:1", 0, &phone).unwrap(), (720, 720));
     }
     #[test]
     fn a_daily_recording_comes_back_at_the_same_time() {
@@ -3023,6 +3085,15 @@ mod engine_tests {
         let joined = render(&blended, "blended.mp4", None).unwrap();
         assert!((video_duration(&joined).unwrap() - 2.0).abs() < 0.25, "{}", video_duration(&joined).unwrap());
         assert!(media_has_audio(&joined).unwrap());
+        // H.265 at the source's own size, written as a .part file that gets its name when done.
+        if hevc_encoder().is_some() {
+            let original = ProjectExport { clips: vec![clip(0.0, 1.0, ClipLook::default())], canvas: "source".into(), quality: 0, codec: "h265".into(), ..ProjectExport::default() };
+            let hevc = render(&original, "original.mp4", None).unwrap();
+            let codec = command(&binary("ffprobe").unwrap()).args(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name,codec_tag_string", "-of", "csv=p=0"]).arg(&hevc).output().unwrap();
+            assert_eq!(String::from_utf8_lossy(&codec.stdout).trim(), "hevc,hvc1");
+            assert_eq!((probe_source(&hevc).unwrap().width, probe_source(&hevc).unwrap().height), (160, 90));
+            assert!(!recording_part(&hevc).exists());
+        }
         let mixed_cuts = ProjectExport { clips: vec![clip(0.0, 1.0, ClipLook::default()), clip(0.0, 1.0, ClipLook::default()), clip(0.0, 1.0, enter("fadeblack"))],
             quality: 480, ..ProjectExport::default() };
         assert!((video_duration(&render(&mixed_cuts, "mixed.mp4", None).unwrap()).unwrap() - 2.5).abs() < 0.25);

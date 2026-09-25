@@ -11,7 +11,9 @@
     <details id="cut-export-menu" class="cut-export"><summary class="primary"><span class="icon" data-icon="download-simple" aria-hidden="true"></span>Export</summary>
       <div class="cut-export-body">
         <span class="cut-label">Format</span><div class="cut-chips" data-chips="format"><button type="button" data-value="mp4" class="selected">MP4</button><button type="button" data-value="gif">GIF</button><button type="button" data-value="mp3">MP3</button></div>
-        <span class="cut-label">Quality</span><div class="cut-chips" data-chips="quality"><button type="button" data-value="1080" class="selected">1080p</button><button type="button" data-value="720">720p</button><button type="button" data-value="480">480p</button></div>
+        <span class="cut-label">Quality</span><div class="cut-chips" data-chips="quality"><button type="button" data-value="0">Original</button><button type="button" data-value="2160">4K</button><button type="button" data-value="1440">1440p</button><button type="button" data-value="1080" class="selected">1080p</button><button type="button" data-value="720">720p</button><button type="button" data-value="480">480p</button></div>
+        <span id="cut-codec-label" class="cut-label">Codec</span><div id="cut-codec" class="cut-chips" data-chips="codec"><button type="button" data-value="h264" class="selected">H.264</button><button type="button" data-value="h265">H.265</button></div>
+        <p id="cut-codec-note" class="cut-note">H.265 makes the file about half the size; some older devices cannot play it.</p>
         <p id="cut-export-summary" class="cut-note"></p>
         <button id="cut-export" class="primary" type="button"><span class="icon" data-icon="download-simple" aria-hidden="true"></span>Save the video</button>
       </div>
@@ -32,7 +34,7 @@
       </div>
       <audio id="cut-music-player" preload="auto"></audio>
       <div class="cut-transport">
-        <button id="cut-play" class="cut-round" type="button" aria-label="Play or pause (Space)" title="Play or pause (Space)"><span class="icon" data-icon="play" aria-hidden="true"></span></button>
+        <button id="cut-play" class="cut-round" type="button" aria-label="Play or pause (Space)" title="Play or pause (Space). J, K and L: back, stop, forward; press again for 2× and 4×."><span class="icon" data-icon="play" aria-hidden="true"></span></button>
         <span id="cut-time" class="cut-time">0:00.0 / 0:00.0</span>
       </div>
     </section>
@@ -110,7 +112,7 @@
       </div>
     </div>
   </div>
-  <footer class="cut-foot"><span id="cut-mascot" class="cut-mascot" data-mascot="front"></span><div id="cut-progress" class="cut-progress" role="progressbar" aria-label="Export progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span></span></div><p id="edit-status" role="status" aria-live="polite">Space plays, Ctrl+B splits, Delete removes, Ctrl+Z undoes. Drag clips to reorder them and their edges to trim.</p></footer>
+  <footer class="cut-foot"><span id="cut-mascot" class="cut-mascot" data-mascot="front"></span><div id="cut-progress" class="cut-progress" role="progressbar" aria-label="Export progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span></span></div><p id="edit-status" role="status" aria-live="polite">Space plays, J K L run back, stop and forward, Ctrl+B splits, Delete removes, Ctrl+Z undoes. Drag clips to reorder them and their edges to trim.</p></footer>
 </div>
 <div id="toasts" class="toasts" aria-live="polite"></div>
 </body></html>

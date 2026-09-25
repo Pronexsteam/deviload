@@ -98,6 +98,8 @@ export function createDevilCut(env) {
   const sources = new Map();
   let project = null, projectId = null, saveTimer = 0;
   let selected = -1, selectedSound = -1, current = 0, playhead = 0, pxPerSecond = 60, playing = false, frameRequest = 0;
+  // J/K/L: the playback speed on top of each clip's own, and the backwards run.
+  let shuttle = 1, rewind = 0, rewindTimer = 0;
   let history = [], future = [], pendingEdit = null, loadedJob = null, mediaTab = "video", lastOutput = "";
   let typingName = false, zoomTouched = false, fullscreen = false;
   // Exact frames for the zoomed-in strip, keyed by "job:second"; "" means pending or unavailable.
@@ -128,7 +130,7 @@ export function createDevilCut(env) {
     $("edit-status").classList.toggle("error", error);
   }
   function defaultStatus() {
-    status(t("Space plays, Ctrl+B splits, Delete removes, Ctrl+Z undoes. Drag clips to reorder them and their edges to trim."));
+    status(t("Space plays, J K L run back, stop and forward, Ctrl+B splits, Delete removes, Ctrl+Z undoes. Drag clips to reorder them and their edges to trim."));
   }
   function clipAt(time) {
     for (let index = 0; index < project.clips.length; index++) {
@@ -310,8 +312,8 @@ export function createDevilCut(env) {
   }
   function applyLook(clip) {
     const look = clip.look, frame = $("cut-frame");
-    video.playbackRate = look.speed;
-    backdrop.playbackRate = look.speed;
+    video.playbackRate = look.speed * shuttle;
+    backdrop.playbackRate = look.speed * shuttle;
     video.volume = Math.min(1, look.volume);
     video.muted = look.volume === 0;
     frame.style.setProperty("--rotate", look.rotate + "deg");
@@ -341,7 +343,7 @@ export function createDevilCut(env) {
       if (player.dataset.src !== url) { player.src = url; player.dataset.src = url; place = true; }
       const local = playhead - sound.at;
       if (local < 0 || local >= soundLength(sound)) { if (!player.paused) player.pause(); return; }
-      player.playbackRate = sound.speed;
+      player.playbackRate = sound.speed * shuttle;
       player.volume = Math.min(1, sound.volume);
       const target = sound.start + local * sound.speed;
       // Small drift is fine; correcting it too often makes the sound stutter.
@@ -373,12 +375,41 @@ export function createDevilCut(env) {
     setPlayIcon();
     video.play().catch(() => {});
     backdrop.play().catch(() => {});
+    music.playbackRate = shuttle;
     if (project.music) music.play().catch(() => {});
     syncSounds(true);
     cancelAnimationFrame(frameRequest);
     frameRequest = requestAnimationFrame(tick);
   }
+  // J, K and L as in other editors: L plays and speeds up (1×, 2×, 4×), J runs back the same way
+  // by stepping the playhead (the video element cannot play backwards), K stops.
+  function stopRewind() { clearInterval(rewindTimer); rewindTimer = 0; rewind = 0; }
+  function setShuttle(rate) {
+    shuttle = rate;
+    const clip = project?.clips[current];
+    if (clip) applyLook(clip);
+    music.playbackRate = rate;
+    syncSounds();
+  }
+  function shuttleForward() {
+    stopRewind();
+    if (!playing) { play(); return; }
+    if (shuttle < 4) setShuttle(shuttle * 2);
+  }
+  function shuttleBack() {
+    if (playing) pause();
+    rewind = Math.min(rewind ? rewind * 2 : 1, 4);
+    if (rewindTimer) return;
+    let last = performance.now();
+    rewindTimer = setInterval(() => {
+      const now = performance.now(), next = playhead - (now - last) / 1000 * rewind;
+      last = now;
+      if (next <= 0) { seek(0); stopRewind(); } else seek(next);
+    }, 80);
+  }
   function pause() {
+    stopRewind();
+    if (shuttle !== 1) { shuttle = 1; const clip = project?.clips[current]; if (clip) applyLook(clip); music.playbackRate = 1; }
     playing = false;
     video.pause(); backdrop.pause(); music.pause();
     for (const player of soundPlayers) player.pause();
@@ -618,10 +649,12 @@ export function createDevilCut(env) {
     }
     track.style.height = rows.length * SOUND_ROW + "px";
   }
+  function qualityLabel(value) { return value === "0" ? t("Original") : value === "2160" ? "4K" : value + "p"; }
   function renderExportSummary() {
     if (!project) return;
     const format = chip("format");
-    const label = format === "mp3" ? "MP3" : format === "gif" ? "GIF" : `MP4 ${chip("quality")}p`;
+    for (const id of ["cut-codec-label", "cut-codec", "cut-codec-note"]) $(id).hidden = format !== "mp4";
+    const label = format === "mp3" ? "MP3" : format === "gif" ? "GIF" : `MP4 ${qualityLabel(chip("quality"))}${chip("codec") === "h265" ? " · H.265" : ""}`;
     $("cut-export-summary").textContent = t("{length} · {canvas} · {format}", {length:clock(total()), canvas:project.canvas, format:label});
   }
   function selectChips(name, value) {
@@ -824,7 +857,7 @@ export function createDevilCut(env) {
       const output = await invoke("editor_render", {project:{
         clips:project.clips.map(clip => ({jobId:clip.jobId, start:clip.start, end:clip.end, look:clip.look})),
         audio:project.audio.map(sound => ({...sound})),
-        canvas:project.canvas, fit:project.fit, music:project.music, format:chip("format"), quality:Number(chip("quality")),
+        canvas:project.canvas, fit:project.fit, music:project.music, format:chip("format"), quality:Number(chip("quality")), codec:chip("codec"),
       }});
       lastOutput = output;
       status(t("Done: {file}", {file:fileName(output)}));
@@ -1159,6 +1192,9 @@ export function createDevilCut(env) {
       handled(); pause();
       seek(playhead + (event.shiftKey ? 1 : FRAME) * (key === "ArrowLeft" ? -1 : 1));
     }
+    else if (!mod && key === "KeyL") { handled(); shuttleForward(); }
+    else if (!mod && key === "KeyK") { handled(); pause(); }
+    else if (!mod && key === "KeyJ") { handled(); shuttleBack(); }
     else if (key === "F11") { handled(); setFullscreen(!fullscreen); }
     else if (key === "Digit0" || key === "Numpad0") { handled(); fitZoom(); zoomTouched = false; render(); }
     else if (key === "Home") { handled(); seek(0); }

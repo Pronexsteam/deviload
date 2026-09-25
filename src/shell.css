@@ -795,3 +795,5 @@ body { font-family: "Inter Variable", "Segoe UI", system-ui, -apple-system, Blin
 .drawer-single { display: block; margin-top: 10px; }
 .drawer-single select { width: 100%; }
 .drawer-repeat { margin-top: 10px; }
+/* Six export sizes sit in two even rows. */
+.cut-chips[data-chips="quality"] { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
