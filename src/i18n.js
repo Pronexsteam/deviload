@@ -1,8 +1,9 @@
-import ru from "./locales/ru.js";
+import ru, {name as russian} from "./locales/ru.js";
+import es, {name as spanish} from "./locales/es.js";
 
 const STORAGE_KEY = "deviload-lang";
-const LANGUAGES = ["en", "ru"];
-const tables = {ru};
+const LANGUAGES = ["en", "ru", "es"];
+const tables = {ru, es};
 const ATTRIBUTES = ["placeholder", "aria-label", "title", "alt", "label", "data-empty-label"];
 const textSources = new WeakMap();
 const attributeSources = new WeakMap();
@@ -12,13 +13,16 @@ function detectLanguage() {
   let saved = null;
   try { saved = localStorage.getItem(STORAGE_KEY); } catch { /* storage unavailable */ }
   if (LANGUAGES.includes(saved)) return saved;
-  return (navigator.language || "").toLowerCase().startsWith("ru") ? "ru" : "en";
+  const system = (navigator.language || "").toLowerCase();
+  return system.startsWith("ru") ? "ru" : system.startsWith("es") ? "es" : "en";
 }
 
 let current = detectLanguage();
 
 export function language() { return current; }
-export function locale() { return current === "ru" ? "ru-RU" : "en-US"; }
+// Each language is offered under its own name.
+export const languageNames = {en:"English", ru:russian, es:spanish};
+export function locale() { return {ru:"ru-RU", es:"es-ES"}[current] || "en-US"; }
 
 function fill(text, params) {
   if (!params) return text;
@@ -31,14 +35,15 @@ export function t(source, params) {
   return fill(Array.isArray(value) ? value[value.length - 1] : value, params);
 }
 
-// Count-dependent text. The Russian entry for `many` is [one, few, many].
+// Count-dependent text. The entry for `many` holds the forms: Russian [one, few, many], Spanish [one, other].
 export function tn(one, many, count, params = {}) {
   const values = {count, ...params};
-  const russian = tables[current]?.[many];
-  if (!Array.isArray(russian)) return fill(count === 1 ? one : many, values);
+  const forms = tables[current]?.[many];
+  if (!Array.isArray(forms)) return fill(count === 1 ? one : many, values);
+  if (forms.length === 2) return fill(forms[count === 1 ? 0 : 1], values);
   const tens = count % 100, units = count % 10;
   const form = units === 1 && tens !== 11 ? 0 : units >= 2 && units <= 4 && (tens < 12 || tens > 14) ? 1 : 2;
-  return fill(russian[form], values);
+  return fill(forms[form], values);
 }
 
 // Backend messages arrive in English and may carry runtime values, so keys

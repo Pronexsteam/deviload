@@ -1,4 +1,7 @@
 // Russian interface strings. Keys are the English source text.
+// The language as it is offered in the language menu.
+export const name = "Русский";
+
 export default {
   // Window, navigation and top bar
   "Deviload — Downloads": "Deviload — загрузки",
@@ -839,10 +842,8 @@ export default {
   "Deviload · a download failed": "Deviload · загрузка не удалась",
   "The tray icon is missing": "Значок в трее не найден",
   "Remove": "Убрать",
-  "Remove from the queue. The file stays in the library.": "Убрать из очереди. Файл останется в медиатеке.",
   "Remove from the queue.": "Убрать из очереди.",
   "Remove from library": "Убрать из медиатеки",
-  "The file stays on the disk.": "Файл останется на диске.",
   "Removed from the library. The file stays on the disk.": "Убрано из медиатеки. Файл остался на диске.",
   "Clear library": "Очистить медиатеку",
   "Clear the library? The files stay on the disk, only the list is emptied.": "Очистить медиатеку? Файлы останутся на диске, очистится только список.",
@@ -1002,7 +1003,6 @@ export default {
   "No folder for the engines": "Нет папки для движков",
   "Could not prepare {}: {e}": "Не удалось подготовить {}: {e}",
   "Open": "Открыть",
-  "Interface language: press to switch": "Язык интерфейса: нажмите, чтобы переключить",
   "Sort the library": "Сортировка медиатеки",
   "Newest first": "Сначала новые",
   "Oldest first": "Сначала старые",
@@ -1033,4 +1033,12 @@ export default {
   "Deviload is free. If it helps you, you can support it on Ko-fi.": "Deviload бесплатный. Если он вам помогает, можно поддержать проект на Ko-fi.",
   "Support on Ko-fi": "Поддержать на Ko-fi",
   "Could not open the support page: {error}": "Не удалось открыть страницу поддержки: {error}",
+  "Remove from the queue?": "Убрать из очереди?",
+  "Remove from the library?": "Убрать из медиатеки?",
+  "Deleted files go to the trash and can be restored from there.": "Удалённые файлы попадут в корзину, оттуда их можно восстановить.",
+  "Removed. The file goes to the trash.": "Убрано. Файл отправлен в корзину.",
+  "Removed from the queue.": "Убрано из очереди.",
+  "Only a finished download has a file to delete": "Удалить с диска можно только файл готовой загрузки",
+  "Could not move the file to the trash: {error}": "Не удалось отправить файл в корзину: {error}",
+  "Also delete {count} files from the disk": ["Удалить и {count} файл с диска", "Удалить и {count} файла с диска", "Удалить и {count} файлов с диска"],
 };

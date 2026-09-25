@@ -22,6 +22,7 @@ Tauri and the Rust crates it depends on   MIT or Apache-2.0   https://tauri.app
 Phosphor Icons (selected SVGs)            MIT                 https://phosphoricons.com
 Simple Icons (service logos)              CC0-1.0             https://simpleicons.org
 QRCode.js                                 MIT                 https://github.com/davidshimjs/qrcodejs
+Inter typeface (Latin and Cyrillic)       OFL-1.1             https://rsms.me/inter   inter.OFL.txt
 
 The Microsoft Edge WebView2 Runtime is part of Windows 10 and 11 and is not
 shipped with Deviload. It can be installed from

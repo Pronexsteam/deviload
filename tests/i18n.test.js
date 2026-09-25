@@ -4,6 +4,7 @@ import {readFileSync, readdirSync, statSync} from "node:fs";
 import {join, relative} from "node:path";
 import {fileURLToPath} from "node:url";
 import ru from "../src/locales/ru.js";
+import es from "../src/locales/es.js";
 import {labels, diagnoseError} from "../src/view-model.js";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -144,3 +145,19 @@ test("Cyrillic text lives only in the Russian locale", () => {
   walk(root);
   assert.deepEqual(offenders, []);
 });
+
+test("the Spanish locale matches the Russian one key for key", () => {
+  const placeholders = text => [...String(text).matchAll(/\{\w+\}/g)].map(match => match[0]).sort();
+  const problems = Object.keys(es).filter(key => !(key in ru)).map(key => `not in ru.js: ${key}`);
+  for (const [key, russian] of Object.entries(ru)) {
+    const spanish = es[key];
+    if (spanish === undefined) { problems.push(`missing: ${key}`); continue; }
+    if (Array.isArray(russian) !== Array.isArray(spanish) || (Array.isArray(spanish) && spanish.length !== 2)) { problems.push(`plural forms: ${key}`); continue; }
+    // A singular form may spell the number out; every other form keeps the placeholders of the English.
+    const forms = Array.isArray(spanish) ? spanish.slice(1) : [spanish];
+    for (const form of forms) if (placeholders(form).join() !== placeholders(key).join()) problems.push(`placeholders: ${key}`);
+    if (Array.isArray(spanish) && placeholders(spanish[0]).some(name => !placeholders(key).includes(name))) problems.push(`placeholders: ${key}`);
+  }
+  assert.deepEqual(problems, []);
+});
+

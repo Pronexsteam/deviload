@@ -6,7 +6,7 @@ import {createCutHome} from "./devil-cut.js";
 import {pop, wireMotion} from "./motion.js";
 import {hydrateMascots, mascotSpot, setPose} from "./mascot-spot.js";
 import {labels, actions, counts, orbState, mediaPreview, visibleJobs, playlistSelection, diagnoseError, isVideoJob, isLibraryAudio, inLibrary} from "./view-model.js";
-import {t, tn, errorText, translateMessage, translateDom, setLanguage, onLanguageChange, language, locale} from "./i18n.js";
+import {t, tn, errorText, translateMessage, translateDom, setLanguage, onLanguageChange, language, locale, languageNames} from "./i18n.js";
 
 const $ = id => document.getElementById(id);
 const invoke = window.__TAURI__?.core?.invoke;
@@ -23,6 +23,9 @@ const pageTitles = {downloads:"Downloads",library:"Library",search:"Media search
 let quality = "1080", currentFilter = "all", search = "", mediaFilter = "all", mediaSearch = "", jobs = [], currentAudioId = null;
 let cinemaIds = [], currentPlayerId = null;
 let cinemaPositions = {}, libraryMeta = {};
+// Tasks hidden while their Undo is on screen, each with the timer that removes it for real.
+const REMOVE_DELAY = 6000;
+const pendingRemovals = new Map();
 const storeTimers = {};
 function persistSection(section, value) {
   if (!invoke) return;
@@ -451,7 +454,7 @@ function dismissToast(toast) {
   toast.classList.add("leaving");
   setTimeout(() => toast.remove(), 220);
 }
-function message(value, error = false) {
+function message(value, error = false, action = null) {
   if (!value) return;
   const box = $("toasts");
   const same = [...box.children].find(toast => toast.dataset.text === value && !toast.classList.contains("leaving"));
@@ -467,7 +470,14 @@ function message(value, error = false) {
   close.setAttribute("aria-label", t("Close"));
   close.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg>';
   close.addEventListener("click", () => dismissToast(toast));
-  toast.append(icon, node("p", "", value), close);
+  toast.append(icon, node("p", "", value));
+  if (action) {
+    const button = node("button", "toast-action", action.label);
+    button.type = "button";
+    button.addEventListener("click", () => { action.run(); dismissToast(toast); });
+    toast.append(button);
+  }
+  toast.append(close);
   box.append(toast);
   while (box.children.length > 4) box.firstElementChild.remove();
   // The strip lives in the top layer; showing it again puts it above a dialog opened since.
@@ -475,7 +485,7 @@ function message(value, error = false) {
     if (box.matches(":popover-open")) box.hidePopover();
     box.showPopover();
   }
-  toast.dataset.timer = String(setTimeout(() => dismissToast(toast), error ? 9000 : 4500));
+  toast.dataset.timer = String(setTimeout(() => dismissToast(toast), action ? REMOVE_DELAY : error ? 9000 : 4500));
 }
 function clearToasts() { $("toasts").replaceChildren(); }
 function setQuality(value) {
@@ -1277,7 +1287,8 @@ function showReaction(kind, detail) {
 }
 
 function render(data) {
-  jobs = data.jobs || [];
+  // A task being removed is hidden at once; it is really removed only once its Undo is gone.
+  jobs = (data.jobs || []).filter(job => !pendingRemovals.has(job.id));
   if (noticeReady) for (const job of jobs) {
     const old = knownJobStates.get(job.id);
     if (old && old !== job.status && job.status === "running") brandMascot.reactStart();
@@ -1443,10 +1454,10 @@ function render(data) {
       }
       if (["done", "error", "cancelled", "interrupted"].includes(job.status)) {
         // Tidying a finished file is occasional; a failed or cancelled task is mostly there to be removed.
-        addAction(job.status === "done" ? menu : controls, t("Remove"), "quiet", async () => {
-          try { await invoke("remove_job", {id:job.id}); await refresh(); }
-          catch (error) { message(errorText(error), true); }
-        }, job.status === "done" ? t("Remove from the queue. The file stays in the library.") : t("Remove from the queue."), "x-circle");
+        addAction(job.status === "done" ? menu : controls, t("Remove"), "quiet", () => {
+          if (job.status === "done" && job.file) askRemove(job, "queue");
+          else removeLater(job.id, "queue", false);
+        }, t("Remove from the queue."), "x-circle");
       }
       addAction(menu, t("Log"), "quiet", () => {
         logJobId = job.id;
@@ -1634,15 +1645,48 @@ function renderMediaLibrary() {
     addAction(moreActions, t("Convert"), "quiet", () => openConverter([job.file]), t("MP4, MP3, GIF or a smaller file"), "arrows-left-right");
     if (isAudioJob(job)) addAction(moreActions, t("Audio"), "quiet", () => openAudioTools(job.id));
     else if (isVideoJob(job)) addAction(moreActions, "Devil Cut", "quiet", () => devilCut.open(job.id), "", "scissors");
-    addAction(moreActions, t("Remove from library"), "quiet", async () => {
-      try { await invoke("remove_from_library", {id:job.id}); await refresh(); message(t("Removed from the library. The file stays on the disk.")); }
-      catch (error) { message(errorText(error), true); }
-    }, t("The file stays on the disk."), "trash");
+    addAction(moreActions, t("Remove from library"), "quiet", () => askRemove(job, "library"), "", "trash");
     buttons.append(more);
     info.append(buttons);
     card.append(art, info);
     grid.append(card);
   }
+}
+// Removing a finished file asks once whether it leaves the disk too. The task disappears at once
+// and can be brought back for a few seconds; only then is it removed and its file sent to the trash.
+function jobFileCount(job) { return new Set([job.file, ...(job.downloads || []).map(([, file]) => file)].filter(Boolean)).size; }
+function askRemove(job, from) {
+  document.querySelectorAll(".library-more[open]").forEach(menu => { menu.open = false; });
+  const dialog = $("remove-dialog");
+  $("remove-title").textContent = t(from === "library" ? "Remove from the library?" : "Remove from the queue?");
+  $("remove-file").textContent = job.file.split(/[\\/]/).pop();
+  $("remove-disk-label").textContent = tn("Also delete the file from the disk", "Also delete {count} files from the disk", jobFileCount(job));
+  $("remove-disk").checked = false;
+  dialog.dataset.jobId = String(job.id);
+  dialog.dataset.from = from;
+  dialog.showModal();
+}
+$("remove-cancel").addEventListener("click", () => $("remove-dialog").close());
+$("remove-confirm").addEventListener("click", () => {
+  const dialog = $("remove-dialog");
+  dialog.close();
+  removeLater(Number(dialog.dataset.jobId), dialog.dataset.from, $("remove-disk").checked);
+});
+function removeLater(id, from, deleteFile) {
+  if (pendingRemovals.has(id)) return;
+  pendingRemovals.set(id, setTimeout(async () => {
+    pendingRemovals.delete(id);
+    try { await invoke(from === "library" ? "remove_from_library" : "remove_job", {id, deleteFile}); }
+    catch (error) { message(errorText(error), true); }
+    await refresh();
+  }, REMOVE_DELAY));
+  render({jobs});
+  const text = deleteFile ? t("Removed. The file goes to the trash.") : from === "library" ? t("Removed from the library. The file stays on the disk.") : t("Removed from the queue.");
+  message(text, false, {label:t("Undo"), run:() => {
+    clearTimeout(pendingRemovals.get(id));
+    pendingRemovals.delete(id);
+    refresh();
+  }});
 }
 $("clear-library").addEventListener("click", async () => {
   const ask = window.__TAURI__?.dialog?.ask;
@@ -2039,16 +2083,17 @@ async function init() {
   setTimeout(poll, 900);
 }
 function syncLanguageButtons() {
-  for (const code of ["ru", "en"]) {
-    const button = $("lang-" + code), active = language() === code;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-pressed", String(active));
-  }
+  $("lang-current").textContent = language().toUpperCase();
+  for (const option of document.querySelectorAll("[data-lang]")) option.setAttribute("aria-checked", String(option.dataset.lang === language()));
 }
 function syncTrayLabels() {
   invoke?.("set_tray_labels", {open:t("Open Deviload"), quit:t("Quit Deviload")}).catch(() => {});
 }
-for (const id of ["lang-ru", "lang-en"]) $(id).addEventListener("click", () => setLanguage(language() === "ru" ? "en" : "ru"));
+for (const option of document.querySelectorAll("[data-lang]")) option.textContent = languageNames[option.dataset.lang];
+for (const option of document.querySelectorAll("[data-lang]")) option.addEventListener("click", () => {
+  option.closest("details").open = false;
+  setLanguage(option.dataset.lang);
+});
 onLanguageChange(() => {
   syncLanguageButtons(); syncTitle(); syncSystemPreferences(); syncClipboardToggle(); syncAuth(); syncFormatHint();
   clearToasts();

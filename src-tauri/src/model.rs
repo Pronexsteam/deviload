@@ -321,7 +321,7 @@ pub struct Job {
     #[serde(skip)]
     pub pid: Option<u32>,
     // The queue and the library can each drop a finished file; the record goes
-    // away only when both did. Files on disk are never touched.
+    // away only when both did. Files on disk are only moved to the trash on request.
     #[serde(default)]
     pub hidden_in_queue: bool,
     #[serde(default)]

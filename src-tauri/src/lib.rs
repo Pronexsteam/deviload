@@ -2030,22 +2030,50 @@ fn change_records(engine: &Engine, change: impl FnOnce(&mut Vec<Job>) -> Result<
     Ok(())
 }
 
-// A finished download leaves the queue but stays in the library.
+// The files a finished task saved that are still on the disk: its file and every item of a playlist.
+fn task_files(job: &Job) -> Vec<PathBuf> {
+    let mut files: Vec<PathBuf> = job.downloads.iter().map(|[_, file]| file.as_str()).chain([job.file.as_str()])
+        .filter(|file| !file.is_empty()).map(PathBuf::from).collect();
+    files.sort();
+    files.dedup();
+    files.retain(|file| file.is_file());
+    files
+}
+
+// Deleting from Deviload moves the files to the Recycle Bin (the Trash on macOS and Linux),
+// so they can still be restored from there.
+fn trash_task_files(engine: &Engine, id: u64) -> Result<(), String> {
+    let files = {
+        let d = engine.data.lock().unwrap();
+        let job = d.jobs.iter().find(|j| j.id == id && j.status == "done").ok_or("Only a finished download has a file to delete")?;
+        task_files(job)
+    };
+    if files.is_empty() { return Ok(()); }
+    trash::delete_all(&files).map_err(|e| format!("Could not move the file to the trash: {e}"))
+}
+
+// A finished download leaves the queue but stays in the library, unless its file is deleted too.
 #[tauri::command]
-fn remove_job(id: u64, engine: tauri::State<Engine>) -> Result<(), String> {
+fn remove_job(id: u64, delete_file: Option<bool>, engine: tauri::State<Engine>) -> Result<(), String> {
+    let delete_file = delete_file.unwrap_or(false);
+    if delete_file { trash_task_files(&engine, id)?; }
     change_records(&engine, |jobs| {
         let job = jobs.iter_mut().find(|j| j.id == id).ok_or("Task not found")?;
         if !REMOVABLE.contains(&job.status.as_str()) { return Err("Stop the task before removing it".into()); }
         job.hidden_in_queue = true;
+        if delete_file { job.hidden_in_library = true; }
         Ok(())
     })
 }
 
 #[tauri::command]
-fn remove_from_library(id: u64, engine: tauri::State<Engine>) -> Result<(), String> {
+fn remove_from_library(id: u64, delete_file: Option<bool>, engine: tauri::State<Engine>) -> Result<(), String> {
+    let delete_file = delete_file.unwrap_or(false);
+    if delete_file { trash_task_files(&engine, id)?; }
     change_records(&engine, |jobs| {
         let job = jobs.iter_mut().find(|j| j.id == id && j.status == "done").ok_or("Task not found")?;
         job.hidden_in_library = true;
+        if delete_file { job.hidden_in_queue = true; }
         Ok(())
     })
 }
@@ -2728,6 +2756,19 @@ mod engine_tests {
             log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, pid: None, hidden_in_queue: false, hidden_in_library: false };
         let report = check_preflight("https://example.com/video", &options, None, &[duplicate]).unwrap();
         assert!(report.warnings.iter().any(|warning| warning.contains("history")));
+    }
+    #[test]
+    fn task_files_lists_each_saved_file_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let (one, two) = (dir.path().join("01 - One.mp3"), dir.path().join("02 - Two.mp3"));
+        fs::write(&one, b"a").unwrap();
+        fs::write(&two, b"b").unwrap();
+        let path = |file: &Path| file.to_string_lossy().into_owned();
+        let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "done".into(), percent: 100.0, speed: String::new(),
+            file: path(&two), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, pid: None,
+            hidden_in_queue: false, hidden_in_library: false };
+        job.downloads = vec![["youtube a".into(), path(&one)], ["youtube b".into(), path(&two)], ["youtube c".into(), path(&dir.path().join("gone.mp3"))]];
+        assert_eq!(task_files(&job), vec![one, two]);
     }
     #[test]
     fn a_recording_tracks_its_length_and_stops_at_the_limit() {

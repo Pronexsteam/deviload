@@ -29,6 +29,7 @@ rand = "0.9"
 tauri-plugin-updater = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
+trash = "5"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
