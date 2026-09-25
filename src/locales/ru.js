@@ -1002,4 +1002,5 @@ export default {
   "No folder for the engines": "Нет папки для движков",
   "Could not prepare {}: {e}": "Не удалось подготовить {}: {e}",
   "Open": "Открыть",
+  "Interface language: press to switch": "Язык интерфейса: нажмите, чтобы переключить",
 };

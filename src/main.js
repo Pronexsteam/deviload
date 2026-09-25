@@ -959,6 +959,18 @@ function openConverter(files = []) {
   invoke("open_converter", {files}).catch(error => message(errorText(error), true));
 }
 $("converter-tab").addEventListener("click", () => openConverter());
+// "More" menus open upwards near the bottom of the window, and close on a click elsewhere or when another opens.
+document.addEventListener("toggle", event => {
+  const menu = event.target;
+  if (!menu.classList?.contains("library-more") || !menu.open) return;
+  document.querySelectorAll(".library-more[open]").forEach(other => { if (other !== menu) other.open = false; });
+  const list = menu.querySelector(".library-more-actions");
+  menu.classList.remove("up");
+  if (list && list.getBoundingClientRect().bottom > innerHeight - 8) menu.classList.add("up");
+}, true);
+document.addEventListener("pointerdown", event => {
+  document.querySelectorAll(".library-more[open]").forEach(menu => { if (!menu.contains(event.target)) menu.open = false; });
+});
 // The Jellyfin / Plex layout names files itself, so the file name choice does not apply.
 function syncNameRule() {
   const server = $("folder-rule").value === "server";
@@ -1346,6 +1358,10 @@ function render(data) {
     if (controls.dataset.actions !== key) {
       controls.dataset.actions = key;
       controls.replaceChildren();
+      // A fixed set of visible buttons per state keeps the rows in even columns; the rest goes under "More".
+      const more = node("details", "library-more job-more");
+      const menu = node("div", "library-more-actions");
+      more.append(node("summary", "", t("More")), menu);
       for (const action of actions(job.status)) {
         const title = {retry:"Retry",cancel:"Cancel",pause:"Pause",resume:"Resume"}[action];
         const icon = {retry:"arrow-clockwise",cancel:"x-circle",pause:"pause",resume:"play"}[action];
@@ -1359,7 +1375,7 @@ function render(data) {
       }
       if (["queued","paused"].includes(job.status)) {
         for (const [direction,title,icon] of [["up","Move up","arrow-up"],["down","Move down","arrow-down"]]) {
-          addAction(controls, t(title), "quiet", async event => {
+          addAction(menu, t(title), "quiet", async event => {
             const button = event.currentTarget;
             button.disabled = true;
             try { await invoke("move_job", {id:job.id,direction}); await refresh(); }
@@ -1372,14 +1388,14 @@ function render(data) {
       if (issue?.action === "update") addAction(controls, t("Update yt-dlp"), "quiet fix-action", event => updateYtdlp(event.currentTarget), "", "arrow-clockwise");
       if (issue?.action === "proxy") addAction(controls, t("Proxy settings"), "quiet fix-action", openProxySettings, "", "gear");
       if (job.status === "done" && job.file) {
-        addAction(controls, t("Show in folder"), "quiet", async () => {
+        addAction(controls, t("Watch"), "quiet", () => openPlayer(job.id), t("Play the finished file in Deviload."), "play");
+        addAction(controls, t("To phone"), "transfer-button", () => startShare(job.id), t("Send this file to a phone with a QR code."), "phone-transfer");
+        addAction(menu, t("Show in folder"), "quiet", async () => {
           try { await invoke("reveal_download", {id:job.id}); }
           catch (error) { message(errorText(error), true); }
         }, "", "folder-open");
-        addAction(controls, t("Watch"), "quiet", () => openPlayer(job.id), t("Play the finished file in Deviload."));
-        addAction(controls, t("To phone"), "transfer-button", () => startShare(job.id), t("Send this file to a phone with a QR code."), "phone-transfer");
-        if (isAudioJob(job)) addAction(controls, t("Audio"), "quiet edit-action", () => openAudioTools(job.id), t("Edit tags or normalize loudness."));
-        if (isVideoJob(job)) addAction(controls, "Devil Cut", "quiet edit-action", () => devilCut.open(job.id), t("Trim the video or make a GIF locally."), "scissors");
+        if (isAudioJob(job)) addAction(menu, t("Audio"), "quiet", () => openAudioTools(job.id), t("Edit tags or normalize loudness."), "music-notes");
+        if (isVideoJob(job)) addAction(menu, "Devil Cut", "quiet", () => devilCut.open(job.id), t("Trim the video or make a GIF locally."), "scissors");
       }
       if (skipped) {
         addAction(controls, t("Download again"), "quiet", async event => {
@@ -1389,16 +1405,18 @@ function render(data) {
         }, t("Download without the archive check; files still on the disk are not downloaded twice."), "arrow-clockwise");
       }
       if (["done", "error", "cancelled", "interrupted"].includes(job.status)) {
-        addAction(controls, t("Remove"), "quiet", async () => {
+        // Tidying a finished file is occasional; a failed or cancelled task is mostly there to be removed.
+        addAction(job.status === "done" ? menu : controls, t("Remove"), "quiet", async () => {
           try { await invoke("remove_job", {id:job.id}); await refresh(); }
           catch (error) { message(errorText(error), true); }
         }, job.status === "done" ? t("Remove from the queue. The file stays in the library.") : t("Remove from the queue."), "x-circle");
       }
-      addAction(controls, t("Log"), "quiet", () => {
+      addAction(menu, t("Log"), "quiet", () => {
         logJobId = job.id;
         $("log-content").textContent = jobs.find(item => item.id === job.id)?.log.join("\n") || t("The log is empty so far");
         $("log-dialog").showModal();
       }, "", "list");
+      controls.append(more);
     }
   }
   existing.forEach((row,id) => { taskOrbs.get(id)?.destroy(); taskOrbs.delete(id); row.remove(); });
@@ -1932,8 +1950,7 @@ function syncLanguageButtons() {
 function syncTrayLabels() {
   invoke?.("set_tray_labels", {open:t("Open Deviload"), quit:t("Quit Deviload")}).catch(() => {});
 }
-$("lang-ru").addEventListener("click", () => setLanguage("ru"));
-$("lang-en").addEventListener("click", () => setLanguage("en"));
+for (const id of ["lang-ru", "lang-en"]) $(id).addEventListener("click", () => setLanguage(language() === "ru" ? "en" : "ru"));
 onLanguageChange(() => {
   syncLanguageButtons(); syncTitle(); syncSystemPreferences(); syncClipboardToggle(); syncAuth(); syncFormatHint();
   clearToasts();
