@@ -82,9 +82,18 @@ function recordingText(job) {
   return [t("Recording"), lengthText(elapsed) + (job.liveLimit ? " / " + lengthText(job.liveLimit) : ""), job.bytes > 0 ? bigSizeText(job.bytes) : ""].filter(Boolean).join(" · ");
 }
 const recordingLimits = [0, 900, 1800, 3600, 7200, 10800, 14400, 21600, 43200, 86400];
+function durationText(seconds) {
+  return seconds < 3600 ? t("{count} min", {count:seconds / 60}) : t("{count} h", {count:seconds / 3600});
+}
+// The length a live stream is recorded for, picked before it starts.
+function fillRecordLength() {
+  const select = $("record-length"), value = select.value || "0";
+  select.replaceChildren(new Option(t("Until stopped"), "0"), ...recordingLimits.slice(1).map(seconds => new Option(durationText(seconds), String(seconds))));
+  select.value = value;
+}
 function recordingLimitText(seconds) {
   if (!seconds) return t("No limit");
-  return t("Limit: {time}", {time:seconds < 3600 ? t("{count} min", {count:seconds / 60}) : t("{count} h", {count:seconds / 3600})});
+  return t("Limit: {time}", {time:durationText(seconds)});
 }
 function sizeText(bytes) {
   return bytes < 1048576 ? t("{size} KB", {size:Math.max(1, Math.ceil(bytes / 1024))}) : t("{size} MB", {size:(bytes / 1048576).toFixed(1)});
@@ -1361,8 +1370,9 @@ function render(data) {
       ? t(job.retryAttempts ? "Retry {attempt}/2 · {time}" : "Starts · {time}", {attempt:job.retryAttempts,
         time:new Date(job.scheduledAt * 1000).toLocaleString(locale(), {day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})})
       : null;
+    const repeatText = nextRun && job.repeatAt ? " · " + t("every day") : "";
     meta.replaceChildren(node("span", "", job.options.quality.toUpperCase()),
-      node("span", recording && !job.stopRequested ? "recording" : "", nextRun || recording && recordingText(job) || (job.status === "running" ? (job.percent >= 99.95 ? t("Processing the file") : [Math.round(job.percent) + "%", speedText(job.speed)].filter(Boolean).join(" · ")) : statusLabel(job.status))));
+      node("span", recording && !job.stopRequested ? "recording" : "", nextRun && nextRun + repeatText || recording && recordingText(job) || (job.status === "running" ? (job.percent >= 99.95 ? t("Processing the file") : [Math.round(job.percent) + "%", speedText(job.speed)].filter(Boolean).join(" · ")) : statusLabel(job.status))));
     const issue = job.status === "error" ? diagnoseError(job.log, Boolean(signedInPath)) : null;
     // yt-dlp skips what the download archive lists, even when the file was deleted since.
     const skipped = job.status === "done" && job.archived > 0 ? job.archived : 0;
@@ -1806,9 +1816,11 @@ function buildDownloadRequest() {
   if (startValue && (!Number.isFinite(scheduledAt) || scheduledAt <= Date.now() / 1000)) {
     throw new Error(t("Pick a time in the future."));
   }
+  const liveLimit = Number($("record-length").value), repeatDaily = $("repeat-daily").checked;
+  if (repeatDaily && !liveLimit) throw new Error(t("A daily recording needs a recording length"));
   return {
     text:$("urls").value, options, parallel:Number($("parallel").value),
-    scheduledAt, autoRetry:$("auto-retry").checked,
+    scheduledAt, autoRetry:$("auto-retry").checked, liveLimit, repeatDaily,
     estimatedBytes:selectedFormat?.bytes || null
   };
 }
@@ -1850,11 +1862,12 @@ $("add").addEventListener("click", async () => {
     if (!report.ready) { setDrawer(true); throw new Error(report.blockers.map(translateMessage).join(" ")); }
     const count = await invoke("enqueue", {
       text:request.text, options:request.options, parallel:request.parallel,
-      scheduledAt:request.scheduledAt, autoRetry:request.autoRetry
+      scheduledAt:request.scheduledAt, autoRetry:request.autoRetry, liveLimit:request.liveLimit, repeatDaily:request.repeatDaily
     });
     message(count ? t("Tasks added: {count}", {count}) : t("These links are already in the queue."));
     if (count) {
       $("start-at").value = ""; selectedFormat = null; $("preflight-status").hidden = true;
+      $("record-length").value = "0"; $("repeat-daily").checked = false;
       linkField.value = ""; linkField.dispatchEvent(new Event("input"));
     }
     await refresh();
@@ -2090,6 +2103,8 @@ function syncTrayLabels() {
   invoke?.("set_tray_labels", {open:t("Open Deviload"), quit:t("Quit Deviload")}).catch(() => {});
 }
 for (const option of document.querySelectorAll("[data-lang]")) option.textContent = languageNames[option.dataset.lang];
+fillRecordLength();
+onLanguageChange(fillRecordLength);
 for (const option of document.querySelectorAll("[data-lang]")) option.addEventListener("click", () => {
   option.closest("details").open = false;
   setLanguage(option.dataset.lang);

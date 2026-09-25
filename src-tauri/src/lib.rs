@@ -227,6 +227,13 @@ impl Engine {
                 }
             }
         }
+        // A daily recording that ended, well or not, queues tomorrow's run and hands the repeat on.
+        let next_id = d.jobs.iter().map(|j| j.id).max().unwrap_or(0) + 1;
+        if let Some(j) = d.jobs.iter_mut().find(|j| j.id == id && j.repeat_at > 0 && ["done", "error"].contains(&j.status.as_str())) {
+            let next = next_recording(j, next_id, now_seconds());
+            j.repeat_at = 0;
+            d.jobs.push(next);
+        }
         self.persist(&mut d);
         // When the last download for the media server is done, ask it to scan.
         let server = d.media_server.clone();
@@ -834,15 +841,21 @@ fn queue_urls(d: &mut Snapshot, urls: Vec<String>, options: &Options, scheduled_
     for url in urls {
         if d.jobs.iter().any(|j| j.url == url && ["queued", "running", "cancelling", "pausing", "paused"].contains(&j.status.as_str())) { continue; }
         d.jobs.push(Job { id: next_id, url, options: options.clone(), status: "queued".into(),
-            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at, auto_retry, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, pid: None, hidden_in_queue: false, hidden_in_library: false });
+            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at, auto_retry, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false });
         next_id += 1; count += 1;
     }
     count
 }
 
 #[tauri::command]
-fn enqueue(text: String, options: Options, parallel: usize, scheduled_at: Option<u64>, auto_retry: bool, engine: tauri::State<Engine>) -> Result<usize, String> {
+#[allow(clippy::too_many_arguments)]
+fn enqueue(text: String, options: Options, parallel: usize, scheduled_at: Option<u64>, auto_retry: bool, live_limit: Option<u64>, repeat_daily: Option<bool>, engine: tauri::State<Engine>) -> Result<usize, String> {
     options.validate()?;
+    // A live stream can be given its length in advance, and a daily repeat needs one.
+    let live_limit = live_limit.unwrap_or(0);
+    if live_limit > 7 * 86400 { return Err("A recording limit is up to 7 days".into()); }
+    let repeat = repeat_daily.unwrap_or(false);
+    if repeat && live_limit == 0 { return Err("A daily recording needs a recording length".into()); }
     let urls = model::parse_urls(&text)?;
     if !options.format_id.is_empty() && urls.len() != 1 {
         return Err("The selected stream belongs to one link. For several links choose a standard quality.".into());
@@ -855,7 +868,12 @@ fn enqueue(text: String, options: Options, parallel: usize, scheduled_at: Option
     for name in ["yt-dlp", "ffmpeg", "ffprobe", "deno"] { binary(name)?; }
     let mut d = engine.data.lock().unwrap();
     let old = d.clone();
+    let first_new = d.jobs.iter().map(|j| j.id).max().unwrap_or(0) + 1;
     let count = queue_urls(&mut d, urls, &options, scheduled_at, auto_retry);
+    for job in d.jobs.iter_mut().filter(|j| j.id >= first_new) {
+        job.live_limit = live_limit;
+        if repeat { job.repeat_at = scheduled_at.unwrap_or_else(now_seconds); }
+    }
     d.options = options; d.parallel = parallel;
     if let Err(e) = save(&engine.dir, &d) { *d = old; return Err(e); }
     Ok(count)
@@ -917,7 +935,7 @@ fn import_legacy_into(legacy: &Path, data: &mut Snapshot, archive_dir: &Path) ->
                 .and_then(|urls| urls.into_iter().next()).unwrap_or_default();
             let options = Options { quality: legacy_quality(file).into(), archive: false, ..data.options.clone() };
             let mut job = Job { id: next_id, url, options, status: "done".into(), percent: 100.0, speed: String::new(),
-                file: file.into(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, pid: None, hidden_in_queue: false, hidden_in_library: false };
+                file: file.into(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
             job.log.push("Moved from Deviload 1.x".into());
             data.jobs.push(job);
             next_id += 1;
@@ -1271,6 +1289,17 @@ async fn audio_normalize(id: u64, engine: tauri::State<'_, Engine>) -> Result<St
         normalize_audio(&audio_file(&engine, id)?).map(|p| p.to_string_lossy().into_owned())
     }).await.map_err(|e| e.to_string())?
 }
+// The next run of a daily recording: the same link, settings and length a day later,
+// or several days later when Deviload was closed in between.
+fn next_recording(job: &Job, id: u64, now: u64) -> Job {
+    let mut at = job.repeat_at + 86400;
+    while at <= now { at += 86400; }
+    Job { id, url: job.url.clone(), options: job.options.clone(), status: "queued".into(), percent: 0.0, speed: String::new(),
+        file: String::new(), log: vec![], scheduled_at: Some(at), auto_retry: job.auto_retry, retry_attempts: 0, archived: 0, healed: vec![],
+        downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: job.live_limit,
+        recording: String::new(), stop_requested: false, repeat_at: at, pid: None, hidden_in_queue: false, hidden_in_library: false }
+}
+
 // Once a second while a live stream records: when it began, how much is on the disk
 // and whether its time is up.
 fn track_recording(job: &mut Job, now: u64) {
@@ -2667,7 +2696,7 @@ mod engine_tests {
         let dir = tempfile::tempdir().unwrap();
         let job = |id: u64, status: &str| Job { id, url: String::new(), options: Options::default(), status: status.into(),
             percent: 0.0, speed: String::new(), file: format!("file{id}.mp4"), log: vec![], scheduled_at: None, auto_retry: false,
-            retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, pid: None, hidden_in_queue: false, hidden_in_library: false };
+            retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
         let engine = Engine { dir: dir.path().into(), data: Arc::new(Mutex::new(Snapshot {
             jobs: vec![job(1, "done"), job(2, "done"), job(3, "error"), job(4, "running")], ..Snapshot::default() })),
             shutdown: Arc::new(AtomicBool::new(false)) };
@@ -2753,9 +2782,22 @@ mod engine_tests {
         assert!(!huge.ready);
         let duplicate = Job { id: 1, url: "https://example.com/video".into(), options: options.clone(),
             status: "done".into(), percent: 100.0, speed: String::new(), file: String::new(),
-            log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, pid: None, hidden_in_queue: false, hidden_in_library: false };
+            log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
         let report = check_preflight("https://example.com/video", &options, None, &[duplicate]).unwrap();
         assert!(report.warnings.iter().any(|warning| warning.contains("history")));
+    }
+    #[test]
+    fn a_daily_recording_comes_back_at_the_same_time() {
+        let mut job = Job { id: 3, url: "https://u.peg.tv/s/x".into(), options: Options::default(), status: "done".into(), percent: 100.0, speed: String::new(),
+            file: "/v/rec.mp4".into(), log: vec!["x".into()], scheduled_at: None, auto_retry: true, retry_attempts: 1, archived: 0, healed: vec![], downloads: vec![], bytes: 9, duration: 9.0, channel: "AOC".into(), live: true, live_since: 5, live_limit: 3600, recording: "/v/rec.mp4".into(), stop_requested: true, repeat_at: 0, pid: None,
+            hidden_in_queue: false, hidden_in_library: false };
+        job.repeat_at = 1000;
+        let next = next_recording(&job, 9, 500);
+        assert_eq!((next.id, next.scheduled_at, next.repeat_at, next.status.as_str()), (9, Some(87_400), 87_400, "queued"));
+        assert_eq!((next.live_limit, next.auto_retry, next.url.as_str()), (3600, true, "https://u.peg.tv/s/x"));
+        assert!(next.file.is_empty() && next.log.is_empty() && !next.live && !next.stop_requested && next.bytes == 0);
+        // Deviload was closed for two days: the run goes to the first slot still ahead.
+        assert_eq!(next_recording(&job, 9, 200_000).scheduled_at, Some(260_200));
     }
     #[test]
     fn task_files_lists_each_saved_file_once() {
@@ -2765,7 +2807,7 @@ mod engine_tests {
         fs::write(&two, b"b").unwrap();
         let path = |file: &Path| file.to_string_lossy().into_owned();
         let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "done".into(), percent: 100.0, speed: String::new(),
-            file: path(&two), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, pid: None,
+            file: path(&two), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None,
             hidden_in_queue: false, hidden_in_library: false };
         job.downloads = vec![["youtube a".into(), path(&one)], ["youtube b".into(), path(&two)], ["youtube c".into(), path(&dir.path().join("gone.mp3"))]];
         assert_eq!(task_files(&job), vec![one, two]);
@@ -2776,7 +2818,7 @@ mod engine_tests {
         let target = dir.path().join("Live [x].mp4");
         fs::write(recording_part(&target), [0x47u8; 188 * 4]).unwrap();
         let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(), percent: 0.0, speed: String::new(),
-            file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: true, live_since: 0, live_limit: 60, recording: target.to_string_lossy().into_owned(), stop_requested: false, pid: None,
+            file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: true, live_since: 0, live_limit: 60, recording: target.to_string_lossy().into_owned(), stop_requested: false, repeat_at: 0, pid: None,
             hidden_in_queue: false, hidden_in_library: false };
         track_recording(&mut job, 1000);
         assert_eq!((job.live_since, job.bytes, job.stop_requested), (1000, 752, false));
@@ -2894,7 +2936,7 @@ mod engine_tests {
         });
         let job = Job { id: 1, url: format!("http://127.0.0.1:{port}/fixture.mp4"),
             options: Options { folder: dir.path().join("downloads").to_string_lossy().into(), quality: "wav".into(), archive: false, ..Options::default() },
-            status: "running".into(), percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, pid: None, hidden_in_queue: false, hidden_in_library: false };
+            status: "running".into(), percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
         let engine = Engine { dir: dir.path().into(), data: Arc::new(Mutex::new(Snapshot { jobs: vec![job.clone()], ..Snapshot::default() })), shutdown: Arc::new(AtomicBool::new(false)) };
         engine.run_job(1);
         let mut mobile_job = job.clone();
@@ -3053,7 +3095,7 @@ mod engine_tests {
     fn scheduled_jobs_wait_and_transient_errors_retry() {
         let mut job = Job { id: 1, url: "https://example.com".into(), options: Options::default(),
             status: "queued".into(), percent: 0.0, speed: String::new(), file: String::new(),
-            log: vec![], scheduled_at: Some(200), auto_retry: true, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, pid: None, hidden_in_queue: false, hidden_in_library: false };
+            log: vec![], scheduled_at: Some(200), auto_retry: true, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
         assert!(!ready_to_run(&job, 199));
         assert!(ready_to_run(&job, 200));
         job.status = "paused".into();

@@ -1041,4 +1041,10 @@ export default {
   "Only a finished download has a file to delete": "Удалить с диска можно только файл готовой загрузки",
   "Could not move the file to the trash: {error}": "Не удалось отправить файл в корзину: {error}",
   "Also delete {count} files from the disk": ["Удалить и {count} файл с диска", "Удалить и {count} файла с диска", "Удалить и {count} файлов с диска"],
+  "Record a live stream for": "Длительность записи эфира",
+  "Until stopped": "До остановки",
+  "Repeat every day": "Повторять каждый день",
+  "For a live stream: the recording stops at this length, and a daily repeat starts it again at the same time tomorrow.": "Для эфира: запись остановится через это время, а повтор запустит её снова завтра в то же время.",
+  "A daily recording needs a recording length": "Для ежедневной записи выберите длительность",
+  "every day": "каждый день",
 };

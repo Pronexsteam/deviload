@@ -61,6 +61,8 @@
         <div class="checks"><label><input id="subtitles" type="checkbox"> RU / EN subtitles</label><label><input id="sponsorblock" type="checkbox"> Remove sponsor segments</label><label><input id="archive" type="checkbox" checked> Skip links already downloaded in this format</label><label><input id="auto-retry" type="checkbox"> Retry after a temporary network error</label></div>
         <div class="drawer-pair"><label for="start-at">Start later<input id="start-at" type="datetime-local"></label><label for="rate">Limit, MB/s · 0 = none<input id="rate" type="number" min="0" max="1000" value="0"></label></div>
         <p class="drawer-note">Deviload must be open at the start time.</p>
+        <label class="drawer-single" for="record-length">Record a live stream for<select id="record-length"><option value="0">Until stopped</option></select></label><div class="checks drawer-repeat"><label><input id="repeat-daily" type="checkbox"> Repeat every day</label></div>
+        <p class="drawer-note">For a live stream: the recording stops at this length, and a daily repeat starts it again at the same time tomorrow.</p>
       </section>
     </div>
     <div class="drawer-foot"><span>Settings are saved with every task.</span><button id="preflight" class="outline small" type="button"><span class="icon" data-icon="check-circle" aria-hidden="true"></span>Check before downloading</button></div>

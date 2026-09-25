@@ -16,10 +16,12 @@
         "installMode": "currentUser",
         "languages": [
           "English",
-          "Russian"
+          "Russian",
+          "Spanish"
         ],
         "displayLanguageSelector": true,
-        "installerIcon": "icons/icon.ico"
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "windows/installer-hooks.nsh"
       }
     },
     "createUpdaterArtifacts": true
