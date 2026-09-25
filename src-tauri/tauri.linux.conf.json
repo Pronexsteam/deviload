@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "targets": [
+      "deb",
+      "appimage"
+    ],
+    "resources": {
+      "../bin/yt-dlp": "bin/yt-dlp",
+      "../bin/ffmpeg": "bin/ffmpeg",
+      "../bin/ffprobe": "bin/ffprobe",
+      "../bin/deno": "bin/deno",
+      "../LICENSES/*": "LICENSES/"
+    },
+    "linux": {
+      "deb": {
+        "section": "video"
+      }
+    },
+    "createUpdaterArtifacts": true
+  }
+}

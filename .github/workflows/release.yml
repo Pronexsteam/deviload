@@ -1,7 +1,9 @@
 name: Release
 
-# Pushing a tag like v2.0.0 builds the Windows installer, the portable zip and the
-# update feed on GitHub's runners and publishes them as the latest release.
+# Pushing a tag like v2.0.0 builds Deviload for Windows, macOS and Linux on GitHub's
+# runners and publishes them as the latest release. Every build is signed for
+# in-app updates; the last job joins their entries into one update feed, so a
+# single release updates all three systems.
 on:
   push:
     tags: ['v*']
@@ -47,27 +49,15 @@ jobs:
           $notes = ".github/release-notes/${{ github.ref_name }}.md"
           $source = if (Test-Path $notes) { @('--notes-file', $notes) } else { @('--generate-notes') }
           gh release create "${{ github.ref_name }}" --latest --title "Deviload ${{ github.ref_name }}" @source @files
-      # The update feed also lives on the updates branch: files served from there
-      # are not counted as release downloads, so the download badge counts people.
-      # A separate clone of that branch, so the build workspace cannot get in the way.
-      - name: Publish the update feed
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euxo pipefail
-          feed="$RUNNER_TEMP/feed"
-          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git clone --quiet --depth 1 --branch updates "$remote" "$feed"
-          cp dist/latest.json "$feed/latest.json"
-          cd "$feed"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add latest.json
-          git commit -m "Update feed for $GITHUB_REF_NAME"
-          git push origin HEAD:updates
+      # The Windows part of the update feed; the feed job adds the other systems.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feed-windows
+          path: dist/latest.json
+          if-no-files-found: error
 
-  # An unsigned macOS test build with yt-dlp, FFmpeg and Deno inside the app.
+  # An unsigned macOS test build with yt-dlp, FFmpeg and Deno inside the app, and
+  # the same app packed for in-app updates.
   macos:
     needs: windows
     runs-on: macos-latest
@@ -84,11 +74,121 @@ jobs:
       - run: npm ci
       - name: Fetch yt-dlp, FFmpeg and Deno for macOS
         run: bash scripts/fetch-tools-macos.sh
-      - run: npm run tauri build -- --target universal-apple-darwin --bundles app --config src-tauri/tauri.macos-bundle.conf.json
+      - name: Build the app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri build -- --target universal-apple-darwin --bundles app --config src-tauri/tauri.macos-bundle.conf.json --config '{"bundle":{"createUpdaterArtifacts":true}}'
       - name: Attach the app to the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
-          ditto -c -k --keepParent "src-tauri/target/universal-apple-darwin/release/bundle/macos/Deviload.app" "Deviload-${version}-macos-test.zip"
-          gh release upload "$GITHUB_REF_NAME" "Deviload-${version}-macos-test.zip"
+          bundle="src-tauri/target/universal-apple-darwin/release/bundle/macos"
+          ditto -c -k --keepParent "$bundle/Deviload.app" "Deviload-${version}-macos-test.zip"
+          cp "$bundle/Deviload.app.tar.gz" "Deviload-${version}-macos.app.tar.gz"
+          gh release upload "$GITHUB_REF_NAME" "Deviload-${version}-macos-test.zip" "Deviload-${version}-macos.app.tar.gz"
+          # One universal app serves both processor types.
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/Deviload-${version}-macos.app.tar.gz"
+          SIGNATURE="$(cat "$bundle/Deviload.app.tar.gz.sig")" URL="$url" node -e '
+            const entry = {signature:process.env.SIGNATURE.trim(), url:process.env.URL};
+            require("fs").writeFileSync("feed-macos.json", JSON.stringify({"darwin-aarch64":entry, "darwin-x86_64":entry}));'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feed-macos
+          path: feed-macos.json
+          if-no-files-found: error
+
+  # A Debian package and an AppImage for x86_64; the AppImage updates itself.
+  linux:
+    needs: windows
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install the libraries Tauri builds against
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libssl-dev libfuse2
+      - run: npm ci
+      - name: Fetch yt-dlp, FFmpeg and Deno for Linux
+        run: bash scripts/fetch-tools-linux.sh
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+      - name: Build the Debian package and the AppImage
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri build
+      - name: Attach the packages to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          bundle="src-tauri/target/release/bundle"
+          deb="$(ls "$bundle"/deb/*.deb | head -n 1)"
+          appimage="$(ls "$bundle"/appimage/*.AppImage | head -n 1)"
+          # For the log: engines that lost the executable bit run from a copy (see runnable() in lib.rs).
+          dpkg-deb -c "$deb" | grep -E '/bin/(yt-dlp|ffmpeg|ffprobe|deno)$' || true
+          cp "$deb" "Deviload-${version}-amd64.deb"
+          cp "$appimage" "Deviload-${version}-x86_64.AppImage"
+          gh release upload "$GITHUB_REF_NAME" "Deviload-${version}-amd64.deb" "Deviload-${version}-x86_64.AppImage"
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/Deviload-${version}-x86_64.AppImage"
+          SIGNATURE="$(cat "$appimage.sig")" URL="$url" node -e '
+            const entry = {signature:process.env.SIGNATURE.trim(), url:process.env.URL};
+            require("fs").writeFileSync("feed-linux.json", JSON.stringify({"linux-x86_64":entry}));'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feed-linux
+          path: feed-linux.json
+          if-no-files-found: error
+
+  # One feed for all systems. It is published even if the macOS or Linux build
+  # failed, so Windows copies are never held back; those systems then keep reading
+  # the version from the Windows entry and link to the release page.
+  feed:
+    needs: [windows, macos, linux]
+    if: always() && needs.windows.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: feed-*
+          path: feeds
+      - name: Join the entries
+        run: |
+          node -e '
+            const fs = require("fs");
+            const feed = JSON.parse(fs.readFileSync("feeds/feed-windows/latest.json", "utf8"));
+            for (const name of ["feed-macos/feed-macos.json", "feed-linux/feed-linux.json"]) {
+              if (fs.existsSync("feeds/" + name)) Object.assign(feed.platforms, JSON.parse(fs.readFileSync("feeds/" + name, "utf8")));
+            }
+            fs.writeFileSync("latest.json", JSON.stringify(feed, null, 2));
+            console.log(Object.keys(feed.platforms).join(", "));'
+      - name: Replace latest.json in the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" latest.json --clobber --repo "$GITHUB_REPOSITORY"
+      # The update feed also lives on the updates branch: files served from there
+      # are not counted as release downloads, so the download badge counts people.
+      - name: Publish the update feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          feed="$RUNNER_TEMP/feed"
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git clone --quiet --depth 1 --branch updates "$remote" "$feed"
+          cp latest.json "$feed/latest.json"
+          cd "$feed"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add latest.json
+          git commit -m "Update feed for $GITHUB_REF_NAME"
+          git push origin HEAD:updates

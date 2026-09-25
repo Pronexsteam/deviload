@@ -6,16 +6,18 @@
 [![Last commit](https://img.shields.io/github/last-commit/Pronexsteam/deviload)](https://github.com/Pronexsteam/deviload/commits/main)
 [![Stars](https://img.shields.io/github/stars/Pronexsteam/deviload?style=flat)](https://github.com/Pronexsteam/deviload/stargazers)
 [![License: MIT](https://img.shields.io/github/license/Pronexsteam/deviload)](LICENSE)
-[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20test-lightgrey)](https://github.com/Pronexsteam/deviload/releases/latest)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20test%20%7C%20Linux-lightgrey)](https://github.com/Pronexsteam/deviload/releases/latest)
 [![Built with Rust and Tauri 2](https://img.shields.io/badge/built%20with-Rust%20%2B%20Tauri%202-b7410e)](https://tauri.app)
 
 **[Download Deviload for Windows](https://github.com/Pronexsteam/deviload/releases/latest)**: take `Deviload-<version>-setup.exe` from the latest release.
 
 **[Download Deviload for Mac](https://github.com/Pronexsteam/deviload/releases/latest)** (test build): take `Deviload-<version>-macos-test.zip`, move the app to Applications and run `xattr -cr /Applications/Deviload.app` once, because it is not signed by Apple yet.
 
+**[Download Deviload for Linux](https://github.com/Pronexsteam/deviload/releases/latest)** (x86_64): take `Deviload-<version>-amd64.deb` for Debian and Ubuntu, or `Deviload-<version>-x86_64.AppImage` for any distribution.
+
 ![Deviload: the download queue with a link preview](docs/screenshots/downloads.png)
 
-Desktop app for downloading video and music with [yt-dlp](https://github.com/yt-dlp/yt-dlp), built with Rust and [Tauri 2](https://tauri.app). Windows is the main target; macOS builds come from CI and have not been tested on a real Mac yet. The interface is available in English and Russian and switches instantly with the RU / EN toggle in the top bar.
+Desktop app for downloading video and music with [yt-dlp](https://github.com/yt-dlp/yt-dlp), built with Rust and [Tauri 2](https://tauri.app). Windows is the main target; the macOS and Linux builds come from CI, and the Mac one has been tried on a real Mac. The interface is available in English and Russian and switches instantly with the RU / EN toggle in the top bar.
 
 ## Features
 
@@ -44,7 +46,7 @@ Desktop app for downloading video and music with [yt-dlp](https://github.com/yt-
 - **Phone link** over the local network: one QR code opens a page on the phone that downloads the files you send from Deviload, sends photos and videos back to the computer (each one needs your OK), and adds links to the download queue. The link turns off after 30 minutes without the phone, and the page can be added to the phone's home screen.
 - **Search** YouTube and YouTube Music inside the app.
 - **YouTube sign-in in one step**: press Sign in, log in to Google in the window that opens, and Deviload keeps the session for downloads. Firefox cookies or your own `cookies.txt` also work (and Chrome, Edge, Brave or Safari on macOS).
-- **Updates**: Deviload checks GitHub once a day and updates itself in one click (the portable zip points to the releases page); yt-dlp updates itself to the nightly build once a day when nothing is downloading. Both can be turned off in the settings.
+- **Updates**: Deviload checks GitHub once a day and updates itself in one click on Windows, macOS and in the AppImage, all from one release (the portable zip and the .deb package point to the releases page); yt-dlp updates itself to the nightly build once a day when nothing is downloading. Both can be turned off in the settings.
 - **Proxy** for downloads, search, link checks and yt-dlp updates (HTTP, HTTPS, SOCKS4 and SOCKS5).
 - **Moving from Deviload 1.x**: the history, settings and the list of downloaded videos of the old portable version move over in one click; cookies are not copied.
 - Tray mode and start with Windows, OS notifications, clipboard link suggestions, links from a text file, a copyable yt-dlp command in every task log, keyboard shortcuts (Ctrl/⌘+L links, Ctrl/⌘+K queue search, Ctrl/⌘+Enter download, Escape closes dialogs) and a short guided tour. Only one copy of Deviload runs at a time; starting it again brings the open window forward.
@@ -60,6 +62,10 @@ Desktop app for downloading video and music with [yt-dlp](https://github.com/yt-
 ## Install on Windows
 
 Download `Deviload-<version>-setup.exe` from the releases page and run it. It installs for the current user, adds a Start menu shortcut and brings yt-dlp, FFmpeg and Deno along. Later versions install from inside the app. A portable zip is published next to it.
+
+## Install on Linux
+
+`sudo apt install ./Deviload-<version>-amd64.deb` on Debian or Ubuntu, or make the AppImage executable (`chmod +x Deviload-<version>-x86_64.AppImage`) and run it. Both bring yt-dlp, FFmpeg and Deno along; the AppImage updates itself from inside the app, the .deb package is updated by installing the new one. The built-in player uses the system's GStreamer, so MKV playback needs its usual plugins (`gstreamer1.0-plugins-good`).
 
 ## Requirements
 
@@ -82,7 +88,19 @@ In-app updates are signed. The script reads the private key and its password fro
 
 ## Releases
 
-Pushing a tag that matches the version, for example `v2.0.0`, runs `.github/workflows/release.yml`: GitHub builds and tests the app and publishes the installer, the portable zip and `latest.json` as the latest release. The release description comes from `.github/release-notes/<tag>.md` when that file exists; changing the file on `main` later updates the published description too. The repository needs two secrets: `TAURI_SIGNING_PRIVATE_KEY` (the content of the key file) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Installed copies read the update feed from the `updates` branch (`raw.githubusercontent.com/Pronexsteam/deviload/updates/latest.json`), so update checks do not count as downloads; the copy attached to each release stays as a fallback for 2.0.0. The same run adds an unsigned macOS test build, `Deviload-<version>-macos-test.zip`, with yt-dlp, FFmpeg and Deno inside (`scripts/fetch-tools-macos.sh`). It is not notarized, so it needs `xattr -cr /Applications/Deviload.app` once before the first start. `.github/workflows/macos.yml` rebuilds only that file for the release of the current version when the `macos-test` branch is pushed.
+Pushing a tag that matches the version, for example `v2.0.0`, runs `.github/workflows/release.yml`: GitHub builds and tests the app and publishes the installer, the portable zip and `latest.json` as the latest release, then adds the macOS and Linux builds. Every build is signed for in-app updates, and a last job joins the Windows, macOS (`Deviload-<version>-macos.app.tar.gz`) and Linux (the AppImage) entries into one `latest.json`, so one release updates all three. If the macOS or Linux build fails, the feed still goes out for Windows, and those systems only show that a new version exists. The release description comes from `.github/release-notes/<tag>.md` when that file exists; changing the file on `main` later updates the published description too. The repository needs two secrets: `TAURI_SIGNING_PRIVATE_KEY` (the content of the key file) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Installed copies read the update feed from the `updates` branch (`raw.githubusercontent.com/Pronexsteam/deviload/updates/latest.json`), so update checks do not count as downloads; the copy attached to each release stays as a fallback for 2.0.0. The same run adds an unsigned macOS test build, `Deviload-<version>-macos-test.zip`, with yt-dlp, FFmpeg and Deno inside (`scripts/fetch-tools-macos.sh`). It is not notarized, so it needs `xattr -cr /Applications/Deviload.app` once before the first start. `.github/workflows/macos.yml` rebuilds only that file for the release of the current version when the `macos-test` branch is pushed.
+
+## Build from source (Linux)
+
+On Debian or Ubuntu install the libraries Tauri builds against, then:
+
+```sh
+sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libssl-dev
+bash scripts/fetch-tools-linux.sh   # yt-dlp, FFmpeg, FFprobe, Deno into ./bin
+npm ci
+npm run tauri dev
+npm run tauri build -- --config src-tauri/tauri.ci.conf.json   # .deb and AppImage, without update signing
+```
 
 ## Build from source (macOS)
 

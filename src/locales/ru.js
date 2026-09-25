@@ -729,7 +729,7 @@ export default {
   "Could not download the update: {detail}": "Не удалось скачать обновление: {detail}",
   "Could not install the update: {detail}. Restart Deviload and try again.": "Не удалось установить обновление: {detail}. Перезапустите Deviload и попробуйте снова.",
   "Check for updates first": "Сначала проверьте обновления",
-  "This is the portable version. Download the new zip from the releases page.": "Это переносная версия. Скачайте новый архив со страницы релизов.",
+  "This copy is updated by hand. Download the new version from the releases page.": "Эта копия обновляется вручную. Скачайте новую версию со страницы выпусков.",
   "Watching": "Слежу",
   "AUTO DOWNLOAD": "АВТОЗАГРУЗКА",
   "Watched channels and playlists": "Каналы и плейлисты под наблюдением",
@@ -998,4 +998,7 @@ export default {
   "yt-dlp looked outdated. Deviload updates it when the current downloads finish, then tries again.": "yt-dlp похож на устаревший. Deviload обновит его, когда закончатся текущие загрузки, и попробует снова.",
   "YouTube asked to slow down. The download tries again in 10 minutes.": "YouTube попросил не спешить. Загрузка повторится через 10 минут.",
   "The download runs again.": "Загрузка повторится.",
+  "Download the new .deb from the releases page and install it over the old one.": "Скачайте новый .deb со страницы выпусков и установите его поверх старого.",
+  "No folder for the engines": "Нет папки для движков",
+  "Could not prepare {}: {e}": "Не удалось подготовить {}: {e}",
 };

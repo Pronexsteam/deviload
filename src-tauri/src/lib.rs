@@ -94,6 +94,14 @@ fn binary(name: &str) -> Result<PathBuf, String> {
             // A macOS app keeps the bundled engines in Contents/Resources/bin.
             #[cfg(target_os = "macos")]
             if let Some(contents) = p.parent() { dirs.push(contents.join("Resources").join("bin")); }
+            // The Linux packages put them in usr/lib/<product>/bin next to usr/bin.
+            #[cfg(all(unix, not(target_os = "macos")))]
+            if let Some(usr) = p.parent() {
+                if let Ok(entries) = fs::read_dir(usr.join("lib")) {
+                    dirs.extend(entries.flatten().filter(|entry| entry.file_name().to_string_lossy().to_ascii_lowercase().contains("deviload"))
+                        .map(|entry| entry.path().join("bin")));
+                }
+            }
         }
     }
     // Development builds also look in the checkout's bin folder.
@@ -103,8 +111,28 @@ fn binary(name: &str) -> Result<PathBuf, String> {
     #[cfg(target_os = "macos")] {
         dirs.push("/opt/homebrew/bin".into()); dirs.push("/usr/local/bin".into());
     }
-    dirs.into_iter().map(|d| d.join(&filename)).find(|p| p.is_file())
-        .ok_or_else(|| format!("{filename} not found. Install yt-dlp, FFmpeg and Deno, then restart the app."))
+    let found = dirs.into_iter().map(|d| d.join(&filename)).find(|p| p.is_file())
+        .ok_or_else(|| format!("{filename} not found. Install yt-dlp, FFmpeg and Deno, then restart the app."))?;
+    #[cfg(unix)]
+    return runnable(found);
+    #[cfg(not(unix))]
+    Ok(found)
+}
+
+// A package can lose the executable bit of a bundled engine, and an AppImage is
+// read-only; such an engine runs from a copy in the app's data folder.
+#[cfg(unix)]
+fn runnable(path: PathBuf) -> Result<PathBuf, String> {
+    use std::os::unix::fs::PermissionsExt;
+    let meta = fs::metadata(&path).map_err(|e| e.to_string())?;
+    if meta.permissions().mode() & 0o111 != 0 { return Ok(path); }
+    let folder = dirs::data_local_dir().ok_or("No folder for the engines")?.join("com.deviload.desktop").join("engines");
+    let copy = folder.join(path.file_name().unwrap_or_default());
+    if fs::metadata(&copy).is_ok_and(|existing| existing.len() == meta.len() && existing.permissions().mode() & 0o111 != 0) { return Ok(copy); }
+    fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
+    fs::copy(&path, &copy).map_err(|e| format!("Could not prepare {}: {e}", path.display()))?;
+    fs::set_permissions(&copy, fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
+    Ok(copy)
 }
 
 // The engines' locations go before the "--" that ends the options.
@@ -2075,29 +2103,40 @@ struct PendingUpdate(Mutex<Option<tauri_plugin_updater::Update>>);
 #[serde(rename_all = "camelCase")]
 struct AppUpdate { version: String, notes: String, installable: bool }
 
-// The installer puts an uninstaller next to the app; the portable zip has none.
-fn installed_copy() -> bool {
-    std::env::current_exe().ok().and_then(|exe| exe.parent().map(|dir| dir.join("uninstall.exe").is_file())).unwrap_or(false)
+// Copies that can replace themselves: the Windows installer (it leaves an uninstaller
+// next to the app), the macOS app and the AppImage. The portable zip and the .deb
+// package are updated by hand.
+fn self_updating() -> bool {
+    if cfg!(windows) {
+        return std::env::current_exe().ok().and_then(|exe| exe.parent().map(|dir| dir.join("uninstall.exe").is_file())).unwrap_or(false);
+    }
+    cfg!(target_os = "macos") || std::env::var_os("APPIMAGE").is_some()
 }
 
 #[tauri::command]
 async fn check_app_update(app: tauri::AppHandle, pending: tauri::State<'_, PendingUpdate>) -> Result<Option<AppUpdate>, String> {
     use tauri_plugin_updater::UpdaterExt;
-    let mut builder = app.updater_builder();
-    // The feed carries only the signed Windows installer. Other systems read the new
-    // version from the same entry and send the user to the releases page.
-    if !cfg!(windows) { builder = builder.target("windows-x86_64"); }
-    let update = builder.build().map_err(|e| e.to_string())?.check().await
-        .map_err(|e| format!("Could not check for updates: {e}"))?;
+    let own = app.updater_builder().build().map_err(|e| e.to_string())?.check().await;
+    let (update, installable) = match own {
+        Ok(update) => (update, self_updating()),
+        // A feed without an entry for this system still tells the version: read it from the
+        // Windows entry and send the user to the releases page.
+        Err(_) if !cfg!(windows) => {
+            let update = app.updater_builder().target("windows-x86_64").build().map_err(|e| e.to_string())?.check().await
+                .map_err(|e| format!("Could not check for updates: {e}"))?;
+            (update, false)
+        }
+        Err(e) => return Err(format!("Could not check for updates: {e}")),
+    };
     let info = update.as_ref().map(|update| AppUpdate { version: update.version.clone(),
-        notes: update.body.clone().unwrap_or_default().chars().take(600).collect(), installable: cfg!(windows) && installed_copy() });
-    *pending.0.lock().unwrap() = update;
+        notes: update.body.clone().unwrap_or_default().chars().take(600).collect(), installable });
+    *pending.0.lock().unwrap() = update.filter(|_| installable);
     Ok(info)
 }
 
 #[tauri::command]
 async fn install_app_update(app: tauri::AppHandle, pending: tauri::State<'_, PendingUpdate>, engine: tauri::State<'_, Engine>) -> Result<(), String> {
-    if !installed_copy() { return Err("This is the portable version. Download the new zip from the releases page.".into()); }
+    if !self_updating() { return Err("This copy is updated by hand. Download the new version from the releases page.".into()); }
     let update = pending.0.lock().unwrap().take().ok_or("Check for updates first")?;
     let mut received = 0u64;
     let bytes = update.download(|chunk, total| {
@@ -2106,7 +2145,7 @@ async fn install_app_update(app: tauri::AppHandle, pending: tauri::State<'_, Pen
     }, || {}).await.map_err(|e| format!("Could not download the update: {e}"))?;
     // Running downloads become "interrupted" and can be resumed after the restart.
     engine.stop();
-    // On Windows this starts the installer and closes Deviload.
+    // On Windows this starts the installer and closes Deviload; the macOS app and the AppImage are replaced in place.
     update.install(bytes).map_err(|e| format!("Could not install the update: {e}. Restart Deviload and try again."))?;
     app.restart();
 }

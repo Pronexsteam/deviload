@@ -285,8 +285,10 @@ $("legacy-import").addEventListener("click", async () => {
 });
 // A new Deviload: the installed copy updates itself, the portable one opens the releases page.
 let appUpdate = null, appVersion = "";
-// The Windows installer updates itself; the Mac build learns about new versions and links to the download.
+// The Windows installer, the Mac app and the AppImage update themselves; the portable
+// zip and the .deb package show where to download the new version.
 const onMac = navigator.userAgent.includes("Mac");
+const onLinux = navigator.userAgent.includes("Linux");
 function showAppUpdate() {
   let later = {};
   try { later = JSON.parse(localStorage.getItem("deviload-update-later") || "{}"); } catch { later = {}; }
@@ -297,6 +299,7 @@ function showAppUpdate() {
   $("app-update-text").textContent = appUpdate.installable
     ? t("The update takes a few seconds, then Deviload restarts. Active downloads can be resumed afterwards.")
     : onMac ? t("Download the new Mac zip from the releases page and replace Deviload in Applications, the same way as the first time.")
+    : onLinux ? t("Download the new .deb from the releases page and install it over the old one.")
     : t("This is the portable version: download the new zip from the releases page and unpack it over the old one.");
   $("app-update-install-label").textContent = t(appUpdate.installable ? "Update" : "Download");
 }
