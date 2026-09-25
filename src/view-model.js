@@ -6,7 +6,13 @@ export function actions(status) {
   return [];
 }
 export function counts(jobs) {
-  return {total:jobs.length,active:jobs.filter(j=>["running","cancelling","pausing"].includes(j.status)).length,done:jobs.filter(j=>j.status==="done").length};
+  const queue = jobs.filter(j=>!j.hiddenInQueue);
+  return {total:queue.length,active:queue.filter(j=>["running","cancelling","pausing"].includes(j.status)).length,done:queue.filter(j=>j.status==="done").length};
+}
+
+// Finished files the library still shows; the queue may have dropped them.
+export function inLibrary(job) {
+  return job.status === "done" && Boolean(job.file) && !job.hiddenInLibrary;
 }
 
 export function orbState(jobs) {
@@ -39,6 +45,7 @@ export function mediaPreview(raw) {
 export function visibleJobs(jobs, filter = "all", query = "") {
   const term = query.trim().toLocaleLowerCase();
   return jobs.filter(job => {
+    if (job.hiddenInQueue) return false;
     const status = job.status;
     const scheduled = status === "queued" && job.scheduledAt != null;
     const matchesFilter = filter === "all" ||

@@ -1,14 +1,19 @@
-// Devil Cut: a one-track editor in the spirit of CapCut. Clips play straight
-// from the downloaded files; the preview applies speed, sound, rotation,
-// mirror, color and captions live, and FFmpeg renders the same settings.
+// Devil Cut: a small editor in the spirit of CapCut. Clips play straight from
+// the downloaded files; the preview applies speed, sound, rotation, mirror,
+// color and captions live, and FFmpeg renders the same settings. Under the
+// video track sit the clips' own sound, sounds detached from clips and music.
 import {setPose} from "./mascot-spot.js";
 
 const DEFAULT_LOOK = Object.freeze({speed:1, volume:1, fadeIn:false, fadeOut:false, rotate:0, flip:false,
   brightness:0, contrast:1, saturation:1, caption:"", captionPosition:"bottom", captionStyle:"outline", transition:"none"});
 const FRAME = 1 / 30;
-const SLOT = 72;
-const MIN_ZOOM = 4, MAX_ZOOM = 400;
-const MAX_CLIPS = 60;
+// Pixels per second: a two-hour project still fits the screen, one frame still gets several pixels.
+const MIN_ZOOM = 0.1, MAX_ZOOM = 400;
+const MAX_CLIPS = 60, MAX_SOUNDS = 40;
+const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+// Height of one row of detached sounds; overlapping sounds stack in rows.
+const SOUND_ROW = 30;
+const TIMELINE_KEY = "devil-cut-timeline";
 const fileName = path => (path || "").split(/[\\/]/).pop();
 
 // Projects are stored by id. Early versions keyed them by title as {clips, audioId};
@@ -37,12 +42,16 @@ export function normalizeProjects(data) {
 export function createCutHome(env) {
   const {t, node} = env;
   const $ = id => document.getElementById(id);
-  let projects = {};
+  let projects = {}, shown = "";
   function render() {
     const videoList = $("editor-home-videos"), projectList = $("editor-home-projects");
+    const videos = env.getJobs().filter(job => env.isVideoJob(job) && !job.hiddenInLibrary).reverse().slice(0, 6);
+    // Called on every queue poll; the lists are rebuilt only when they change.
+    const key = JSON.stringify([t("Untitled project"), videos.map(job => [job.id, job.file]), projects]);
+    if (key === shown) return;
+    shown = key;
     videoList.replaceChildren();
     projectList.replaceChildren();
-    const videos = env.getJobs().filter(env.isVideoJob).reverse().slice(0, 6);
     if (!videos.length) videoList.append(node("p", "editor-home-empty", t("Download a video first and it will show up here.")));
     for (const job of videos) {
       const button = node("button", "editor-home-item", fileName(job.file));
@@ -88,7 +97,7 @@ export function createDevilCut(env) {
   const dialog = $("edit-dialog"), video = $("edit-video"), backdrop = $("cut-backdrop"), music = $("cut-music-player");
   const sources = new Map();
   let project = null, projectId = null, saveTimer = 0;
-  let selected = -1, current = 0, playhead = 0, pxPerSecond = 60, playing = false, frameRequest = 0;
+  let selected = -1, selectedSound = -1, current = 0, playhead = 0, pxPerSecond = 60, playing = false, frameRequest = 0;
   let history = [], future = [], pendingEdit = null, loadedJob = null, mediaTab = "video", lastOutput = "";
   let typingName = false, zoomTouched = false, fullscreen = false;
   // Exact frames for the zoomed-in strip, keyed by "job:second"; "" means pending or unavailable.
@@ -98,6 +107,7 @@ export function createDevilCut(env) {
   const jobs = () => env.getJobs();
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const clipLength = clip => (clip.end - clip.start) / clip.look.speed;
+  const soundLength = sound => (sound.end - sound.start) / sound.speed;
   // A clip with a transition starts before the previous one ends (the same rule as the export).
   const overlapOf = index => {
     const clip = project.clips[index], previous = project.clips[index - 1];
@@ -158,7 +168,7 @@ export function createDevilCut(env) {
     if (!history.length) return;
     future.push(snapshot());
     project = JSON.parse(history.pop());
-    selected = Math.min(selected, project.clips.length - 1);
+    keepSelection();
     changed();
     seek(playhead);
   }
@@ -166,8 +176,13 @@ export function createDevilCut(env) {
     if (!future.length) return;
     history.push(snapshot());
     project = JSON.parse(future.pop());
+    keepSelection();
     changed();
     seek(playhead);
+  }
+  function keepSelection() {
+    selected = Math.min(selected, project.clips.length - 1);
+    selectedSound = Math.min(selectedSound, project.audio.length - 1);
   }
   function save() {
     if (!project) return;
@@ -191,7 +206,14 @@ export function createDevilCut(env) {
     return {name:String(data.name || "").slice(0, 60), canvas:["16:9", "9:16", "1:1", "4:5"].includes(data.canvas) ? data.canvas : "16:9",
       fit:["fit", "fill", "blur"].includes(data.fit) ? data.fit : "fit",
       music:data.music && Number.isSafeInteger(data.music.jobId) ? {jobId:data.music.jobId, volume:clamp(Number(data.music.volume) || 0.35, 0, 2)} : null,
-      clips, updated:data.updated || Date.now()};
+      clips, audio:normalizeSounds(data.audio, known), updated:data.updated || Date.now()};
+  }
+  function normalizeSounds(list, known) {
+    const volume = value => Number.isFinite(Number(value)) ? clamp(Number(value), 0, 2) : 1;
+    return (Array.isArray(list) ? list : [])
+      .filter(sound => Number.isSafeInteger(sound.jobId) && known.has(sound.jobId) && Number.isFinite(sound.start) && Number.isFinite(sound.end) && sound.end > sound.start && Number.isFinite(sound.at))
+      .slice(0, MAX_SOUNDS).map(sound => ({jobId:sound.jobId, start:Math.max(0, sound.start), end:sound.end, at:Math.max(0, sound.at),
+        speed:SPEEDS.includes(sound.speed) ? sound.speed : 1, volume:volume(sound.volume), fadeIn:Boolean(sound.fadeIn), fadeOut:Boolean(sound.fadeOut)}));
   }
 
   async function openData(id, data) {
@@ -199,12 +221,13 @@ export function createDevilCut(env) {
     projectId = id;
     project = normalize(data);
     selected = project.clips.length ? 0 : -1;
+    selectedSound = -1;
     playhead = 0; current = 0; history = []; future = []; pendingEdit = null; loadedJob = null; lastOutput = "";
     video.removeAttribute("src"); backdrop.removeAttribute("src");
     defaultStatus();
     renderMedia();
     render();
-    await Promise.all(project.clips.map(clip => loadSource(clip.jobId).catch(() => null)));
+    await Promise.all([...project.clips, ...project.audio].map(item => loadSource(item.jobId).catch(() => null)));
     await prepareMusic().catch(() => {});
     zoomTouched = false;
     fitZoom();
@@ -306,6 +329,29 @@ export function createDevilCut(env) {
     const length = music.duration;
     if (Number.isFinite(length) && length > 0) music.currentTime = playhead % length;
   }
+  // Detached sounds play from their own audio elements beside the video.
+  const soundPlayers = [];
+  function syncSounds(jump = false) {
+    if (!project) return;
+    project.audio.forEach((sound, index) => {
+      const url = sources.get(sound.jobId)?.url;
+      const player = soundPlayers[index] ||= Object.assign(new Audio(), {preload:"auto"});
+      if (!url) return;
+      let place = jump;
+      if (player.dataset.src !== url) { player.src = url; player.dataset.src = url; place = true; }
+      const local = playhead - sound.at;
+      if (local < 0 || local >= soundLength(sound)) { if (!player.paused) player.pause(); return; }
+      player.playbackRate = sound.speed;
+      player.volume = Math.min(1, sound.volume);
+      const target = sound.start + local * sound.speed;
+      // Small drift is fine; correcting it too often makes the sound stutter.
+      const drift = Math.abs(player.currentTime - target) > 0.35 && !player.seeking && performance.now() - (player.placedAt || 0) > 1000;
+      if (place || drift) { player.currentTime = target; player.placedAt = performance.now(); }
+      if (playing && player.paused) player.play().catch(() => {});
+      else if (!playing && !player.paused) player.pause();
+    });
+    for (const player of soundPlayers.slice(project.audio.length)) player.pause();
+  }
   function seek(time) {
     if (!project?.clips.length) { playhead = 0; renderPlayhead(); updateEmpty(); return; }
     playhead = clamp(time, 0, total());
@@ -315,6 +361,7 @@ export function createDevilCut(env) {
     if (loadClipMedia(at.index)) setVideoTime(clip.start + (playhead - at.offset) * clip.look.speed);
     applyLook(clip);
     syncMusic();
+    syncSounds(true);
     renderPlayhead();
     updateEmpty();
   }
@@ -327,12 +374,14 @@ export function createDevilCut(env) {
     video.play().catch(() => {});
     backdrop.play().catch(() => {});
     if (project.music) music.play().catch(() => {});
+    syncSounds(true);
     cancelAnimationFrame(frameRequest);
     frameRequest = requestAnimationFrame(tick);
   }
   function pause() {
     playing = false;
     video.pause(); backdrop.pause(); music.pause();
+    for (const player of soundPlayers) player.pause();
     cancelAnimationFrame(frameRequest);
     if ($("cut-play")) setPlayIcon();
   }
@@ -356,6 +405,7 @@ export function createDevilCut(env) {
       playhead = offset + Math.max(0, video.currentTime - clip.start) / clip.look.speed;
     }
     renderPlayhead();
+    syncSounds();
     frameRequest = requestAnimationFrame(tick);
   }
 
@@ -367,12 +417,16 @@ export function createDevilCut(env) {
     $("cut-play").disabled = empty;
   }
   function renderPlayhead() {
-    $("cut-playhead").style.left = (playhead * pxPerSecond) + "px";
+    const x = playhead * pxPerSecond;
+    $("cut-playhead").style.left = x + "px";
     $("cut-time").textContent = clock(playhead) + " / " + clock(total());
+    // While playing, the view follows the playhead.
+    const scroll = $("cut-scroll");
+    if (playing && (x > scroll.scrollLeft + scroll.clientWidth - 30 || x < scroll.scrollLeft)) scroll.scrollLeft = Math.max(0, x - 60);
   }
   function rulerStep() {
-    for (const step of [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300]) if (step * pxPerSecond >= 64) return step;
-    return 600;
+    for (const step of [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800]) if (step * pxPerSecond >= 64) return step;
+    return 3600;
   }
   function render() {
     if (!project) return;
@@ -382,18 +436,13 @@ export function createDevilCut(env) {
     $("cut-stage").dataset.canvas = project.canvas;
     $("cut-stage").dataset.fit = project.fit;
     const length = total();
-    const width = Math.max(length * pxPerSecond + 240, $("cut-scroll").clientWidth);
+    const soundEnd = project.audio.reduce((end, sound) => Math.max(end, sound.at + soundLength(sound)), 0);
+    const width = Math.max(Math.max(length, soundEnd) * pxPerSecond + 240, $("cut-scroll").clientWidth);
     $("cut-lane").style.width = width + "px";
-    const ruler = $("cut-ruler");
-    ruler.replaceChildren();
-    const step = rulerStep();
-    for (let time = 0; time * pxPerSecond < width; time += step) {
-      const tick = node("span", "cut-tick", clock(time).replace(/\.0$/, ""));
-      tick.style.left = time * pxPerSecond + "px";
-      ruler.append(tick);
-    }
-    const track = $("cut-video-track");
+    renderRuler();
+    const track = $("cut-video-track"), soundTrack = $("cut-sound-track");
     track.replaceChildren();
+    soundTrack.replaceChildren();
     project.clips.forEach((clip, index) => {
       const source = sources.get(clip.jobId);
       const block = node("div", "cut-clip" + (index === selected ? " selected" : ""));
@@ -408,16 +457,24 @@ export function createDevilCut(env) {
       const strip = node("div", "cut-clip-strip");
       const badges = [];
       if (clip.look.speed !== 1) badges.push(clip.look.speed + "×");
-      if (clip.look.volume === 0) badges.push(t("mute"));
       if (clip.look.caption.trim()) badges.push("T");
       const label = node("span", "cut-clip-label", (source?.name || t("Unavailable file")).replace(/\.[^.]+$/, ""));
       const info = node("span", "cut-clip-info", [clock(clipLength(clip)), ...badges].join(" · "));
+      block.append(strip, label, info, node("span", "cut-trim cut-trim-start"), node("span", "cut-trim cut-trim-end"));
+      track.append(block);
+      // The clip's own sound, lined up under the picture.
+      const sound = node("div", "cut-sound" + (index === selected ? " selected" : "") + (clip.look.volume === 0 ? " muted" : ""));
+      sound.dataset.index = String(index);
+      sound.style.width = block.style.width;
+      sound.style.marginLeft = block.style.marginLeft;
       const wave = node("div", "cut-clip-wave");
       paintWave(wave, clip.jobId, clip.start, clip.end);
-      block.append(strip, wave, label, info, node("span", "cut-trim cut-trim-start"), node("span", "cut-trim cut-trim-end"));
-      track.append(block);
+      sound.append(wave);
+      if (clip.look.volume !== 1) sound.append(node("span", "cut-sound-label", clip.look.volume === 0 ? t("No sound") : Math.round(clip.look.volume * 100) + "%"));
+      soundTrack.append(sound);
     });
     renderStrips();
+    renderSounds();
     const musicTrack = $("cut-music-track");
     musicTrack.replaceChildren();
     if (project.music) {
@@ -446,7 +503,7 @@ export function createDevilCut(env) {
     $("cut-zoom").value = String(zoomToSlider(pxPerSecond));
     $("cut-undo").disabled = !history.length;
     $("cut-redo").disabled = !future.length;
-    for (const id of ["cut-split", "cut-duplicate", "cut-delete"]) $(id).disabled = selected < 0;
+    renderTools();
     renderInspector();
     renderPlayhead();
     updateEmpty();
@@ -456,12 +513,12 @@ export function createDevilCut(env) {
     const list = source.thumbnails;
     return list[Math.min(list.length - 1, Math.max(0, Math.floor(second / source.duration * list.length)))];
   }
-  function frameFor(clip, source, second, visible) {
+  function frameFor(clip, source, second, step) {
     const time = Math.round(second * 10) / 10, key = clip.jobId + ":" + time.toFixed(1);
     const exact = frameCache.get(key);
     if (exact) return exact;
-    const slotSeconds = SLOT / pxPerSecond * clip.look.speed;
-    if (visible && exact === undefined && slotSeconds < source.duration / source.thumbnails.length * 0.8) {
+    const slotSeconds = step / pxPerSecond * clip.look.speed;
+    if (exact === undefined && slotSeconds < source.duration / source.thumbnails.length * 0.8) {
       frameCache.set(key, "");
       if (!frameQueue.has(clip.jobId)) frameQueue.set(clip.jobId, new Set());
       frameQueue.get(clip.jobId).add(time);
@@ -483,34 +540,83 @@ export function createDevilCut(env) {
         } catch { /* The coarse strip stays. */ }
       }
     }
+    // Long videos would keep every frame ever shown; drop the oldest ones.
+    if (frameCache.size > 4000) for (const key of [...frameCache.keys()].slice(0, 1500)) frameCache.delete(key);
     renderStrips();
   }
-  // Fill each clip with frame images; only the visible part asks for exact frames.
+  // The part of the timeline in view, with half a screen on each side.
+  function viewRange() {
+    const scroll = $("cut-scroll");
+    return {from:scroll.scrollLeft - scroll.clientWidth / 2, to:scroll.scrollLeft + scroll.clientWidth * 1.5};
+  }
+  function renderRuler() {
+    if (!project) return;
+    const {from, to} = viewRange(), step = rulerStep(), ticks = [];
+    for (let index = Math.max(0, Math.floor(from / pxPerSecond / step)); index * step * pxPerSecond <= to; index++) {
+      const time = index * step;
+      const tick = node("span", "cut-tick", clock(time).replace(/\.0$/, ""));
+      tick.style.left = time * pxPerSecond + "px";
+      ticks.push(tick);
+    }
+    $("cut-ruler").replaceChildren(...ticks);
+  }
+  // Frame pictures are about as wide as the track is tall, so taller tracks show bigger frames.
+  const slotWidth = () => Math.max(56, Math.round(($("cut-video-track").clientHeight || 74) * 1.35));
+  // Each clip gets frame pictures only where the view is; a long video no longer builds thousands of them.
   function renderStrips() {
     if (!project) return;
-    const scroll = $("cut-scroll");
-    const from = scroll.scrollLeft / pxPerSecond - 2, to = (scroll.scrollLeft + scroll.clientWidth) / pxPerSecond + 2;
-    let offset = 0;
+    const {from, to} = viewRange(), slot = slotWidth();
     for (const block of $("cut-video-track").children) {
-      const clip = project.clips[Number(block.dataset.index)], source = sources.get(clip?.jobId);
-      const length = clip ? clipLength(clip) : 0;
+      const index = Number(block.dataset.index), clip = project.clips[index], source = sources.get(clip?.jobId);
       const strip = block.querySelector(".cut-clip-strip");
-      if (!clip || !source?.thumbnails?.length || !strip) { offset += length; continue; }
-      const count = Math.max(1, Math.round(length * pxPerSecond / SLOT));
+      if (!clip || !source?.thumbnails?.length || !strip) continue;
+      const left = offsetOf(index) * pxPerSecond, width = Math.max(10, clipLength(clip) * pxPerSecond);
+      const count = Math.max(1, Math.round(width / slot)), step = width / count;
+      const first = clamp(Math.floor((from - left) / step), 0, count), last = clamp(Math.ceil((to - left) / step), 0, count);
       const images = [];
-      for (let slot = 0; slot < count; slot++) {
-        const at = offset + (slot + 0.5) / count * length;
-        const second = clip.start + (slot + 0.5) / count * (clip.end - clip.start);
-        const image = strip.children[slot] || node("img");
-        const src = frameFor(clip, source, second, at >= from && at <= to);
+      for (let position = first; position < last; position++) {
+        const image = strip.children[images.length] || node("img");
+        const src = frameFor(clip, source, clip.start + (position + 0.5) / count * (clip.end - clip.start), step);
         if (image.getAttribute("src") !== src) image.src = src;
         image.alt = "";
         image.draggable = false;
+        image.style.left = position * step + "px";
+        image.style.width = Math.ceil(step) + "px";
         images.push(image);
       }
       strip.replaceChildren(...images);
-      offset += length;
     }
+  }
+  // Detached sounds sit where they play; overlapping ones stack in rows.
+  function renderSounds() {
+    const track = $("cut-audio-track");
+    track.replaceChildren();
+    if (!project.audio.length) {
+      track.style.height = "";
+      track.append(node("span", "cut-track-hint", t("Separate sound: select a clip and press Detach sound.")));
+      return;
+    }
+    const rows = [];
+    const order = project.audio.map((sound, index) => index).sort((a, b) => project.audio[a].at - project.audio[b].at);
+    for (const index of order) {
+      const sound = project.audio[index];
+      let row = rows.findIndex(end => end <= sound.at + 0.001);
+      if (row < 0) { row = rows.length; rows.push(0); }
+      rows[row] = sound.at + soundLength(sound);
+      const block = node("div", "cut-piece" + (index === selectedSound ? " selected" : ""));
+      block.dataset.index = String(index);
+      block.style.left = sound.at * pxPerSecond + "px";
+      block.style.top = row * SOUND_ROW + "px";
+      block.style.width = Math.max(10, soundLength(sound) * pxPerSecond) + "px";
+      const wave = node("div", "cut-clip-wave");
+      paintWave(wave, sound.jobId, sound.start, sound.end);
+      const name = (sources.get(sound.jobId)?.name || t("Unavailable file")).replace(/\.[^.]+$/, "");
+      const label = node("span", "cut-piece-label", sound.volume === 1 ? name : `${name} · ${Math.round(sound.volume * 100)}%`);
+      block.title = name;
+      block.append(wave, label, node("span", "cut-trim cut-trim-start"), node("span", "cut-trim cut-trim-end"));
+      track.append(block);
+    }
+    track.style.height = rows.length * SOUND_ROW + "px";
   }
   function renderExportSummary() {
     if (!project) return;
@@ -526,9 +632,17 @@ export function createDevilCut(env) {
     }
   }
   function renderInspector() {
-    const clip = project?.clips[selected];
-    $("cut-inspector-empty").hidden = Boolean(clip);
+    const clip = project?.clips[selected], sound = project?.audio[selectedSound];
+    $("cut-inspector-empty").hidden = Boolean(clip || sound);
     $("cut-inspector-body").hidden = !clip;
+    $("cut-sound-body").hidden = !sound;
+    if (sound) {
+      $("cut-sound-name").textContent = (sources.get(sound.jobId)?.name || t("Unavailable file")).replace(/\.[^.]+$/, "") + " · " + clock(soundLength(sound));
+      $("cut-sound-volume").value = String(Math.round(sound.volume * 100));
+      $("cut-sound-volume-value").textContent = Math.round(sound.volume * 100) + "%";
+      $("cut-sound-fade-in").checked = sound.fadeIn;
+      $("cut-sound-fade-out").checked = sound.fadeOut;
+    }
     if (!clip) return;
     const look = clip.look;
     selectChips("speed", look.speed);
@@ -553,7 +667,7 @@ export function createDevilCut(env) {
     const list = $("cut-media-list");
     list.replaceChildren();
     const audio = mediaTab === "audio";
-    const items = jobs().filter(job => audio ? env.isLibraryAudio(job) : env.isVideoJob(job)).reverse();
+    const items = jobs().filter(job => !job.hiddenInLibrary && (audio ? env.isLibraryAudio(job) : env.isVideoJob(job))).reverse();
     if (!items.length) list.append(node("p", "cut-note", t(audio ? "No finished audio yet." : "No finished videos yet.")));
     for (const job of items) {
       const item = node("div", "cut-media-item");
@@ -581,13 +695,21 @@ export function createDevilCut(env) {
   }
 
   // Tools
-  function select(index) {
-    selected = index;
-    for (const block of $("cut-video-track").children) block.classList.toggle("selected", Number(block.dataset.index) === index);
-    renderInspector();
-    for (const id of ["cut-split", "cut-duplicate", "cut-delete"]) $(id).disabled = selected < 0;
+  function renderTools() {
+    const clip = project?.clips[selected];
+    for (const id of ["cut-split", "cut-duplicate", "cut-delete"]) $(id).disabled = selected < 0 && selectedSound < 0;
+    $("cut-detach").disabled = !clip || clip.look.volume === 0 || waves.get(clip.jobId) === "";
   }
+  function markSelection() {
+    for (const block of document.querySelectorAll("#cut-video-track .cut-clip, #cut-sound-track .cut-sound")) block.classList.toggle("selected", Number(block.dataset.index) === selected);
+    for (const block of document.querySelectorAll("#cut-audio-track .cut-piece")) block.classList.toggle("selected", Number(block.dataset.index) === selectedSound);
+    renderInspector();
+    renderTools();
+  }
+  function select(index) { selected = index; selectedSound = -1; markSelection(); }
+  function selectSound(index) { selectedSound = index; selected = -1; markSelection(); }
   function split() {
+    if (selectedSound >= 0) { splitSound(); return; }
     if (!project?.clips.length) return;
     const at = clipAt(Math.min(playhead, total() - 0.001));
     const clip = project.clips[at.index];
@@ -601,7 +723,28 @@ export function createDevilCut(env) {
     selected = at.index + 1;
     changed();
   }
+  function splitSound() {
+    const sound = project.audio[selectedSound];
+    const point = sound.start + (playhead - sound.at) * sound.speed;
+    if (point - sound.start < 0.1 || sound.end - point < 0.1) { status(t("Move the playhead inside the sound to split it."), true); return; }
+    if (project.audio.length >= MAX_SOUNDS) { status(t("A project holds up to 40 separate sounds."), true); return; }
+    commit();
+    const second = {...copy(sound), start:point, at:playhead, fadeIn:false};
+    sound.end = point; sound.fadeOut = false;
+    project.audio.splice(selectedSound + 1, 0, second);
+    selectedSound += 1;
+    changed();
+    syncSounds(true);
+  }
   function removeSelected() {
+    if (selectedSound >= 0) {
+      commit();
+      project.audio.splice(selectedSound, 1);
+      selectedSound = -1;
+      changed();
+      syncSounds(true);
+      return;
+    }
     if (selected < 0) return;
     commit();
     project.clips.splice(selected, 1);
@@ -610,11 +753,37 @@ export function createDevilCut(env) {
     seek(Math.min(playhead, total()));
   }
   function duplicate() {
+    if (selectedSound >= 0) {
+      if (project.audio.length >= MAX_SOUNDS) { status(t("A project holds up to 40 separate sounds."), true); return; }
+      commit();
+      const sound = project.audio[selectedSound];
+      project.audio.push({...copy(sound), at:sound.at + soundLength(sound)});
+      selectedSound = project.audio.length - 1;
+      changed();
+      return;
+    }
     if (selected < 0 || project.clips.length >= MAX_CLIPS) return;
     commit();
     project.clips.splice(selected + 1, 0, copy(project.clips[selected]));
     selected += 1;
     changed();
+  }
+  // The clip keeps its picture and goes silent; its sound becomes a piece that can move on its own.
+  function detachSound() {
+    const clip = project?.clips[selected];
+    if (!clip) return;
+    if (clip.look.volume === 0 || waves.get(clip.jobId) === "") { status(t("This clip has no sound to detach."), true); return; }
+    if (project.audio.length >= MAX_SOUNDS) { status(t("A project holds up to 40 separate sounds."), true); return; }
+    commit();
+    const look = clip.look;
+    project.audio.push({jobId:clip.jobId, start:clip.start, end:clip.end, at:offsetOf(selected), speed:look.speed, volume:look.volume, fadeIn:look.fadeIn, fadeOut:look.fadeOut});
+    look.volume = 0;
+    if (current === selected) applyLook(clip);
+    selectedSound = project.audio.length - 1;
+    selected = -1;
+    changed();
+    syncSounds(true);
+    status(t("The sound has its own track now: drag it to move it, drag its edges to trim it."));
   }
   function fitZoom() {
     const width = $("cut-scroll").clientWidth - 60, length = total();
@@ -654,6 +823,7 @@ export function createDevilCut(env) {
     try {
       const output = await invoke("editor_render", {project:{
         clips:project.clips.map(clip => ({jobId:clip.jobId, start:clip.start, end:clip.end, look:clip.look})),
+        audio:project.audio.map(sound => ({...sound})),
         canvas:project.canvas, fit:project.fit, music:project.music, format:chip("format"), quality:Number(chip("quality")),
       }});
       lastOutput = output;
@@ -729,18 +899,72 @@ export function createDevilCut(env) {
     setVideoTime(second);
     applyLook(project.clips[index]);
   }
-  for (const id of ["cut-ruler", "cut-music-track"]) {
-    $(id).addEventListener("pointerdown", event => {
-      if (event.target.closest("input, button") || !project?.clips.length) return;
-      pause();
-      const area = $(id);
-      try { area.setPointerCapture(event.pointerId); } catch { /* synthetic pointer */ }
-      seek(timeAtX(event.clientX));
-      const move = moveEvent => seek(timeAtX(moveEvent.clientX));
-      area.addEventListener("pointermove", move);
-      area.addEventListener("pointerup", () => area.removeEventListener("pointermove", move), {once:true});
-    });
+  function scrub(event, area) {
+    if (event.target.closest("input, button") || !project?.clips.length) return;
+    pause();
+    try { area.setPointerCapture(event.pointerId); } catch { /* synthetic pointer */ }
+    seek(timeAtX(event.clientX));
+    const move = moveEvent => seek(timeAtX(moveEvent.clientX));
+    area.addEventListener("pointermove", move);
+    area.addEventListener("pointerup", () => area.removeEventListener("pointermove", move), {once:true});
   }
+  for (const id of ["cut-ruler", "cut-music-track"]) $(id).addEventListener("pointerdown", event => scrub(event, $(id)));
+  $("cut-sound-track").addEventListener("pointerdown", event => {
+    const block = event.target.closest(".cut-sound");
+    if (block) select(Number(block.dataset.index));
+    scrub(event, $("cut-sound-track"));
+  });
+  // A moved sound sticks to the start, the playhead and clip edges when it comes close.
+  function snapTime(at, length) {
+    const points = [0, playhead, total()];
+    project.clips.forEach((clip, index) => points.push(offsetOf(index), offsetOf(index) + clipLength(clip)));
+    let best = at, distance = 8 / pxPerSecond;
+    for (const point of points) {
+      for (const candidate of [point, point - length]) {
+        if (candidate >= 0 && Math.abs(candidate - at) < distance) { best = candidate; distance = Math.abs(candidate - at); }
+      }
+    }
+    return best;
+  }
+  $("cut-audio-track").addEventListener("pointerdown", event => {
+    const area = $("cut-audio-track"), block = event.target.closest(".cut-piece");
+    if (!block) { scrub(event, area); return; }
+    event.preventDefault();
+    pause();
+    const index = Number(block.dataset.index), sound = project.audio[index];
+    const trim = event.target.closest(".cut-trim");
+    const edge = trim ? (trim.classList.contains("cut-trim-start") ? "start" : "end") : "";
+    const startX = event.clientX, original = {...sound};
+    const limit = sources.get(sound.jobId)?.duration ?? sound.end;
+    let moved = false;
+    selectSound(index);
+    try { area.setPointerCapture(event.pointerId); } catch { /* synthetic pointer */ }
+    const move = moveEvent => {
+      const dx = moveEvent.clientX - startX;
+      if (!moved && Math.abs(dx) < 4) return;
+      if (!moved) { moved = true; beginEdit(); block.classList.add("dragging"); }
+      const seconds = dx / pxPerSecond;
+      if (edge === "start") {
+        sound.start = clamp(original.start + seconds * sound.speed, Math.max(0, original.start - original.at * sound.speed), original.end - 0.1);
+        sound.at = original.at + (sound.start - original.start) / sound.speed;
+      } else if (edge === "end") {
+        sound.end = clamp(original.end + seconds * sound.speed, original.start + 0.1, limit);
+      } else {
+        sound.at = snapTime(Math.max(0, original.at + seconds), soundLength(sound));
+      }
+      block.style.left = sound.at * pxPerSecond + "px";
+      block.style.width = Math.max(10, soundLength(sound) * pxPerSecond) + "px";
+    };
+    const up = upEvent => {
+      area.removeEventListener("pointermove", move);
+      block.classList.remove("dragging");
+      if (!moved) { seek(timeAtX(upEvent.clientX)); return; }
+      endEdit();
+      syncSounds(true);
+    };
+    area.addEventListener("pointermove", move);
+    area.addEventListener("pointerup", up, {once:true});
+  });
 
   // Inspector controls
   function editLook(update) {
@@ -772,6 +996,25 @@ export function createDevilCut(env) {
   for (const [id, key] of [["cut-fade-in", "fadeIn"], ["cut-fade-out", "fadeOut"]]) {
     $(id).addEventListener("change", () => { editLook(look => { look[key] = $(id).checked; }); endEdit(); });
   }
+  $("cut-sound-volume").addEventListener("input", () => {
+    const sound = project?.audio[selectedSound];
+    if (!sound) return;
+    beginEdit();
+    sound.volume = Number($("cut-sound-volume").value) / 100;
+    $("cut-sound-volume-value").textContent = Math.round(sound.volume * 100) + "%";
+    syncSounds();
+  });
+  $("cut-sound-volume").addEventListener("change", endEdit);
+  for (const [id, key] of [["cut-sound-fade-in", "fadeIn"], ["cut-sound-fade-out", "fadeOut"]]) {
+    $(id).addEventListener("change", () => {
+      const sound = project?.audio[selectedSound];
+      if (!sound) return;
+      beginEdit();
+      sound[key] = $(id).checked;
+      endEdit();
+    });
+  }
+  $("cut-sound-delete").addEventListener("click", removeSelected);
   $("cut-rotate-left").addEventListener("click", () => { editLook(look => { look.rotate = (look.rotate + 270) % 360; }); endEdit(); });
   $("cut-rotate-right").addEventListener("click", () => { editLook(look => { look.rotate = (look.rotate + 90) % 360; }); endEdit(); });
   $("cut-flip").addEventListener("click", () => { editLook(look => { look.flip = !look.flip; }); endEdit(); });
@@ -825,20 +1068,65 @@ export function createDevilCut(env) {
   $("cut-split").addEventListener("click", split);
   $("cut-duplicate").addEventListener("click", duplicate);
   $("cut-delete").addEventListener("click", removeSelected);
+  $("cut-detach").addEventListener("click", detachSound);
   $("cut-undo").addEventListener("click", undo);
   $("cut-redo").addEventListener("click", redo);
   $("cut-zoom-in").addEventListener("click", () => zoom(1.4));
   $("cut-zoom").addEventListener("input", () => setZoom(sliderToZoom(Number($("cut-zoom").value))));
   $("cut-zoom-fit").addEventListener("click", () => { fitZoom(); zoomTouched = false; render(); });
   $("cut-scroll").addEventListener("wheel", event => {
-    if (!event.ctrlKey || !project) return;
+    if (!project) return;
+    const scroll = $("cut-scroll");
+    if (event.ctrlKey) {
+      event.preventDefault();
+      const box = scroll.getBoundingClientRect();
+      setZoom(pxPerSecond * (event.deltaY < 0 ? 1.25 : 0.8), timeAtX(event.clientX), event.clientX - box.left);
+      return;
+    }
+    // The wheel moves along time, unless the sound rows need scrolling up and down.
+    if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY) || scroll.scrollHeight > scroll.clientHeight + 1) return;
     event.preventDefault();
-    const box = $("cut-scroll").getBoundingClientRect();
-    setZoom(pxPerSecond * (event.deltaY < 0 ? 1.25 : 0.8), timeAtX(event.clientX), event.clientX - box.left);
+    scroll.scrollLeft += event.deltaY;
   }, {passive:false});
   $("cut-scroll").addEventListener("scroll", () => {
     cancelAnimationFrame(stripFrame);
-    stripFrame = requestAnimationFrame(renderStrips);
+    stripFrame = requestAnimationFrame(() => { renderRuler(); renderStrips(); });
+  });
+  // The timeline grows from its top edge; the height is remembered.
+  function setTimelineHeight(value, remember = false) {
+    const height = Math.round(clamp(value, 170, Math.max(170, window.innerHeight * 0.7)));
+    dialog.style.setProperty("--cut-timeline", height + "px");
+    if (remember) try { localStorage.setItem(TIMELINE_KEY, String(height)); } catch { /* storage unavailable */ }
+    renderStrips();
+  }
+  try {
+    const saved = Number(localStorage.getItem(TIMELINE_KEY));
+    if (saved > 0) setTimelineHeight(saved);
+  } catch { /* storage unavailable */ }
+  $("cut-resize").addEventListener("pointerdown", event => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const handle = $("cut-resize"), startY = event.clientY, startHeight = $("cut-timeline").offsetHeight;
+    try { handle.setPointerCapture(event.pointerId); } catch { /* synthetic pointer */ }
+    handle.classList.add("dragging");
+    const move = moveEvent => setTimelineHeight(startHeight + startY - moveEvent.clientY);
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", () => {
+      handle.removeEventListener("pointermove", move);
+      handle.classList.remove("dragging");
+      setTimelineHeight($("cut-timeline").offsetHeight, true);
+    }, {once:true});
+  });
+  $("cut-resize").addEventListener("dblclick", () => {
+    try { localStorage.removeItem(TIMELINE_KEY); } catch { /* storage unavailable */ }
+    dialog.style.removeProperty("--cut-timeline");
+    renderStrips();
+  });
+  $("cut-resize").addEventListener("keydown", event => {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    event.preventDefault();
+    event.stopPropagation();
+    setTimelineHeight($("cut-timeline").offsetHeight + (event.key === "ArrowUp" ? 24 : -24), true);
   });
   function setFullscreen(on) {
     fullscreen = on;

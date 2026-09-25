@@ -19,9 +19,12 @@ struct Snapshot {
     parallel: usize,
     #[serde(default)]
     warning: String,
+    // Where new downloads go when the app starts; empty means the last used folder.
+    #[serde(default)]
+    default_folder: String,
 }
 impl Default for Snapshot {
-    fn default() -> Self { Self { jobs: vec![], options: Options::default(), parallel: 2, warning: String::new() } }
+    fn default() -> Self { Self { jobs: vec![], options: Options::default(), parallel: 2, warning: String::new(), default_folder: String::new() } }
 }
 
 #[derive(Clone)]
@@ -194,7 +197,7 @@ impl Engine {
         let project = ProjectExport { clips: vec![ProjectClip { job_id: job.id, start: 0.0, end: source.duration, look: ClipLook::default() }],
             canvas: "source".into(), format: "gif".into(), quality: 480, ..ProjectExport::default() };
         let output = new_output_path(&file, "GIF", "gif")?;
-        render_project(&[source], &project, None, &output, &|_| {})?;
+        render_project(&[source], &project, None, &[], &output, &|_| {})?;
         let mut d = self.data.lock().unwrap();
         if let Some(current) = d.jobs.iter_mut().find(|item| item.id == job.id) {
             current.file = output.to_string_lossy().into_owned();
@@ -275,6 +278,21 @@ impl Engine {
 
 #[tauri::command]
 fn snapshot(engine: tauri::State<Engine>) -> Snapshot { engine.data.lock().unwrap().clone() }
+
+// An empty folder goes back to the last used one.
+#[tauri::command]
+fn set_default_folder(folder: String, engine: tauri::State<Engine>) -> Result<String, String> {
+    let folder = if folder.trim().is_empty() { PathBuf::new() } else { plain_folder(&folder) };
+    if !folder.as_os_str().is_empty() && (!folder.is_absolute() || !folder.is_dir()) {
+        return Err("Pick an existing folder".into());
+    }
+    let mut d = engine.data.lock().unwrap();
+    let old = d.clone();
+    d.default_folder = folder.to_string_lossy().into_owned();
+    if !d.default_folder.is_empty() { d.options.folder = d.default_folder.clone(); }
+    if let Err(e) = save(&engine.dir, &d) { *d = old; return Err(e); }
+    Ok(d.default_folder.clone())
+}
 
 #[tauri::command]
 fn common_folders() -> Vec<(String, String)> {
@@ -628,7 +646,7 @@ fn queue_urls(d: &mut Snapshot, urls: Vec<String>, options: &Options, scheduled_
     for url in urls {
         if d.jobs.iter().any(|j| j.url == url && ["queued", "running", "cancelling", "pausing", "paused"].contains(&j.status.as_str())) { continue; }
         d.jobs.push(Job { id: next_id, url, options: options.clone(), status: "queued".into(),
-            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at, auto_retry, retry_attempts: 0, pid: None });
+            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at, auto_retry, retry_attempts: 0, archived: 0, pid: None, hidden_in_queue: false, hidden_in_library: false });
         next_id += 1; count += 1;
     }
     count
@@ -711,7 +729,7 @@ fn import_legacy_into(legacy: &Path, data: &mut Snapshot, archive_dir: &Path) ->
                 .and_then(|urls| urls.into_iter().next()).unwrap_or_default();
             let options = Options { quality: legacy_quality(file).into(), archive: false, ..data.options.clone() };
             let mut job = Job { id: next_id, url, options, status: "done".into(), percent: 100.0, speed: String::new(),
-                file: file.into(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, pid: None };
+                file: file.into(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
             job.log.push("Moved from Deviload 1.x".into());
             data.jobs.push(job);
             next_id += 1;
@@ -783,6 +801,11 @@ fn change_job(id: u64, action: String, engine: tauri::State<Engine>) -> Result<(
         "cancel" if j.status == "running" => j.status = "cancelling".into(),
         "retry" if ["error", "cancelled", "interrupted"].contains(&j.status.as_str()) => {
             j.status = "queued".into(); j.percent = 0.0; j.log.clear(); j.speed.clear(); j.file.clear(); j.scheduled_at = None; j.retry_attempts = 0;
+        }
+        // Without the archive yt-dlp fetches what it skipped; files still on the disk are not downloaded twice.
+        "again" if j.status == "done" && j.archived > 0 => {
+            j.status = "queued".into(); j.percent = 0.0; j.log.clear(); j.speed.clear(); j.file.clear(); j.scheduled_at = None;
+            j.retry_attempts = 0; j.archived = 0; j.options.archive = false;
         }
         _ => return Err("This action is not available in the current state".into()),
     }
@@ -1217,13 +1240,29 @@ struct ProjectClip { job_id: u64, start: f64, end: f64, #[serde(default)] look: 
 struct ProjectMusic { job_id: u64, #[serde(default = "default_music_volume")] volume: f64 }
 fn default_music_volume() -> f64 { 0.35 }
 
+// Sound taken off a clip: a part of a file that plays from `at` seconds of the project.
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectAudio {
+    job_id: u64,
+    start: f64,
+    end: f64,
+    at: f64,
+    #[serde(default = "unit")] speed: f64,
+    #[serde(default = "unit")] volume: f64,
+    #[serde(default)] fade_in: bool,
+    #[serde(default)] fade_out: bool,
+}
+fn unit() -> f64 { 1.0 }
+const MAX_AUDIO_PIECES: usize = 40;
+
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-struct ProjectExport { clips: Vec<ProjectClip>, canvas: String, fit: String, music: Option<ProjectMusic>, format: String, quality: u32 }
+struct ProjectExport { clips: Vec<ProjectClip>, canvas: String, fit: String, music: Option<ProjectMusic>, audio: Vec<ProjectAudio>, format: String, quality: u32 }
 
 impl Default for ProjectExport {
     fn default() -> Self {
-        Self { clips: vec![], canvas: "16:9".into(), fit: "fit".into(), music: None, format: "mp4".into(), quality: 1080 }
+        Self { clips: vec![], canvas: "16:9".into(), fit: "fit".into(), music: None, audio: vec![], format: "mp4".into(), quality: 1080 }
     }
 }
 
@@ -1269,9 +1308,13 @@ fn tempo(speed: f64) -> String {
     if speed > 2.0 { format!("atempo=2,atempo={}", speed / 2.0) } else { format!("atempo={speed}") }
 }
 
-fn render_project(sources: &[Source], project: &ProjectExport, music: Option<&Source>, output: &Path, progress: &dyn Fn(f64)) -> Result<(), String> {
+// `pieces` are the files of `project.audio`, in the same order.
+fn render_project(sources: &[Source], project: &ProjectExport, music: Option<&Source>, pieces: &[Source], output: &Path, progress: &dyn Fn(f64)) -> Result<(), String> {
     if sources.is_empty() || sources.len() > 60 || sources.len() != project.clips.len() {
         return Err("A project needs from 1 to 60 clips".into());
+    }
+    if project.audio.len() > MAX_AUDIO_PIECES || pieces.len() != project.audio.len() {
+        return Err("A project holds up to 40 separate sounds".into());
     }
     if !["mp4", "gif", "mp3"].contains(&project.format.as_str()) { return Err("Unknown export format".into()); }
     if ![480, 720, 1080].contains(&project.quality) { return Err("Unknown export resolution".into()); }
@@ -1364,12 +1407,44 @@ fn render_project(sources: &[Source], project: &ProjectExport, music: Option<&So
     }
     let total = total - overlaps.iter().sum::<f64>();
     let mut audio_label = "[acat]".to_owned();
+    let mut layers = vec![];
+    let mut input = count;
+    for (index, (piece, source)) in project.audio.iter().zip(pieces).enumerate() {
+        if !source.has_audio { return Err("The selected file has no audio track".into()); }
+        if ![0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0].contains(&piece.speed) { return Err("Unknown playback speed".into()); }
+        if !piece.volume.is_finite() || !(0.0..=2.0).contains(&piece.volume) { return Err("Volume must be between 0 and 200%".into()); }
+        if !piece.start.is_finite() || !piece.end.is_finite() || !piece.at.is_finite() || piece.start < 0.0 || piece.at < 0.0 ||
+            piece.end - piece.start < 0.1 || piece.end > source.duration + 0.05 {
+            return Err("A sound is outside its source file".into());
+        }
+        // A sound that starts after the video ends is not heard in the preview either.
+        if !with_audio || piece.at >= total || piece.volume == 0.0 { continue; }
+        let length = (piece.end - piece.start) / piece.speed;
+        let fade = (length / 4.0).min(0.5);
+        cmd.args(["-ss", &piece.start.to_string(), "-t", &(piece.end - piece.start).to_string(), "-i"]).arg(&source.path);
+        let mut chain = vec!["asetpts=PTS-STARTPTS".to_owned()];
+        if piece.speed != 1.0 { chain.push(tempo(piece.speed)); }
+        if piece.volume != 1.0 { chain.push(format!("volume={}", piece.volume)); }
+        if piece.fade_in { chain.push(format!("afade=t=in:st=0:d={fade:.3}")); }
+        if piece.fade_out { chain.push(format!("afade=t=out:st={:.3}:d={fade:.3}", length - fade)); }
+        chain.push("aresample=48000".into());
+        chain.push("aformat=sample_fmts=fltp:channel_layouts=stereo".into());
+        chain.push(format!("adelay={}:all=1", (piece.at * 1000.0).round() as u64));
+        graph.push_str(&format!(";[{input}:a]{}[s{index}]", chain.join(",")));
+        layers.push(format!("[s{index}]"));
+        input += 1;
+    }
     if let (true, Some(track), Some(settings)) = (with_audio, music, project.music.as_ref()) {
         if !track.has_audio { return Err("The selected file has no audio track".into()); }
         if !settings.volume.is_finite() || !(0.0..=2.0).contains(&settings.volume) { return Err("Volume must be between 0 and 200%".into()); }
         cmd.args(["-stream_loop", "-1", "-i"]).arg(&track.path);
-        graph.push_str(&format!(";[{count}:a]atrim=duration={total:.3},asetpts=PTS-STARTPTS,volume={},afade=t=out:st={:.3}:d=1.5,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[music];[acat][music]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[amix]",
+        graph.push_str(&format!(";[{input}:a]atrim=duration={total:.3},asetpts=PTS-STARTPTS,volume={},afade=t=out:st={:.3}:d=1.5,aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[music]",
             settings.volume, (total - 1.5).max(0.0)));
+        layers.push("[music]".into());
+    }
+    if !layers.is_empty() {
+        // The joined clips come first, so the mix ends with the video.
+        graph.push_str(&format!(";[acat]{}amix=inputs={}:duration=first:dropout_transition=0:normalize=0[amix]", layers.concat(), layers.len() + 1));
         audio_label = "[amix]".into();
     }
     match project.format.as_str() {
@@ -1450,10 +1525,19 @@ async fn editor_render(project: ProjectExport, engine: tauri::State<'_, Engine>,
             }
             None => None,
         };
+        let mut pieces = Vec::new();
+        for piece in project.audio.iter().take(MAX_AUDIO_PIECES + 1) {
+            if !probed.contains_key(&piece.job_id) {
+                let source = probe_source(&completed_video(&engine, piece.job_id)?)?;
+                probed.insert(piece.job_id, source);
+            }
+            let source = &probed[&piece.job_id];
+            pieces.push(Source { path: source.path.clone(), duration: source.duration, has_audio: source.has_audio, width: source.width, height: source.height });
+        }
         let first = sources.first().ok_or("A project needs from 1 to 60 clips")?.path.clone();
         let output = project_output(&first, &project.format)?;
         let progress = |share: f64| { let _ = app.emit("devilcut-progress", share); };
-        render_project(&sources, &project, music.as_ref(), &output, &progress)?;
+        render_project(&sources, &project, music.as_ref(), &pieces, &output, &progress)?;
         Ok(output.to_string_lossy().into_owned())
     }).await.map_err(|e| e.to_string())?
 }
@@ -1595,11 +1679,28 @@ async fn reveal(file: PathBuf) -> Result<(), String> {
     return result.map(|_| ()).map_err(|e| format!("Could not open the folder: {e}"));
 }
 
+// Explorer falls back to another folder when the path has forward slashes or a trailing separator.
+fn plain_folder(text: &str) -> PathBuf {
+    let text = text.trim();
+    #[cfg(windows)] {
+        let text = text.replace('/', "\\");
+        let trimmed = text.trim_end_matches('\\');
+        // A drive root keeps its separator.
+        return PathBuf::from(if trimmed.is_empty() || trimmed.ends_with(':') { &text[..] } else { trimmed });
+    }
+    #[cfg(not(windows))]
+    PathBuf::from(text)
+}
+
+// Opens the folder chosen in the download settings; without one, the default or the last used folder.
 #[tauri::command]
-fn open_downloads(engine: tauri::State<Engine>) -> Result<(), String> {
-    let folder = {
-        let d = engine.data.lock().unwrap();
-        PathBuf::from(&d.options.folder)
+fn open_downloads(folder: Option<String>, engine: tauri::State<Engine>) -> Result<(), String> {
+    let folder = match folder.map(|text| plain_folder(&text)).filter(|path| path.is_absolute()) {
+        Some(path) => path,
+        None => {
+            let d = engine.data.lock().unwrap();
+            plain_folder(if d.default_folder.is_empty() { &d.options.folder } else { &d.default_folder })
+        }
     };
     if !folder.is_dir() { return Err("The downloads folder does not exist yet".into()); }
     #[cfg(windows)]
@@ -1613,11 +1714,50 @@ fn open_downloads(engine: tauri::State<Engine>) -> Result<(), String> {
 
 #[tauri::command]
 fn clear_finished(engine: tauri::State<Engine>) -> Result<(), String> {
+    change_records(&engine, |jobs| {
+        for job in jobs.iter_mut().filter(|j| j.status == "done") { job.hidden_in_queue = true; }
+        Ok(())
+    })
+}
+
+const REMOVABLE: [&str; 4] = ["done", "error", "cancelled", "interrupted"];
+
+// Applies a change to the task records, drops those hidden everywhere and saves.
+fn change_records(engine: &Engine, change: impl FnOnce(&mut Vec<Job>) -> Result<(), String>) -> Result<(), String> {
     let mut d = engine.data.lock().unwrap();
     let old = d.clone();
-    d.jobs.retain(|j| j.status != "done");
+    change(&mut d.jobs)?;
+    d.jobs.retain(|j| !(j.hidden_in_queue && (j.hidden_in_library || j.status != "done")));
     if let Err(e) = save(&engine.dir, &d) { *d = old; return Err(e); }
     Ok(())
+}
+
+// A finished download leaves the queue but stays in the library.
+#[tauri::command]
+fn remove_job(id: u64, engine: tauri::State<Engine>) -> Result<(), String> {
+    change_records(&engine, |jobs| {
+        let job = jobs.iter_mut().find(|j| j.id == id).ok_or("Task not found")?;
+        if !REMOVABLE.contains(&job.status.as_str()) { return Err("Stop the task before removing it".into()); }
+        job.hidden_in_queue = true;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+fn remove_from_library(id: u64, engine: tauri::State<Engine>) -> Result<(), String> {
+    change_records(&engine, |jobs| {
+        let job = jobs.iter_mut().find(|j| j.id == id && j.status == "done").ok_or("Task not found")?;
+        job.hidden_in_library = true;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+fn clear_library(engine: tauri::State<Engine>) -> Result<(), String> {
+    change_records(&engine, |jobs| {
+        for job in jobs.iter_mut().filter(|j| j.status == "done") { job.hidden_in_library = true; }
+        Ok(())
+    })
 }
 
 #[derive(Serialize)]
@@ -1993,15 +2133,19 @@ fn window_action(window: tauri::WebviewWindow, action: String) -> Result<(), Str
 }
 
 pub fn run() {
-    tauri::Builder::default()
-        // A second launch only brings the running window forward; two copies would share one queue.
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+    let mut builder = tauri::Builder::default();
+    // A second launch only brings the running window forward; two copies would share one queue.
+    // A copy with its own test data shares nothing, so it may run beside the installed app.
+    if std::env::var_os("DEVILOAD_TEST_DATA_DIR").is_none() {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.unminimize();
                 let _ = window.set_focus();
             }
-        }))
+        }));
+    }
+    builder
         .plugin(tauri_plugin_autostart::Builder::new().arg("--minimized").build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
@@ -2088,7 +2232,7 @@ pub fn run() {
                     let active = d.jobs.iter().filter(|j| ["running", "cancelling", "pausing"].contains(&j.status.as_str())).count();
                     if active < d.parallel {
                         if let Some(j) = d.jobs.iter_mut().find(|j| ready_to_run(j, now_seconds())) {
-                            j.status = "running".into(); j.scheduled_at = None; let id = j.id; engine.persist(&mut d); Some(id)
+                            j.status = "running".into(); j.scheduled_at = None; j.archived = 0; let id = j.id; engine.persist(&mut d); Some(id)
                         } else { None }
                     } else { None }
                 };
@@ -2109,7 +2253,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_releases, window_action, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, search_media, inspect_media, playlist_entries, enqueue, change_job, move_job, clear_finished, reveal_download, reveal_file, open_downloads, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
+        .invoke_handler(tauri::generate_handler![set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_releases, window_action, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, search_media, inspect_media, playlist_entries, enqueue, change_job, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
         .build(tauri::generate_context!()).expect("failed to start Deviload")
         .run(|app, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event { app.state::<Engine>().stop(); }
@@ -2156,6 +2300,37 @@ mod engine_tests {
         // A second import adds nothing new.
         assert_eq!(import_legacy_into(old, &mut data, data_dir.path()).unwrap().files, 0);
         assert_eq!(data.jobs.len(), 2);
+    }
+    #[test]
+    fn queue_and_library_forget_files_independently() {
+        let dir = tempfile::tempdir().unwrap();
+        let job = |id: u64, status: &str| Job { id, url: String::new(), options: Options::default(), status: status.into(),
+            percent: 0.0, speed: String::new(), file: format!("file{id}.mp4"), log: vec![], scheduled_at: None, auto_retry: false,
+            retry_attempts: 0, archived: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
+        let engine = Engine { dir: dir.path().into(), data: Arc::new(Mutex::new(Snapshot {
+            jobs: vec![job(1, "done"), job(2, "done"), job(3, "error"), job(4, "running")], ..Snapshot::default() })),
+            shutdown: Arc::new(AtomicBool::new(false)) };
+        let ids = |engine: &Engine| engine.data.lock().unwrap().jobs.iter().map(|j| j.id).collect::<Vec<_>>();
+        // Leaving the queue keeps a finished file in the library; a failed task just goes.
+        change_records(&engine, |jobs| { for j in jobs.iter_mut().filter(|j| [1, 3].contains(&j.id)) { j.hidden_in_queue = true; } Ok(()) }).unwrap();
+        assert_eq!(ids(&engine), [1, 2, 4]);
+        assert!(engine.data.lock().unwrap().jobs[0].hidden_in_queue);
+        // Leaving the library too removes the record for good.
+        change_records(&engine, |jobs| { jobs[0].hidden_in_library = true; Ok(()) }).unwrap();
+        assert_eq!(ids(&engine), [2, 4]);
+        // Hidden only in the library, it stays in the queue.
+        change_records(&engine, |jobs| { jobs[0].hidden_in_library = true; Ok(()) }).unwrap();
+        assert_eq!(ids(&engine), [2, 4]);
+        let saved: Snapshot = serde_json::from_slice(&fs::read(dir.path().join("queue.json")).unwrap()).unwrap();
+        assert!(saved.jobs[0].hidden_in_library && !saved.jobs[0].hidden_in_queue);
+        // A running task refuses to be removed.
+        let error = change_records(&engine, |jobs| {
+            let running = jobs.iter_mut().find(|j| j.id == 4).unwrap();
+            if !REMOVABLE.contains(&running.status.as_str()) { return Err("busy".into()); }
+            Ok(())
+        });
+        assert!(error.is_err());
+        assert_eq!(ids(&engine), [2, 4]);
     }
     #[test]
     fn the_tray_badge_sits_in_the_corner() {
@@ -2217,7 +2392,7 @@ mod engine_tests {
         assert!(!huge.ready);
         let duplicate = Job { id: 1, url: "https://example.com/video".into(), options: options.clone(),
             status: "done".into(), percent: 100.0, speed: String::new(), file: String::new(),
-            log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, pid: None };
+            log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
         let report = check_preflight("https://example.com/video", &options, None, &[duplicate]).unwrap();
         assert!(report.warnings.iter().any(|warning| warning.contains("history")));
     }
@@ -2293,7 +2468,7 @@ mod engine_tests {
         });
         let job = Job { id: 1, url: format!("http://127.0.0.1:{port}/fixture.mp4"),
             options: Options { folder: dir.path().join("downloads").to_string_lossy().into(), quality: "wav".into(), archive: false, ..Options::default() },
-            status: "running".into(), percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, pid: None };
+            status: "running".into(), percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
         let engine = Engine { dir: dir.path().into(), data: Arc::new(Mutex::new(Snapshot { jobs: vec![job.clone()], ..Snapshot::default() })), shutdown: Arc::new(AtomicBool::new(false)) };
         engine.run_job(1);
         let mut mobile_job = job.clone();
@@ -2357,7 +2532,8 @@ mod engine_tests {
         let render = |project: &ProjectExport, name: &str, music: Option<&Source>| {
             let output = dir.path().join(name);
             let sources: Vec<Source> = project.clips.iter().map(|_| probed()).collect();
-            render_project(&sources, project, music, &output, &|_| {}).map(|_| output)
+            let pieces: Vec<Source> = project.audio.iter().map(|_| probed()).collect();
+            render_project(&sources, project, music, &pieces, &output, &|_| {}).map(|_| output)
         };
         // Two clips, the second twice as fast with a caption and fades, on a vertical canvas.
         let styled = ClipLook { speed: 2.0, fade_in: true, fade_out: true, rotate: 90, flip: true, brightness: 0.1,
@@ -2367,7 +2543,7 @@ mod engine_tests {
         let shares = Mutex::new(Vec::new());
         let sources = vec![probed(), probed()];
         let video = dir.path().join("vertical.mp4");
-        render_project(&sources, &vertical, None, &video, &|share| shares.lock().unwrap().push(share)).unwrap();
+        render_project(&sources, &vertical, None, &[], &video, &|share| shares.lock().unwrap().push(share)).unwrap();
         assert!((video_duration(&video).unwrap() - 1.6).abs() < 0.25, "{}", video_duration(&video).unwrap());
         assert_eq!(probe_source(&video).unwrap().width, 480);
         assert_eq!(probe_source(&video).unwrap().height, 854);
@@ -2402,6 +2578,17 @@ mod engine_tests {
         let audio = render(&ProjectExport { clips: vec![clip(0.2, 0.8, ClipLook::default())], format: "mp3".into(),
             ..ProjectExport::default() }, "clip.mp3", None).unwrap();
         assert!(media_has_audio(&audio).unwrap());
+        // Sound taken off a muted clip plays half a second later over the music; the result keeps the video length.
+        let piece = |at: f64| ProjectAudio { job_id: 1, start: 0.0, end: 1.0, at, speed: 1.0, volume: 0.8, fade_in: true, fade_out: false };
+        let detached = ProjectExport { clips: vec![clip(0.0, 2.0, ClipLook { volume: 0.0, ..ClipLook::default() })],
+            audio: vec![piece(0.5), piece(5.0)], music: Some(ProjectMusic { job_id: 3, volume: 0.5 }), quality: 480, ..ProjectExport::default() };
+        let moved = render(&detached, "detached.mp4", Some(&music)).unwrap();
+        assert!(media_has_audio(&moved).unwrap());
+        assert!((video_duration(&moved).unwrap() - 2.0).abs() < 0.25, "{}", video_duration(&moved).unwrap());
+        let moved_audio = render(&ProjectExport { format: "mp3".into(), music: None, ..detached.clone() }, "detached.mp3", None).unwrap();
+        assert!((video_duration(&moved_audio).unwrap() - 2.0).abs() < 0.25, "{}", video_duration(&moved_audio).unwrap());
+        let outside = ProjectExport { audio: vec![ProjectAudio { end: 9.0, ..piece(0.0) }], ..detached.clone() };
+        assert!(render(&outside, "bad-sound.mp4", Some(&music)).is_err());
         // Invalid input is rejected before FFmpeg runs.
         assert!(render(&ProjectExport { clips: vec![clip(1.5, 3.0, ClipLook::default())], ..ProjectExport::default() }, "bad.mp4", None).is_err());
         assert!(ClipLook { speed: 4.0, ..ClipLook::default() }.validate().is_err());
@@ -2440,7 +2627,7 @@ mod engine_tests {
     fn scheduled_jobs_wait_and_transient_errors_retry() {
         let mut job = Job { id: 1, url: "https://example.com".into(), options: Options::default(),
             status: "queued".into(), percent: 0.0, speed: String::new(), file: String::new(),
-            log: vec![], scheduled_at: Some(200), auto_retry: true, retry_attempts: 0, pid: None };
+            log: vec![], scheduled_at: Some(200), auto_retry: true, retry_attempts: 0, archived: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
         assert!(!ready_to_run(&job, 199));
         assert!(ready_to_run(&job, 200));
         job.status = "paused".into();

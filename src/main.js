@@ -5,7 +5,7 @@ import {wireTour} from "./tour.js";
 import {createCutHome} from "./devil-cut.js";
 import {pop, wireMotion} from "./motion.js";
 import {hydrateMascots, mascotSpot, setPose} from "./mascot-spot.js";
-import {labels, actions, counts, orbState, mediaPreview, visibleJobs, playlistSelection, diagnoseError, isVideoJob, isLibraryAudio} from "./view-model.js";
+import {labels, actions, counts, orbState, mediaPreview, visibleJobs, playlistSelection, diagnoseError, isVideoJob, isLibraryAudio, inLibrary} from "./view-model.js";
 import {t, tn, errorText, translateMessage, translateDom, setLanguage, onLanguageChange, language, locale} from "./i18n.js";
 
 const $ = id => document.getElementById(id);
@@ -689,6 +689,26 @@ for (const button of document.querySelectorAll("[data-folder]")) {
     message(t("Save folder: {path}", {path}));
   });
 }
+function showDefaultFolder(folder) {
+  $("default-folder-text").textContent = folder || t("The folder of the last download.");
+  $("default-folder-text").title = folder || "";
+  $("default-folder-reset").hidden = !folder;
+}
+async function setDefaultFolder(folder) {
+  try {
+    const saved = await invoke("set_default_folder", {folder});
+    showDefaultFolder(saved);
+    if (saved) { $("folder").value = saved; $("folder").dispatchEvent(new Event("input", {bubbles:true})); }
+    message(saved ? t("New downloads go to {path} by default.", {path:saved}) : t("Downloads go to the folder of the last download again."));
+  } catch (error) { message(errorText(error), true); }
+}
+$("default-folder-pick").addEventListener("click", async () => {
+  const open = window.__TAURI__?.dialog?.open;
+  if (!open) { message(t("Folder selection is available in the Deviload app."), true); return; }
+  const path = await open({directory:true,multiple:false,defaultPath:$("folder").value.trim() || undefined,title:t("Choose the default save folder")}).catch(() => null);
+  if (typeof path === "string" && path) await setDefaultFolder(path);
+});
+$("default-folder-reset").addEventListener("click", () => setDefaultFolder(""));
 $("folder").addEventListener("input", () => { document.querySelectorAll("[data-folder]").forEach(item => item.classList.remove("active")); syncOptionsSummary(); });
 $("browse-folder").addEventListener("click", async () => {
   const open = window.__TAURI__?.dialog?.open;
@@ -1099,7 +1119,7 @@ $("open-youtube-view").addEventListener("click", async () => {
 });
 $("open-folder").addEventListener("click", async () => {
   if (!invoke) { message(t("The folder opens in the installed Deviload app."), true); return; }
-  try { await invoke("open_downloads"); }
+  try { await invoke("open_downloads", {folder:$("folder").value.trim() || null}); }
   catch (error) { message(errorText(error), true); }
 });
 function changeStatus(row, status) {
@@ -1230,17 +1250,22 @@ function render(data) {
     meta.replaceChildren(node("span", "", job.options.quality.toUpperCase()),
       node("span", "", nextRun || (job.status === "running" ? (job.percent >= 99.95 ? t("Processing the file") : [Math.round(job.percent) + "%", speedText(job.speed)].filter(Boolean).join(" · ")) : statusLabel(job.status))));
     const issue = job.status === "error" ? diagnoseError(job.log, Boolean(signedInPath)) : null;
+    // yt-dlp skips what the download archive lists, even when the file was deleted since.
+    const skipped = job.status === "done" && job.archived > 0 ? job.archived : 0;
     const help = row.querySelector(".job-help");
-    const helpKey = issue ? issue.title + issue.message + language() : "";
+    const helpKey = issue ? issue.title + issue.message + language() : skipped ? "archived" + skipped + (job.file ? "+" : "") + language() : "";
     if (help.dataset.key !== helpKey) {
       help.dataset.key = helpKey;
       const text = node("div", "job-help-text");
       if (issue) text.append(node("strong", "", t(issue.title)), node("span", "", t(issue.message)));
-      help.replaceChildren(...(issue ? [mascotSpot("error", "help-mascot"), text] : []));
+      else if (skipped) text.append(node("strong", "", t(job.file ? "Some items were downloaded before" : "Nothing new: downloaded before")),
+        node("span", "", tn("{count} item was skipped because it was downloaded before, even if its file was deleted since. “Download again” brings back what is missing.",
+          "{count} items were skipped because they were downloaded before, even if their files were deleted since. “Download again” brings back what is missing.", skipped)));
+      help.replaceChildren(...(issue ? [mascotSpot("error", "help-mascot"), text] : skipped ? [mascotSpot("look", "help-mascot"), text] : []));
     }
-    help.hidden = !issue;
+    help.hidden = !issue && !skipped;
     const controls = row.querySelector(".job-controls");
-    const key = actions(job.status).join(",") + (issue?.action || "") + (isVideoJob(job) ? "|video" : job.status === "done" && job.file ? "|file" : "");
+    const key = actions(job.status).join(",") + (skipped ? "|again" : "") + (issue?.action || "") + (isVideoJob(job) ? "|video" : job.status === "done" && job.file ? "|file" : "");
     if (controls.dataset.actions !== key) {
       controls.dataset.actions = key;
       controls.replaceChildren();
@@ -1278,6 +1303,19 @@ function render(data) {
         addAction(controls, t("To phone"), "transfer-button", () => startShare(job.id), t("Send this file to a phone with a QR code."), "phone-transfer");
         if (isAudioJob(job)) addAction(controls, t("Audio"), "quiet edit-action", () => openAudioTools(job.id), t("Edit tags or normalize loudness."));
         if (isVideoJob(job)) addAction(controls, "Devil Cut", "quiet edit-action", () => devilCut.open(job.id), t("Trim the video or make a GIF locally."), "scissors");
+      }
+      if (skipped) {
+        addAction(controls, t("Download again"), "quiet", async event => {
+          event.currentTarget.disabled = true;
+          try { await invoke("change_job", {id:job.id, action:"again"}); await refresh(); }
+          catch (error) { message(errorText(error), true); }
+        }, t("Download without the archive check; files still on the disk are not downloaded twice."), "arrow-clockwise");
+      }
+      if (["done", "error", "cancelled", "interrupted"].includes(job.status)) {
+        addAction(controls, t("Remove"), "quiet", async () => {
+          try { await invoke("remove_job", {id:job.id}); await refresh(); }
+          catch (error) { message(errorText(error), true); }
+        }, job.status === "done" ? t("Remove from the queue. The file stays in the library.") : t("Remove from the queue."), "x-circle");
       }
       addAction(controls, t("Log"), "quiet", () => {
         logJobId = job.id;
@@ -1349,9 +1387,11 @@ $("library-edit-save").addEventListener("click", () => {
 });
 $("library-collection").addEventListener("change", renderMediaLibrary);
 refreshCollections();
+let libraryKey = "";
 function renderMediaLibrary() {
-  const done = jobs.filter(job => job.status === "done" && job.file);
+  const done = jobs.filter(inLibrary);
   $("media-library-total").textContent = String(done.length);
+  $("clear-library").hidden = !done.length;
   const visible = done.filter(job => {
     if (mediaFilter === "audio" && !isLibraryAudio(job)) return false;
     if (mediaFilter === "video" && isLibraryAudio(job)) return false;
@@ -1361,6 +1401,10 @@ function renderMediaLibrary() {
     return [job.file, job.url, entry.collection, ...(entry.tags || [])].join(" ").toLocaleLowerCase().includes(mediaSearch);
   });
   cinemaIds = visible.map(job => job.id);
+  // The queue is polled every second; rebuilding unchanged cards resets hover and closes open menus.
+  const key = JSON.stringify([t("More"), done.length, visible.map(job => [job.id, job.file, job.url, libraryEntry(job)])]);
+  if (key === libraryKey) return;
+  libraryKey = key;
   const grid = $("media-library-grid");
   grid.replaceChildren();
   $("media-library-empty").hidden = visible.length > 0;
@@ -1398,12 +1442,22 @@ function renderMediaLibrary() {
     }, "", "folder-open");
     if (isAudioJob(job)) addAction(moreActions, t("Audio"), "quiet", () => openAudioTools(job.id));
     else if (isVideoJob(job)) addAction(moreActions, "Devil Cut", "quiet", () => devilCut.open(job.id), "", "scissors");
+    addAction(moreActions, t("Remove from library"), "quiet", async () => {
+      try { await invoke("remove_from_library", {id:job.id}); await refresh(); message(t("Removed from the library. The file stays on the disk.")); }
+      catch (error) { message(errorText(error), true); }
+    }, t("The file stays on the disk."), "trash");
     buttons.append(more);
     info.append(buttons);
     card.append(art, info);
     grid.append(card);
   }
 }
+$("clear-library").addEventListener("click", async () => {
+  const ask = window.__TAURI__?.dialog?.ask;
+  if (ask && !(await ask(t("Clear the library? The files stay on the disk, only the list is emptied."), {title:"Deviload", kind:"warning"}))) return;
+  try { await invoke("clear_library"); await refresh(); message(t("The library is empty. The files stay on the disk.")); }
+  catch (error) { message(errorText(error), true); }
+});
 $("find-duplicates").addEventListener("click", async () => {
   if (!invoke) return;
   const button = $("find-duplicates"), results = $("duplicate-results");
@@ -1458,6 +1512,15 @@ if (invoke && navigator.userAgent.includes("Windows")) {
   });
   topbar.addEventListener("dblclick", event => {
     if (event.target === topbar) invoke("window_action", {action:"toggle_maximize"}).catch(() => {});
+  });
+  // An open dialog covers the top bar; its header and the dimmed area around it move the window.
+  document.addEventListener("pointerdown", event => {
+    const dialog = event.button === 0 ? event.target.closest?.("dialog[open]") : null;
+    if (!dialog) return;
+    const box = dialog.getBoundingClientRect();
+    const outside = event.target === dialog && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom);
+    const header = event.target.closest(".dialog-head") && !event.target.closest("button, input, select, textarea, a, summary, label");
+    if (outside || header) invoke("window_action", {action:"start_dragging"}).catch(() => {});
   });
 }
 async function refresh() {
@@ -1564,7 +1627,7 @@ $("add").addEventListener("click", async () => {
 });
 $("clear").addEventListener("click", async () => {
   if (!invoke) return;
-  try { await invoke("clear_finished"); await refresh(); message(t("Finished tasks removed from the list.")); }
+  try { await invoke("clear_finished"); await refresh(); message(t("Finished tasks left the queue. They stay in the library.")); }
   catch (error) { message(errorText(error), true); }
 });
 $("close-log").addEventListener("click", () => $("log-dialog").close());
@@ -1708,7 +1771,8 @@ async function init() {
   if (!invoke) { $("engines").textContent = ""; $("add").disabled = true; return; }
   try {
     const data = await invoke("snapshot"), options = data.options;
-    $("folder").value = options.folder;
+    $("folder").value = data.defaultFolder || options.folder;
+    showDefaultFolder(data.defaultFolder);
     $("profile").value = options.profile || "custom";
     signedInPath = await invoke("youtube_login_status");
     const modes = [...$("cookies-mode").options].map(option => option.value);

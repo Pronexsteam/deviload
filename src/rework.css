@@ -584,7 +584,7 @@ html[data-motion="reduced"] .mascot-stage[data-reaction="cinema"] .mascot-spark,
 .media-library-actions .transfer-button:hover,.cinema-controls .transfer-button:hover{background:#984233;border-color:#ffab83;transform:translateY(-1px)}
 .transfer-button .icon{width:15px;height:15px;margin:0}
 .cinema-controls .transfer-button{font-size:12px;padding:8px 11px}
-.share-dialog{position:relative}
+.share-dialog{position:fixed}
 .share-mascot{position:absolute;right:4px;top:118px;width:68px;height:80px;pointer-events:none;filter:drop-shadow(0 3px 6px #0009)}
 .share-mascot img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .2s}
 .share-dialog[data-phase="waiting"] .share-mascot-wait,.share-dialog[data-phase="sending"] .share-mascot-sending,.share-dialog[data-phase="complete"] .share-mascot-done{opacity:1}

@@ -235,8 +235,17 @@ pub struct Job {
     pub auto_retry: bool,
     #[serde(default)]
     pub retry_attempts: u8,
+    // Items of the last run that yt-dlp skipped because the download archive lists them.
+    #[serde(default)]
+    pub archived: u32,
     #[serde(skip)]
     pub pid: Option<u32>,
+    // The queue and the library can each drop a finished file; the record goes
+    // away only when both did. Files on disk are never touched.
+    #[serde(default)]
+    pub hidden_in_queue: bool,
+    #[serde(default)]
+    pub hidden_in_library: bool,
 }
 impl Job {
     pub fn consume(&mut self, line: &str) {
@@ -252,6 +261,8 @@ impl Job {
         } else if let Some(json) = line.strip_prefix("DEVI_FILE:") {
             if let Ok(file) = serde_json::from_str::<String>(json) { self.file = file; }
         } else {
+            // The archive skips a video even when its file was deleted since; the UI offers to download it again.
+            if line.contains("has already been recorded in the archive") { self.archived += 1; }
             // Keep diagnostic output bounded even for long playlists.
             if self.log.len() >= 100 { self.log.remove(0); }
             self.log.push(line.chars().take(2000).collect());
@@ -262,6 +273,16 @@ impl Job {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test] fn archive_skips_are_counted() {
+        let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(), percent: 0.0, speed: String::new(),
+            file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, pid: None,
+            hidden_in_queue: false, hidden_in_library: false };
+        job.consume("[download] Song one has already been recorded in the archive");
+        job.consume("[download] Downloading item 2 of 2");
+        job.consume("[download] Song two has already been recorded in the archive");
+        assert_eq!(job.archived, 2);
+        assert!(job.file.is_empty());
+    }
     #[test] fn proxy_accepts_known_schemes_only() {
         assert_eq!(parse_proxy("  ").unwrap(), "");
         assert_eq!(parse_proxy("socks5://127.0.0.1:1080/").unwrap(), "socks5://127.0.0.1:1080");
@@ -344,7 +365,7 @@ mod tests {
     }
     #[test] fn progress_is_not_completion() {
         let mut j = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(),
-            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, pid: None };
+            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
         j.consume(r#"DEVI_PROGRESS:{"downloaded_bytes":100,"total_bytes":100,"speed":1048576}"#);
         assert_eq!(j.percent, 100.0);
         assert_eq!(j.status, "running");

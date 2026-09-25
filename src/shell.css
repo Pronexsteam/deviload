@@ -285,6 +285,8 @@ dialog.app-settings-dialog { width: min(560px, calc(100vw - 32px)); max-height: 
 .setting-row strong { display: block; font-size: 13px; color: var(--ink); }
 .app-settings-dialog .setting-row p { margin: 3px 0 0; font-size: 11.5px; line-height: 1.4; color: var(--muted); }
 .setting-row > button { flex: none; }
+.setting-actions { display: flex; flex: none; gap: 6px; }
+#default-folder-text { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .switch {
   flex: none;
   position: relative;
@@ -404,19 +406,40 @@ body.cut-page { display: block; min-width: 0; height: 100vh; margin: 0; padding:
 .cut-tool:disabled { opacity: .38; cursor: default; }
 .cut-sep { width: 1px; height: 20px; margin: 0 6px; background: #2f373f; }
 .cut-total { margin-left: auto; font: 600 12px/1 ui-monospace, Consolas, monospace; color: #c9d1d7; }
-.cut-timeline { position: relative; height: 158px; background: #0f1216; }
-.cut-scroll { height: 100%; overflow-x: auto; overflow-y: hidden; }
-.cut-lane { position: relative; height: 100%; min-width: 100%; user-select: none; }
-.cut-ruler { position: relative; height: 24px; border-bottom: 1px solid #242b32; cursor: pointer; touch-action: none; }
+.cut-timeline { position: relative; height: var(--cut-timeline, clamp(230px, 34vh, 340px)); background: #0f1216; }
+.cut-resize { position: absolute; top: -5px; right: 0; left: 0; z-index: 9; height: 10px; cursor: ns-resize; touch-action: none; }
+.cut-resize::after { content: ""; position: absolute; top: 3px; left: calc(50% - 22px); width: 44px; height: 4px; border-radius: 3px; background: #3a434c; transition: background .15s, width .15s, left .15s; }
+.cut-resize:hover::after, .cut-resize.dragging::after, .cut-resize:focus-visible::after { left: calc(50% - 32px); width: 64px; background: var(--accent); }
+.cut-resize:focus-visible { outline: none; }
+.cut-scroll { height: 100%; overflow: auto; }
+.cut-lane { position: relative; display: grid; grid-template-rows: 24px minmax(52px, 1fr) 38px auto 30px; row-gap: 6px; min-width: 100%; min-height: 100%; padding-bottom: 8px; user-select: none; }
+.cut-ruler { position: sticky; top: 0; z-index: 7; height: 24px; border-bottom: 1px solid #242b32; background: #0f1216; cursor: pointer; touch-action: none; }
 .cut-tick { position: absolute; top: 5px; padding-left: 4px; border-left: 1px solid #3a434c; font-size: 10px; color: #8f99a3; }
 .cut-track { position: relative; display: flex; align-items: stretch; touch-action: none; }
-.cut-track-video { height: 74px; margin-top: 8px; }
-.cut-track-music { height: 34px; margin-top: 8px; cursor: pointer; }
+.cut-track-video { min-height: 0; }
+.cut-track-music { cursor: pointer; }
+.cut-track-sound { cursor: pointer; }
+.cut-track-audio { display: block; min-height: 30px; }
+.cut-sound { position: relative; flex: none; height: 100%; overflow: hidden; border: 1px solid #4a3a33; border-radius: 7px; background: #211a17; }
+.cut-sound .cut-clip-wave { top: 0; height: auto; opacity: .8; }
+.cut-sound.selected { border-color: var(--accent); }
+.cut-sound.muted { border-style: dashed; background: #15181c; }
+.cut-sound.muted .cut-clip-wave { opacity: .16; }
+.cut-sound-label { position: absolute; top: 50%; left: 8px; transform: translateY(-50%); font-size: 10.5px; font-weight: 700; color: #ffd6c8; text-shadow: 0 1px 3px #000; pointer-events: none; }
+.cut-piece { position: absolute; height: 26px; overflow: hidden; border: 1px solid #3c5566; border-radius: 7px; background: #182530; cursor: grab; }
+.cut-piece .cut-clip-wave { top: 0; height: auto; opacity: .7; }
+.cut-piece.selected { z-index: 2; border-color: #7cc4ff; box-shadow: 0 0 12px #5fb2ff44; }
+.cut-piece.dragging { z-index: 5; opacity: .85; cursor: grabbing; }
+.cut-piece:hover .cut-trim, .cut-piece.selected .cut-trim { opacity: 1; }
+.cut-piece .cut-trim { width: 7px; background: #7cc4ffd0; }
+.cut-piece-label { position: absolute; top: 50%; left: 10px; max-width: calc(100% - 20px); overflow: hidden; transform: translateY(-50%); font-size: 10.5px; font-weight: 700; color: #e4f2ff; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 3px #000; pointer-events: none; }
+.cut-sound-name { font-size: 13px; overflow-wrap: anywhere; }
+#cut-sound-body { gap: 12px; }
 .cut-clip { position: relative; flex: none; height: 100%; overflow: hidden; border: 2px solid #3a434c; border-radius: 8px; background: #1b2128; cursor: grab; }
 .cut-clip.selected { z-index: 2; border-color: var(--accent); box-shadow: 0 0 16px #ff5a3255; }
 .cut-clip.dragging { z-index: 5; opacity: .85; cursor: grabbing; }
-.cut-clip-strip { position: absolute; inset: 0; display: flex; }
-.cut-clip-strip img { flex: 1; min-width: 0; height: 100%; object-fit: cover; opacity: .72; pointer-events: none; }
+.cut-clip-strip { position: absolute; inset: 0; overflow: hidden; }
+.cut-clip-strip img { position: absolute; top: 0; height: 100%; object-fit: cover; opacity: .72; pointer-events: none; }
 .cut-clip-label, .cut-clip-info { position: absolute; left: 10px; max-width: calc(100% - 20px); overflow: hidden; font-size: 11px; font-weight: 700; color: #fff; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 3px #000; pointer-events: none; }
 .cut-clip-label { top: 5px; }
 .cut-clip-info { bottom: 5px; font-weight: 600; color: #ffd6c8; }
@@ -424,12 +447,13 @@ body.cut-page { display: block; min-width: 0; height: 100vh; margin: 0; padding:
 .cut-trim-start { left: 0; }
 .cut-trim-end { right: 0; }
 .cut-clip:hover .cut-trim, .cut-clip.selected .cut-trim { opacity: 1; }
+.icon[data-icon="link-break"] { --glyph: url("assets/icons/link-break.svg"); }
 .cut-music { display: flex; align-items: center; gap: 8px; height: 100%; padding: 0 8px; border: 1px solid #3a5a48; border-radius: 7px; background: linear-gradient(90deg, #1d3328, #172920); }
 .cut-music .cut-clip-label { position: static; max-width: 260px; }
 .cut-music input[type=range] { width: 110px; accent-color: #5fd38a; }
 .cut-music-remove { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: #ffffff14; color: #dfe5e9; cursor: pointer; }
 .cut-track-hint { align-self: center; padding-left: 8px; font-size: 11px; color: var(--muted); }
-.cut-playhead { position: absolute; top: 0; bottom: 0; z-index: 6; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 6px #fffa; pointer-events: none; }
+.cut-playhead { position: absolute; top: 0; bottom: 0; z-index: 8; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 6px #fffa; pointer-events: none; }
 .cut-playhead::before { content: ""; position: absolute; top: 0; left: -6px; border: 7px solid transparent; border-top-color: #fff; }
 .cut-foot { display: flex; align-items: center; gap: 12px; min-height: 42px; padding: 6px 16px; border-top: 1px solid #2a3139; background: #13171c; }
 .cut-foot #edit-status { flex: 1; margin: 0; font-size: 12px; color: #a9d5b5; }
@@ -478,7 +502,6 @@ select:disabled, input:disabled { opacity: .5; }
 
 /* Devil Cut: sound waves and transitions */
 .cut-clip-wave { position: absolute; left: 0; right: 0; bottom: 0; height: 22px; background-repeat: no-repeat; opacity: .75; pointer-events: none; }
-.cut-clip .cut-clip-info { bottom: 24px; }
 .cut-music { position: relative; }
 .cut-music-wave { top: 0; height: auto; opacity: .45; }
 .cut-clip.has-transition { z-index: 1; box-shadow: -6px 0 12px #0009; }

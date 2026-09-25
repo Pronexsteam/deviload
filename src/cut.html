@@ -37,7 +37,16 @@
       </div>
     </section>
     <aside id="cut-inspector" class="cut-inspector" aria-label="Clip settings">
-      <div id="cut-inspector-empty" class="cut-inspector-empty"><strong>Select a clip on the timeline</strong><p>Its speed, sound, frame, color and caption settings appear here.</p></div>
+      <div id="cut-inspector-empty" class="cut-inspector-empty"><strong>Select a clip or a sound on the timeline</strong><p>Its speed, sound, frame, color and caption settings appear here.</p></div>
+      <div id="cut-sound-body" class="cut-look" hidden>
+        <span class="cut-label">Separate sound</span>
+        <strong id="cut-sound-name" class="cut-sound-name"></strong>
+        <label class="cut-slider" for="cut-sound-volume"><span class="cut-label">Volume <b id="cut-sound-volume-value">100%</b></span><input id="cut-sound-volume" type="range" min="0" max="200" step="5" value="100"></label>
+        <label class="switch-line" for="cut-sound-fade-in"><input id="cut-sound-fade-in" type="checkbox"><span class="switch-ui" aria-hidden="true"></span><span>Smooth start</span></label>
+        <label class="switch-line" for="cut-sound-fade-out"><input id="cut-sound-fade-out" type="checkbox"><span class="switch-ui" aria-hidden="true"></span><span>Smooth end</span></label>
+        <p class="cut-note">Drag the sound along its track to move it and its edges to trim it. Ctrl+B splits it at the playhead.</p>
+        <button id="cut-sound-delete" class="outline small" type="button"><span class="icon" data-icon="trash" aria-hidden="true"></span>Delete the sound</button>
+      </div>
       <div id="cut-inspector-body" hidden>
         <div class="cut-media-tabs" role="tablist"><button type="button" role="tab" data-look-tab="basic" class="selected" aria-selected="true">Basic</button><button type="button" role="tab" data-look-tab="frame" aria-selected="false">Frame</button><button type="button" role="tab" data-look-tab="color" aria-selected="false">Color</button><button type="button" role="tab" data-look-tab="text" aria-selected="false">Text</button></div>
         <section class="cut-look" data-look-pane="basic">
@@ -80,6 +89,7 @@
     <button id="cut-split" class="cut-tool wide" type="button" title="Split at the playhead (Ctrl+B)"><span class="icon" data-icon="scissors" aria-hidden="true"></span>Split</button>
     <button id="cut-duplicate" class="cut-tool wide" type="button" title="Duplicate (Ctrl+D)"><span class="icon" data-icon="copy" aria-hidden="true"></span>Duplicate</button>
     <button id="cut-delete" class="cut-tool wide" type="button" title="Delete (Delete)"><span class="icon" data-icon="trash" aria-hidden="true"></span>Delete</button>
+    <button id="cut-detach" class="cut-tool wide" type="button" title="Put the sound of the selected clip on its own track"><span class="icon" data-icon="link-break" aria-hidden="true"></span>Detach sound</button>
     <span class="cut-sep" aria-hidden="true"></span>
     <button id="cut-zoom-out" class="cut-tool" type="button" title="Zoom out (−)" aria-label="Zoom out">−</button>
     <input id="cut-zoom" class="cut-zoom" type="range" min="0" max="100" step="1" value="40" aria-label="Timeline zoom" title="Timeline zoom (Ctrl + mouse wheel)">
@@ -88,11 +98,14 @@
     <span id="cut-total" class="cut-total"></span>
   </div>
   <div id="cut-timeline" class="cut-timeline" aria-label="Timeline">
+    <div id="cut-resize" class="cut-resize" role="separator" aria-orientation="horizontal" aria-label="Timeline height" tabindex="0" title="Drag to change the timeline height; double-click resets it"></div>
     <div id="cut-scroll" class="cut-scroll">
       <div id="cut-lane" class="cut-lane">
         <div id="cut-ruler" class="cut-ruler"></div>
-        <div id="cut-video-track" class="cut-track cut-track-video"></div>
-        <div id="cut-music-track" class="cut-track cut-track-music"></div>
+        <div id="cut-video-track" class="cut-track cut-track-video" aria-label="Video"></div>
+        <div id="cut-sound-track" class="cut-track cut-track-sound" aria-label="Sound of the clips"></div>
+        <div id="cut-audio-track" class="cut-track cut-track-audio" aria-label="Separate sounds"></div>
+        <div id="cut-music-track" class="cut-track cut-track-music" aria-label="Music"></div>
         <div id="cut-playhead" class="cut-playhead" aria-hidden="true"></div>
       </div>
     </div>

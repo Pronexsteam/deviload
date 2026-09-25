@@ -45,7 +45,8 @@ export function wireTour(navigate) {
       if (top + height > innerHeight - margin) top = target.top - height - 30;
     }
     left = Math.max(margin, Math.min(left, innerWidth - width - margin));
-    top = Math.max(margin, Math.min(top, innerHeight - height - margin));
+    // The mascot sits on the top edge of the card and needs room above it.
+    top = Math.max(margin + 44, Math.min(top, innerHeight - height - margin));
     card.style.left = `${left}px`;
     card.style.top = `${top}px`;
     const box = card.getBoundingClientRect();
