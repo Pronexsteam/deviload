@@ -1,11 +1,11 @@
 {
-  "version": "2.0.1",
-  "notes": "https://github.com/Pronexsteam/deviload/releases/tag/v2.0.1",
-  "pub_date": "2026-09-25T02:29:31Z",
+  "version": "2.1.0",
+  "notes": "https://github.com/Pronexsteam/deviload/releases/tag/v2.1.0",
+  "pub_date": "2026-09-25T03:21:21Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSV1QzWkRhOGwyOFpLaXcvZ1FnV3FuS1ZPOHZQWXN1VC80Y1ZyTGd1clFrZkJYYzd4RTBmUE4wM05xeHVrNFl0TUV5TlFuNHc1aklNK210WFQvTnpxWHRBSVlMY2taamdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzAzMzcwCWZpbGU6RGV2aWxvYWRfMi4wLjFfeDY0LXNldHVwLmV4ZQl2ZXJzaW9uOjIuMC4xCldvTzFUNkJtbGh4dXpsbnpvRWN4V1hMWlAzSmkvQUVqVEpvR3FTOVBGMXE2WlNMejlKVnZvdklqbWlGL2UvalFZSmtwb2hVNHNNV0ZQR1ZSREY2akNRPT0K",
-      "url": "https://github.com/Pronexsteam/deviload/releases/download/v2.0.1/Deviload-2.0.1-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSV1QzWkRhOGwyOFRmVmprSUt6NGIyQ2cvTEwwS1hjM3k4VXJRNlZaYktLQXZhc2d4dW91Y3hXeEtzRXVtTi9TUHFjTGFpcWtSdGZvd3p3T1R2NU5BVExIZHJPWDR5QUFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzA2NDgwCWZpbGU6RGV2aWxvYWRfMi4xLjBfeDY0LXNldHVwLmV4ZQl2ZXJzaW9uOjIuMS4wCktKRlNueFhzekFxZUJFZ1hwSHZxdU1GVlV6dEZkWjRoaGlNM3lOQmllemhvL3JVZ0JQSlRwYUJqdktXeGVYK3RuYmhxcnpxRGVxSWRyY29ET1dQYkF3PT0K",
+      "url": "https://github.com/Pronexsteam/deviload/releases/download/v2.1.0/Deviload-2.1.0-setup.exe"
     }
   }
 }
