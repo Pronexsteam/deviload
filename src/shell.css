@@ -724,3 +724,8 @@ body { font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Ub
 .media-library-filters select { height: 36px; margin: 0; padding: 0 30px 0 12px; border-radius: 8px; background-color: #13181d; font-size: 12px; }
 .media-library-filters #library-collection { margin-left: auto; }
 .media-library-filters .library-view { align-items: center; height: 36px; }
+/* Channel headings when the library is grouped. */
+.library-group { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin: 14px 0 2px; font-size: 13px; color: var(--ink); }
+.library-group:first-child { margin-top: 0; }
+.library-group span { padding: 1px 7px; border-radius: 9px; background: #2a323a; color: #aeb8c0; font-size: 11px; font-weight: 700; }
+[data-view="list"] .library-group { margin: 16px 0 6px; }

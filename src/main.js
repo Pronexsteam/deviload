@@ -1532,14 +1532,17 @@ function renderMediaLibrary() {
   });
   const order = $("library-sort").value;
   const name = job => job.file.split(/[\\/]/).pop().toLocaleLowerCase();
+  // Grouped by channel: channels A to Z, files without one last, newest first inside a channel.
+  const channelOf = job => (job.channel || "").trim();
+  const byChannel = (a, b) => (!channelOf(a) - !channelOf(b)) || channelOf(a).localeCompare(channelOf(b)) || b.id - a.id;
   const compare = {new:(a, b) => b.id - a.id, old:(a, b) => a.id - b.id, size:(a, b) => (b.bytes || 0) - (a.bytes || 0),
-    length:(a, b) => (b.duration || 0) - (a.duration || 0), name:(a, b) => name(a).localeCompare(name(b))}[order] || ((a, b) => b.id - a.id);
+    length:(a, b) => (b.duration || 0) - (a.duration || 0), name:(a, b) => name(a).localeCompare(name(b)), channel:byChannel}[order] || ((a, b) => b.id - a.id);
   visible.sort(compare);
   const total = done.reduce((sum, job) => sum + (job.bytes > 1 ? job.bytes : 0), 0);
   $("media-library-size").textContent = total ? t("Takes {size}.", {size:bigSizeText(total)}) : "";
   cinemaIds = visible.map(job => job.id);
   // The queue is polled every second; rebuilding unchanged cards resets hover and closes open menus.
-  const key = JSON.stringify([t("More"), done.length, order, visible.map(job => [job.id, job.file, job.url, job.bytes, job.duration, libraryEntry(job)])]);
+  const key = JSON.stringify([t("More"), done.length, order, visible.map(job => [job.id, job.file, job.url, job.bytes, job.duration, job.channel, libraryEntry(job)])]);
   if (key === libraryKey) return;
   libraryKey = key;
   const grid = $("media-library-grid");
@@ -1547,7 +1550,15 @@ function renderMediaLibrary() {
   $("media-library-empty").hidden = visible.length > 0;
   $("media-library-empty-text").textContent = done.length ? t("Nothing matches your search.") : t("Files appear here once downloads finish.");
   setPose($("library-mascot"), done.length ? "look" : "front");
+  let group = null;
   for (const job of visible) {
+    if (order === "channel" && channelOf(job) !== group) {
+      group = channelOf(job);
+      const count = visible.filter(item => channelOf(item) === group).length;
+      const heading = node("h3", "library-group", group || t("No channel"));
+      heading.append(node("span", "", String(count)));
+      grid.append(heading);
+    }
     const card = node("article", "media-library-item");
     const art = node("div", "media-library-art");
     const preview = mediaPreview(job.url);

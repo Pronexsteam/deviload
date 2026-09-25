@@ -1014,4 +1014,6 @@ export default {
   "Large tiles": "Крупные значки",
   "Small tiles": "Мелкие значки",
   "List": "Список",
+  "By channel": "По каналам",
+  "No channel": "Без канала",
 };
