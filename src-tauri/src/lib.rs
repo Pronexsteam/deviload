@@ -384,7 +384,7 @@ fn set_default_folder(folder: String, engine: tauri::State<Engine>) -> Result<St
 
 #[tauri::command]
 fn common_folders() -> Vec<(String, String)> {
-    [("downloads", dirs::download_dir()), ("music", dirs::audio_dir()),
+    [("downloads", Some(model::download_dir())), ("music", dirs::audio_dir()),
      ("desktop", dirs::desktop_dir())].into_iter()
         .filter_map(|(name, path)| path.map(|p| (name.into(), p.to_string_lossy().into())))
         .collect()

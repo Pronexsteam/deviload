@@ -36,10 +36,16 @@ pub struct Options {
     pub format_has_audio: bool,
 }
 
+// The system Downloads folder. Linux reports it only when the XDG user folders are
+// set up, so a minimal system falls back to ~/Downloads.
+pub fn download_dir() -> PathBuf {
+    dirs::download_dir().or_else(|| dirs::home_dir().map(|home| home.join("Downloads"))).unwrap_or_else(std::env::temp_dir)
+}
+
 impl Default for Options {
     fn default() -> Self {
         Self {
-            folder: dirs::download_dir().unwrap_or_else(|| PathBuf::from(".")).to_string_lossy().into(),
+            folder: download_dir().to_string_lossy().into(),
             quality: "1080".into(), profile: "custom".into(), playlist: false, playlist_items: String::new(),
             split_chapters: false, subtitles: false, sponsorblock: false, archive: true,
             cookies: String::new(), cookies_browser: String::new(), rate_mbps: 0,
@@ -399,6 +405,10 @@ mod tests {
         assert!(Options { clip_end: Some(80.0), ..o.clone() }.validate().is_err());
         assert!(Options { playlist: true, ..o.clone() }.validate().is_err());
         assert!(Options { quality: "mp3".into(), ..o }.validate().is_err());
+    }
+    #[test] fn the_default_folder_is_always_a_full_path() {
+        assert!(download_dir().is_absolute());
+        assert!(Options::default().validate().is_ok());
     }
     #[test] fn media_server_layout() {
         let video = Options { folder_rule: "server".into(), ..Default::default() };
