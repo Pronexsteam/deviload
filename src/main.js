@@ -1759,8 +1759,9 @@ function renderWatches() {
     text.append(node("strong", "", watch.title));
     text.title = watch.url;
     const quality = labelFor(watch.quality);
-    const meta = [quality, watch.checkedAt ? t("checked {time}", {time:agoText(watch.checkedAt)}) : t("not checked yet"),
-      tn("{count} new video downloaded", "{count} new videos downloaded", watch.queued)];
+    const artist = watch.kind === "artist";
+    const meta = [artist ? t("Artist") + " · " + quality : quality, watch.checkedAt ? t("checked {time}", {time:agoText(watch.checkedAt)}) : t("not checked yet"),
+      artist ? tn("{count} album in the queue", "{count} albums in the queue", watch.queued) : tn("{count} new video downloaded", "{count} new videos downloaded", watch.queued)];
     text.append(node("small", "", meta.join(" · ")));
     if (watch.error) text.append(node("small", "watch-error", translateMessage(watch.error)));
     const check = node("button", "quiet small", t("Check now"));
@@ -1772,7 +1773,8 @@ function renderWatches() {
         setPose($("watch-mascot"), "working");
         const count = await invoke("watch_check", {id:watch.id});
         setPose($("watch-mascot"), count ? "victory" : "look", count ? "look" : null);
-        message(count ? tn("Queued {count} new video", "Queued {count} new videos", count) : t("No new videos"));
+        if (artist) message(count ? tn("Queued {count} new album", "Queued {count} new albums", count) : t("No new albums"));
+        else message(count ? tn("Queued {count} new video", "Queued {count} new videos", count) : t("No new videos"));
       } catch (error) { message(errorText(error), true); }
       finally { check.disabled = false; check.classList.remove("is-busy"); }
     });
@@ -1796,15 +1798,35 @@ async function refreshWatches() {
 function labelFor(value) {
   return {best:t("Best quality"), mp3:"MP3", flac:"FLAC", wav:"WAV"}[value] || (value + "p");
 }
-async function addWatch(address, button) {
+let watchMode = "list";
+function setWatchMode(mode) {
+  watchMode = mode;
+  for (const button of document.querySelectorAll("[data-watch-mode]")) {
+    button.classList.toggle("selected", button.dataset.watchMode === mode);
+    button.setAttribute("aria-pressed", String(button.dataset.watchMode === mode));
+  }
+  const artist = mode === "artist";
+  $("watch-help-list").hidden = artist;
+  $("watch-help-artist").hidden = !artist;
+  $("watch-backfill-row").hidden = !artist;
+  const label = t(artist ? "Artist channel link" : "Channel or playlist link");
+  $("watch-url").placeholder = label;
+  $("watch-url").setAttribute("aria-label", label);
+}
+for (const button of document.querySelectorAll("[data-watch-mode]")) button.addEventListener("click", () => setWatchMode(button.dataset.watchMode));
+onLanguageChange(() => setWatchMode(watchMode));
+async function addWatch(address, button, artist = false) {
   if (!invoke) return;
   let options;
   try { options = buildDownloadRequest().options; } catch (error) { message(errorText(error), true); return; }
   button.disabled = true;
   button.classList.add("is-busy");
   try {
-    const watch = await invoke("watch_add", {url:address, options});
-    message(t("Watching “{title}”. New videos will download by themselves.", {title:watch.title}));
+    const watch = await invoke("watch_add", {url:address, options, artist, backfill:artist && $("watch-backfill").checked});
+    if (artist) message(watch.queued
+      ? tn("Following {title}: {count} album is in the queue.", "Following {title}: {count} albums are in the queue.", watch.queued, {title:watch.title})
+      : t("Following {title}. New albums will download by themselves.", {title:watch.title}));
+    else message(t("Watching “{title}”. New videos will download by themselves.", {title:watch.title}));
     await refreshWatches();
     return watch;
   } catch (error) { message(errorText(error), true); }
@@ -1815,15 +1837,17 @@ $("watch-close").addEventListener("click", () => $("watch-dialog").close());
 $("watch-add").addEventListener("click", async () => {
   const address = $("watch-url").value.trim();
   if (!address) { $("watch-url").focus(); return; }
-  if (await addWatch(address, $("watch-add"))) $("watch-url").value = "";
+  if (await addWatch(address, $("watch-add"), watchMode === "artist")) $("watch-url").value = "";
 });
 $("watch-url").addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); $("watch-add").click(); } });
 window.__TAURI__?.event?.listen?.("watches-changed", refreshWatches);
 window.__TAURI__?.event?.listen?.("watch-found", event => {
-  const {title, count} = event.payload || {};
-  const text = tn("{count} new video from “{title}” is in the queue", "{count} new videos from “{title}” are in the queue", count, {title});
+  const {title, count, artist} = event.payload || {};
+  const text = artist
+    ? tn("{count} new album by {title} is in the queue", "{count} new albums by {title} are in the queue", count, {title})
+    : tn("{count} new video from “{title}” is in the queue", "{count} new videos from “{title}” are in the queue", count, {title});
   message(text);
-  systemNotice(t("New videos"), text);
+  systemNotice(t(artist ? "New albums" : "New videos"), text);
   brandMascot.celebrate();
   setPose($("watch-mascot"), "victory", "look");
 });

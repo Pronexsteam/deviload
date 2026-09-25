@@ -1,4 +1,6 @@
 // Watched channels and playlists: new entries are queued as ordinary downloads.
+// An artist is watched through the Releases tab of their channel: every album, EP
+// or single there is a playlist, downloaded whole into an artist / album folder.
 use crate::{binary, model::{self, Options}, now_seconds, queue_urls, save, ytdlp_command, Engine};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, fs, io::Write, path::{Path, PathBuf}, process::Stdio, sync::Mutex, thread, time::Duration};
@@ -9,6 +11,8 @@ const MAX_WATCHES: usize = 50;
 const MAX_SEEN: usize = 3000;
 // One check looks at the newest entries only; more than this at once is a flood, not an update.
 const MAX_NEW_PER_CHECK: usize = 20;
+// Releases looked at when an artist is added and the albums already out are wanted.
+const MAX_DISCOGRAPHY: usize = 100;
 
 static WATCH_LOCK: Mutex<()> = Mutex::new(());
 
@@ -27,16 +31,19 @@ pub struct Watch {
     pub queued: u64,
     #[serde(default)]
     pub error: String,
+    // "" for a channel or playlist, "artist" for an artist's releases.
+    #[serde(default)]
+    pub kind: String,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WatchView { id: u64, url: String, title: String, quality: String, checked_at: u64, queued: u64, error: String }
+pub struct WatchView { id: u64, url: String, title: String, quality: String, checked_at: u64, queued: u64, error: String, kind: String }
 
 impl From<&Watch> for WatchView {
     fn from(w: &Watch) -> Self {
         Self { id: w.id, url: w.url.clone(), title: w.title.clone(), quality: w.options.quality.clone(),
-            checked_at: w.checked_at, queued: w.queued, error: w.error.clone() }
+            checked_at: w.checked_at, queued: w.queued, error: w.error.clone(), kind: w.kind.clone() }
     }
 }
 
@@ -73,6 +80,26 @@ pub fn watch_address(url: &str) -> String {
     parsed.to_string()
 }
 
+// An artist's channel on YouTube or YouTube Music, pointed at its Releases tab.
+fn not_artist<T>() -> Result<T, String> { Err("Give a link to the artist's channel on YouTube or YouTube Music".into()) }
+
+pub fn artist_address(url: &str) -> Result<String, String> {
+    let mut parsed = url::Url::parse(url).or_else(|_| not_artist())?;
+    let host = parsed.host_str().unwrap_or("").trim_start_matches("www.").trim_start_matches("m.").to_owned();
+    if !["youtube.com", "music.youtube.com"].contains(&host.as_str()) { return not_artist(); }
+    let parts: Vec<String> = parsed.path().trim_matches('/').split('/').map(str::to_owned).collect();
+    let channel = match parts.as_slice() {
+        [handle, ..] if handle.starts_with('@') => handle.clone(),
+        [kind, name, ..] if ["channel", "c", "user"].contains(&kind.as_str()) => format!("{kind}/{name}"),
+        _ => return not_artist(),
+    };
+    parsed.set_host(Some("www.youtube.com")).or_else(|_| not_artist())?;
+    parsed.set_path(&format!("/{channel}/releases"));
+    parsed.set_query(None);
+    parsed.set_fragment(None);
+    Ok(parsed.to_string())
+}
+
 pub fn parse_entries(info: &serde_json::Value) -> (String, Vec<Entry>) {
     let title = ["title", "channel", "uploader"].iter().find_map(|key| info[*key].as_str())
         .unwrap_or("").chars().take(160).collect();
@@ -88,11 +115,11 @@ pub fn parse_entries(info: &serde_json::Value) -> (String, Vec<Entry>) {
     (title, entries)
 }
 
-fn fetch(url: &str, options: &Options) -> Result<serde_json::Value, String> {
+fn fetch(url: &str, options: &Options, limit: usize) -> Result<serde_json::Value, String> {
     let exe = binary("yt-dlp")?;
     let mut cmd = ytdlp_command(&exe);
     cmd.args(["--ignore-config", "--flat-playlist", "--dump-single-json", "--skip-download",
-        "--playlist-end", "30", "--no-warnings", "--no-colors"]);
+        "--playlist-end", &limit.to_string(), "--no-warnings", "--no-colors"]);
     // Saved or private playlists need the same sign-in as their downloads.
     if !options.cookies.is_empty() && Path::new(&options.cookies).is_file() { cmd.args(["--cookies", &options.cookies]); }
     if !options.cookies_browser.is_empty() { cmd.args(["--cookies-from-browser", &options.cookies_browser]); }
@@ -117,31 +144,46 @@ fn watch_options(mut options: Options) -> Options {
     options
 }
 
-pub fn add(dir: &Path, url: &str, options: Options) -> Result<Watch, String> {
+// Every release downloads as a whole album, as music, into artist / album folders.
+fn artist_options(options: Options) -> Options {
+    let mut options = watch_options(options);
+    if !options.audio_only() { options.quality = "mp3".into(); }
+    options.profile = "music".into();
+    options.playlist = true;
+    options.folder_rule = "server".into();
+    options.archive = true;
+    options
+}
+
+// Returns the watch and, when `backfill` is set, the releases that are already out, oldest first.
+pub fn add(dir: &Path, url: &str, options: Options, artist: bool, backfill: bool) -> Result<(Watch, Vec<String>), String> {
     let urls = model::parse_urls(url)?;
     if urls.len() != 1 { return Err("Give a single channel or playlist link".into()); }
-    let options = watch_options(options);
+    let options = if artist { artist_options(options) } else { watch_options(options) };
     options.validate()?;
-    let address = watch_address(&urls[0]);
+    let address = if artist { artist_address(&urls[0])? } else { watch_address(&urls[0]) };
     {
         let _guard = WATCH_LOCK.lock().unwrap();
         let watches = load(dir);
         if watches.len() >= MAX_WATCHES { return Err("No more than 50 watched lists".into()); }
         if watches.iter().any(|w| w.url == address) { return Err("This list is already watched".into()); }
     }
-    let info = fetch(&address, &options)?;
+    let info = fetch(&address, &options, if artist && backfill { MAX_DISCOGRAPHY } else { 30 })?;
     let (title, entries) = parse_entries(&info);
+    if entries.is_empty() && artist { return Err("This channel has no releases. Give the link of the artist's own channel".into()); }
     if entries.is_empty() { return Err("This link has no list of videos to watch".into()); }
     let _guard = WATCH_LOCK.lock().unwrap();
     let mut watches = load(dir);
     if watches.iter().any(|w| w.url == address) { return Err("This list is already watched".into()); }
-    // What is there now counts as seen: only later additions download.
-    let watch = Watch { id: watches.iter().map(|w| w.id).max().unwrap_or(0) + 1, url: address,
-        title: if title.is_empty() { urls[0].clone() } else { title }, options,
-        seen: entries.into_iter().map(|entry| entry.key).collect(), checked_at: now_seconds(), queued: 0, error: String::new() };
+    // What is there now counts as seen: only later additions download, unless the albums already out are wanted.
+    let now: Vec<String> = if backfill && artist { entries.iter().rev().map(|entry| entry.url.clone()).collect() } else { vec![] };
+    let title = if title.is_empty() { urls[0].clone() } else { title.trim_end_matches(" - Releases").to_owned() };
+    let watch = Watch { id: watches.iter().map(|w| w.id).max().unwrap_or(0) + 1, url: address, title, options,
+        seen: entries.into_iter().map(|entry| entry.key).collect(), checked_at: now_seconds(), queued: now.len() as u64,
+        error: String::new(), kind: if artist { "artist".into() } else { String::new() } };
     watches.push(watch.clone());
     store(dir, &watches)?;
-    Ok(watch)
+    Ok((watch, now))
 }
 
 // Returns the new entries in list order and remembers every key it saw.
@@ -167,7 +209,7 @@ pub fn check(engine: &Engine, id: u64) -> Result<(String, usize), String> {
         let _guard = WATCH_LOCK.lock().unwrap();
         load(&engine.dir).into_iter().find(|w| w.id == id).ok_or("The list is not watched any more")?
     };
-    let result = fetch(&watch.url, &watch.options);
+    let result = fetch(&watch.url, &watch.options, 30);
     let _guard = WATCH_LOCK.lock().unwrap();
     let mut watches = load(&engine.dir);
     let Some(current) = watches.iter_mut().find(|w| w.id == id) else { return Ok((watch.title, 0)) };
@@ -200,12 +242,12 @@ pub fn check(engine: &Engine, id: u64) -> Result<(String, usize), String> {
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct Found { title: String, count: usize }
+struct Found { title: String, count: usize, artist: bool }
 
-fn announce(app: &tauri::AppHandle, found: Option<(String, usize)>) {
+fn announce(app: &tauri::AppHandle, found: Option<(String, usize)>, artist: bool) {
     let _ = app.emit("watches-changed", ());
     if let Some((title, count)) = found.filter(|(_, count)| *count > 0) {
-        let _ = app.emit("watch-found", Found { title, count });
+        let _ = app.emit("watch-found", Found { title, count, artist });
     }
 }
 
@@ -216,14 +258,14 @@ pub fn start(app: tauri::AppHandle) {
         loop {
             let engine = app.state::<Engine>().inner().clone();
             if engine.shutdown.load(std::sync::atomic::Ordering::Relaxed) { break; }
-            let due: Vec<u64> = {
+            let due: Vec<(u64, bool)> = {
                 let _guard = WATCH_LOCK.lock().unwrap();
-                load(&engine.dir).iter().filter(|w| now_seconds().saturating_sub(w.checked_at) >= CHECK_EVERY).map(|w| w.id).collect()
+                load(&engine.dir).iter().filter(|w| now_seconds().saturating_sub(w.checked_at) >= CHECK_EVERY).map(|w| (w.id, w.kind == "artist")).collect()
             };
-            for id in due {
+            for (id, artist) in due {
                 if engine.shutdown.load(std::sync::atomic::Ordering::Relaxed) { return; }
                 let found = check(&engine, id).ok();
-                announce(&app, found);
+                announce(&app, found, artist);
             }
             thread::sleep(Duration::from_secs(300));
         }
@@ -237,10 +279,17 @@ pub fn watch_list(engine: tauri::State<Engine>) -> Vec<WatchView> {
 }
 
 #[tauri::command]
-pub async fn watch_add(url: String, options: Options, engine: tauri::State<'_, Engine>, app: tauri::AppHandle) -> Result<WatchView, String> {
+pub async fn watch_add(url: String, options: Options, artist: Option<bool>, backfill: Option<bool>, engine: tauri::State<'_, Engine>, app: tauri::AppHandle) -> Result<WatchView, String> {
     let dir = engine.dir.clone();
-    let watch = tauri::async_runtime::spawn_blocking(move || add(&dir, &url, options)).await.map_err(|e| e.to_string())??;
-    announce(&app, None);
+    let (artist, backfill) = (artist.unwrap_or(false), backfill.unwrap_or(false));
+    let (watch, now) = tauri::async_runtime::spawn_blocking(move || add(&dir, &url, options, artist, backfill)).await.map_err(|e| e.to_string())??;
+    if !now.is_empty() {
+        let mut d = engine.data.lock().unwrap();
+        let old = d.clone();
+        queue_urls(&mut d, now, &watch.options, None, true);
+        if let Err(e) = save(&engine.dir, &d) { *d = old; return Err(e); }
+    }
+    announce(&app, None, artist);
     Ok(WatchView::from(&watch))
 }
 
@@ -252,7 +301,7 @@ pub fn watch_remove(id: u64, engine: tauri::State<Engine>, app: tauri::AppHandle
         watches.retain(|w| w.id != id);
         store(&engine.dir, &watches)?;
     }
-    announce(&app, None);
+    announce(&app, None, false);
     Ok(())
 }
 
@@ -260,7 +309,7 @@ pub fn watch_remove(id: u64, engine: tauri::State<Engine>, app: tauri::AppHandle
 pub async fn watch_check(id: u64, engine: tauri::State<'_, Engine>, app: tauri::AppHandle) -> Result<usize, String> {
     let engine = engine.inner().clone();
     let result = tauri::async_runtime::spawn_blocking(move || check(&engine, id)).await.map_err(|e| e.to_string())?;
-    announce(&app, None);
+    announce(&app, None, false);
     result.map(|(_, count)| count)
 }
 
@@ -295,7 +344,7 @@ mod tests {
     #[test]
     fn only_unseen_entries_are_new_and_seen_stays_bounded() {
         let mut watch = Watch { id: 1, url: String::new(), title: String::new(), options: Options::default(),
-            seen: vec!["b".into(), "c".into()], checked_at: 0, queued: 0, error: String::new() };
+            seen: vec!["b".into(), "c".into()], checked_at: 0, queued: 0, error: String::new(), kind: String::new() };
         let fresh = take_new(&mut watch, vec![entry("a"), entry("b"), entry("a"), entry("c")]);
         assert_eq!(fresh, vec![entry("a")]);
         assert_eq!(watch.seen, ["a", "b", "c"]);
@@ -305,6 +354,24 @@ mod tests {
         watch.seen = (0..MAX_SEEN).map(|i| format!("old{i}")).collect();
         take_new(&mut watch, vec![entry("new")]);
         assert_eq!((watch.seen.len(), watch.seen[0].as_str()), (MAX_SEEN, "new"));
+    }
+
+    #[test]
+    fn artists_are_followed_through_their_releases() {
+        assert_eq!(artist_address("https://www.youtube.com/@Adele").unwrap(), "https://www.youtube.com/@Adele/releases");
+        assert_eq!(artist_address("https://music.youtube.com/channel/UCsRM0YB_dabtEPGPTKo-gcw?feature=share").unwrap(),
+            "https://www.youtube.com/channel/UCsRM0YB_dabtEPGPTKo-gcw/releases");
+        assert_eq!(artist_address("https://youtube.com/@Adele/videos").unwrap(), "https://www.youtube.com/@Adele/releases");
+        assert!(artist_address("https://www.youtube.com/watch?v=abc").is_err());
+        assert!(artist_address("https://example.com/@Adele").is_err());
+        // Releases are playlists: each one downloads whole, as music, into artist / album folders.
+        let info = serde_json::json!({"title": "Adele - Releases", "entries": [
+            {"_type": "url", "ie_key": "YoutubeTab", "id": "OLAK5uy_a", "url": "https://www.youtube.com/playlist?list=OLAK5uy_a"}]});
+        assert_eq!(parse_entries(&info).1[0].url, "https://www.youtube.com/playlist?list=OLAK5uy_a");
+        let options = artist_options(Options { quality: "1080".into(), ..Options::default() });
+        assert_eq!((options.quality.as_str(), options.playlist, options.folder_rule.as_str()), ("mp3", true, "server"));
+        assert!(options.validate().is_ok());
+        assert_eq!(artist_options(Options { quality: "flac".into(), ..Options::default() }).quality, "flac");
     }
 
     #[test]

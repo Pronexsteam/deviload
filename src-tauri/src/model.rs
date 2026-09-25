@@ -179,6 +179,19 @@ impl Options {
             let playlist_prefix = if self.playlist { "%(playlist_title)s/%(playlist_index)03d - " } else { "" };
             format!("{folder_prefix}{playlist_prefix}{base}")
         };
+        if self.folder_rule == "server" && self.audio_only() {
+            // Albums: the playlist is the album, its order the track numbers; the cover becomes square.
+            a.extend(["--parse-metadata".into(), "%(artist,uploader)s:%(artist)s".into(),
+                "--parse-metadata".into(), r"release_year:(?P<meta_date>\d{4})".into()]);
+            if self.playlist {
+                a.extend(["--parse-metadata".into(), "%(album,playlist_title)s:%(album)s".into(),
+                    "--parse-metadata".into(), "%(playlist_index)s:%(track_number)s".into()]);
+            }
+            if self.quality != "wav" {
+                a.extend(["--convert-thumbnails".into(), "jpg".into(), "--ppa".into(),
+                    "ThumbnailsConvertor+FFmpeg_o:-c:v mjpeg -vf crop=\"'if(gt(ih,iw),iw,ih)':'if(gt(iw,ih),ih,iw)'\"".into()]);
+            }
+        }
         if self.folder_rule == "server" && !self.audio_only() {
             // A picture and the video's details next to the file; Deviload turns them into what Jellyfin and Plex read.
             a.extend(["--write-thumbnail".into(), "--convert-thumbnails".into(), "jpg".into(), "--write-info-json".into(),
@@ -195,8 +208,8 @@ impl Options {
     // and grouped by year; music goes by artist and album.
     fn server_name(&self) -> String {
         if self.audio_only() {
-            let number = if self.playlist { "%(track_number,playlist_index&{:02d} - |)s" } else { "%(track_number&{:02d} - |)s" };
-            return format!("%(artist,creator,uploader|Unknown artist)s/%(album|Singles)s/{number}%(track,title)s");
+            let number = if self.playlist { "%(playlist_index&{:02d} - |)s" } else { "" };
+            return format!("%(artist,creator,uploader|Unknown artist)s/%(album,playlist_title|Singles)s/{number}%(track,title)s");
         }
         let channel = "%(channel,uploader|Unknown channel)s";
         format!("{channel}/Season %(upload_date>%Y|0000)s/{channel} - %(upload_date>%Y-%m-%d|0000-00-00)s - %(title)s [%(id)s]")
@@ -395,8 +408,10 @@ mod tests {
         assert!(args.iter().any(|part| part == "--write-info-json"));
         let music = Options { folder_rule: "server".into(), quality: "mp3".into(), playlist: true, ..Default::default() };
         let args = music.args("https://example.com/album", std::path::Path::new("/tmp"));
-        assert!(args.iter().any(|part| part == "%(artist,creator,uploader|Unknown artist)s/%(album|Singles)s/%(track_number,playlist_index&{:02d} - |)s%(track,title)s.%(ext)s"));
+        assert!(args.iter().any(|part| part == "%(artist,creator,uploader|Unknown artist)s/%(album,playlist_title|Singles)s/%(playlist_index&{:02d} - |)s%(track,title)s.%(ext)s"));
         assert!(!args.iter().any(|part| part == "--write-info-json"));
+        assert!(args.windows(2).any(|pair| pair == ["--parse-metadata", "%(playlist_index)s:%(track_number)s"]));
+        assert!(args.iter().any(|part| part.starts_with("ThumbnailsConvertor+FFmpeg_o:") && part.contains("crop=")));
     }
     #[test] fn progress_is_not_completion() {
         let mut j = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(),

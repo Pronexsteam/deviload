@@ -474,6 +474,11 @@ select:disabled, input:disabled { opacity: .5; }
 .watch-count[hidden] { display: none; }
 .watch-dialog { width: min(640px, 92vw); max-height: 88vh; overflow: auto; padding: 22px; }
 .watch-dialog .edit-help { margin: 4px 0 12px; }
+.watch-mode { display: inline-flex; gap: 2px; margin-top: 10px; padding: 3px; border: 1px solid #313a43; border-radius: 9px; background: #101418; }
+.watch-mode button { padding: 6px 12px; border: 0; border-radius: 6px; background: transparent; color: #bbc4cd; font-size: 12px; font-weight: 650; cursor: pointer; }
+.watch-mode button.selected { background: #452922; color: #fff; }
+.watch-backfill { display: flex; align-items: center; gap: 8px; margin: -4px 0 10px; font-size: 12px; font-weight: 450; }
+.watch-backfill input { accent-color: var(--accent); }
 .watch-list { display: grid; gap: 6px; margin-top: 14px; }
 .watch-list:empty::before { content: attr(data-empty-label); padding: 18px 12px; border: 1px dashed #3a444d; border-radius: 10px; color: var(--muted); font-size: 12px; text-align: center; }
 .watch-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #333d46; border-radius: 10px; background: #1a2026; }
