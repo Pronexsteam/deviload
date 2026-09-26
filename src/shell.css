@@ -815,3 +815,31 @@ body { font-family: "Inter Variable", "Segoe UI", system-ui, -apple-system, Blin
 .toasts[popover] { inset: auto 18px 60px auto; }
 main { padding-bottom: 64px; }
 @media (max-width: 760px) { .support-float { padding: 0 9px; } .support-float span:last-child { display: none; } }
+
+/* Format bar: types first, then quality, file type, settings and the hint flow after them.
+   On wide windows the settings button moves up beside the types and the rest lines up below. */
+.download-options-row { row-gap: 8px; }
+.download-picks { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; }
+.download-picks .quality-select,
+.download-picks .options-toggle { margin-left: 0; }
+.download-picks .download-format-hint { flex: 1 1 100%; margin: 0; }
+#container-field[hidden] { display: none; }
+@media (min-width: 1100px) {
+  .download-options-row {
+    display: grid;
+    grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "label modes modes modes toggle" ". quality file hint hint";
+    column-gap: 10px;
+  }
+  .download-options-label { grid-area: label; }
+  .download-options .media-modes { grid-area: modes; justify-self: start; }
+  .download-picks { display: contents; }
+  .download-picks .quality-select { grid-area: quality; }
+  .download-picks #container-field { grid-area: file; }
+  .download-picks .options-toggle { grid-area: toggle; }
+  .download-picks .download-format-hint { grid-area: hint; margin-left: 4px; }
+}
+@media (max-width: 620px) {
+  .download-picks .options-toggle { flex: 1 1 100%; max-width: none; }
+  .download-picks .options-caret { margin-left: auto; }
+}

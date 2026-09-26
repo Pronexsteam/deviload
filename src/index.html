@@ -37,10 +37,11 @@
 <button id="mode-audio" class="media-mode" type="button" aria-pressed="false"><span class="icon" data-icon="music-notes" aria-hidden="true"></span>Audio</button>
 <button id="mode-playlist" class="media-mode" type="button" aria-pressed="false"><span class="icon" data-icon="list" aria-hidden="true"></span>Playlist</button>
 <button id="mode-subtitles" class="media-mode" type="button" aria-pressed="false"><span class="icon" data-icon="files" aria-hidden="true"></span>Subtitles</button></div>
-    <label class="quality-select" for="quality-select">Quality<select id="quality-select"><optgroup label="Video"><option value="best">Best</option><option value="1080" selected>1080p</option><option value="720">720p</option><option value="480">480p</option></optgroup><optgroup label="Audio"><option value="mp3">MP3</option><option value="flac">FLAC</option><option value="wav">WAV</option></optgroup></select></label>
+    <div class="download-picks"><label class="quality-select" for="quality-select">Quality<select id="quality-select"><optgroup label="Video"><option value="best">Best</option><option value="1080" selected>1080p</option><option value="720">720p</option><option value="480">480p</option></optgroup><optgroup label="Audio"><option value="mp3">MP3</option><option value="flac">FLAC</option><option value="wav">WAV</option></optgroup></select></label>
     <label id="container-field" class="quality-select" for="container-select">File<select id="container-select"><option value="mp4" selected>MP4</option><option value="mkv">MKV</option><option value="webm">WebM</option></select></label>
     <button id="options-toggle" class="options-toggle" type="button" aria-expanded="false" aria-controls="download-drawer"><span class="icon" data-icon="folder-open" aria-hidden="true"></span><span class="options-toggle-text"><span>Download settings</span><small id="options-summary"></small></span><span class="icon options-caret" data-icon="caret-down" aria-hidden="true"></span></button>
-  </div><p id="format-hint" class="download-format-hint">Video is merged into MKV without re-encoding.</p>
+    <p id="format-hint" class="download-format-hint">Video is merged into MKV without re-encoding.</p></div>
+  </div>
   <div id="download-drawer" class="download-drawer" hidden>
     <div class="drawer-grid">
       <section class="drawer-card" aria-labelledby="drawer-where"><h3 id="drawer-where">Where and how</h3>
