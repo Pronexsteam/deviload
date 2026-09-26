@@ -1080,6 +1080,9 @@ fn import_legacy_into(legacy: &Path, data: &mut Snapshot, archive_dir: &Path) ->
 }
 
 fn legacy_candidates() -> Vec<PathBuf> {
+    // Deviload 1.x ran on Windows only. Elsewhere the search finds nothing, and on macOS looking
+    // into Downloads, Desktop and Documents makes the system ask for access at every start.
+    if !cfg!(windows) { return vec![]; }
     let mut roots: Vec<PathBuf> = [dirs::download_dir(), dirs::desktop_dir(), dirs::document_dir(), dirs::home_dir()]
         .into_iter().flatten().collect();
     if let Some(exe_dir) = std::env::current_exe().ok().and_then(|exe| exe.parent().map(Path::to_path_buf)) {
