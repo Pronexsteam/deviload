@@ -100,7 +100,7 @@ test("static HTML text has a Russian translation", () => {
 });
 
 test("strings passed to t() have a Russian translation", () => {
-  for (const file of ["src/main.js", "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/cut-main.js", "src/converter.js"]) {
+  for (const file of ["src/main.js", "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js"]) {
     assert.deepEqual(missing(translatedLiterals(read(file))), [], file);
   }
 });
@@ -117,7 +117,7 @@ test("messages from the Rust core have a Russian translation", () => {
 
 test("the Russian locale has no unused strings", () => {
   const used = new Set([...htmlStrings(), ...tableStrings(), "Deviload — Downloads"]);
-  for (const file of ["src/main.js", "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/cut-main.js", "src/converter.js"]) for (const text of translatedLiterals(read(file), true)) used.add(text);
+  for (const file of ["src/main.js", "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js"]) for (const text of translatedLiterals(read(file), true)) used.add(text);
   const rust = new Set(rustMessages().map(({text}) => normalize(text)));
   const unused = [...keys].filter(key => !used.has(key) && !rust.has(normalize(key)));
   assert.deepEqual(unused, []);

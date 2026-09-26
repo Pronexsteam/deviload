@@ -885,7 +885,7 @@ export default {
   "Converter": "Конвертер",
   "Converter · Deviload": "Конвертер · Deviload",
   "TOOLS": "ИНСТРУМЕНТЫ",
-  "Any video or audio file from this computer. The original stays as it is; the result is saved next to it.": "Любое видео или аудио с этого компьютера. Исходник не меняется, результат сохраняется рядом с ним.",
+  "Any video or audio file from this computer. The original stays as it is; the result is saved next to it or in the folder you choose.": "Любое видео или аудио с этого компьютера. Исходник не меняется, результат сохраняется рядом с ним или в выбранной папке.",
   "Drop files here": "Перетащите файлы сюда",
   "Choose files": "Выбрать файлы",
   "Plays everywhere": "Откроется где угодно",
@@ -1060,4 +1060,9 @@ export default {
   "MP4 plays everywhere: H.264 and AAC are taken when the site has them.": "MP4 играет везде: берутся H.264 и AAC, если сайт их даёт.",
   "Unknown video container": "Неизвестный формат файла",
   "WebM is the open format of browsers. Streams that do not fit it are saved as MKV.": "WebM — открытый формат браузеров. Если потоки в него не помещаются, видео сохранится в MKV.",
+  "Save to": "Сохранять в",
+  "Next to the source file": "Рядом с исходным файлом",
+  "Save next to the source file": "Сохранять рядом с исходным файлом",
+  "Where to save the results": "Куда сохранять результаты",
+  "The export folder was not found. Choose it again or save next to the source file.": "Папка для экспорта не найдена. Выберите её снова или сохраняйте рядом с исходным файлом.",
 };

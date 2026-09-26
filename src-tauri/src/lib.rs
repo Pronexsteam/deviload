@@ -1593,11 +1593,11 @@ const MAX_AUDIO_PIECES: usize = 40;
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-struct ProjectExport { clips: Vec<ProjectClip>, canvas: String, fit: String, music: Option<ProjectMusic>, audio: Vec<ProjectAudio>, format: String, quality: u32, codec: String }
+struct ProjectExport { clips: Vec<ProjectClip>, canvas: String, fit: String, music: Option<ProjectMusic>, audio: Vec<ProjectAudio>, format: String, quality: u32, codec: String, folder: String }
 
 impl Default for ProjectExport {
     fn default() -> Self {
-        Self { clips: vec![], canvas: "16:9".into(), fit: "fit".into(), music: None, audio: vec![], format: "mp4".into(), quality: 1080, codec: "h264".into() }
+        Self { clips: vec![], canvas: "16:9".into(), fit: "fit".into(), music: None, audio: vec![], format: "mp4".into(), quality: 1080, codec: "h264".into(), folder: String::new() }
     }
 }
 
@@ -1628,6 +1628,16 @@ fn muxer_for(output: &Path) -> &'static str {
         Some("m4a") => "ipod", Some("flac") => "flac", Some("wav") => "wav", Some("ogg") => "ogg", Some("opus") => "opus",
         Some("ts") => "mpegts", _ => "mp4",
     }
+}
+
+// Where Devil Cut and the converter put a result: the export folder the person chose, or next to
+// the source when none is set. The name still comes from the source file.
+pub(crate) fn export_base(source: &Path, folder: &str) -> Result<PathBuf, String> {
+    let folder = folder.trim();
+    if folder.is_empty() { return Ok(source.to_path_buf()); }
+    let dir = PathBuf::from(folder);
+    if !dir.is_absolute() || !dir.is_dir() { return Err("The export folder was not found. Choose it again or save next to the source file.".into()); }
+    Ok(dir.join(source.file_name().unwrap_or_default()))
 }
 
 // "<name>.deviload.part": plainly unfinished, and never the ".part" yt-dlp keeps a recording in.
@@ -1932,7 +1942,7 @@ async fn editor_render(project: ProjectExport, engine: tauri::State<'_, Engine>,
             pieces.push(Source { path: source.path.clone(), duration: source.duration, has_audio: source.has_audio, width: source.width, height: source.height });
         }
         let first = sources.first().ok_or("A project needs from 1 to 60 clips")?.path.clone();
-        let output = project_output(&first, &project.format)?;
+        let output = project_output(&export_base(&first, &project.folder)?, &project.format)?;
         let progress = |share: f64| { let _ = app.emit("devilcut-progress", share); };
         render_project(&sources, &project, music.as_ref(), &pieces, &output, &progress)?;
         Ok(output.to_string_lossy().into_owned())
@@ -2856,6 +2866,15 @@ mod engine_tests {
             log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
         let report = check_preflight("https://example.com/video", &options, None, &[duplicate]).unwrap();
         assert!(report.warnings.iter().any(|warning| warning.contains("history")));
+    }
+    #[test]
+    fn results_go_to_the_export_folder_or_next_to_the_source() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = Path::new("/videos/Clip [x].mp4");
+        assert_eq!(export_base(source, "").unwrap(), source);
+        assert_eq!(export_base(source, &dir.path().to_string_lossy()).unwrap(), dir.path().join("Clip [x].mp4"));
+        assert!(export_base(source, &dir.path().join("gone").to_string_lossy()).is_err());
+        assert!(export_base(source, "relative/folder").is_err());
     }
     #[test]
     fn unfinished_files_never_take_the_name_yt_dlp_records_into() {

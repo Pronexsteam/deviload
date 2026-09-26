@@ -29,7 +29,7 @@ pub struct MediaFile { path: String, name: String, bytes: u64, duration: f64, vi
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Conversion { path: String, preset: String, #[serde(default)] megabytes: u32 }
+pub struct Conversion { path: String, preset: String, #[serde(default)] megabytes: u32, #[serde(default)] folder: String }
 
 fn probe(path: &Path) -> Result<MediaFile, String> {
     let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
@@ -97,11 +97,12 @@ fn run(state: &Converter, cmd: Command, seconds: f64, output: Option<&Path>, pro
 fn convert(state: &Converter, job: &Conversion, progress: &dyn Fn(f64)) -> Result<PathBuf, String> {
     let source = PathBuf::from(&job.path);
     let file = probe(&source)?;
+    let base = super::export_base(&source, &job.folder)?;
     let seconds = file.duration;
     match job.preset.as_str() {
         "mp3" => {
             if !file.audio { return Err("This file has no sound".into()); }
-            let output = output_path(&source, "MP3", "mp3")?;
+            let output = output_path(&base, "MP3", "mp3")?;
             let mut cmd = ffmpeg_command()?;
             cmd.arg("-i").arg(&source).args(["-map", "0:a:0", "-vn", "-c:a", "libmp3lame", "-b:a", "320k", "-map_metadata", "0"]);
             let part = write_to(&mut cmd, &output);
@@ -111,7 +112,7 @@ fn convert(state: &Converter, job: &Conversion, progress: &dyn Fn(f64)) -> Resul
         }
         "mp4" => {
             if !file.video { return Err("This file has no picture. Pick MP3 for sound".into()); }
-            let output = output_path(&source, "MP4", "mp4")?;
+            let output = output_path(&base, "MP4", "mp4")?;
             let mut cmd = ffmpeg_command()?;
             cmd.arg("-i").arg(&source).args(["-map", "0:v:0", "-map", "0:a:0?", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
                 "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
@@ -124,7 +125,7 @@ fn convert(state: &Converter, job: &Conversion, progress: &dyn Fn(f64)) -> Resul
         "gif" => {
             if !file.video { return Err("This file has no picture. Pick MP3 for sound".into()); }
             if seconds > MAX_GIF_SECONDS + 0.5 { return Err("A GIF can be up to 60 seconds. Trim the video in Devil Cut first".into()); }
-            let output = output_path(&source, "GIF", "gif")?;
+            let output = output_path(&base, "GIF", "gif")?;
             let mut cmd = ffmpeg_command()?;
             cmd.arg("-i").arg(&source).args(["-vf", "fps=12,scale='min(480,iw)':-2:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse",
                 "-an", "-loop", "0"]);
@@ -133,12 +134,12 @@ fn convert(state: &Converter, job: &Conversion, progress: &dyn Fn(f64)) -> Resul
             finish_part(&part, &output)?;
             Ok(output)
         }
-        "size" => squeeze_to_size(state, &source, &file, job.megabytes, progress),
+        "size" => squeeze_to_size(state, &source, &base, &file, job.megabytes, progress),
         _ => Err("Unknown conversion".into()),
     }
 }
 
-fn squeeze_to_size(state: &Converter, source: &Path, file: &MediaFile, megabytes: u32, progress: &dyn Fn(f64)) -> Result<PathBuf, String> {
+fn squeeze_to_size(state: &Converter, source: &Path, base: &Path, file: &MediaFile, megabytes: u32, progress: &dyn Fn(f64)) -> Result<PathBuf, String> {
     if !(1..=4000).contains(&megabytes) { return Err("Pick a size from 1 to 4000 MB".into()); }
     let limit = megabytes as u64 * 1_000_000;
     if file.bytes <= limit { return Err("The file is already smaller than this size".into()); }
@@ -147,7 +148,7 @@ fn squeeze_to_size(state: &Converter, source: &Path, file: &MediaFile, megabytes
     if !file.video {
         let kbps = total.floor().min(320.0);
         if kbps < 32.0 { return Err("The audio is too long for this size. Pick a bigger size".into()); }
-        let output = output_path(source, &label, "mp3")?;
+        let output = output_path(base, &label, "mp3")?;
         let mut cmd = ffmpeg_command()?;
         cmd.arg("-i").arg(source).args(["-map", "0:a:0", "-vn", "-c:a", "libmp3lame", "-b:a", &format!("{kbps}k"), "-map_metadata", "0"]);
         let part = write_to(&mut cmd, &output);
@@ -164,7 +165,7 @@ fn squeeze_to_size(state: &Converter, source: &Path, file: &MediaFile, megabytes
     first.arg("-i").arg(source).args(["-map", "0:v:0", "-vf", &scale, "-c:v", "libx264", "-preset", "medium",
         "-b:v", &format!("{video_kbps}k"), "-pass", "1", "-passlogfile"]).arg(&log).args(["-an", "-f", "null", "-"]);
     run(state, first, file.duration, None, &|share| progress(share * 0.5))?;
-    let output = output_path(source, &label, "mp4")?;
+    let output = output_path(base, &label, "mp4")?;
     for attempt in 0..2 {
         let mut second = ffmpeg_command()?;
         second.arg("-i").arg(source).args(["-map", "0:v:0", "-map", "0:a:0?", "-vf", &scale, "-c:v", "libx264", "-preset", "medium",
@@ -286,9 +287,14 @@ mod tests {
         assert!(generated.status.success(), "{}", String::from_utf8_lossy(&generated.stderr));
         let original = fs::read(&source).unwrap();
         let state = Converter::default();
-        let job = |preset: &str, megabytes: u32| Conversion { path: source.to_string_lossy().into(), preset: preset.into(), megabytes };
+        let job = |preset: &str, megabytes: u32| Conversion { path: source.to_string_lossy().into(), preset: preset.into(), megabytes, folder: String::new() };
         let mp3 = convert(&state, &job("mp3", 0), &|_| {}).unwrap();
         assert!(!probe(&mp3).unwrap().video);
+        // With an export folder the result lands there, named after the source.
+        let exports = tempfile::tempdir().unwrap();
+        let moved = convert(&state, &Conversion { folder: exports.path().to_string_lossy().into(), ..job("mp3", 0) }, &|_| {}).unwrap();
+        assert_eq!(moved.parent(), Some(exports.path()));
+        assert!(moved.file_name().unwrap().to_string_lossy().starts_with(&*source.file_stem().unwrap().to_string_lossy()));
         let mp4 = convert(&state, &job("mp4", 0), &|_| {}).unwrap();
         assert!(probe(&mp4).unwrap().audio);
         let gif = convert(&state, &job("gif", 0), &|_| {}).unwrap();

@@ -835,7 +835,7 @@ export default {
   "Converter": "Convertidor",
   "Converter · Deviload": "Convertidor · Deviload",
   "TOOLS": "HERRAMIENTAS",
-  "Any video or audio file from this computer. The original stays as it is; the result is saved next to it.": "Cualquier archivo de video o audio de este equipo. El original no cambia; el resultado se guarda junto a él.",
+  "Any video or audio file from this computer. The original stays as it is; the result is saved next to it or in the folder you choose.": "Cualquier video o audio de este equipo. El original no cambia; el resultado se guarda junto a él o en la carpeta que elijas.",
   "Drop files here": "Suelta los archivos aquí",
   "Choose files": "Elegir archivos",
   "Plays everywhere": "Se reproduce en cualquier lugar",
@@ -1010,4 +1010,9 @@ export default {
   "MP4 plays everywhere: H.264 and AAC are taken when the site has them.": "MP4 se reproduce en todas partes: se toman H.264 y AAC si el sitio los ofrece.",
   "Unknown video container": "Contenedor de video desconocido",
   "WebM is the open format of browsers. Streams that do not fit it are saved as MKV.": "WebM es el formato abierto de los navegadores. Si los flujos no caben, el video se guarda en MKV.",
+  "Save to": "Guardar en",
+  "Next to the source file": "Junto al archivo original",
+  "Save next to the source file": "Guardar junto al archivo original",
+  "Where to save the results": "Dónde guardar los resultados",
+  "The export folder was not found. Choose it again or save next to the source file.": "No se encontró la carpeta de exportación. Elígela de nuevo o guarda junto al archivo original.",
 };

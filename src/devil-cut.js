@@ -3,6 +3,7 @@
 // color and captions live, and FFmpeg renders the same settings. Under the
 // video track sit the clips' own sound, sounds detached from clips and music.
 import {setPose} from "./mascot-spot.js";
+import {exportFolder, bindExportFolder} from "./export-folder.js";
 
 const DEFAULT_LOOK = Object.freeze({speed:1, volume:1, fadeIn:false, fadeOut:false, rotate:0, flip:false,
   brightness:0, contrast:1, saturation:1, caption:"", captionPosition:"bottom", captionStyle:"outline", transition:"none"});
@@ -862,7 +863,7 @@ export function createDevilCut(env) {
       const output = await invoke("editor_render", {project:{
         clips:project.clips.map(clip => ({jobId:clip.jobId, start:clip.start, end:clip.end, look:clip.look})),
         audio:project.audio.map(sound => ({...sound})),
-        canvas:project.canvas, fit:project.fit, music:project.music, format:chip("format"), quality:Number(chip("quality")), codec:chip("codec"),
+        canvas:project.canvas, fit:project.fit, music:project.music, format:chip("format"), quality:Number(chip("quality")), codec:chip("codec"), folder:exportFolder(),
       }});
       lastOutput = output;
       status(t("Done: {file}", {file:fileName(output)}));
@@ -1209,7 +1210,9 @@ export function createDevilCut(env) {
   });
 
   function refresh() { renderMedia(); }
+  const showExportFolder = $("cut-folder") ? bindExportFolder({name:$("cut-folder"), pick:$("cut-folder-pick"), reset:$("cut-folder-reset")}, t) : () => {};
   function relabel() {
+    showExportFolder();
     renderMedia();
     render();
     defaultStatus();

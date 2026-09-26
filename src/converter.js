@@ -2,6 +2,7 @@
 // the library, and are converted one at a time by the Rust side.
 import {hydrateMascots, setPose} from "./mascot-spot.js";
 import {t, tn, errorText, translateDom, setLanguage, onLanguageChange} from "./i18n.js";
+import {exportFolder, bindExportFolder} from "./export-folder.js";
 
 const invoke = window.__TAURI__?.core?.invoke;
 const $ = id => document.getElementById(id);
@@ -124,7 +125,7 @@ async function start() {
     item.share = 0;
     render();
     try {
-      item.output = await invoke("convert_file", {job:{path:item.path, preset, megabytes:megabytes()}});
+      item.output = await invoke("convert_file", {job:{path:item.path, preset, megabytes:megabytes(), folder:exportFolder()}});
       item.state = "done";
       done++;
     } catch (error) {
@@ -200,7 +201,9 @@ window.__TAURI__?.event?.listen?.("convert-progress", event => {
 });
 window.__TAURI__?.event?.listen?.("converter-add", event => add(Array.isArray(event.payload) ? event.payload : []));
 
+const showExportFolder = bindExportFolder({name:$("convert-folder"), pick:$("convert-folder-pick"), reset:$("convert-folder-reset")}, t);
 function relabel() {
+  showExportFolder();
   document.title = t("Converter") + " · Deviload";
   render();
 }
