@@ -13,7 +13,7 @@ const keys = new Set(Object.keys(ru));
 // Brand names, formats and codes read the same in both languages.
 const neutral = new Set(["Deviload", "Devil", "oad", "Devil Cut", "Devil Cut · Deviload", "DEVIL CINEMA", "YouTube", "YouTube Music", "VK", "TikTok",
   "Instagram", "Twitch", "SoundCloud", "1080p", "720p", "480p", "1440p", "4K", "H.264", "H.265", "MP3", "FLAC", "WAV", "GIF", "GIF · 480px", "Chrome", "Edge",
-  "Firefox", "Brave", "Safari", "yt-dlp", "RU", "EN", "I", "O", "MP4", "16:9", "9:16", "1:1", "4:5", "00:30", "01:15", "https://youtube.com/watch?v=…", "socks5://127.0.0.1:1080", "Plex", "http://192.168.1.10:8096"]);
+  "Firefox", "Brave", "Safari", "yt-dlp", "RU", "EN", "I", "O", "MP4", "MKV", "WebM", "16:9", "9:16", "1:1", "4:5", "00:30", "01:15", "https://youtube.com/watch?v=…", "socks5://127.0.0.1:1080", "Plex", "http://192.168.1.10:8096"]);
 
 function missing(strings) {
   return [...strings].filter(text => /[A-Za-z]/.test(text) && !neutral.has(text) && !keys.has(text));

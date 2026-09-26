@@ -797,3 +797,8 @@ body { font-family: "Inter Variable", "Segoe UI", system-ui, -apple-system, Blin
 .drawer-repeat { margin-top: 10px; }
 /* Six export sizes sit in two even rows. */
 .cut-chips[data-chips="quality"] { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* Saved projects: the name gives way, the clip count and the time stay in view. */
+.editor-home-project .editor-home-item { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.editor-home-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editor-home-meta { flex: none; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.editor-home-project > .quiet { flex: none; }

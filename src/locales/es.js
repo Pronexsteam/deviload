@@ -288,7 +288,7 @@ export default {
   "Finished videos": "Videos terminados",
   "Saved projects": "Proyectos guardados",
   "Download a video first and it will show up here.": "Descarga un video primero y aparecerá aquí.",
-  "{title} · {count} clips": "{title} · {count} clips",
+  "{count} clips": ["{count} clip", "{count} clips"],
   "Project name": "Nombre del proyecto",
   "New project": "Nuevo proyecto",
   "Export": "Exportar",
@@ -1006,4 +1006,8 @@ export default {
   "Could not save the file: {error}": "No se pudo guardar el archivo: {error}",
   "This site shows it only to signed-in users. In the download options, pick cookies from a browser where you are signed in, or a cookies.txt file, and retry.": "Este sitio lo muestra solo a usuarios con sesión iniciada. En los ajustes de descarga, elige las cookies de un navegador donde hayas iniciado sesión o un archivo cookies.txt, y vuelve a intentarlo.",
   "Cookies settings": "Ajustes de cookies",
+  "File": "Archivo",
+  "MP4 plays everywhere: H.264 and AAC are taken when the site has them.": "MP4 se reproduce en todas partes: se toman H.264 y AAC si el sitio los ofrece.",
+  "Unknown video container": "Contenedor de video desconocido",
+  "WebM is the open format of browsers. Streams that do not fit it are saved as MKV.": "WebM es el formato abierto de los navegadores. Si los flujos no caben, el video se guarda en MKV.",
 };

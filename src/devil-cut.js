@@ -40,14 +40,14 @@ export function normalizeProjects(data) {
 
 // The Devil Cut page of the main window: recent videos and saved projects.
 export function createCutHome(env) {
-  const {t, node} = env;
+  const {t, tn, locale, node} = env;
   const $ = id => document.getElementById(id);
   let projects = {}, shown = "";
   function render() {
     const videoList = $("editor-home-videos"), projectList = $("editor-home-projects");
     const videos = env.getJobs().filter(job => env.isVideoJob(job) && !job.hiddenInLibrary).reverse().slice(0, 6);
     // Called on every queue poll; the lists are rebuilt only when they change.
-    const key = JSON.stringify([t("Untitled project"), videos.map(job => [job.id, job.file]), projects]);
+    const key = JSON.stringify([t("Untitled project"), locale(), videos.map(job => [job.id, job.file]), projects]);
     if (key === shown) return;
     shown = key;
     videoList.replaceChildren();
@@ -65,7 +65,12 @@ export function createCutHome(env) {
     for (const [id, data] of saved) {
       const row = node("div", "editor-home-project");
       const clips = Array.isArray(data.clips) ? data.clips.length : 0;
-      const openButton = node("button", "editor-home-item", t("{title} · {count} clips", {title:data.name || t("Untitled project"), count:clips}));
+      const name = data.name || t("Untitled project");
+      // Projects often share a name: the clip count and the time of the last change tell them apart.
+      const when = data.updated ? new Date(data.updated).toLocaleString(locale(), {day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"}) : "";
+      const openButton = node("button", "editor-home-item");
+      openButton.append(node("span", "editor-home-name", name), node("span", "editor-home-meta", [tn("{count} clip", "{count} clips", clips), when].filter(Boolean).join(" · ")));
+      openButton.title = name;
       openButton.type = "button";
       openButton.addEventListener("click", () => env.openEditor({project:id}));
       const remove = node("button", "quiet small", "×");

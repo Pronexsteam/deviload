@@ -34,7 +34,13 @@ pub struct Options {
     pub format_id: String,
     #[serde(default)]
     pub format_has_audio: bool,
+    // The file a video lands in: MP4 plays everywhere, MKV keeps the best streams as they are,
+    // WebM is the open format of browsers.
+    #[serde(default = "default_container")]
+    pub container: String,
 }
+
+fn default_container() -> String { "mp4".into() }
 
 // The system Downloads folder. Linux reports it only when the XDG user folders are
 // set up, so a minimal system falls back to ~/Downloads.
@@ -58,7 +64,7 @@ impl Default for Options {
             cookies: String::new(), cookies_browser: String::new(), rate_mbps: 0,
             clip_start: None, clip_end: None, clip_format: "source".into(),
             folder_rule: "manual".into(), name_rule: "title".into(),
-            format_id: String::new(), format_has_audio: false,
+            format_id: String::new(), format_has_audio: false, container: default_container(),
         }
     }
 }
@@ -95,6 +101,7 @@ impl Options {
         if self.format_id.len() > 80 || !self.format_id.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c)) {
             return Err("Invalid source format ID".into());
         }
+        if !["mp4", "mkv", "webm"].contains(&self.container.as_str()) { return Err("Unknown video container".into()); }
         if !["", "source", "gif"].contains(&self.clip_format.as_str()) {
             return Err("Unknown clip format".into());
         }
@@ -158,7 +165,13 @@ impl Options {
         };
         a.extend(["-f".into(), selected_format]);
         if !["mp3", "flac", "wav"].contains(&self.quality.as_str()) {
-            a.extend(["--merge-output-format".into(), if self.profile == "mobile" { "mp4" } else { "mkv" }.into()]);
+            let container = if self.profile == "mobile" { "mp4" } else { self.container.as_str() };
+            // WebM holds only VP9, AV1 and Opus; streams that do not fit are merged into MKV instead of failing.
+            a.extend(["--merge-output-format".into(), match container { "mp4" => "mp4", "webm" => "webm/mkv", _ => "mkv" }.into()]);
+            // Among streams of the same size, the ones the container plays best come first:
+            // H.264 and AAC for an MP4 that plays on phones, TVs and editors, Opus for WebM.
+            let sort = match container { "mp4" => "res,vcodec:h264,acodec:m4a", "webm" => "res,acodec:opus", _ => "" };
+            if !sort.is_empty() && self.format_id.is_empty() { a.extend(["-S".into(), sort.into()]); }
             if self.profile == "mobile" { a.extend(["--recode-video".into(), "mp4".into()]); }
             if self.subtitles {
                 a.extend(["--write-subs".into(), "--write-auto-subs".into(),
@@ -477,6 +490,15 @@ mod tests {
         assert!(o.cookies_browser.is_empty());
     }
     #[test] fn mobile_profile_reencodes_video_to_mp4() {
+        let mkv = Options { container: "mkv".into(), ..Default::default() }.args("https://example.com/v", std::path::Path::new("/tmp"));
+        assert!(mkv.windows(2).any(|pair| pair == ["--merge-output-format", "mkv"]) && !mkv.contains(&"-S".to_string()));
+        let mp4 = Options::default().args("https://example.com/v", std::path::Path::new("/tmp"));
+        assert!(mp4.windows(2).any(|pair| pair == ["--merge-output-format", "mp4"]));
+        assert!(mp4.windows(2).any(|pair| pair == ["-S", "res,vcodec:h264,acodec:m4a"]));
+        let webm = Options { container: "webm".into(), ..Default::default() }.args("https://example.com/v", std::path::Path::new("/tmp"));
+        assert!(webm.windows(2).any(|pair| pair == ["--merge-output-format", "webm/mkv"]));
+        assert!(webm.windows(2).any(|pair| pair == ["-S", "res,acodec:opus"]));
+        assert!(Options { container: "avi".into(), ..Default::default() }.validate().is_err());
         let o = Options { profile: "mobile".into(), quality: "720".into(), ..Default::default() };
         o.validate().unwrap();
         let args = o.args("https://example.com/video", std::path::Path::new("/tmp"));

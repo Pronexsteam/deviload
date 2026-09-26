@@ -319,7 +319,7 @@ export default {
   "Finished videos": "Готовые видео",
   "Saved projects": "Сохранённые проекты",
   "Download a video first and it will show up here.": "Сначала скачайте видео — оно появится здесь.",
-  "{title} · {count} clips": "{title} · клипов: {count}",
+  "{count} clips": ["{count} клип", "{count} клипа", "{count} клипов"],
   "Project name": "Имя проекта",
   "New project": "Новый проект",
   "Export": "Экспорт",
@@ -1056,4 +1056,8 @@ export default {
   "Could not save the file: {error}": "Не удалось сохранить файл: {error}",
   "This site shows it only to signed-in users. In the download options, pick cookies from a browser where you are signed in, or a cookies.txt file, and retry.": "Этот сайт показывает запись только тем, кто вошёл в аккаунт. В параметрах загрузки выберите cookies из браузера, где вы вошли, или файл cookies.txt, и повторите.",
   "Cookies settings": "Настройки cookies",
+  "File": "Файл",
+  "MP4 plays everywhere: H.264 and AAC are taken when the site has them.": "MP4 играет везде: берутся H.264 и AAC, если сайт их даёт.",
+  "Unknown video container": "Неизвестный формат файла",
+  "WebM is the open format of browsers. Streams that do not fit it are saved as MKV.": "WebM — открытый формат браузеров. Если потоки в него не помещаются, видео сохранится в MKV.",
 };

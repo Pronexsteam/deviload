@@ -513,7 +513,11 @@ function setQuality(value) {
 function syncFormatHint() {
   $("format-hint").textContent = selectedFormat ? t("Stream {id} selected for this link.", {id:selectedFormat.id})
     : ["mp3","flac","wav"].includes(quality) ? t("Audio extraction. FLAC and WAV cannot restore quality the source never had.")
-    : $("profile").value === "mobile" ? t("For phone: the result is an MP4, re-encoded when needed.") : t("Video is merged into MKV without re-encoding.");
+    : $("profile").value === "mobile" ? t("For phone: the result is an MP4, re-encoded when needed.")
+    : $("container-select").value === "mp4" ? t("MP4 plays everywhere: H.264 and AAC are taken when the site has them.")
+    : $("container-select").value === "webm" ? t("WebM is the open format of browsers. Streams that do not fit it are saved as MKV.")
+    : t("Video is merged into MKV without re-encoding.");
+  $("container-field").hidden = ["mp3","flac","wav"].includes(quality);
 }
 function syncModeButtons() {
   const audio = ["mp3","flac","wav"].includes(quality);
@@ -774,12 +778,15 @@ $("profile").addEventListener("change", () => {
     if (folderPaths.music) $("folder").value = folderPaths.music;
     $("subtitles").checked = false; $("sponsorblock").checked = false;
   } else if (profile === "archive") {
+    $("container-select").value = "mkv";
     setQuality("best");
     $("subtitles").checked = true; $("sponsorblock").checked = false;
   } else if (profile === "mobile") {
+    $("container-select").value = "mp4";
     setQuality("720");
     $("subtitles").checked = false; $("sponsorblock").checked = false;
   } else if (profile === "maximum") {
+    $("container-select").value = "mkv";
     setQuality("best");
     $("subtitles").checked = false; $("sponsorblock").checked = false;
   }
@@ -804,6 +811,7 @@ $("download-drawer").addEventListener("change", event => {
   $("profile").value = "custom";
   setQuality(quality);
 });
+$("container-select").addEventListener("change", () => { $("profile").value = "custom"; syncFormatHint(); });
 $("quality-select").addEventListener("change", event => { clearSelectedFormat(); $("profile").value = "custom"; setQuality(event.target.value); });
 for (const button of document.querySelectorAll("[data-quality]")) {
   button.addEventListener("click", () => { clearSelectedFormat(); $("profile").value = "custom"; setQuality(button.dataset.quality); });
@@ -985,7 +993,7 @@ $("cinema-next").addEventListener("click", () => { const index = cinemaIds.index
 $("player-cut").addEventListener("click", () => { if (currentPlayerId == null) return; const id = currentPlayerId; $("player-dialog").close(); devilCut.open(id); });
 $("player-share").addEventListener("click", () => { if (currentPlayerId != null) startShare(currentPlayerId); });
 // Devil Cut opens in its own window; this page lists its projects.
-const devilCut = createCutHome({t, node, getJobs:() => jobs, isVideoJob,
+const devilCut = createCutHome({t, tn, locale, node, getJobs:() => jobs, isVideoJob,
   openEditor:request => invoke ? invoke("open_devil_cut", request).catch(error => message(errorText(error), true)) : message(t("Devil Cut works in the installed Deviload app."), true),
   deleteProject:id => invoke("save_ui_project", {id, project:null})});
 $("open-editor").addEventListener("click", () => devilCut.open());
@@ -1808,7 +1816,7 @@ function buildDownloadRequest() {
   if (selectedFormat && (inputUrls.length !== 1 || inputUrls[0] !== selectedFormat.url)) {
     throw new Error(t("The selected stream belongs to one checked link. Check the link again or clear the choice."));
   }
-  const options = {folder:$("folder").value.trim(),quality,profile:$("profile").value,playlist:$("playlist").checked,
+  const options = {folder:$("folder").value.trim(),quality,profile:$("profile").value,playlist:$("playlist").checked,container:$("container-select").value,
     playlistItems:$("playlist").checked ? $("playlist-items").value.trim() : "",splitChapters:$("split-chapters").checked,
     subtitles:$("subtitles").checked,sponsorblock:$("sponsorblock").checked,
     archive:$("archive").checked,cookies:mode === "file" ? $("cookies").value.trim() : mode === "account" ? (signedInPath || "") : "",
@@ -2052,6 +2060,7 @@ async function init() {
     $("folder").value = data.defaultFolder || options.folder;
     showDefaultFolder(data.defaultFolder);
     $("profile").value = options.profile || "custom";
+    $("container-select").value = ["mkv", "webm"].includes(options.container) ? options.container : "mp4";
     signedInPath = await invoke("youtube_login_status");
     const modes = [...$("cookies-mode").options].map(option => option.value);
     let savedMode = null;
