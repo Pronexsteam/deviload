@@ -142,6 +142,12 @@ The integration tests generate their own media and serve it from a local HTTP se
 
 English is the source language. Russian strings live in `src/locales/ru.js`, keyed by the English text. Messages from the Rust core are English and are translated in the interface, including messages that carry runtime values (`"Search failed: {detail}"`).
 
+## Team
+
+Deviload is maintained by Samvel Avetisyan ([Pronexsteam](https://github.com/Pronexsteam)), who writes, reviews and approves every release. Outside contributions arrive as pull requests and are reviewed by the maintainer. Most of the code is written with AI assistance (Claude) and is reviewed and tested by the maintainer before it ships.
+
+Deviload transfers no information to other networked systems except the sites you download from, GitHub for update checks (both can be turned off in the settings) and, while you use the phone link, the phone on your local network. See [Data and privacy](#data-and-privacy).
+
 ## Support
 
 Deviload is free and stays free. If it saves you time, you can buy me a coffee on [Ko-fi](https://ko-fi.com/pronexsteam); it helps me keep working on it.
