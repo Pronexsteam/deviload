@@ -1075,4 +1075,6 @@ export default {
   "Not signed in. Needed for age-restricted, private and members-only videos.": "Вход не выполнен. Нужен для видео 18+, приватных и только для спонсоров.",
   "Support": "Поддержать",
   "Deviload checks GitHub for a new version at start and every 6 hours. Only the version number is requested; nothing about you or your downloads is sent.": "Deviload проверяет на GitHub новую версию при запуске и каждые 6 часов. Запрашивается только номер версии; ничего о вас и ваших загрузках не передаётся.",
+  "Open at login": "Открывать при входе в систему",
+  "Start at login": "Запускать при входе в систему",
 };

@@ -1404,7 +1404,8 @@ function render(data) {
   $("total").textContent = totals.total;
   $("active-count").textContent = visibleJobs(jobs, "active", "").length;
   $("scheduled-count").textContent = visibleJobs(jobs, "scheduled", "").length;
-  $("library-count").textContent = totals.done;
+  // The library keeps files the queue has already let go of.
+  $("library-count").textContent = jobs.filter(inLibrary).length;
   $("issue-count").textContent = visibleJobs(jobs, "issues", "").length;
   $("stat-total").textContent = totals.total;
   $("stat-active").textContent = jobs.filter(job => ["queued","running","cancelling","pausing"].includes(job.status)).length;
@@ -1828,25 +1829,32 @@ if (invoke && (navigator.userAgent.includes("Windows") || macWindow)) {
       $(id).addEventListener("click", () => invoke("window_action", {action}).catch(error => message(errorText(error), true)));
     }
   }
-  document.querySelector(".window-drag-strip")?.addEventListener("pointerdown", event => {
-    if (event.button === 0) invoke("window_action", {action:"start_dragging"}).catch(() => {});
-  });
+  // Moving the window must not start a text selection: on macOS the page never sees the button
+  // go up again, and the selection then runs over the whole page.
+  const dragWindow = event => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    // macOS zooms on the double click itself.
+    if (macWindow && event.detail === 2) return;
+    invoke("window_action", {action:"start_dragging"}).catch(() => {});
+  };
+  document.querySelector(".window-drag-strip")?.addEventListener("mousedown", dragWindow);
   document.querySelector(".window-drag-strip")?.addEventListener("dblclick", () => invoke("window_action", {action:"toggle_maximize"}).catch(() => {}));
   const topbar = document.querySelector(".topbar");
-  topbar.addEventListener("pointerdown", event => {
-    if (event.button === 0 && event.target === topbar) invoke("window_action", {action:"start_dragging"}).catch(() => {});
+  topbar.addEventListener("mousedown", event => {
+    if (event.target === topbar) dragWindow(event);
   });
   topbar.addEventListener("dblclick", event => {
     if (event.target === topbar) invoke("window_action", {action:"toggle_maximize"}).catch(() => {});
   });
   // An open dialog covers the top bar; its header and the dimmed area around it move the window.
-  document.addEventListener("pointerdown", event => {
+  document.addEventListener("mousedown", event => {
     const dialog = event.button === 0 ? event.target.closest?.("dialog[open]") : null;
     if (!dialog) return;
     const box = dialog.getBoundingClientRect();
     const outside = event.target === dialog && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom);
     const header = event.target.closest(".dialog-head") && !event.target.closest("button, input, select, textarea, a, summary, label");
-    if (outside || header) invoke("window_action", {action:"start_dragging"}).catch(() => {});
+    if (outside || header) dragWindow(event);
   });
 }
 async function refresh() {
@@ -1990,7 +1998,15 @@ $("load-links").addEventListener("click", async () => {
     message(tn("Loaded {count} link", "Loaded {count} links", found.length));
   } catch (error) { message(errorText(error), true); }
 });
-// Start with Windows, in the tray.
+// Start with the system, in the tray. The switch is named the way each system names it.
+function syncAutostartLabel() {
+  const label = navigator.userAgent.includes("Mac OS X") ? t("Open at login")
+    : navigator.userAgent.includes("Windows") ? t("Start with Windows") : t("Start at login");
+  $("autostart-label").textContent = label;
+  $("autostart-toggle").setAttribute("aria-label", label);
+}
+syncAutostartLabel();
+onLanguageChange(syncAutostartLabel);
 async function syncAutostart() {
   if (!invoke) return;
   try { $("autostart-toggle").setAttribute("aria-checked", String(await invoke("autostart_status"))); } catch { /* not available */ }

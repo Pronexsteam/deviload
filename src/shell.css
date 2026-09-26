@@ -871,3 +871,6 @@ select:not([multiple]) {
   background-position: right 11px center !important;
   background-size: 10px 6px !important;
 }
+
+/* The window chrome is not text to select: a drag that starts there moves the window. */
+.window-drag-strip, .sidebar { -webkit-user-select: none; user-select: none; }
