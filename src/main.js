@@ -1329,6 +1329,38 @@ function addAction(controls, label, className, handler, title = "", iconName = "
   button.addEventListener("click", handler);
   controls.append(button);
 }
+function addJobAction(controls, job, action) {
+  const title = {retry:"Retry",cancel:"Cancel",pause:"Pause",resume:"Resume",stop:"Stop recording"}[action];
+  const icon = {retry:"arrow-clockwise",cancel:"x-circle",pause:"pause",resume:"play",stop:"stop"}[action];
+  addAction(controls, t(title), "quiet", async event => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try { await invoke("change_job", {id:job.id,action}); await refresh(); }
+    catch (error) { message(errorText(error), true); }
+    finally { button.disabled = false; }
+  }, "", icon);
+}
+function recordingLimitSelect(job) {
+  const limit = node("select", "recording-limit");
+  limit.setAttribute("aria-label", t("Recording limit"));
+  limit.title = t("Recording limit");
+  for (const seconds of recordingLimits) limit.add(new Option(recordingLimitText(seconds), String(seconds)));
+  limit.value = String(job.liveLimit || 0);
+  limit.addEventListener("change", async () => {
+    try { await invoke("set_recording_limit", {id:job.id, seconds:Number(limit.value)}); await refresh(); }
+    catch (error) { message(errorText(error), true); }
+  });
+  return limit;
+}
+function syncRecordingLimit(controls, job) {
+  const limit = controls.querySelector(".recording-limit");
+  if (limit && document.activeElement !== limit) limit.value = String(job.liveLimit || 0);
+}
+function showJobLog(id) {
+  logJobId = id;
+  $("log-content").textContent = jobs.find(item => item.id === id)?.log.join("\n") || t("The log is empty so far");
+  $("log-dialog").showModal();
+}
 function showReaction(kind, detail) {
   const overlay = $("reaction-overlay");
   clearTimeout(reactionTimer);
@@ -1456,29 +1488,8 @@ function render(data) {
       const more = node("details", "library-more job-more");
       const menu = node("div", "library-more-actions");
       more.append(node("summary", "", t("More")), menu);
-      for (const action of jobActions) {
-        const title = {retry:"Retry",cancel:"Cancel",pause:"Pause",resume:"Resume",stop:"Stop recording"}[action];
-        const icon = {retry:"arrow-clockwise",cancel:"x-circle",pause:"pause",resume:"play",stop:"stop"}[action];
-        addAction(controls, t(title), "quiet", async event => {
-          const button = event.currentTarget;
-          button.disabled = true;
-          try { await invoke("change_job", {id:job.id,action}); await refresh(); }
-          catch (error) { message(errorText(error), true); }
-          finally { button.disabled = false; }
-        }, "", icon);
-      }
-      if (jobActions.includes("stop")) {
-        const limit = node("select", "recording-limit");
-        limit.setAttribute("aria-label", t("Recording limit"));
-        limit.title = t("Recording limit");
-        for (const seconds of recordingLimits) limit.add(new Option(recordingLimitText(seconds), String(seconds)));
-        limit.value = String(job.liveLimit || 0);
-        limit.addEventListener("change", async () => {
-          try { await invoke("set_recording_limit", {id:job.id, seconds:Number(limit.value)}); await refresh(); }
-          catch (error) { message(errorText(error), true); }
-        });
-        controls.append(limit);
-      }
+      for (const action of jobActions) addJobAction(controls, job, action);
+      if (jobActions.includes("stop")) controls.append(recordingLimitSelect(job));
       if (["queued","paused"].includes(job.status)) {
         for (const [direction,title,icon] of [["up","Move up","arrow-up"],["down","Move down","arrow-down"]]) {
           addAction(menu, t(title), "quiet", async event => {
@@ -1523,15 +1534,10 @@ function render(data) {
           else removeLater(job.id, "queue", false);
         }, t("Remove from the queue."), "x-circle");
       }
-      addAction(menu, t("Log"), "quiet", () => {
-        logJobId = job.id;
-        $("log-content").textContent = jobs.find(item => item.id === job.id)?.log.join("\n") || t("The log is empty so far");
-        $("log-dialog").showModal();
-      }, "", "list");
+      addAction(menu, t("Log"), "quiet", () => showJobLog(job.id), "", "list");
       controls.append(more);
     }
-    const limit = controls.querySelector(".recording-limit");
-    if (limit && document.activeElement !== limit) limit.value = String(job.liveLimit || 0);
+    syncRecordingLimit(controls, job);
   }
   existing.forEach((row,id) => { taskOrbs.get(id)?.destroy(); taskOrbs.delete(id); row.remove(); });
   renderMediaLibrary();
@@ -1541,6 +1547,21 @@ function render(data) {
 function renderLiveDownload(runningJobs) {
   const current = runningJobs[0];
   liveFire.setActive(Boolean(current));
+  // A recording can be stopped or limited from the top panel, without scrolling to its card.
+  const controls = $("live-controls");
+  const recording = Boolean(current?.live && !current.stopRequested);
+  const controlsKey = recording ? String(current.id) : "";
+  if (controls.dataset.job !== controlsKey) {
+    controls.dataset.job = controlsKey;
+    controls.replaceChildren();
+    if (recording) {
+      addJobAction(controls, current, "stop");
+      controls.append(recordingLimitSelect(current));
+      addAction(controls, t("Log"), "quiet", () => showJobLog(current.id), "", "list");
+    }
+  }
+  controls.hidden = !recording;
+  if (recording) syncRecordingLimit(controls, current);
   if (!current) return;
   const shown = current.file || current.recording;
   const name = shown ? shown.split(/[\\/]/).pop() : current.url;
@@ -1794,13 +1815,18 @@ for (const button of document.querySelectorAll("[data-media-filter]")) {
   });
 }
 window.addEventListener("scroll", () => document.documentElement.classList.toggle("is-scrolled", scrollY > 4), {passive:true});
-if (invoke && navigator.userAgent.includes("Windows")) {
-  const chrome = $("window-chrome");
-  chrome.hidden = false;
+// Windows draws its own window buttons; on macOS the system buttons sit over the page. Both move
+// the window by the strip on top.
+const macWindow = Boolean(invoke) && navigator.userAgent.includes("Mac OS X");
+if (invoke && (navigator.userAgent.includes("Windows") || macWindow)) {
   document.documentElement.classList.add("custom-window");
-  const controls = {"window-minimize":"minimize","window-maximize":"toggle_maximize","window-close":"close"};
-  for (const [id, action] of Object.entries(controls)) {
-    $(id).addEventListener("click", () => invoke("window_action", {action}).catch(error => message(errorText(error), true)));
+  if (macWindow) document.documentElement.classList.add("mac-window");
+  else {
+    $("window-chrome").hidden = false;
+    const controls = {"window-minimize":"minimize","window-maximize":"toggle_maximize","window-close":"close"};
+    for (const [id, action] of Object.entries(controls)) {
+      $(id).addEventListener("click", () => invoke("window_action", {action}).catch(error => message(errorText(error), true)));
+    }
   }
   document.querySelector(".window-drag-strip")?.addEventListener("pointerdown", event => {
     if (event.button === 0) invoke("window_action", {action:"start_dragging"}).catch(() => {});
@@ -2175,6 +2201,7 @@ onLanguageChange(() => {
   taskOrbs.forEach(orb => orb.destroy());
   taskOrbs.clear();
   $("jobs").replaceChildren();
+  delete $("live-controls").dataset.job;
   render({jobs});
   refreshCollections();
   devilCut.relabel();

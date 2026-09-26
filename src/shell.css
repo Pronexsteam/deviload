@@ -735,7 +735,8 @@ body { font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Ub
 .job-meta .recording::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: #ff4b3b; vertical-align: 1px; animation: recording-dot 1.6s ease-in-out infinite; }
 @keyframes recording-dot { 50% { opacity: .3; } }
 @media (prefers-reduced-motion: reduce) { .job-meta .recording::before { animation: none; } }
-.job-controls .recording-limit { width: auto; min-width: 0; height: 30px; min-height: 30px; margin: 0; padding: 0 28px 0 10px; border: 1px solid #424a53; border-radius: 8px; background-color: #1a1f25; font-size: 10px; font-weight: 600; }
+.job-controls .recording-limit,
+.live-controls .recording-limit { width: auto; min-width: 0; height: 30px; min-height: 30px; margin: 0; padding: 0 28px 0 10px; border: 1px solid #424a53; border-radius: 8px; background-color: #1a1f25; font-size: 10px; font-weight: 600; }
 .icon[data-icon="heart"] { --glyph: url("assets/icons/heart.svg"); }
 /* Interface language: the current code in the top bar, the three languages under it. */
 .topbar-actions .lang-menu { margin: 0; }
@@ -842,4 +843,31 @@ main { padding-bottom: 64px; }
 @media (max-width: 620px) {
   .download-picks .options-toggle { flex: 1 1 100%; max-width: none; }
   .download-picks .options-caret { margin-left: auto; }
+}
+
+/* A recording's own buttons in the top panel, so it can be stopped without scrolling to its card. */
+.live-controls { display: flex; flex: none; align-items: center; gap: 6px; }
+.live-controls[hidden] { display: none; }
+.live-controls .quiet { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 5px 10px; font-size: 11px; white-space: nowrap; }
+.live-controls .icon { width: 13px; height: 13px; }
+@media (max-width: 620px) {
+  .live-download-line { flex-wrap: wrap; }
+  .live-controls { width: 100%; }
+}
+
+/* macOS: the system window buttons sit over the top left corner, so the strip that moves the
+   window runs across the whole width and the sidebar starts below it. */
+.mac-window .window-drag-strip { left: 0; }
+@media (min-width: 761px) { .mac-window .sidebar { padding-top: 34px; } }
+
+/* Every drop-down gets the same drawn arrow, so they look alike on Windows, macOS and Linux.
+   The arrow wins over the background shorthands that colour individual selects. */
+select:not([multiple]) {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 28px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23aeb8c0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 11px center !important;
+  background-size: 10px 6px !important;
 }

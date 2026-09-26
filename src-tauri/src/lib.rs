@@ -234,7 +234,7 @@ impl Engine {
         }
         // A daily recording that ended, well or not, queues tomorrow's run and hands the repeat on.
         let next_id = d.jobs.iter().map(|j| j.id).max().unwrap_or(0) + 1;
-        if let Some(j) = d.jobs.iter_mut().find(|j| j.id == id && j.repeat_at > 0 && ["done", "error"].contains(&j.status.as_str())) {
+        if let Some(j) = d.jobs.iter_mut().find(|j| j.id == id && queues_next_recording(j)) {
             let next = next_recording(j, next_id, now_seconds());
             j.repeat_at = 0;
             d.jobs.push(next);
@@ -436,7 +436,17 @@ impl Engine {
         }
         let _ = out_thread.join(); let _ = err_thread.join();
         if status.success() { return Ok(()); }
+        let stopped = self.data.lock().unwrap().jobs.iter().any(|j| j.id == job.id && j.live && j.stop_requested);
         if let Some(saved) = self.keep_recording(job.id) { return saved; }
+        if stopped {
+            // Stopped before the stream sent anything: there is nothing to keep, and nothing went wrong.
+            let mut d = self.data.lock().unwrap();
+            if let Some(j) = d.jobs.iter_mut().find(|j| j.id == job.id) {
+                j.consume("Deviload: the recording was stopped before anything was recorded");
+                j.status = "cancelling".into();
+            }
+            return Err("stopped before anything was recorded".into());
+        }
         let code = status.code().map_or_else(|| "?".to_string(), |code| code.to_string());
         Err(format!("yt-dlp exited with code {code}. See the task log for details."))
     }
@@ -1404,6 +1414,11 @@ async fn audio_normalize(id: u64, engine: tauri::State<'_, Engine>) -> Result<St
     tauri::async_runtime::spawn_blocking(move || {
         normalize_audio(&audio_file(&engine, id)?).map(|p| p.to_string_lossy().into_owned())
     }).await.map_err(|e| e.to_string())?
+}
+// A daily recording repeats after it ended, well or not, and after it was stopped by hand,
+// even when it was stopped before anything was recorded.
+fn queues_next_recording(job: &Job) -> bool {
+    job.repeat_at > 0 && (["done", "error"].contains(&job.status.as_str()) || job.status == "cancelled" && job.stop_requested)
 }
 // The next run of a daily recording: the same link, settings and length a day later,
 // or several days later when Deviload was closed in between.
@@ -3047,6 +3062,22 @@ mod engine_tests {
         assert!(next.file.is_empty() && next.log.is_empty() && !next.live && !next.stop_requested && next.bytes == 0);
         // Deviload was closed for two days: the run goes to the first slot still ahead.
         assert_eq!(next_recording(&job, 9, 200_000).scheduled_at, Some(260_200));
+    }
+    #[test]
+    fn a_daily_recording_repeats_unless_it_was_cancelled() {
+        let mut job = Job { id: 3, url: "https://u.peg.tv/s/x".into(), options: Options::default(), status: "done".into(), percent: 0.0, speed: String::new(),
+            file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: true, live_since: 5, live_limit: 0, recording: "/v/rec.mp4".into(), stop_requested: false, repeat_at: 1000, pid: None,
+            hidden_in_queue: false, hidden_in_library: false };
+        assert!(queues_next_recording(&job));
+        job.status = "error".into();
+        assert!(queues_next_recording(&job));
+        // Cancelled some other way, the repeat ends; stopped by hand, even with nothing recorded, it goes on.
+        job.status = "cancelled".into();
+        assert!(!queues_next_recording(&job));
+        job.stop_requested = true;
+        assert!(queues_next_recording(&job));
+        job.repeat_at = 0;
+        assert!(!queues_next_recording(&job));
     }
     #[test]
     fn task_files_lists_each_saved_file_once() {
