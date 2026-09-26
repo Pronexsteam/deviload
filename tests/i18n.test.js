@@ -84,6 +84,8 @@ function tableStrings() {
       strings.push(issue.title, issue.message);
     }
   }
+  const other = diagnoseError(["ERROR: [Instagram] x: use --cookies-from-browser or --cookies for the authentication"], true, "https://www.instagram.com/p/x/");
+  strings.push(other.title, other.message);
   return strings;
 }
 

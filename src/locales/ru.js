@@ -1054,4 +1054,6 @@ export default {
   "Unknown video codec": "Неизвестный видеокодек",
   "This FFmpeg cannot encode H.265. Choose H.264.": "Этот FFmpeg не умеет кодировать H.265. Выберите H.264.",
   "Could not save the file: {error}": "Не удалось сохранить файл: {error}",
+  "This site shows it only to signed-in users. In the download options, pick cookies from a browser where you are signed in, or a cookies.txt file, and retry.": "Этот сайт показывает запись только тем, кто вошёл в аккаунт. В параметрах загрузки выберите cookies из браузера, где вы вошли, или файл cookies.txt, и повторите.",
+  "Cookies settings": "Настройки cookies",
 };

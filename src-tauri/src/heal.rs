@@ -45,14 +45,20 @@ pub fn plan(job: &Job, signed_in: bool, now: u64) -> Option<Fix> {
     let tried = |fix: &Fix| job.healed.iter().any(|key| key == fix.key());
     let has = |words: &[&str]| words.iter().any(|word| log.contains(word));
     let own_cookies = !job.options.cookies.is_empty() || !job.options.cookies_browser.is_empty();
+    // A site that wants a signed-in account: a newer yt-dlp does not help, and the Deviload
+    // sign-in holds YouTube cookies only. yt-dlp ends most errors with "please report this
+    // issue" and "yt-dlp -U", so those words alone must not start an update.
+    let needs_account = has(&["--cookies-from-browser or --cookies", "use --cookies", "empty media response", "login required", "log in to", "authentication"]);
+    let youtube = url::Url::parse(&job.url).ok().and_then(|url| url.host_str().map(str::to_ascii_lowercase))
+        .is_some_and(|host| host == "youtu.be" || host == "youtube.com" || host.ends_with(".youtube.com"));
     let fixes = [
         (has(&["sign in to confirm", "confirm your age", "login required", "members-only", "join this channel", "private video"])
-            && signed_in && !own_cookies, Fix::SignIn),
+            && youtube && signed_in && !own_cookies, Fix::SignIn),
         (has(&["requested format is not available"]) && !job.options.format_id.is_empty(), Fix::AnyFormat),
         (has(&["http error 429", "too many requests"]), Fix::Wait),
         (has(&["unable to extract", "signature extraction failed", "n challenge solving failed", "nsig extraction failed",
             "http error 403", "requested format is not available", "please report this issue", "po token"])
-            && now.saturating_sub(UPDATED_AT.load(Ordering::Relaxed)) >= UPDATE_EVERY, Fix::UpdateEngine),
+            && !(needs_account && !youtube) && now.saturating_sub(UPDATED_AT.load(Ordering::Relaxed)) >= UPDATE_EVERY, Fix::UpdateEngine),
     ];
     fixes.into_iter().find(|(applies, fix)| *applies && !tried(fix)).map(|(_, fix)| fix)
 }
@@ -104,6 +110,17 @@ mod tests {
         Job { id: 1, url: "https://www.youtube.com/watch?v=x".into(), options: Options::default(), status: "running".into(), percent: 40.0,
             speed: "2.0".into(), file: String::new(), log: lines.iter().map(|line| line.to_string()).collect(), scheduled_at: None,
             auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false }
+    }
+
+    #[test]
+    fn a_site_asking_for_an_account_is_not_healed_with_youtube_cookies_or_an_update() {
+        // The Instagram error from a real report: it names cookies and ends with "please report this issue".
+        let mut job = failed(&["ERROR: [Instagram] DdnoZIluWmN: Instagram sent an empty media response. Check if this post is accessible in your browser without being logged-in. If it is not, then use --cookies-from-browser or --cookies for the authentication. Otherwise, if the post is accessible in browser without being logged-in, please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U"]);
+        job.url = "https://www.instagram.com/p/DdnoZIluWmN/".into();
+        assert_eq!(plan(&job, true, UPDATE_EVERY), None);
+        // A YouTube failure with the same closing words still gets the update.
+        let youtube = failed(&["ERROR: [youtube] x: nsig extraction failed; please report this issue. Confirm you are on the latest version using yt-dlp -U"]);
+        assert_eq!(plan(&youtube, true, UPDATE_EVERY), Some(Fix::UpdateEngine));
     }
 
     #[test]

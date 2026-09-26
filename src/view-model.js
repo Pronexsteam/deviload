@@ -90,8 +90,17 @@ const ISSUES = [
   [/login required|cookies|authentication/, "Sign-in needed", "Access needs a signed-in YouTube account.", "login"],
 ];
 
-export function diagnoseError(log = [], signedIn = false) {
+function isYouTube(url) {
+  try { const host = new URL(url).hostname.toLowerCase(); return host === "youtu.be" || host === "youtube.com" || host.endsWith(".youtube.com"); }
+  catch { return true; }
+}
+
+export function diagnoseError(log = [], signedIn = false, url = "") {
   const detail = log.slice(-30).join("\n").toLowerCase();
+  // Other sites that want an account need cookies from where you are signed in; the Deviload sign-in is YouTube's.
+  if (url && !isYouTube(url) && /--cookies-from-browser or --cookies|use --cookies|empty media response|login required|log in to|authentication/.test(detail)) {
+    return {title:"Sign-in needed", message:"This site shows it only to signed-in users. In the download options, pick cookies from a browser where you are signed in, or a cookies.txt file, and retry.", action:"cookies"};
+  }
   for (const [pattern, title, message, action] of ISSUES) {
     if (!pattern.test(detail)) continue;
     if (action === "login" && signedIn && title === "YouTube asks to sign in") {

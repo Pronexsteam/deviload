@@ -1302,7 +1302,7 @@ function render(data) {
     const old = knownJobStates.get(job.id);
     if (old && old !== job.status && job.status === "running") brandMascot.reactStart();
     if (old && old !== job.status && ["done","error"].includes(job.status)) {
-      const detail = job.status === "error" ? t(diagnoseError(job.log, Boolean(signedInPath)).title) : (job.file.split(/[\\/]/).pop() || job.url);
+      const detail = job.status === "error" ? t(diagnoseError(job.log, Boolean(signedInPath), job.url).title) : (job.file.split(/[\\/]/).pop() || job.url);
       const title = t(job.status === "done" ? "Download ready" : "Download failed");
       addNotice(title, detail);
       systemNotice("Deviload · " + title, detail);
@@ -1373,7 +1373,7 @@ function render(data) {
     const repeatText = nextRun && job.repeatAt ? " · " + t("every day") : "";
     meta.replaceChildren(node("span", "", job.options.quality.toUpperCase()),
       node("span", recording && !job.stopRequested ? "recording" : "", nextRun && nextRun + repeatText || recording && recordingText(job) || (job.status === "running" ? (job.percent >= 99.95 ? t("Processing the file") : [Math.round(job.percent) + "%", speedText(job.speed)].filter(Boolean).join(" · ")) : statusLabel(job.status))));
-    const issue = job.status === "error" ? diagnoseError(job.log, Boolean(signedInPath)) : null;
+    const issue = job.status === "error" ? diagnoseError(job.log, Boolean(signedInPath), job.url) : null;
     // yt-dlp skips what the download archive lists, even when the file was deleted since.
     const skipped = job.status === "done" && job.archived > 0 ? job.archived : 0;
     // After a failure Deviload may be trying a fix by itself.
@@ -1445,6 +1445,11 @@ function render(data) {
       if (issue?.action === "login") addAction(controls, t(signedInPath ? "Sign in again" : "Sign in to YouTube"), "quiet fix-action", signIn, "", "play");
       if (issue?.action === "update") addAction(controls, t("Update yt-dlp"), "quiet fix-action", event => updateYtdlp(event.currentTarget), "", "arrow-clockwise");
       if (issue?.action === "proxy") addAction(controls, t("Proxy settings"), "quiet fix-action", openProxySettings, "", "gear");
+      if (issue?.action === "cookies") addAction(controls, t("Cookies settings"), "quiet fix-action", () => {
+        setDrawer(true);
+        $("cookies-mode").scrollIntoView({block:"center"});
+        $("cookies-mode").focus();
+      }, "", "gear");
       if (job.status === "done" && job.file) {
         addAction(controls, t("Watch"), "quiet", () => openPlayer(job.id), t("Play the finished file in Deviload."), "play");
         addAction(controls, t("To phone"), "transfer-button", () => startShare(job.id), t("Send this file to a phone with a QR code."), "phone-transfer");

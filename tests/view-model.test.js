@@ -37,6 +37,11 @@ test("error hints identify login, disk, update and network cases",()=>{
  assert.equal(diagnoseError(["WARNING: n challenge solving failed"]).action,"update");
  assert.equal(diagnoseError(["ERROR: HTTP Error 403: Forbidden"]).action,"update");
  assert.equal(diagnoseError(["ERROR: [youtube] abc: Private video"]).title,"Private video");
+ // Another site asking for an account points to the cookies settings, not to the YouTube sign-in.
+ const instagram = diagnoseError(["ERROR: [Instagram] x: Instagram sent an empty media response. use --cookies-from-browser or --cookies for the authentication. please report this issue. Confirm you are on the latest version using yt-dlp -U"], true, "https://www.instagram.com/p/x/");
+ assert.equal(instagram.action,"cookies");
+ assert.doesNotMatch(instagram.message,/YouTube/);
+ assert.equal(diagnoseError(["ERROR: login required"], false, "https://www.youtube.com/watch?v=x").action,"login");
  assert.match(diagnoseError(["No space left on device"]).message,/space/);
  assert.match(diagnoseError(["OSError: [WinError 112]"]).message,/space/);
  assert.match(diagnoseError(["Connection reset by peer"]).message,/connection/);
