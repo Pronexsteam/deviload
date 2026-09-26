@@ -334,18 +334,8 @@ function showAppUpdate() {
     : t("This is the portable version: download the new zip from the releases page and unpack it over the old one.");
   $("app-update-install-label").textContent = t(appUpdate.installable ? "Update" : "Download");
 }
-function updateAuto() {
-  try { return localStorage.getItem("deviload-update-auto") !== "false"; } catch { return true; }
-}
-$("update-auto-toggle").setAttribute("aria-checked", String(updateAuto()));
-$("update-auto-toggle").addEventListener("click", () => {
-  const next = !updateAuto();
-  try { localStorage.setItem("deviload-update-auto", String(next)); } catch { /* storage unavailable */ }
-  $("update-auto-toggle").setAttribute("aria-checked", String(next));
-});
 async function checkAppUpdate(manual = false) {
   if (!invoke) { if (manual) message(t("Update checks are available in the app."), true); return; }
-  if (!manual && !updateAuto()) return;
   try {
     appUpdate = await invoke("check_app_update");
     if (manual) {

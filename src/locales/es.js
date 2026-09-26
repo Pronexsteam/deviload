@@ -767,9 +767,6 @@ export default {
   "Circle": "Círculo",
   "Transition: {name}": "Transición: {name}",
   "Unknown transition": "Transición desconocida",
-  "Deviload checks GitHub for a new version at start and every 6 hours.": "Deviload busca una nueva versión en GitHub al iniciar y cada 6 horas.",
-  "Check for new versions": "Buscar nuevas versiones",
-  "Only the version number is requested; nothing about you or your downloads is sent.": "Solo se solicita el número de versión; no se envía nada sobre ti ni sobre tus descargas.",
   "Save to phone": "Guardar en el teléfono",
   "The phone link turned itself off after 30 minutes without the phone.": "El enlace con el teléfono se desactivó solo tras 30 minutos sin el teléfono.",
   "The link turns off by itself after 30 minutes without the phone, or when you close Deviload.": "El enlace se desactiva solo tras 30 minutos sin el teléfono, o al cerrar Deviload.",
@@ -1027,4 +1024,5 @@ export default {
   "No folder for the saved sign-in": "No hay carpeta para la sesión guardada",
   "Not signed in. Needed for age-restricted, private and members-only videos.": "Sin sesión. Hace falta para videos con restricción de edad, privados y solo para miembros.",
   "Support": "Apoyar",
+  "Deviload checks GitHub for a new version at start and every 6 hours. Only the version number is requested; nothing about you or your downloads is sent.": "Deviload busca una versión nueva en GitHub al iniciar y cada 6 horas. Solo se pide el número de versión; no se envía nada sobre ti ni tus descargas.",
 };

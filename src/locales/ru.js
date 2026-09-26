@@ -817,9 +817,6 @@ export default {
   "Circle": "Круг",
   "Transition: {name}": "Переход: {name}",
   "Unknown transition": "Неизвестный переход",
-  "Deviload checks GitHub for a new version at start and every 6 hours.": "Deviload проверяет на GitHub новую версию при запуске и каждые 6 часов.",
-  "Check for new versions": "Проверять новые версии",
-  "Only the version number is requested; nothing about you or your downloads is sent.": "Запрашивается только номер версии; ничего о вас и ваших загрузках не передаётся.",
   "Save to phone": "Скачать",
   "The phone link turned itself off after 30 minutes without the phone.": "Связь с телефоном выключилась сама: телефон не появлялся 30 минут.",
   "The link turns off by itself after 30 minutes without the phone, or when you close Deviload.": "Ссылка выключится сама, если телефон не появится 30 минут, или когда вы закроете Deviload.",
@@ -1077,4 +1074,5 @@ export default {
   "No folder for the saved sign-in": "Нет папки для сохранённого входа",
   "Not signed in. Needed for age-restricted, private and members-only videos.": "Вход не выполнен. Нужен для видео 18+, приватных и только для спонсоров.",
   "Support": "Поддержать",
+  "Deviload checks GitHub for a new version at start and every 6 hours. Only the version number is requested; nothing about you or your downloads is sent.": "Deviload проверяет на GitHub новую версию при запуске и каждые 6 часов. Запрашивается только номер версии; ничего о вас и ваших загрузках не передаётся.",
 };

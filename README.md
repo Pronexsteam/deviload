@@ -48,7 +48,7 @@ Desktop app for downloading video and music with [yt-dlp](https://github.com/yt-
 - **Phone link** over the local network: one QR code opens a page on the phone that downloads the files you send from Deviload, sends photos and videos back to the computer (each one needs your OK), and adds links to the download queue. The link turns off after 30 minutes without the phone, and the page can be added to the phone's home screen.
 - **Search** YouTube and YouTube Music inside the app.
 - **Sign-in in one step** for YouTube, Instagram, TikTok and X: press Sign in, log in in the window that opens, and Deviload keeps the session; each link uses the session of its own site only. Firefox cookies or your own `cookies.txt` also work (and Chrome, Edge, Brave or Safari on macOS).
-- **Updates**: Deviload checks GitHub at start and every 6 hours and updates itself in one click on Windows, macOS and in the AppImage, all from one release (the portable zip and the .deb package point to the releases page); yt-dlp updates itself to the nightly build once a day when nothing is downloading. Both can be turned off in the settings.
+- **Updates**: Deviload checks GitHub at start and every 6 hours and updates itself in one click on Windows, macOS and in the AppImage, all from one release (the portable zip and the .deb package point to the releases page); yt-dlp updates itself to the nightly build once a day when nothing is downloading, which can be turned off in the settings.
 - **Proxy** for downloads, search, link checks and yt-dlp updates (HTTP, HTTPS, SOCKS4 and SOCKS5).
 - **Moving from Deviload 1.x**: the history, settings and the list of downloaded videos of the old portable version move over in one click; cookies are not copied.
 - Tray mode and start with Windows, OS notifications, clipboard link suggestions, links from a text file, a copyable yt-dlp command in every task log, keyboard shortcuts (Ctrl/⌘+L links, Ctrl/⌘+K queue search, Ctrl/⌘+Enter download, Escape closes dialogs) and a short guided tour. Only one copy of Deviload runs at a time; starting it again brings the open window forward.
@@ -123,7 +123,7 @@ Public macOS builds would also need a Developer ID signature and notarization.
 
 The queue (`queue.json`), per-format download archives and the saved YouTube sign-in (`youtube-cookies.txt`) live in the app data folder: `%APPDATA%\com.deviload.desktop` on Windows, `~/Library/Application Support/com.deviload.desktop` on macOS. The sign-in export keeps only YouTube and Google cookies and never leaves your computer. Library tags, collections, player positions, Devil Cut projects and the proxy are stored in `library.json`, watched lists and artists in `watches.json` and the phone link key in `phone.json`, all in the same folder. The media server address and API key, if you set them, are kept in `queue.json` and are only sent to that server. Files received from a phone go to `Deviload from phone` inside the download folder.
 
-Deviload has no telemetry. Besides the sites you download from, it contacts GitHub to check for a new Deviload and to update yt-dlp; both checks can be turned off in the settings. The phone link only listens on the local network address and only while it is on; every file a phone sends needs your confirmation.
+Deviload has no telemetry. Besides the sites you download from, it contacts GitHub to check for a new Deviload (only the version number is requested) and to update yt-dlp; the yt-dlp update can be turned off in the settings. The phone link only listens on the local network address and only while it is on; every file a phone sends needs your confirmation.
 
 Engines run with an argument list and no shell. A task counts as finished only when yt-dlp exits with code 0, and the queue file is written atomically.
 
@@ -146,7 +146,7 @@ English is the source language. Russian strings live in `src/locales/ru.js`, key
 
 Deviload is maintained by Samvel Avetisyan ([Pronexsteam](https://github.com/Pronexsteam)), who writes, reviews and approves every release. Outside contributions arrive as pull requests and are reviewed by the maintainer. Most of the code is written with AI assistance (Claude) and is reviewed and tested by the maintainer before it ships.
 
-Deviload transfers no information to other networked systems except the sites you download from, GitHub for update checks (both can be turned off in the settings) and, while you use the phone link, the phone on your local network. See [Data and privacy](#data-and-privacy).
+Deviload transfers no information to other networked systems except the sites you download from, GitHub for update checks, which ask only for the version number and, while you use the phone link, the phone on your local network. See [Data and privacy](#data-and-privacy).
 
 ## Support
 
