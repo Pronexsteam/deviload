@@ -670,7 +670,7 @@ body { font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Ub
 .job-controls .job-more { margin-left: 0; }
 .job-controls .job-more summary { min-height: 30px; padding: 5px 12px; }
 .job-more .library-more-actions .quiet { display: flex; align-items: center; gap: 7px; width: 100%; }
-@media (max-width: 760px) { .job-controls { flex-wrap: wrap; } .job-controls > button { min-width: 0; } }
+@media (max-width: 900px) { .job-controls { flex-wrap: wrap; } .job-controls > button { min-width: 0; } }
 
 /* The status strip above the queue is a single line. */
 .hero.hero-slim { height: 92px; gap: 8px; }
