@@ -1076,4 +1076,5 @@ export default {
   "Could not open the sign-in window: {error}": "Не удалось открыть окно входа: {error}",
   "No folder for the saved sign-in": "Нет папки для сохранённого входа",
   "Not signed in. Needed for age-restricted, private and members-only videos.": "Вход не выполнен. Нужен для видео 18+, приватных и только для спонсоров.",
+  "Support": "Поддержать",
 };

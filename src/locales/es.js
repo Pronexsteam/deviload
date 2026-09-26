@@ -1026,4 +1026,5 @@ export default {
   "Could not open the sign-in window: {error}": "No se pudo abrir la ventana de inicio de sesión: {error}",
   "No folder for the saved sign-in": "No hay carpeta para la sesión guardada",
   "Not signed in. Needed for age-restricted, private and members-only videos.": "Sin sesión. Hace falta para videos con restricción de edad, privados y solo para miembros.",
+  "Support": "Apoyar",
 };
