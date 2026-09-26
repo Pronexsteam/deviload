@@ -358,7 +358,8 @@ $("check-updates").addEventListener("click", async () => {
   try { await checkAppUpdate(true); } finally { button.disabled = false; button.classList.remove("is-busy"); }
 });
 $("app-update-later").addEventListener("click", () => {
-  try { localStorage.setItem("deviload-update-later", JSON.stringify({version:appUpdate?.version, until:Date.now() + 3 * 86400000})); } catch { /* storage unavailable */ }
+  // "Later" hides the notice until the next check six hours on, which then shows it again.
+  try { localStorage.setItem("deviload-update-later", JSON.stringify({version:appUpdate?.version, until:Date.now() + 6 * 3600000 - 5 * 60000})); } catch { /* storage unavailable */ }
   showAppUpdate();
 });
 $("app-update-install").addEventListener("click", async () => {
