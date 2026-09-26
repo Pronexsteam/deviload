@@ -23,8 +23,8 @@
       <div class="cut-chips" role="group" aria-label="Size limit"><button type="button" data-size="10" class="selected">Discord · 10 MB</button><button type="button" data-size="16">WhatsApp · 16 MB</button><button type="button" data-size="25">Mail · 25 MB</button><button type="button" data-size="50">50 MB</button></div>
       <label class="convert-own-size" for="convert-size">Own size <input id="convert-size" type="number" min="1" max="4000" step="1" value="10"> MB</label>
     </div>
+    <div class="convert-save"><span class="cut-label">Save to</span><div class="export-folder"><span id="convert-folder" class="export-folder-name">Next to the source file</span><button id="convert-folder-pick" class="outline small" type="button">Choose</button><button id="convert-folder-reset" class="quiet small" type="button" hidden title="Save next to the source file" aria-label="Save next to the source file">×</button></div></div>
   </section>
-  <section class="convert-save" aria-label="Save to"><span class="cut-label">Save to</span><div class="export-folder"><span id="convert-folder" class="export-folder-name">Next to the source file</span><button id="convert-folder-pick" class="outline small" type="button">Choose</button><button id="convert-folder-reset" class="quiet small" type="button" hidden title="Save next to the source file" aria-label="Save next to the source file">×</button></div></section>
   <section class="convert-list-wrap" aria-label="Files">
     <div id="convert-list" class="convert-list"></div>
     <p id="convert-empty" class="convert-empty">The list is empty. Drop files into this window or press “Choose files”.</p>

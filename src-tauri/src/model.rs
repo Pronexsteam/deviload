@@ -19,6 +19,9 @@ pub struct Options {
     pub cookies: String,
     #[serde(default)]
     pub cookies_browser: String,
+    // The Deviload sign-in: each link uses the saved session of its own site (see account_cookies).
+    #[serde(default)]
+    pub cookies_account: bool,
     pub rate_mbps: u32,
     #[serde(default)]
     pub clip_start: Option<f64>,
@@ -61,7 +64,7 @@ impl Default for Options {
             folder: download_dir().to_string_lossy().into(),
             quality: "1080".into(), profile: "custom".into(), playlist: false, playlist_items: String::new(),
             split_chapters: false, subtitles: false, sponsorblock: false, archive: true,
-            cookies: String::new(), cookies_browser: String::new(), rate_mbps: 0,
+            cookies: String::new(), cookies_browser: String::new(), cookies_account: false, rate_mbps: 0,
             clip_start: None, clip_end: None, clip_format: "source".into(),
             folder_rule: "manual".into(), name_rule: "title".into(),
             format_id: String::new(), format_has_audio: false, container: default_container(),

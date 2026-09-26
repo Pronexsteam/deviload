@@ -7,6 +7,7 @@ import {pop, wireMotion} from "./motion.js";
 import {hydrateMascots, mascotSpot, setPose} from "./mascot-spot.js";
 import {labels, actions, counts, orbState, mediaPreview, visibleJobs, playlistSelection, diagnoseError, isVideoJob, isLibraryAudio, inLibrary} from "./view-model.js";
 import {t, tn, errorText, translateMessage, translateDom, setLanguage, onLanguageChange, language, locale, languageNames} from "./i18n.js";
+import {signInSite} from "./view-model.js";
 
 const $ = id => document.getElementById(id);
 const invoke = window.__TAURI__?.core?.invoke;
@@ -669,9 +670,10 @@ function renderAccount() {
   $("youtube-label").textContent = signed ? "YouTube" : t("Sign in");
   button.title = signed ? t("Signed in to YouTube · open YouTube") : t("Sign in to YouTube");
   button.setAttribute("aria-label", button.title);
-  $("account-state").textContent = signed ? t("Signed in to YouTube") : t("Not signed in");
-  $("account-hint").textContent = signed ? t("Downloads use this session. It is stored only on this computer.")
-    : t("Needed for age-restricted, private and members-only videos.");
+  // One row per site in the Accounts group, YouTube first.
+  $("account-state").textContent = "YouTube";
+  $("account-hint").textContent = signed ? t("Signed in. Links from {site} use this session.", {site:"YouTube"})
+    : t("Not signed in. Needed for age-restricted, private and members-only videos.");
   $("account-action").textContent = signed ? t("Sign out") : t("Sign in");
   $("account-action").className = signed ? "outline small" : "primary small";
   syncAuth();
@@ -722,6 +724,51 @@ window.__TAURI__?.event?.listen?.("youtube-session", async event => {
     brandMascot.celebrate();
   }
 });
+// Instagram, TikTok and X: each keeps its own sign-in, and a link uses the one of its own site.
+const SIGN_IN_SITES = [["instagram", "Instagram"], ["tiktok", "TikTok"], ["x", "X"]];
+let siteSessions = [];
+function siteName(key) { return SIGN_IN_SITES.find(([id]) => id === key)?.[1] || key; }
+function renderSites() {
+  $("site-accounts").replaceChildren(...SIGN_IN_SITES.map(([key, name]) => {
+    const signed = siteSessions.includes(key);
+    const row = node("div", "setting-row"), text = node("div");
+    text.append(node("strong", "", name), node("p", "", signed ? t("Signed in. Links from {site} use this session.", {site:name}) : t("Not signed in")));
+    const button = node("button", signed ? "outline small" : "primary small", signed ? t("Sign out") : t("Sign in"));
+    button.type = "button";
+    button.addEventListener("click", () => signed ? siteSignOut(key) : siteSignIn(key));
+    row.append(text, button);
+    return row;
+  }));
+}
+async function refreshSites() {
+  siteSessions = invoke ? await invoke("site_sessions").catch(() => []) : [];
+  renderSites();
+}
+async function siteSignIn(key) {
+  if (!invoke) { message(t("The sign-in window is available in the Deviload app."), true); return; }
+  try {
+    await invoke("site_sign_in", {site:key});
+    message(t("Sign in to {site} in the window that opened. Deviload saves the sign-in by itself.", {site:siteName(key)}));
+  } catch (error) { message(errorText(error), true); }
+}
+async function siteSignOut(key) {
+  const ask = window.__TAURI__?.dialog?.ask;
+  if (ask && !(await ask(t("Sign out of {site}? The saved session will be deleted from this computer.", {site:siteName(key)}), {title:"Deviload", kind:"warning"}))) return;
+  try {
+    await invoke("site_sign_out", {site:key});
+    await refreshSites();
+    message(t("Signed out of {site}. The saved session was deleted.", {site:siteName(key)}));
+  } catch (error) { message(errorText(error), true); }
+}
+window.__TAURI__?.event?.listen?.("site-session", async event => {
+  await refreshSites();
+  if (!event.payload) return;
+  if ($("cookies-mode").value === "none") { $("cookies-mode").value = "account"; syncAuth(); }
+  message(t("Signed in to {site}. Links from it now download with your account.", {site:siteName(event.payload)}));
+  brandMascot.celebrate();
+});
+refreshSites();
+onLanguageChange(renderSites);
 renderAccount();$("cookies-mode").addEventListener("change", syncAuth);
 syncAuth();
 for (const button of document.querySelectorAll("[data-folder]")) {
@@ -1392,7 +1439,7 @@ function render(data) {
     if (help.dataset.key !== helpKey) {
       help.dataset.key = helpKey;
       const text = node("div", "job-help-text");
-      if (issue) text.append(node("strong", "", t(issue.title)), node("span", "", t(issue.message)));
+      if (issue) text.append(node("strong", "", t(issue.title)), node("span", "", t(issue.message, issue.params)));
       else if (skipped) text.append(node("strong", "", t(job.file ? "Some items were downloaded before" : "Nothing new: downloaded before")),
         node("span", "", tn("{count} item was skipped because it was downloaded before, even if its file was deleted since. “Download again” brings back what is missing.",
           "{count} items were skipped because they were downloaded before, even if their files were deleted since. “Download again” brings back what is missing.", skipped)));
@@ -1454,10 +1501,11 @@ function render(data) {
       if (issue?.action === "update") addAction(controls, t("Update yt-dlp"), "quiet fix-action", event => updateYtdlp(event.currentTarget), "", "arrow-clockwise");
       if (issue?.action === "proxy") addAction(controls, t("Proxy settings"), "quiet fix-action", openProxySettings, "", "gear");
       if (issue?.action === "cookies") addAction(controls, t("Cookies settings"), "quiet fix-action", () => {
-        setDrawer(true);
+        $("app-settings-dialog").showModal();
         $("cookies-mode").scrollIntoView({block:"center"});
         $("cookies-mode").focus();
       }, "", "gear");
+      if (issue?.action === "site-login") addAction(controls, t("Sign in to {site}", issue.params), "quiet fix-action", () => siteSignIn(issue.site), "", "play");
       if (job.status === "done" && job.file) {
         addAction(controls, t("Watch"), "quiet", () => openPlayer(job.id), t("Play the finished file in Deviload."), "play");
         addAction(controls, t("To phone"), "transfer-button", () => startShare(job.id), t("Send this file to a phone with a QR code."), "phone-transfer");
@@ -1819,7 +1867,7 @@ function buildDownloadRequest() {
   const options = {folder:$("folder").value.trim(),quality,profile:$("profile").value,playlist:$("playlist").checked,container:$("container-select").value,
     playlistItems:$("playlist").checked ? $("playlist-items").value.trim() : "",splitChapters:$("split-chapters").checked,
     subtitles:$("subtitles").checked,sponsorblock:$("sponsorblock").checked,
-    archive:$("archive").checked,cookies:mode === "file" ? $("cookies").value.trim() : mode === "account" ? (signedInPath || "") : "",
+    archive:$("archive").checked,cookies:mode === "file" ? $("cookies").value.trim() : mode === "account" ? (signedInPath || "") : "",cookiesAccount:mode === "account",
     cookiesBrowser:["chrome","edge","firefox","brave","safari"].includes(mode) ? mode : "",rateMbps:Number($("rate").value),
     clipStart,clipEnd,clipFormat:clipEnabled ? $("clip-output").value : "source",
     folderRule:$("folder-rule").value,nameRule:$("name-rule").value,

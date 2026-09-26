@@ -22,7 +22,7 @@ Desktop app for downloading video and music with [yt-dlp](https://github.com/yt-
 
 ## Features
 
-- **Downloads** from YouTube, YouTube Music and every other site yt-dlp supports. Best, 1080p, 720p or 480p video; MP3, FLAC or WAV audio. Profiles for music, archive, phone (MP4) and maximum quality.
+- **Downloads** from YouTube, YouTube Music and every other site yt-dlp supports. Best, 1080p, 720p or 480p video as MP4 (plays everywhere, H.264 and AAC when the site has them), MKV (the best streams as they are) or WebM; MP3, FLAC or WAV audio. Profiles for music, archive, phone (MP4) and maximum quality.
 - **One link field.** Paste one or more links, or drop a link from the browser anywhere on the window. A preview with the title, duration and the real streams of the source appears by itself; an exact stream can be picked.
 - **Playlists**: whole list, first N items or exact ranges, a track picker by title, and splitting by chapters. Subtitles, SponsorBlock removal and a per-format download archive.
 - **Live streams** record from the moment you add the link: the task shows the time recorded and the size so far, "Stop recording" keeps what was recorded as a normal MP4, and an optional limit (15 minutes to 24 hours) stops it by itself. With a start time, a length and "Repeat every day" it records the same stream at the same time daily. A recording cut off when Deviload closes is saved at the next start.
@@ -41,13 +41,13 @@ Desktop app for downloading video and music with [yt-dlp](https://github.com/yt-
   - detach a clip's sound and move, trim or split it on its own track;
   - transitions between clips (crossfade, through black, slide, wipe, circle) and a sound wave on the tracks;
   - per clip: speed 0.5× to 3×, volume, smooth start and end, rotation, mirror, brightness, contrast, saturation and a caption;
-  - frame formats 16:9, 9:16, 1:1 and 4:5 with fit, fill or a blurred background; export to MP4 (1080p, 720p, 480p), GIF or MP3 with progress;
+  - frame formats 16:9, 9:16, 1:1 and 4:5 with fit, fill or a blurred background; export to MP4 at the original size, 4K, 1440p, 1080p, 720p or 480p in H.264 or H.265, GIF or MP3 with progress, into the folder the video came from or one you choose;
   - projects are saved automatically, and source files are never changed.
 - **Audio tools** for MP3, FLAC and WAV: tags and loudness normalization, saved as a new copy.
-- **Converter** in its own window: drop any video or audio file from the computer, or send one from the library, and get MP4, MP3, a GIF, or a video that fits a size limit (Discord 10 MB, WhatsApp 16 MB, mail 25 MB or your own) through two-pass encoding. The original stays as it is.
+- **Converter** in its own window: drop any video or audio file from the computer, or send one from the library, and get MP4, MP3, a GIF, or a video that fits a size limit (Discord 10 MB, WhatsApp 16 MB, mail 25 MB or your own) through two-pass encoding. The original stays as it is; results go next to it or into the export folder shared with Devil Cut.
 - **Phone link** over the local network: one QR code opens a page on the phone that downloads the files you send from Deviload, sends photos and videos back to the computer (each one needs your OK), and adds links to the download queue. The link turns off after 30 minutes without the phone, and the page can be added to the phone's home screen.
 - **Search** YouTube and YouTube Music inside the app.
-- **YouTube sign-in in one step**: press Sign in, log in to Google in the window that opens, and Deviload keeps the session for downloads. Firefox cookies or your own `cookies.txt` also work (and Chrome, Edge, Brave or Safari on macOS).
+- **Sign-in in one step** for YouTube, Instagram, TikTok and X: press Sign in, log in in the window that opens, and Deviload keeps the session; each link uses the session of its own site only. Firefox cookies or your own `cookies.txt` also work (and Chrome, Edge, Brave or Safari on macOS).
 - **Updates**: Deviload checks GitHub at start and every 6 hours and updates itself in one click on Windows, macOS and in the AppImage, all from one release (the portable zip and the .deb package point to the releases page); yt-dlp updates itself to the nightly build once a day when nothing is downloading. Both can be turned off in the settings.
 - **Proxy** for downloads, search, link checks and yt-dlp updates (HTTP, HTTPS, SOCKS4 and SOCKS5).
 - **Moving from Deviload 1.x**: the history, settings and the list of downloaded videos of the old portable version move over in one click; cookies are not copied.

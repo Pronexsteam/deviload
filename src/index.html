@@ -91,8 +91,9 @@
     <div class="setting-row"><div><strong>Move from Deviload 1.x</strong><p>Carry over the history, settings and the list of downloaded videos. Pick the folder of the old version.</p></div><button id="legacy-import" class="outline small" type="button"><span class="icon" data-icon="folder-open" aria-hidden="true"></span>Pick folder</button></div>
     <div class="setting-row"><div><strong>App tour</strong><p>A short walk through the main screens.</p></div><button id="tour-replay" class="outline small" type="button">Show</button></div>
   </section>
-  <section class="settings-group"><h3>YouTube account</h3>
-    <div class="setting-row"><div><strong id="account-state">Not signed in</strong><p id="account-hint">Needed for age-restricted, private and members-only videos.</p></div><button id="account-action" class="primary small" type="button">Sign in</button></div>
+  <section class="settings-group"><h3>Accounts</h3>
+    <div class="setting-row"><div><strong id="account-state">YouTube</strong><p id="account-hint">Not signed in. Needed for age-restricted, private and members-only videos.</p></div><button id="account-action" class="primary small" type="button">Sign in</button></div>
+    <div id="site-accounts"></div>
     <label for="cookies-mode">Cookies for downloads<select id="cookies-mode"><option value="account">Deviload sign-in (recommended)</option><option value="none">No cookies</option><option value="firefox">Firefox</option><option value="chrome" data-os="mac">Chrome</option><option value="edge" data-os="mac">Edge</option><option value="brave" data-os="mac">Brave</option><option value="safari" data-os="mac">Safari</option><option value="file">cookies.txt file</option></select></label>
     <div id="cookies-file-wrap" class="folder-input-row" hidden><input id="cookies" type="text" placeholder="Full path to cookies.txt" aria-label="Full path to cookies.txt"><button id="browse-cookies" class="outline" type="button"><span class="icon" data-icon="folder-open" aria-hidden="true"></span>Browse</button></div>
     <p id="auth-hint" class="settings-note"></p>

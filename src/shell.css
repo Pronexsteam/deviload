@@ -804,5 +804,5 @@ body { font-family: "Inter Variable", "Segoe UI", system-ui, -apple-system, Blin
 .editor-home-project > .quiet { flex: none; }
 /* "Save to": the export folder of Devil Cut and the converter. */
 .export-folder { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.export-folder-name { flex: 1; min-width: 0; overflow: hidden; color: #c9d1d7; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.convert-save { display: grid; gap: 6px; }
+.export-folder-name { flex: 1; min-width: 0; overflow: hidden; padding: 7px 10px; border: 1px solid #39434c; border-radius: 7px; background: #11161b; color: #c9d1d7; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.convert-save { display: grid; gap: 6px; max-width: 560px; margin-top: 14px; }

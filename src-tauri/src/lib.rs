@@ -140,6 +140,11 @@ fn download_args(job: &Job, dir: &Path) -> Result<Vec<String>, String> {
     let ffmpeg = binary("ffmpeg")?;
     binary("ffprobe")?;
     let deno = binary("deno")?;
+    let mut job = job.clone();
+    // The Deviload sign-in: each link gets its own site's saved session and never another site's.
+    if job.options.cookies_account || (!job.options.cookies.is_empty() && Path::new(&job.options.cookies) == session_file(dir)) {
+        job.options.cookies = account_cookies(&job.url, dir).map(|file| file.to_string_lossy().into_owned()).unwrap_or_default();
+    }
     let mut args = job.options.args(&job.url, dir);
     let tail = args.split_off(args.len() - 2);
     args.extend(["--ffmpeg-location".into(), ffmpeg.parent().unwrap().to_string_lossy().into(),
@@ -500,26 +505,73 @@ const SESSION_URLS: [&str; 4] = ["https://www.youtube.com/", "https://music.yout
 
 fn session_file(dir: &Path) -> PathBuf { dir.join("youtube-cookies.txt") }
 
+// Sites with a Deviload sign-in. Each keeps its own window profile and cookie file, and a link
+// is downloaded with the session of its own site only.
+struct Site { key: &'static str, name: &'static str, sign_in: &'static str, hosts: &'static [&'static str], signed_in: &'static [&'static str] }
+
+impl Site {
+    fn matches(&self, host: &str) -> bool { self.hosts.iter().any(|known| host == *known || host.ends_with(&format!(".{known}"))) }
+}
+
+static SITES: [Site; 4] = [
+    Site { key: "youtube", name: "YouTube", sign_in: YOUTUBE_SIGN_IN, hosts: &["youtube.com", "youtu.be", "google.com"], signed_in: &["LOGIN_INFO", "SID", "__Secure-3PSID"] },
+    Site { key: "instagram", name: "Instagram", sign_in: "https://www.instagram.com/accounts/login/", hosts: &["instagram.com"], signed_in: &["sessionid"] },
+    Site { key: "tiktok", name: "TikTok", sign_in: "https://www.tiktok.com/login", hosts: &["tiktok.com"], signed_in: &["sessionid"] },
+    Site { key: "x", name: "X", sign_in: "https://x.com/i/flow/login", hosts: &["x.com", "twitter.com"], signed_in: &["auth_token"] },
+];
+
+fn find_site(key: &str) -> Result<&'static Site, String> {
+    SITES.iter().find(|site| site.key == key && site.key != "youtube").ok_or_else(|| "Unknown site".to_string())
+}
+
+fn site_cookie_file(dir: &Path, site: &Site) -> PathBuf {
+    if site.key == "youtube" { session_file(dir) } else { dir.join(format!("{}-cookies.txt", site.key)) }
+}
+
+fn site_profile(app: &tauri::AppHandle, site: &Site) -> Result<PathBuf, String> {
+    app.path().app_local_data_dir().map(|dir| dir.join(format!("{}-session", site.key))).map_err(|e| e.to_string())
+}
+
+// With the Deviload sign-in, each link uses the saved session of its own site, if there is one.
+fn account_cookies(url: &str, dir: &Path) -> Option<PathBuf> {
+    let host = url::Url::parse(url).ok()?.host_str()?.to_ascii_lowercase();
+    let site = SITES.iter().find(|site| site.matches(&host))?;
+    Some(site_cookie_file(dir, site)).filter(|file| file.is_file())
+}
+
+fn write_private(path: &Path, content: &str) -> Result<(), String> {
+    let dir = path.parent().ok_or("No folder for the saved sign-in")?;
+    let mut temp = tempfile::NamedTempFile::new_in(dir).map_err(|e| e.to_string())?;
+    temp.write_all(content.as_bytes()).map_err(|e| e.to_string())?;
+    temp.as_file().sync_all().map_err(|e| e.to_string())?;
+    temp.persist(path).map_err(|e| e.to_string())?;
+    #[cfg(unix)] {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 // The YouTube window keeps its own WebView profile, so signing out never
 // touches the main window's storage.
 fn youtube_profile(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path().app_local_data_dir().map(|dir| dir.join("youtube-session")).map_err(|e| e.to_string())
 }
 
-fn cookie_file_content(cookies: &[tauri::webview::Cookie<'static>]) -> Option<String> {
-    let mut out = String::from("# Netscape HTTP Cookie File\n# Deviload YouTube session; keep this file private.\n\n");
+fn cookie_file_content(cookies: &[tauri::webview::Cookie<'static>], site: &Site) -> Option<String> {
+    let mut out = format!("# Netscape HTTP Cookie File\n# Deviload {} session; keep this file private.\n\n", site.name);
     let mut seen = HashSet::new();
     let mut signed_in = false;
     for cookie in cookies {
         let Some(domain) = cookie.domain() else { continue; };
         let host = domain.trim_start_matches('.').to_ascii_lowercase();
-        if !(host == "youtube.com" || host.ends_with(".youtube.com") || host == "google.com" || host.ends_with(".google.com")) { continue; }
+        if !site.matches(&host) { continue; }
         let path = cookie.path().unwrap_or("/");
         let name = cookie.name();
         let value = cookie.value();
         if [domain, path, name, value].iter().any(|part| part.contains(['\t', '\r', '\n'])) { continue; }
         if !seen.insert((host.clone(), path.to_owned(), name.to_owned())) { continue; }
-        signed_in |= ["LOGIN_INFO", "SID", "__Secure-3PSID"].contains(&name);
+        signed_in |= site.signed_in.contains(&name);
         let expiry = cookie.expires_datetime().map(|d| d.unix_timestamp().max(0)).unwrap_or(0);
         out.push_str(&format!(".{}\tTRUE\t{}\t{}\t{}\t{}\t{}\n", host,
             path,
@@ -534,17 +586,75 @@ fn save_session(window: &tauri::WebviewWindow, dir: &Path) -> Result<bool, Strin
     for url in SESSION_URLS {
         cookies.extend(window.cookies_for_url(url.parse().unwrap()).map_err(|e| e.to_string())?);
     }
-    let Some(content) = cookie_file_content(&cookies) else { return Ok(false); };
-    let mut temp = tempfile::NamedTempFile::new_in(dir).map_err(|e| e.to_string())?;
-    temp.write_all(content.as_bytes()).map_err(|e| e.to_string())?;
-    temp.as_file().sync_all().map_err(|e| e.to_string())?;
-    let path = session_file(dir);
-    temp.persist(&path).map_err(|e| e.to_string())?;
-    #[cfg(unix)] {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())?;
-    }
+    let Some(content) = cookie_file_content(&cookies, &SITES[0]) else { return Ok(false); };
+    write_private(&session_file(dir), &content)?;
     Ok(true)
+}
+
+// The same for the other sites: their cookies from the sign-in window, once the site set its session cookie.
+fn save_site_session(window: &tauri::WebviewWindow, dir: &Path, site: &Site) -> Result<bool, String> {
+    let mut cookies = Vec::new();
+    for host in site.hosts {
+        for address in [format!("https://www.{host}/"), format!("https://{host}/")] {
+            let Ok(url) = address.parse() else { continue };
+            cookies.extend(window.cookies_for_url(url).map_err(|e| e.to_string())?);
+        }
+    }
+    let Some(content) = cookie_file_content(&cookies, site) else { return Ok(false); };
+    write_private(&site_cookie_file(dir, site), &content)?;
+    Ok(true)
+}
+
+// A sign-in window for Instagram, TikTok or X; it closes by itself once the session is saved.
+#[tauri::command]
+async fn site_sign_in(app: tauri::AppHandle, engine: tauri::State<'_, Engine>, site: String) -> Result<(), String> {
+    let site = find_site(&site)?;
+    let label = format!("signin-{}", site.key);
+    if let Some(window) = app.get_webview_window(&label) { return window.set_focus().map_err(|e| e.to_string()); }
+    let url = site.sign_in.parse().map_err(|e| format!("Invalid sign-in address: {e}"))?;
+    let dir = engine.dir.clone();
+    let builder = tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(url))
+        .title(format!("{} · Deviload", site.name))
+        .inner_size(1000.0, 760.0)
+        .min_inner_size(520.0, 540.0)
+        .on_page_load(move |window, payload| {
+            if payload.event() != tauri::webview::PageLoadEvent::Finished { return; }
+            let host = payload.url().host_str().unwrap_or("").to_ascii_lowercase();
+            if !site.matches(&host) { return; }
+            let dir = dir.clone();
+            // Reading cookies on the page-load thread deadlocks WebView2.
+            thread::spawn(move || {
+                if let Ok(true) = save_site_session(&window, &dir, site) {
+                    let _ = window.app_handle().emit("site-session", site.key);
+                    let _ = window.close();
+                }
+            });
+        });
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder.data_directory(site_profile(&app, site)?);
+    builder.build().map(|_| ()).map_err(|e| format!("Could not open the sign-in window: {e}"))
+}
+
+#[tauri::command]
+fn site_sessions(engine: tauri::State<Engine>) -> Vec<&'static str> {
+    SITES.iter().filter(|site| site.key != "youtube" && site_cookie_file(&engine.dir, site).is_file()).map(|site| site.key).collect()
+}
+
+#[tauri::command]
+async fn site_sign_out(app: tauri::AppHandle, engine: tauri::State<'_, Engine>, site: String) -> Result<(), String> {
+    let site = find_site(&site)?;
+    if let Some(window) = app.get_webview_window(&format!("signin-{}", site.key)) { let _ = window.destroy(); }
+    let file = site_cookie_file(&engine.dir, site);
+    if file.exists() { fs::remove_file(&file).map_err(|e| format!("Could not remove the saved sign-in: {e}"))?; }
+    let profile = site_profile(&app, site)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        // WebView2 can hold the profile for a moment after the window closes.
+        for _ in 0..20 {
+            if !profile.exists() || fs::remove_dir_all(&profile).is_ok() { return; }
+            thread::sleep(Duration::from_millis(250));
+        }
+    }).await.map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -2280,15 +2390,17 @@ struct FormatChoice {
 }
 
 #[tauri::command]
-async fn inspect_media(address: String) -> Result<InspectInfo, String> {
+async fn inspect_media(address: String, engine: tauri::State<'_, Engine>) -> Result<InspectInfo, String> {
     let urls = model::parse_urls(&address)?;
     if urls.len() != 1 { return Err("Check one link at a time".into()); }
+    let dir = engine.dir.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let exe = binary("yt-dlp")?;
-        let output = ytdlp_command(&exe)
-            .args(["--ignore-config", "--flat-playlist", "--dump-single-json", "--skip-download",
-                "--playlist-items", "1", "--no-warnings", "--no-colors", "--"])
-            .arg(&urls[0]).output().map_err(|e| e.to_string())?;
+        let mut cmd = ytdlp_command(&exe);
+        cmd.args(["--ignore-config", "--flat-playlist", "--dump-single-json", "--skip-download",
+            "--playlist-items", "1", "--no-warnings", "--no-colors"]);
+        if let Some(cookies) = account_cookies(&urls[0], &dir) { cmd.arg("--cookies").arg(cookies); }
+        let output = cmd.arg("--").arg(&urls[0]).output().map_err(|e| e.to_string())?;
         if !output.status.success() {
             let detail = String::from_utf8_lossy(&output.stderr);
             return Err(format!("Could not check the link: {}", detail.chars().take(280).collect::<String>()));
@@ -2724,7 +2836,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_releases, open_support, window_action, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
+        .invoke_handler(tauri::generate_handler![set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_releases, open_support, window_action, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, site_sign_in, site_sign_out, site_sessions, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
         .build(tauri::generate_context!()).expect("failed to start Deviload")
         .run(|app, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event { app.state::<Engine>().stop(); }
@@ -2839,11 +2951,35 @@ mod engine_tests {
             .domain(".youtube.com").path("/").secure(true).build();
         let unrelated = tauri::webview::Cookie::build(("SID", "other"))
             .domain(".example.com").path("/").build();
-        let content = cookie_file_content(&[auth, unrelated.clone()]).unwrap();
+        let content = cookie_file_content(&[auth, unrelated.clone()], &SITES[0]).unwrap();
         assert!(content.contains(".youtube.com\tTRUE\t/\tTRUE"), "{content}");
         assert!(content.contains("\tSID\tsecret"));
         assert!(!content.contains("example.com"));
-        assert!(cookie_file_content(&[unrelated]).is_none());
+        assert!(cookie_file_content(&[unrelated], &SITES[0]).is_none());
+    }
+    #[test]
+    fn each_site_keeps_its_own_session_and_links_use_their_own() {
+        let instagram = find_site("instagram").unwrap();
+        let session = tauri::webview::Cookie::build(("sessionid", "ig")).domain(".instagram.com").path("/").secure(true).build();
+        let youtube = tauri::webview::Cookie::build(("SID", "yt")).domain(".youtube.com").path("/").build();
+        let content = cookie_file_content(&[session, youtube.clone()], instagram).unwrap();
+        assert!(content.contains("\tsessionid\tig") && !content.contains("youtube"), "{content}");
+        // Signing in to Instagram is not signing in to YouTube, and a page without the session cookie saves nothing.
+        assert!(cookie_file_content(&[youtube], instagram).is_none());
+        assert!(find_site("youtube").is_err() && find_site("myspace").is_err());
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(session_file(dir.path()), "yt").unwrap();
+        fs::write(site_cookie_file(dir.path(), instagram), "ig").unwrap();
+        let pick = |url: &str| account_cookies(url, dir.path()).map(|file| file.file_name().unwrap().to_string_lossy().into_owned());
+        assert_eq!(pick("https://www.youtube.com/watch?v=x").as_deref(), Some("youtube-cookies.txt"));
+        assert_eq!(pick("https://youtu.be/x").as_deref(), Some("youtube-cookies.txt"));
+        assert_eq!(pick("https://www.instagram.com/p/DdnoZIluWmN/").as_deref(), Some("instagram-cookies.txt"));
+        assert_eq!(pick("https://www.tiktok.com/@a/video/1"), None);
+        assert_eq!(pick("https://example.com/v"), None);
+        // A download in the account mode never hands the YouTube session to Instagram.
+        let job = Job { id: 1, url: "https://www.tiktok.com/@a/video/1".into(), options: Options { cookies_account: true, cookies: session_file(dir.path()).to_string_lossy().into(), ..Options::default() },
+            status: "queued".into(), percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
+        if let Ok(args) = download_args(&job, dir.path()) { assert!(!args.contains(&"--cookies".to_string()), "{args:?}"); }
     }
     #[test]
     fn preflight_rejects_unwritable_destination_and_missing_urls() {
