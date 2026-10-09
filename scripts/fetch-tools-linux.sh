@@ -9,6 +9,24 @@ trap 'rm -rf "$work"' EXIT
 
 fetch() { curl -fsSL --retry 4 --retry-delay 10 --retry-all-errors -o "$2" "$1"; }
 
+# yt-dlp's checksums are GPG-signed. The signing key fingerprint below is pinned in this
+# repository (not fetched from the same GitHub release as the binary/checksums), so an
+# attacker who only controls the release page can't forge a checksum file that passes.
+YTDLP_GPG_FINGERPRINT="AC0CBBE6848D6A873464AF4E57CF65933B5A7581"
+
+verify_ytdlp_sums() {
+    local sums_url="$1" sig_url="$1.sig" sums="$work/SHA2-256SUMS" sig="$work/SHA2-256SUMS.sig"
+    curl -fsSL --retry 4 --retry-delay 10 --retry-all-errors -o "$sums" "$sums_url"
+    curl -fsSL --retry 4 --retry-delay 10 --retry-all-errors -o "$sig" "$sig_url"
+    GNUPGHOME="$work/gnupg" && mkdir -m 700 -p "$GNUPGHOME"
+    curl -fsSL https://github.com/yt-dlp/yt-dlp/raw/master/public.key | GNUPGHOME="$GNUPGHOME" gpg -q --import
+    if ! GNUPGHOME="$GNUPGHOME" gpg --status-fd 1 --verify "$sig" "$sums" 2>/dev/null \
+            | grep -q "VALIDSIG $YTDLP_GPG_FINGERPRINT"; then
+        echo "GPG signature verification failed for yt-dlp checksums" >&2
+        exit 1
+    fi
+}
+
 # Every download is checked against the SHA-256 its own project publishes. A mismatch deletes the
 # file and stops the build, so nothing unverified reaches a release. The third argument names the
 # file in a list of checksums; without it the checksum file holds just the one.
