@@ -85,9 +85,12 @@ function tableStrings() {
     }
   }
   for (const url of ["https://www.instagram.com/p/x/", "https://example.com/v"]) {
-    const other = diagnoseError(["ERROR: x: use --cookies-from-browser or --cookies for the authentication"], true, url);
-    strings.push(other.title, other.message);
+    for (const signed of [true, false]) for (const line of ["login required", "empty media response", "not available to everyone", "HTTP Error 429"]) {
+      const issue = diagnoseError([line], signed, url);
+      strings.push(issue.title, issue.message);
+    }
   }
+  strings.push(...literals(block(main, "const stages =", "\n")));
   return strings;
 }
 
@@ -133,16 +136,16 @@ test("translations keep every placeholder", () => {
 });
 
 test("Cyrillic text lives only in the Russian locale", () => {
-  const skip = new Set(["node_modules", "target", "gen", ".git", ".work", "bin", "dist", "vendor"]);
+  const skip = new Set(["node_modules", "target", "gen", ".git", ".work", ".playwright-cli", "bin", "dist", "vendor"]);
   const offenders = [];
   const walk = dir => {
     for (const name of readdirSync(dir)) {
       if (skip.has(name)) continue;
       const path = join(dir, name);
       if (statSync(path).isDirectory()) { walk(path); continue; }
-      if (!/\.(js|mjs|html|css|rs|toml|json|md|yml|ps1|sh)$/.test(name)) continue;
+      if (!/\.(js|mjs|html|css|rs|toml|json|md|yml|ps1|sh|nsh)$/.test(name)) continue;
       const file = relative(root, path).replaceAll("\\", "/");
-      if (file === "src/locales/ru.js" || file === "README.md") continue;
+      if ((file === "src/locales/ru.js" || file === "src-tauri/windows/locales/ru.nsh") || file === "README.md") continue;
       if (/\p{Script=Cyrillic}/u.test(readFileSync(path, "utf8"))) offenders.push(file);
     }
   };

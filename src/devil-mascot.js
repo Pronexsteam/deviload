@@ -165,8 +165,8 @@ export class DevilMascot {
     const menu = this.menuLook || now < this.lookUntil || (!reduced() && Math.floor(elapsed / 4.2) % 2 === 1);
     const activeReaction = now < this.reactionUntil ? this.reaction : "idle";
     const working = this.state === "running" || this.activity === "sending";
-    const bob = reduced() ? 0 : Math.sin(elapsed * (working ? 5.3 : 2.15)) * (working ? 4 : 1.65);
-    const sway = reduced() ? 0 : Math.sin(elapsed * 1.35) * 1.15;
+    const bob = reduced() ? 0 : Math.sin(elapsed * (working ? 5.3 : 1.3)) * (working ? 4 : .5);
+    const sway = reduced() ? 0 : Math.sin(elapsed * 1.35) * (working ? 1.15 : .3);
     const victory = activeReaction === "victory" || activeReaction === "sent";
     const rage = activeReaction === "rage";
     const wink = activeReaction === "wink";

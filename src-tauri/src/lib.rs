@@ -19,6 +19,8 @@ use base64::Engine as _;
 #[serde(rename_all = "camelCase")]
 struct Snapshot {
     jobs: Vec<Job>,
+    #[serde(default)]
+    next_id: u64,
     options: Options,
     parallel: usize,
     #[serde(default)]
@@ -32,7 +34,7 @@ struct Snapshot {
 }
 impl Default for Snapshot {
     fn default() -> Self {
-        Self { jobs: vec![], options: Options::default(), parallel: 2, warning: String::new(), default_folder: String::new(),
+        Self { jobs: vec![], next_id: 1, options: Options::default(), parallel: 2, warning: String::new(), default_folder: String::new(),
             media_server: media_server::MediaServer::default() }
     }
 }
@@ -42,6 +44,43 @@ struct Engine {
     data: Arc<Mutex<Snapshot>>,
     dir: PathBuf,
     shutdown: Arc<AtomicBool>,
+}
+
+// IDs survive queue cleanup and are shared by downloads, imports and library files.
+fn allocate_id(data: &mut Snapshot) -> u64 {
+    let id = data.next_id.max(data.jobs.iter().map(|j| j.id).max().unwrap_or(0) + 1);
+    data.next_id = id + 1;
+    id
+}
+
+// Keep the original task ID for its final file, so existing editor projects keep working.
+// Additional playlist files have independent records and can be played, shared or removed.
+fn index_library(data: &mut Snapshot) {
+    let parents: Vec<Job> = data.jobs.iter().filter(|j| j.library_parent.is_none() && (j.status == "done" || !j.downloads.is_empty())).cloned().collect();
+    for job in parents {
+        let mut seen = HashSet::new();
+        let files: Vec<String> = job.downloads.iter().map(|entry| entry[1].clone()).filter(|file| !file.is_empty() && seen.insert(file.clone())).collect();
+        for file in files {
+            if (file == job.file && job.status == "done") || data.jobs.iter().any(|j| j.library_parent == Some(job.id) && j.file == file) { continue; }
+            let mut media = job.clone();
+            media.id = allocate_id(data);
+            media.library_parent = Some(job.id);
+            media.file = file;
+            media.status = "done".into();
+            media.percent = 100.0;
+            media.downloads.clear();
+            media.log.clear();
+            media.hidden_in_queue = true;
+            media.bytes = 0;
+            media.duration = 0.0;
+            data.jobs.push(media);
+        }
+    }
+    let mut visible = HashSet::new();
+    for media in data.jobs.iter_mut().filter(|j| j.status == "done" && !j.hidden_in_library && !j.file.is_empty()) {
+        let key = if cfg!(windows) { media.file.replace('\\', "/").to_lowercase() } else { media.file.clone() };
+        if !visible.insert(key) { media.hidden_in_library = true; }
+    }
 }
 
 fn save(dir: &Path, data: &Snapshot) -> Result<(), String> {
@@ -141,10 +180,7 @@ fn download_args(job: &Job, dir: &Path) -> Result<Vec<String>, String> {
     binary("ffprobe")?;
     let deno = binary("deno")?;
     let mut job = job.clone();
-    // The Deviload sign-in: each link gets its own site's saved session and never another site's.
-    if job.options.cookies_account || (!job.options.cookies.is_empty() && Path::new(&job.options.cookies) == session_file(dir)) {
-        job.options.cookies = account_cookies(&job.url, dir).map(|file| file.to_string_lossy().into_owned()).unwrap_or_default();
-    }
+    job.options = resolve_auth(job.options, &job.url, dir);
     let mut args = job.options.args(&job.url, dir);
     let tail = args.split_off(args.len() - 2);
     args.extend(["--ffmpeg-location".into(), ffmpeg.parent().unwrap().to_string_lossy().into(),
@@ -218,7 +254,11 @@ impl Engine {
             else if j.status == "cancelling" || self.shutdown.load(Ordering::Relaxed) { j.status = "cancelled".into(); }
             else {
                 match result {
-                    Ok(()) => { j.status = "done".into(); j.percent = 100.0; j.scheduled_at = None; }
+                    Ok(()) => {
+                        j.status = if j.file.is_empty() && j.archived > 0 { "skipped" } else if j.file.is_empty() { "error" } else { "done" }.into();
+                        if j.status == "error" { j.consume("No output file was produced. Open the task log for details."); }
+                        j.percent = 100.0; j.scheduled_at = None;
+                    }
                     Err(e) => {
                         j.consume(&e);
                         if !schedule_retry(j) {
@@ -233,12 +273,13 @@ impl Engine {
             }
         }
         // A daily recording that ended, well or not, queues tomorrow's run and hands the repeat on.
-        let next_id = d.jobs.iter().map(|j| j.id).max().unwrap_or(0) + 1;
+        let next_id = allocate_id(&mut d);
         if let Some(j) = d.jobs.iter_mut().find(|j| j.id == id && queues_next_recording(j)) {
             let next = next_recording(j, next_id, now_seconds());
             j.repeat_at = 0;
             d.jobs.push(next);
         }
+        index_library(&mut d);
         self.persist(&mut d);
         // When the last download for the media server is done, ask it to scan.
         let server = d.media_server.clone();
@@ -318,9 +359,9 @@ impl Engine {
             let d = self.data.lock().unwrap();
             let Some(job) = d.jobs.iter().find(|j| j.id == id && j.live && j.options.archive && !j.options.playlist) else { return };
             // Another download of this format may be appending to the same archive right now.
-            if d.jobs.iter().any(|j| j.id != id && j.status == "running" && j.options.quality == job.options.quality) { return; }
+            if d.jobs.iter().any(|j| j.id != id && j.status == "running" && j.options.archive_path(&self.dir) == job.options.archive_path(&self.dir)) { return; }
             let keys: HashSet<String> = job.downloads.iter().map(|[key, _]| key.clone()).collect();
-            (self.dir.join(format!("archive-{}.txt", job.options.quality)), keys)
+            (job.options.archive_path(&self.dir), keys)
         };
         if keys.is_empty() { return; }
         if let Some(kept) = fs::read_to_string(&path).ok().and_then(|text| model::prune_archive(&text, &keys)) {
@@ -363,15 +404,15 @@ impl Engine {
         let gone: HashSet<String> = {
             let d = self.data.lock().unwrap();
             // Another download of this format may be appending to the same archive right now.
-            if d.jobs.iter().any(|j| j.id != job.id && j.status == "running" && j.options.quality == job.options.quality) { return; }
+            if d.jobs.iter().any(|j| j.id != job.id && j.status == "running" && j.options.archive_path(&self.dir) == job.options.archive_path(&self.dir)) { return; }
             let mut present: HashMap<&str, bool> = HashMap::new();
-            for [key, file] in d.jobs.iter().filter(|j| j.options.quality == job.options.quality).flat_map(|j| &j.downloads) {
+            for [key, file] in d.jobs.iter().filter(|j| j.options.archive_path(&self.dir) == job.options.archive_path(&self.dir)).flat_map(|j| &j.downloads) {
                 if !file.is_empty() { *present.entry(key.as_str()).or_insert(false) |= Path::new(file).exists(); }
             }
             present.into_iter().filter(|(_, there)| !there).map(|(key, _)| key.to_owned()).collect()
         };
         if gone.is_empty() { return; }
-        let path = self.dir.join(format!("archive-{}.txt", job.options.quality));
+        let path = job.options.archive_path(&self.dir);
         if let Some(kept) = fs::read_to_string(&path).ok().and_then(|text| model::prune_archive(&text, &gone)) {
             let _ = fs::write(&path, kept);
         }
@@ -543,6 +584,20 @@ fn site_profile(app: &tauri::AppHandle, site: &Site) -> Result<PathBuf, String> 
 }
 
 // With the Deviload sign-in, each link uses the saved session of its own site, if there is one.
+fn resolve_auth(mut options: Options, url: &str, dir: &Path) -> Options {
+    if options.cookies_account || (!options.cookies.is_empty() && Path::new(&options.cookies) == session_file(dir)) {
+        options.cookies = account_cookies(url, dir).map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+        options.cookies_browser.clear();
+    }
+    options
+}
+
+fn apply_auth(cmd: &mut Command, options: Options, url: &str, dir: &Path) {
+    let options = resolve_auth(options, url, dir);
+    if !options.cookies.is_empty() { cmd.args(["--cookies", &options.cookies]); }
+    if !options.cookies_browser.is_empty() { cmd.args(["--cookies-from-browser", &options.cookies_browser]); }
+}
+
 fn account_cookies(url: &str, dir: &Path) -> Option<PathBuf> {
     let host = url::Url::parse(url).ok()?.host_str()?.to_ascii_lowercase();
     let site = SITES.iter().find(|site| site.matches(&host))?;
@@ -580,9 +635,10 @@ fn cookie_file_content(cookies: &[tauri::webview::Cookie<'static>], site: &Site)
         let name = cookie.name();
         let value = cookie.value();
         if [domain, path, name, value].iter().any(|part| part.contains(['\t', '\r', '\n'])) { continue; }
-        if !seen.insert((host.clone(), path.to_owned(), name.to_owned())) { continue; }
-        signed_in |= site.signed_in.contains(&name);
         let expiry = cookie.expires_datetime().map(|d| d.unix_timestamp().max(0)).unwrap_or(0);
+        if expiry > 0 && expiry <= now_seconds() as i64 { continue; }
+        if !seen.insert((host.clone(), path.to_owned(), name.to_owned())) { continue; }
+        signed_in |= site.signed_in.contains(&name) && !value.is_empty();
         out.push_str(&format!(".{}\tTRUE\t{}\t{}\t{}\t{}\t{}\n", host,
             path,
             if cookie.secure().unwrap_or(false) { "TRUE" } else { "FALSE" }, expiry, name, value));
@@ -631,6 +687,9 @@ async fn site_sign_in(app: tauri::AppHandle, engine: tauri::State<'_, Engine>, s
             if payload.event() != tauri::webview::PageLoadEvent::Finished { return; }
             let host = payload.url().host_str().unwrap_or("").to_ascii_lowercase();
             if !site.matches(&host) { return; }
+            // A session cookie can appear before the account challenge has been completed.
+            let path = payload.url().path();
+            if ["/accounts/", "/challenge", "/checkpoint", "/login", "/i/flow/"].iter().any(|prefix| path.starts_with(prefix)) { return; }
             let dir = dir.clone();
             // Reading cookies on the page-load thread deadlocks WebView2.
             thread::spawn(move || {
@@ -653,6 +712,8 @@ fn site_sessions(engine: tauri::State<Engine>) -> Vec<&'static str> {
 #[tauri::command]
 async fn site_sign_out(app: tauri::AppHandle, engine: tauri::State<'_, Engine>, site: String) -> Result<(), String> {
     let site = find_site(&site)?;
+    #[cfg(target_os = "macos")]
+    clear_site_cookies(&app, site).await?;
     if let Some(window) = app.get_webview_window(&format!("signin-{}", site.key)) { let _ = window.destroy(); }
     let file = site_cookie_file(&engine.dir, site);
     if file.exists() { fs::remove_file(&file).map_err(|e| format!("Could not remove the saved sign-in: {e}"))?; }
@@ -707,6 +768,8 @@ fn youtube_login_status(engine: tauri::State<Engine>) -> Option<String> {
 
 #[tauri::command]
 async fn youtube_sign_out(app: tauri::AppHandle, engine: tauri::State<'_, Engine>) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    clear_site_cookies(&app, &SITES[0]).await?;
     if let Some(window) = app.get_webview_window("youtube") { let _ = window.destroy(); }
     let file = session_file(&engine.dir);
     if file.exists() { fs::remove_file(&file).map_err(|e| format!("Could not remove the saved sign-in: {e}"))?; }
@@ -721,6 +784,28 @@ async fn youtube_sign_out(app: tauri::AppHandle, engine: tauri::State<'_, Engine
     }).await.map_err(|e| e.to_string())?;
     let _ = app.emit("youtube-session", false);
     Ok(())
+}
+
+// Older macOS versions share WKWebsiteDataStore. Delete only this site's cookies,
+// never the shared store containing the main window's preferences and projects.
+#[cfg(target_os = "macos")]
+async fn clear_site_cookies(app: &tauri::AppHandle, site: &'static Site) -> Result<(), String> {
+    let label = if site.key == "youtube" { "youtube".to_string() } else { format!("signin-{}", site.key) };
+    if let Some(window) = app.get_webview_window(&label) { window.destroy().map_err(|e| e.to_string())?; }
+    let window = tauri::WebviewWindowBuilder::new(app, format!("signout-{}", site.key),
+        tauri::WebviewUrl::External("about:blank".parse().unwrap())).visible(false).build().map_err(|e| e.to_string())?;
+    let result = tauri::async_runtime::spawn_blocking({ let window = window.clone(); move || {
+        for host in site.hosts {
+            for url in [format!("https://{host}/"), format!("https://www.{host}/")] {
+                for cookie in window.cookies_for_url(url.parse().unwrap()).map_err(|e| e.to_string())? {
+                    window.delete_cookie(cookie).map_err(|e| e.to_string())?;
+                }
+            }
+        }
+        Ok::<(), String>(())
+    }}).await.map_err(|e| e.to_string());
+    let _ = window.destroy();
+    result?
 }
 
 #[tauri::command]
@@ -956,13 +1041,13 @@ fn preflight_download(text: String, options: Options, estimated_bytes: Option<u6
 
 // Links already waiting or downloading are not added twice.
 fn queue_urls(d: &mut Snapshot, urls: Vec<String>, options: &Options, scheduled_at: Option<u64>, auto_retry: bool) -> usize {
-    let mut next_id = d.jobs.iter().map(|j| j.id).max().unwrap_or(0) + 1;
     let mut count = 0;
     for url in urls {
         if d.jobs.iter().any(|j| j.url == url && ["queued", "running", "cancelling", "pausing", "paused"].contains(&j.status.as_str())) { continue; }
+        let next_id = allocate_id(d);
         d.jobs.push(Job { id: next_id, url, options: options.clone(), status: "queued".into(),
-            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at, auto_retry, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false });
-        next_id += 1; count += 1;
+            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at, auto_retry, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() });
+        count += 1;
     }
     count
 }
@@ -1046,7 +1131,6 @@ fn import_legacy_into(legacy: &Path, data: &mut Snapshot, archive_dir: &Path) ->
     }
     if let Some(history) = read_legacy_json(&legacy.join("history.json")) {
         let items = match history { serde_json::Value::Array(items) => items, item @ serde_json::Value::Object(_) => vec![item], _ => vec![] };
-        let mut next_id = data.jobs.iter().map(|j| j.id).max().unwrap_or(0) + 1;
         // Newest first in the old file; the newest item gets the highest id here.
         for item in items.iter().rev() {
             let Some(file) = item["path"].as_str().filter(|file| Path::new(file).is_file()) else { continue };
@@ -1054,11 +1138,12 @@ fn import_legacy_into(legacy: &Path, data: &mut Snapshot, archive_dir: &Path) ->
             let url = item["url"].as_str().and_then(|url| model::parse_urls(url).ok())
                 .and_then(|urls| urls.into_iter().next()).unwrap_or_default();
             let options = Options { quality: legacy_quality(file).into(), archive: false, ..data.options.clone() };
+            let next_id = allocate_id(data);
             let mut job = Job { id: next_id, url, options, status: "done".into(), percent: 100.0, speed: String::new(),
-                file: file.into(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
+                file: file.into(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
             job.log.push("Moved from Deviload 1.x".into());
             data.jobs.push(job);
-            next_id += 1;
+
             result.files += 1;
         }
     }
@@ -1128,11 +1213,29 @@ fn set_recording_limit(id: u64, seconds: u64, engine: tauri::State<Engine>) -> R
 }
 
 #[tauri::command]
-fn change_job(id: u64, action: String, engine: tauri::State<Engine>) -> Result<(), String> {
+fn change_job(id: u64, action: String, auth: Option<Options>, engine: tauri::State<Engine>) -> Result<(), String> {
     let mut d = engine.data.lock().unwrap();
     let old = d.clone();
+    // A repeat must not repoint a media record already used by an editor project.
+    if action == "again" {
+        let previous = d.jobs.iter().find(|j| j.id == id).ok_or("Task not found")?.clone();
+        if previous.status == "done" && previous.archived > 0 && !previous.file.is_empty() {
+            let mut next = previous.clone();
+            next.id = allocate_id(&mut d); next.status = "queued".into(); next.percent = 0.0;
+            next.file.clear(); next.downloads.clear(); next.log.clear(); next.stage.clear(); next.speed.clear();
+            next.options.archive = false; next.archived = 0; next.healed.clear(); next.scheduled_at = None;
+            next.hidden_in_queue = false; next.hidden_in_library = false; next.library_parent = None;
+            d.jobs.push(next);
+            if let Err(error) = save(&engine.dir, &d) { *d = old; return Err(error); }
+            return Ok(());
+        }
+    }
     let j = d.jobs.iter_mut().find(|j| j.id == id).ok_or("Task not found")?;
     match action.as_str() {
+        "use-account" if ["error", "cancelled", "interrupted"].contains(&j.status.as_str()) => {
+            j.options.cookies_account = true;
+            j.options.cookies.clear(); j.options.cookies_browser.clear();
+        }
         "pause" if j.status == "queued" => j.status = "paused".into(),
         "pause" if j.status == "running" && !j.live => j.status = "pausing".into(),
         // A live recording stops and keeps what was recorded.
@@ -1142,11 +1245,20 @@ fn change_job(id: u64, action: String, engine: tauri::State<Engine>) -> Result<(
         "cancel" if j.status == "queued" => j.status = "cancelled".into(),
         "cancel" if j.status == "running" => j.status = "cancelling".into(),
         "retry" if ["error", "cancelled", "interrupted"].contains(&j.status.as_str()) => {
+            if let Some(auth) = auth {
+                let mut options = j.options.clone();
+                options.cookies = auth.cookies;
+                options.cookies_browser = auth.cookies_browser;
+                options.cookies_account = auth.cookies_account;
+                options.validate()?;
+                j.options = options;
+            }
             j.status = "queued".into(); j.percent = 0.0; j.log.clear(); j.speed.clear(); j.file.clear(); j.scheduled_at = None; j.retry_attempts = 0;
-            j.healed.clear();
+            j.healed.clear(); j.archived = 0;
+            if j.options.cookies_browser.is_empty() && account_cookies(&j.url, &engine.dir).is_some() && (j.options.cookies_account || j.options.cookies.is_empty()) { j.options.cookies_account = true; }
         }
         // Without the archive yt-dlp fetches what it skipped; files still on the disk are not downloaded twice.
-        "again" if j.status == "done" && j.archived > 0 => {
+        "again" if ["done", "skipped"].contains(&j.status.as_str()) && j.archived > 0 => {
             j.status = "queued".into(); j.percent = 0.0; j.log.clear(); j.speed.clear(); j.file.clear(); j.scheduled_at = None;
             j.retry_attempts = 0; j.archived = 0; j.options.archive = false; j.healed.clear();
         }
@@ -1431,7 +1543,7 @@ fn next_recording(job: &Job, id: u64, now: u64) -> Job {
     Job { id, url: job.url.clone(), options: job.options.clone(), status: "queued".into(), percent: 0.0, speed: String::new(),
         file: String::new(), log: vec![], scheduled_at: Some(at), auto_retry: job.auto_retry, retry_attempts: 0, archived: 0, healed: vec![],
         downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: job.live_limit,
-        recording: String::new(), stop_requested: false, repeat_at: at, pid: None, hidden_in_queue: false, hidden_in_library: false }
+        recording: String::new(), stop_requested: false, repeat_at: at, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() }
 }
 
 // Once a second while a live stream records: when it began, how much is on the disk
@@ -1535,6 +1647,29 @@ fn video_duration(file: &Path) -> Result<f64, String> {
         .map_err(|_| "Could not determine the video duration".to_string())?;
     if !duration.is_finite() || duration <= 0.0 { return Err("Invalid video duration".into()); }
     Ok(duration)
+}
+
+#[tauri::command]
+async fn relink_media(id: u64, path: String, engine: tauri::State<'_, Engine>) -> Result<(), String> {
+    if id == 0 || id > 9_007_199_254_740_990 { return Err("Task not found".into()); }
+    let file = PathBuf::from(path).canonicalize().map_err(|_| "The file is no longer at the saved path".to_string())?;
+    let probe = file.clone();
+    tauri::async_runtime::spawn_blocking(move || probe_source(&probe)).await.map_err(|e| e.to_string())??;
+    let mut d = engine.data.lock().unwrap();
+    let old = d.clone();
+    if let Some(job) = d.jobs.iter_mut().find(|j| j.id == id) {
+        if job.status != "done" { return Err("Stop the task before removing it".into()); }
+        let previous = job.file.clone();
+        job.file = file.to_string_lossy().into_owned();
+        for entry in &mut job.downloads { if entry[1] == previous { entry[1] = job.file.clone(); } }
+        job.bytes = 0; job.duration = 0.0;
+    } else {
+        d.jobs.push(Job { id, file: file.to_string_lossy().into_owned(), status: "done".into(),
+            hidden_in_queue: true, hidden_in_library: true, ..Job::default() });
+        d.next_id = d.next_id.max(id + 1);
+    }
+    if let Err(error) = save(&engine.dir, &d) { *d = old; return Err(error); }
+    Ok(())
 }
 
 #[tauri::command]
@@ -2251,19 +2386,20 @@ fn open_downloads(folder: Option<String>, engine: tauri::State<Engine>) -> Resul
 fn clear_finished(engine: tauri::State<Engine>) -> Result<(), String> {
     change_records(&engine, |jobs| {
         // Cancelled tasks go too: nothing more will happen to them.
-        for job in jobs.iter_mut().filter(|j| ["done", "cancelled"].contains(&j.status.as_str())) { job.hidden_in_queue = true; }
+        for job in jobs.iter_mut().filter(|j| ["done", "skipped", "cancelled"].contains(&j.status.as_str())) { job.hidden_in_queue = true; }
         Ok(())
     })
 }
 
-const REMOVABLE: [&str; 4] = ["done", "error", "cancelled", "interrupted"];
+const REMOVABLE: [&str; 5] = ["done", "skipped", "error", "cancelled", "interrupted"];
 
 // Applies a change to the task records, drops those hidden everywhere and saves.
 fn change_records(engine: &Engine, change: impl FnOnce(&mut Vec<Job>) -> Result<(), String>) -> Result<(), String> {
     let mut d = engine.data.lock().unwrap();
     let old = d.clone();
     change(&mut d.jobs)?;
-    d.jobs.retain(|j| !(j.hidden_in_queue && (j.hidden_in_library || j.status != "done")));
+    // Completed records remain addressable by saved projects even when hidden in both views.
+    d.jobs.retain(|j| !(j.hidden_in_queue && j.status != "done" && j.status != "skipped"));
     if let Err(e) = save(&engine.dir, &d) { *d = old; return Err(e); }
     Ok(())
 }
@@ -2299,7 +2435,10 @@ fn remove_job(id: u64, delete_file: Option<bool>, engine: tauri::State<Engine>) 
         let job = jobs.iter_mut().find(|j| j.id == id).ok_or("Task not found")?;
         if !REMOVABLE.contains(&job.status.as_str()) { return Err("Stop the task before removing it".into()); }
         job.hidden_in_queue = true;
-        if delete_file { job.hidden_in_library = true; }
+        if delete_file {
+            job.hidden_in_library = true;
+            for media in jobs.iter_mut().filter(|j| j.library_parent == Some(id)) { media.hidden_in_library = true; }
+        }
         Ok(())
     })
 }
@@ -2307,7 +2446,10 @@ fn remove_job(id: u64, delete_file: Option<bool>, engine: tauri::State<Engine>) 
 #[tauri::command]
 fn remove_from_library(id: u64, delete_file: Option<bool>, engine: tauri::State<Engine>) -> Result<(), String> {
     let delete_file = delete_file.unwrap_or(false);
-    if delete_file { trash_task_files(&engine, id)?; }
+    if delete_file {
+        let file = engine.data.lock().unwrap().jobs.iter().find(|j| j.id == id && j.status == "done").map(|j| j.file.clone()).ok_or("Task not found")?;
+        if Path::new(&file).is_file() { trash::delete(&file).map_err(|e| format!("Could not move the file to the trash: {e}"))?; }
+    }
     change_records(&engine, |jobs| {
         let job = jobs.iter_mut().find(|j| j.id == id && j.status == "done").ok_or("Task not found")?;
         job.hidden_in_library = true;
@@ -2408,16 +2550,17 @@ struct FormatChoice {
 }
 
 #[tauri::command]
-async fn inspect_media(address: String, engine: tauri::State<'_, Engine>) -> Result<InspectInfo, String> {
+async fn inspect_media(address: String, options: Option<Options>, engine: tauri::State<'_, Engine>) -> Result<InspectInfo, String> {
     let urls = model::parse_urls(&address)?;
     if urls.len() != 1 { return Err("Check one link at a time".into()); }
     let dir = engine.dir.clone();
+    let auth = options.unwrap_or_else(|| engine.data.lock().unwrap().options.clone());
     tauri::async_runtime::spawn_blocking(move || {
         let exe = binary("yt-dlp")?;
         let mut cmd = ytdlp_command(&exe);
         cmd.args(["--ignore-config", "--flat-playlist", "--dump-single-json", "--skip-download",
             "--playlist-items", "1", "--no-warnings", "--no-colors"]);
-        if let Some(cookies) = account_cookies(&urls[0], &dir) { cmd.arg("--cookies").arg(cookies); }
+        apply_auth(&mut cmd, auth, &urls[0], &dir);
         let output = cmd.arg("--").arg(&urls[0]).output().map_err(|e| e.to_string())?;
         if !output.status.success() {
             let detail = String::from_utf8_lossy(&output.stderr);
@@ -2475,15 +2618,18 @@ struct PlaylistEntry { index: u64, title: String, duration: Option<f64> }
 struct PlaylistInfo { title: String, total: Option<u64>, entries: Vec<PlaylistEntry> }
 
 #[tauri::command]
-async fn playlist_entries(address: String) -> Result<PlaylistInfo, String> {
+async fn playlist_entries(address: String, options: Option<Options>, engine: tauri::State<'_, Engine>) -> Result<PlaylistInfo, String> {
     let urls = model::parse_urls(&address)?;
     if urls.len() != 1 { return Err("Give a single playlist link".into()); }
+    let dir = engine.dir.clone();
+    let auth = options.unwrap_or_else(|| engine.data.lock().unwrap().options.clone());
     tauri::async_runtime::spawn_blocking(move || {
         let exe = binary("yt-dlp")?;
-        let output = ytdlp_command(&exe)
-            .args(["--ignore-config", "--flat-playlist", "--dump-single-json", "--skip-download",
-                "--playlist-end", "100", "--no-warnings", "--no-colors", "--"])
-            .arg(&urls[0]).output().map_err(|e| e.to_string())?;
+        let mut cmd = ytdlp_command(&exe);
+        cmd.args(["--ignore-config", "--flat-playlist", "--dump-single-json", "--skip-download",
+                "--playlist-end", "100", "--no-warnings", "--no-colors"]);
+        apply_auth(&mut cmd, auth, &urls[0], &dir);
+        let output = cmd.arg("--").arg(&urls[0]).output().map_err(|e| e.to_string())?;
         if !output.status.success() {
             let detail = String::from_utf8_lossy(&output.stderr);
             return Err(format!("Could not open the playlist: {}", detail.chars().take(280).collect::<String>()));
@@ -2638,6 +2784,12 @@ fn open_in_browser(url: &str) -> std::io::Result<()> {
 }
 
 #[tauri::command]
+fn open_site_browser(site: String) -> Result<(), String> {
+    let site = SITES.iter().find(|entry| entry.key == site).ok_or("Unknown site")?;
+    open_in_browser(site.sign_in).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn open_releases() -> Result<(), String> {
     open_in_browser("https://github.com/Pronexsteam/deviload/releases/latest").map_err(|e| format!("Could not open the releases page: {e}"))
 }
@@ -2722,17 +2874,39 @@ fn window_action(window: tauri::WebviewWindow, action: String) -> Result<(), Str
     result.map_err(|e| e.to_string())
 }
 
+// AppImages ship a matching GIO stack. Host GIO plugins may require newer GLib
+// symbols, so do not load the host's extension directories into that stack.
+#[cfg(target_os = "linux")]
+fn configure_appimage() {
+    let Some(root) = std::env::var_os("APPDIR").map(PathBuf::from).filter(|p| p.is_absolute()) else { return };
+    let modules = [root.join("usr/lib/gio/modules"), root.join("usr/lib/x86_64-linux-gnu/gio/modules")]
+        .into_iter().find(|p| p.is_dir()).unwrap_or_else(|| root.join("usr/lib/deviload-gio-modules"));
+    std::env::set_var("GIO_MODULE_DIR", modules);
+    std::env::remove_var("GIO_EXTRA_MODULES");
+    std::env::set_var("GIO_USE_VFS", "local");
+    std::env::set_var("GSETTINGS_BACKEND", "memory");
+    if let Some(cache) = dirs::cache_dir() {
+        std::env::set_var("GST_REGISTRY", cache.join("deviload/gstreamer-registry.bin"));
+    }
+}
+
+fn restore_main(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    configure_appimage();
     let mut builder = tauri::Builder::default();
     // A second launch only brings the running window forward; two copies would share one queue.
     // A copy with its own test data shares nothing, so it may run beside the installed app.
     if std::env::var_os("DEVILOAD_TEST_DATA_DIR").is_none() {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.unminimize();
-                let _ = window.set_focus();
-            }
+            restore_main(app);
         }));
     }
     builder
@@ -2763,23 +2937,17 @@ pub fn run() {
                 .icon(app.default_window_icon().ok_or("tray icon is missing")?.clone())
                 .tooltip("Deviload")
                 .menu(&menu)
-                .show_menu_on_left_click(false)
+                .show_menu_on_left_click(cfg!(target_os = "linux"))
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "tray-open" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
+                        restore_main(app);
                     }
                     "tray-quit" => app.exit(0),
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
-                    if let tauri::tray::TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, .. } = event {
-                        if let Some(window) = tray.app_handle().get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
+                    if let tauri::tray::TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, button_state: tauri::tray::MouseButtonState::Up, .. } = event {
+                        restore_main(tray.app_handle());
                     }
                 })
                 .build(app)?;
@@ -2807,6 +2975,10 @@ pub fn run() {
                     }
                 }
             } else { Snapshot::default() };
+            // Legacy projects may refer to IDs already removed from old queue files.
+            // Start new IDs above the old sequential range without changing existing IDs.
+            data.next_id = data.next_id.max(now_seconds() * 1000);
+            index_library(&mut data);
             data.parallel = data.parallel.clamp(1, 8);
             // Never restart downloads silently when the app is opened.
             for job in &mut data.jobs {
@@ -2854,9 +3026,11 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_releases, open_support, window_action, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, site_sign_in, site_sign_out, site_sessions, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
+        .invoke_handler(tauri::generate_handler![set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_site_browser, open_releases, open_support, window_action, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, site_sign_in, site_sign_out, site_sessions, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, relink_media, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
         .build(tauri::generate_context!()).expect("failed to start Deviload")
         .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event { restore_main(app); }
             if let tauri::RunEvent::ExitRequested { .. } = event { app.state::<Engine>().stop(); }
         });
 }
@@ -2907,7 +3081,7 @@ mod engine_tests {
         let dir = tempfile::tempdir().unwrap();
         let job = |id: u64, status: &str| Job { id, url: String::new(), options: Options::default(), status: status.into(),
             percent: 0.0, speed: String::new(), file: format!("file{id}.mp4"), log: vec![], scheduled_at: None, auto_retry: false,
-            retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
+            retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
         let engine = Engine { dir: dir.path().into(), data: Arc::new(Mutex::new(Snapshot {
             jobs: vec![job(1, "done"), job(2, "done"), job(3, "error"), job(4, "running")], ..Snapshot::default() })),
             shutdown: Arc::new(AtomicBool::new(false)) };
@@ -2916,14 +3090,15 @@ mod engine_tests {
         change_records(&engine, |jobs| { for j in jobs.iter_mut().filter(|j| [1, 3].contains(&j.id)) { j.hidden_in_queue = true; } Ok(()) }).unwrap();
         assert_eq!(ids(&engine), [1, 2, 4]);
         assert!(engine.data.lock().unwrap().jobs[0].hidden_in_queue);
-        // Leaving the library too removes the record for good.
+        // Hidden media remains addressable by saved projects.
         change_records(&engine, |jobs| { jobs[0].hidden_in_library = true; Ok(()) }).unwrap();
-        assert_eq!(ids(&engine), [2, 4]);
+        assert_eq!(ids(&engine), [1, 2, 4]);
         // Hidden only in the library, it stays in the queue.
-        change_records(&engine, |jobs| { jobs[0].hidden_in_library = true; Ok(()) }).unwrap();
-        assert_eq!(ids(&engine), [2, 4]);
+        change_records(&engine, |jobs| { jobs[1].hidden_in_library = true; Ok(()) }).unwrap();
+        assert_eq!(ids(&engine), [1, 2, 4]);
         let saved: Snapshot = serde_json::from_slice(&fs::read(dir.path().join("queue.json")).unwrap()).unwrap();
-        assert!(saved.jobs[0].hidden_in_library && !saved.jobs[0].hidden_in_queue);
+        assert!(saved.jobs[0].hidden_in_library && saved.jobs[0].hidden_in_queue);
+        assert!(saved.jobs[1].hidden_in_library && !saved.jobs[1].hidden_in_queue);
         // A running task refuses to be removed.
         let error = change_records(&engine, |jobs| {
             let running = jobs.iter_mut().find(|j| j.id == 4).unwrap();
@@ -2931,8 +3106,73 @@ mod engine_tests {
             Ok(())
         });
         assert!(error.is_err());
-        assert_eq!(ids(&engine), [2, 4]);
+        assert_eq!(ids(&engine), [1, 2, 4]);
     }
+    #[test]
+    fn ids_survive_empty_queues_and_reload() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut data = Snapshot::default();
+        queue_urls(&mut data, vec!["https://example.com/first".into()], &Options::default(), None, false);
+        let old_id = data.jobs[0].id;
+        data.jobs.clear();
+        save(dir.path(), &data).unwrap();
+        let mut loaded: Snapshot = serde_json::from_slice(&fs::read(dir.path().join("queue.json")).unwrap()).unwrap();
+        queue_urls(&mut loaded, vec!["https://example.com/second".into()], &Options::default(), None, false);
+        assert!(loaded.jobs[0].id > old_id);
+    }
+
+    #[test]
+    fn playlist_index_preserves_original_id_and_individual_files() {
+        let mut data = Snapshot::default();
+        data.jobs.push(Job { id: 7, status: "done".into(), file: "/last.mp4".into(),
+            downloads: vec![["a".into(), "/first.mp4".into()], ["b".into(), "/last.mp4".into()]], ..Job::default() });
+        index_library(&mut data);
+        assert_eq!(data.jobs.len(), 2);
+        assert_eq!((data.jobs[0].id, data.jobs[0].file.as_str()), (7, "/last.mp4"));
+        let child = &mut data.jobs[1];
+        assert_eq!(child.file, "/first.mp4");
+        assert!(child.hidden_in_queue && child.downloads.is_empty());
+        assert_eq!(child.library_parent, Some(7));
+        child.hidden_in_library = true;
+        index_library(&mut data);
+        assert_eq!(data.jobs.len(), 2);
+        assert!(data.jobs[1].hidden_in_library);
+    }
+
+    #[test]
+    fn partial_playlists_keep_successful_files_without_duplicate_cards() {
+        let mut data = Snapshot::default();
+        data.jobs.push(Job { id: 1, status: "error".into(), file: "/saved.mp4".into(),
+            downloads: vec![["a".into(), "/saved.mp4".into()]], ..Job::default() });
+        index_library(&mut data);
+        assert_eq!(data.jobs[0].status, "error");
+        let media_id = data.jobs[1].id;
+        assert_eq!(data.jobs[1].status, "done");
+        data.jobs.push(Job { id: 3, status: "done".into(), file: "/saved.mp4".into(), ..Job::default() });
+        index_library(&mut data);
+        let visible: Vec<_> = data.jobs.iter().filter(|j| j.status == "done" && !j.hidden_in_library).collect();
+        assert_eq!(visible.len(), 1);
+        assert_eq!(visible[0].id, media_id);
+    }
+
+    #[test]
+    fn auth_source_is_shared_by_inspection_and_downloads() {
+        let dir = tempfile::tempdir().unwrap();
+        let instagram = dir.path().join("instagram-cookies.txt");
+        fs::write(&instagram, "# Netscape HTTP Cookie File").unwrap();
+        let url = "https://www.instagram.com/reel/test/";
+        let account = Options { cookies_account: true, ..Options::default() };
+        let resolved = resolve_auth(account.clone(), url, dir.path());
+        assert_eq!(Path::new(&resolved.cookies), instagram);
+        assert!(resolve_auth(account.clone(), "https://example.com/v", dir.path()).cookies.is_empty());
+        let mut cmd = Command::new("yt-dlp");
+        apply_auth(&mut cmd, account, url, dir.path());
+        let args: Vec<_> = cmd.get_args().map(|s| s.to_string_lossy().into_owned()).collect();
+        assert_eq!(args, ["--cookies", instagram.to_str().unwrap()]);
+        let manual = Options { cookies_browser: "firefox".into(), ..Options::default() };
+        assert_eq!(resolve_auth(manual, url, dir.path()).cookies_browser, "firefox");
+    }
+
     #[test]
     fn the_tray_badge_sits_in_the_corner() {
         let (width, height) = (32u32, 32u32);
@@ -2996,7 +3236,7 @@ mod engine_tests {
         assert_eq!(pick("https://example.com/v"), None);
         // A download in the account mode never hands the YouTube session to Instagram.
         let job = Job { id: 1, url: "https://www.tiktok.com/@a/video/1".into(), options: Options { cookies_account: true, cookies: session_file(dir.path()).to_string_lossy().into(), ..Options::default() },
-            status: "queued".into(), percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
+            status: "queued".into(), percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
         if let Ok(args) = download_args(&job, dir.path()) { assert!(!args.contains(&"--cookies".to_string()), "{args:?}"); }
     }
     #[test]
@@ -3017,7 +3257,7 @@ mod engine_tests {
         assert!(!huge.ready);
         let duplicate = Job { id: 1, url: "https://example.com/video".into(), options: options.clone(),
             status: "done".into(), percent: 100.0, speed: String::new(), file: String::new(),
-            log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
+            log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
         let report = check_preflight("https://example.com/video", &options, None, &[duplicate]).unwrap();
         assert!(report.warnings.iter().any(|warning| warning.contains("history")));
     }
@@ -3057,7 +3297,7 @@ mod engine_tests {
     fn a_daily_recording_comes_back_at_the_same_time() {
         let mut job = Job { id: 3, url: "https://u.peg.tv/s/x".into(), options: Options::default(), status: "done".into(), percent: 100.0, speed: String::new(),
             file: "/v/rec.mp4".into(), log: vec!["x".into()], scheduled_at: None, auto_retry: true, retry_attempts: 1, archived: 0, healed: vec![], downloads: vec![], bytes: 9, duration: 9.0, channel: "AOC".into(), live: true, live_since: 5, live_limit: 3600, recording: "/v/rec.mp4".into(), stop_requested: true, repeat_at: 0, pid: None,
-            hidden_in_queue: false, hidden_in_library: false };
+            hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
         job.repeat_at = 1000;
         let next = next_recording(&job, 9, 500);
         assert_eq!((next.id, next.scheduled_at, next.repeat_at, next.status.as_str()), (9, Some(87_400), 87_400, "queued"));
@@ -3070,7 +3310,7 @@ mod engine_tests {
     fn a_daily_recording_repeats_unless_it_was_cancelled() {
         let mut job = Job { id: 3, url: "https://u.peg.tv/s/x".into(), options: Options::default(), status: "done".into(), percent: 0.0, speed: String::new(),
             file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: true, live_since: 5, live_limit: 0, recording: "/v/rec.mp4".into(), stop_requested: false, repeat_at: 1000, pid: None,
-            hidden_in_queue: false, hidden_in_library: false };
+            hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
         assert!(queues_next_recording(&job));
         job.status = "error".into();
         assert!(queues_next_recording(&job));
@@ -3091,7 +3331,7 @@ mod engine_tests {
         let path = |file: &Path| file.to_string_lossy().into_owned();
         let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "done".into(), percent: 100.0, speed: String::new(),
             file: path(&two), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None,
-            hidden_in_queue: false, hidden_in_library: false };
+            hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
         job.downloads = vec![["youtube a".into(), path(&one)], ["youtube b".into(), path(&two)], ["youtube c".into(), path(&dir.path().join("gone.mp3"))]];
         assert_eq!(task_files(&job), vec![one, two]);
     }
@@ -3102,7 +3342,7 @@ mod engine_tests {
         fs::write(recording_part(&target), [0x47u8; 188 * 4]).unwrap();
         let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(), percent: 0.0, speed: String::new(),
             file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: true, live_since: 0, live_limit: 60, recording: target.to_string_lossy().into_owned(), stop_requested: false, repeat_at: 0, pid: None,
-            hidden_in_queue: false, hidden_in_library: false };
+            hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
         track_recording(&mut job, 1000);
         assert_eq!((job.live_since, job.bytes, job.stop_requested), (1000, 752, false));
         track_recording(&mut job, 1059);
@@ -3219,7 +3459,7 @@ mod engine_tests {
         });
         let job = Job { id: 1, url: format!("http://127.0.0.1:{port}/fixture.mp4"),
             options: Options { folder: dir.path().join("downloads").to_string_lossy().into(), quality: "wav".into(), archive: false, ..Options::default() },
-            status: "running".into(), percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
+            status: "running".into(), percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
         let engine = Engine { dir: dir.path().into(), data: Arc::new(Mutex::new(Snapshot { jobs: vec![job.clone()], ..Snapshot::default() })), shutdown: Arc::new(AtomicBool::new(false)) };
         engine.run_job(1);
         let mut mobile_job = job.clone();
@@ -3240,6 +3480,26 @@ mod engine_tests {
         gif_job.options.clip_format = "gif".into();
         engine.data.lock().unwrap().jobs.push(gif_job);
         engine.run_job(4);
+        let mut remux = job.clone();
+        remux.id = 50;
+        remux.options = Options { folder: dir.path().join("remux").to_string_lossy().into(), container: "mkv".into(), archive: true, ..Options::default() };
+        engine.data.lock().unwrap().jobs.push(remux.clone());
+        engine.run_job(50);
+        {
+            let d = engine.data.lock().unwrap();
+            let result = d.jobs.iter().find(|j| j.id == 50).unwrap();
+            assert_eq!(result.status, "done", "{:?}", result.log);
+            assert!(result.file.ends_with(".mkv"));
+        }
+        remux.id = 51;
+        engine.data.lock().unwrap().jobs.push(remux);
+        engine.run_job(51);
+        {
+            let d = engine.data.lock().unwrap();
+            let result = d.jobs.iter().find(|j| j.id == 51).unwrap();
+            assert_eq!(result.status, "skipped", "{:?}", result.log);
+            assert!(result.file.is_empty() && result.archived > 0);
+        }
         finished.store(true, Ordering::Relaxed);
         server.join().unwrap();
         let data = engine.data.lock().unwrap();
@@ -3387,7 +3647,7 @@ mod engine_tests {
     fn scheduled_jobs_wait_and_transient_errors_retry() {
         let mut job = Job { id: 1, url: "https://example.com".into(), options: Options::default(),
             status: "queued".into(), percent: 0.0, speed: String::new(), file: String::new(),
-            log: vec![], scheduled_at: Some(200), auto_retry: true, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
+            log: vec![], scheduled_at: Some(200), auto_retry: true, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
         assert!(!ready_to_run(&job, 199));
         assert!(ready_to_run(&job, 200));
         job.status = "paused".into();

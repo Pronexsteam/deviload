@@ -5,9 +5,8 @@ import {wireTour} from "./tour.js";
 import {createCutHome} from "./devil-cut.js";
 import {pop, wireMotion} from "./motion.js";
 import {hydrateMascots, mascotSpot, setPose} from "./mascot-spot.js";
-import {labels, actions, counts, orbState, mediaPreview, visibleJobs, playlistSelection, diagnoseError, isVideoJob, isLibraryAudio, inLibrary} from "./view-model.js";
+import {labels, actions, counts, orbState, mediaPreview, visibleJobs, playlistSelection, diagnoseError, signInSite, isVideoJob, isLibraryAudio, inLibrary} from "./view-model.js";
 import {t, tn, errorText, translateMessage, translateDom, setLanguage, onLanguageChange, language, locale, languageNames} from "./i18n.js";
-import {signInSite} from "./view-model.js";
 
 const $ = id => document.getElementById(id);
 const invoke = window.__TAURI__?.core?.invoke;
@@ -64,6 +63,10 @@ function syncTray(state, running) {
   if (trayShown === look + tooltip) return;
   trayShown = look + tooltip;
   invoke("set_tray_state", {state:look, tooltip}).catch(() => {});
+}
+function processingLabel(job) {
+  const stages = {merging:"Merging streams", remuxing:"Changing container", converting:"Converting media", saving:"Saving file"};
+  return t(stages[job.stage] || "Processing the file");
 }
 function statusLabel(status) { return labels[status] ? t(labels[status]) : status; }
 function speedText(value) {
@@ -166,6 +169,51 @@ function syncSystemPreferences() {
   syncSwitch("os-notify-toggle", localStorage.getItem("deviload-os-notify") === "true");
 }
 syncSystemPreferences();
+// Settings keep one category visible; keyboard focus follows the selected category.
+const settingsGroups = [...document.querySelectorAll("#app-settings-dialog > .settings-group")];
+const settingsNav = node("nav", "settings-nav");
+function selectSettings(index) {
+  settingsGroups.forEach((group, i) => { group.hidden = i !== index; });
+  [...settingsNav.children].forEach((button, i) => button.setAttribute("aria-pressed", String(i === index)));
+}
+settingsGroups.forEach((group, index) => {
+  const button = node("button", "quiet small", group.querySelector("h3").textContent);
+  button.type = "button";
+  button.addEventListener("click", () => selectSettings(index));
+  settingsNav.append(button);
+});
+$("app-settings-dialog").querySelector(".dialog-head").after(settingsNav);
+selectSettings(0);
+function showSettingsFor(id) {
+  const index = settingsGroups.findIndex(group => group.contains($(id)));
+  if (index >= 0) selectSettings(index);
+  if (!$("app-settings-dialog").open) $("app-settings-dialog").showModal();
+}
+const toolbar = document.querySelector(".topbar-actions");
+const overflowControls = [document.querySelector(".lang-menu"), $("open-youtube-view"), $("notice-button"), $("open-folder")];
+const narrowToolbar = matchMedia("(max-width: 1100px)");
+function arrangeToolbar() {
+  const narrow = narrowToolbar.matches;
+  $("toolbar-more").hidden = !narrow;
+  $("toolbar-more").open = false;
+  for (const control of overflowControls) {
+    if (narrow) $("toolbar-overflow").append(control);
+    else toolbar.insertBefore(control, $("phone-open"));
+  }
+}
+narrowToolbar.addEventListener("change", arrangeToolbar);
+arrangeToolbar();
+function labelNavigation() {
+  for (const button of document.querySelectorAll(".sidebar .nav")) {
+    button.title = button.querySelector("span:nth-child(2)")?.textContent || "";
+    button.setAttribute("aria-label", button.title);
+  }
+}
+onLanguageChange(labelNavigation);
+document.addEventListener("pointerdown", event => {
+  if (!$("toolbar-more").contains(event.target)) $("toolbar-more").open = false;
+});
+document.addEventListener("keydown", event => { if (event.key === "Escape") $("toolbar-more").open = false; });
 $("settings-open").addEventListener("click", () => $("app-settings-dialog").showModal());
 $("settings-close").addEventListener("click", () => $("app-settings-dialog").close());
 $("tray-toggle").addEventListener("click", async () => {
@@ -269,7 +317,7 @@ async function saveProxy() {
 $("proxy-save").addEventListener("click", saveProxy);
 $("proxy").addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); saveProxy(); } });
 function openProxySettings() {
-  $("app-settings-dialog").showModal();
+  showSettingsFor("proxy");
   $("proxy").focus();
 }
 // Deviload 1.x kept its data next to its own files.
@@ -615,7 +663,7 @@ $("playlist-browse").addEventListener("click", async () => {
   $("playlist-list").replaceChildren();
   $("playlist-status").textContent = t("Reading the playlist…");
   try {
-    const info = await invoke("playlist_entries", {address});
+    const info = await invoke("playlist_entries", {address, options:buildDownloadRequest().options});
     const selected = parsePlaylistSelection($("playlist-items").value.trim(), info.entries);
     const playlistTitle = info.title || t("Playlist");
     $("playlist-status").textContent = info.total && info.total > info.entries.length
@@ -677,6 +725,17 @@ async function refreshAccount() {
 }
 async function signIn() {
   if (!invoke) { message(t("The YouTube window is available in the Deviload app."), true); return; }
+  if (onLinux) {
+    showSettingsFor("cookies-mode");
+    if (["none", "account"].includes($("cookies-mode").value)) {
+      $("cookies-mode").value = "firefox";
+      $("cookies-mode").dispatchEvent(new Event("change"));
+    }
+    try { await invoke("open_site_browser", {site:"youtube"}); }
+    catch (error) { message(errorText(error), true); return; }
+    message(t("On Linux, sign in in Firefox and select Firefox cookies here, or import a cookies.txt file. Opening the browser alone does not import a session."));
+    return;
+  }
   try {
     await invoke("open_youtube", {signIn:true});
     message(t("Sign in to your Google account in the window that opened. Deviload saves the sign-in by itself."));
@@ -737,7 +796,9 @@ async function refreshSites() {
   siteSessions = invoke ? await invoke("site_sessions").catch(() => []) : [];
   renderSites();
 }
-async function siteSignIn(key) {
+const pendingAccountJobs = new Map();
+async function siteSignIn(key, jobId = null) {
+  if (jobId !== null) pendingAccountJobs.set(key, jobId);
   if (!invoke) { message(t("The sign-in window is available in the Deviload app."), true); return; }
   try {
     await invoke("site_sign_in", {site:key});
@@ -756,7 +817,15 @@ async function siteSignOut(key) {
 window.__TAURI__?.event?.listen?.("site-session", async event => {
   await refreshSites();
   if (!event.payload) return;
-  if ($("cookies-mode").value === "none") { $("cookies-mode").value = "account"; syncAuth(); }
+  const jobId = pendingAccountJobs.get(event.payload);
+  if (jobId !== undefined) {
+    try { await invoke("change_job", {id:jobId, action:"use-account"}); }
+    catch (error) { message(errorText(error), true); }
+    pendingAccountJobs.delete(event.payload);
+  }
+  $("cookies-mode").value = "account";
+  try { localStorage.setItem("deviload-cookies-mode", "account"); } catch { /* Storage unavailable. */ }
+  syncAuth();
   message(t("Signed in to {site}. Links from it now download with your account.", {site:siteName(event.payload)}));
   brandMascot.celebrate();
 });
@@ -841,9 +910,12 @@ function setDrawer(open) {
 }
 function syncOptionsSummary() {
   const folder = $("folder").value.trim();
+  $("destination-quick").title = folder;
+  $("destination-name").textContent = folder.split(/[\\/]/).filter(Boolean).pop() || t("Save folder");
   const name = folder.split(/[\\/]/).filter(Boolean).pop() || folder;
   $("options-summary").textContent = [name, t("{count} at a time", {count:$("parallel").value})].filter(Boolean).join(" · ");
 }
+$("destination-quick").addEventListener("click", () => $("browse-folder").click());
 $("options-toggle").addEventListener("click", () => setDrawer($("download-drawer").hidden));
 $("download-drawer").addEventListener("change", event => {
   if (event.target.id === "profile") { clearSelectedFormat(); return; }
@@ -1243,7 +1315,7 @@ async function inspectLink(address) {
   card.dataset.state = "loading";
   card.hidden = false;
   try {
-    const info = await invoke("inspect_media", {address});
+    const info = await invoke("inspect_media", {address, options:buildDownloadRequest().options});
     if (serial !== inspectSerial) return;
     inspectedAddress = address;
     inspectedInfo = info;
@@ -1335,7 +1407,13 @@ function addJobAction(controls, job, action) {
   addAction(controls, t(title), "quiet", async event => {
     const button = event.currentTarget;
     button.disabled = true;
-    try { await invoke("change_job", {id:job.id,action}); await refresh(); }
+    try {
+      const mode = $("cookies-mode").value;
+      const auth = action === "retry" ? {...job.options, cookiesAccount:mode === "account",
+        cookies:mode === "file" ? $("cookies").value.trim() : "",
+        cookiesBrowser:["chrome","edge","firefox","brave","safari"].includes(mode) ? mode : ""} : null;
+      await invoke("change_job", {id:job.id,action,auth}); await refresh();
+    }
     catch (error) { message(errorText(error), true); }
     finally { button.disabled = false; }
   }, "", icon);
@@ -1382,7 +1460,7 @@ function render(data) {
     const old = knownJobStates.get(job.id);
     if (old && old !== job.status && job.status === "running") brandMascot.reactStart();
     if (old && old !== job.status && ["done","error"].includes(job.status)) {
-      const detail = job.status === "error" ? t(diagnoseError(job.log, Boolean(signedInPath), job.url).title) : (job.file.split(/[\\/]/).pop() || job.url);
+      const detail = job.status === "error" ? t(diagnoseError(job.log, signInSite(job.url) ? siteSessions.includes(signInSite(job.url).key) : Boolean(signedInPath), job.url).title) : (job.file.split(/[\\/]/).pop() || job.url);
       const title = t(job.status === "done" ? "Download ready" : "Download failed");
       addNotice(title, detail);
       systemNotice("Deviload · " + title, detail);
@@ -1453,10 +1531,10 @@ function render(data) {
       : null;
     const repeatText = nextRun && job.repeatAt ? " · " + t("every day") : "";
     meta.replaceChildren(node("span", "", job.options.quality.toUpperCase()),
-      node("span", recording && !job.stopRequested ? "recording" : "", nextRun && nextRun + repeatText || recording && recordingText(job) || (job.status === "running" ? (job.percent >= 99.95 ? t("Processing the file") : [Math.round(job.percent) + "%", speedText(job.speed)].filter(Boolean).join(" · ")) : statusLabel(job.status))));
-    const issue = job.status === "error" ? diagnoseError(job.log, Boolean(signedInPath), job.url) : null;
+      node("span", recording && !job.stopRequested ? "recording" : "", nextRun && nextRun + repeatText || recording && recordingText(job) || (job.status === "running" ? (job.percent >= 99.95 ? processingLabel(job) : [Math.round(job.percent) + "%", speedText(job.speed)].filter(Boolean).join(" · ")) : statusLabel(job.status))));
+    const issue = job.status === "error" ? diagnoseError(job.log, signInSite(job.url) ? siteSessions.includes(signInSite(job.url).key) : Boolean(signedInPath), job.url) : null;
     // yt-dlp skips what the download archive lists, even when the file was deleted since.
-    const skipped = job.status === "done" && job.archived > 0 ? job.archived : 0;
+    const skipped = ["done", "skipped"].includes(job.status) && job.archived > 0 ? job.archived : 0;
     // After a failure Deviload may be trying a fix by itself.
     const healing = ["queued", "running"].includes(job.status) && job.healed?.length ? job.healed.at(-1) : "";
     const help = row.querySelector(".job-help");
@@ -1506,11 +1584,11 @@ function render(data) {
       if (issue?.action === "update") addAction(controls, t("Update yt-dlp"), "quiet fix-action", event => updateYtdlp(event.currentTarget), "", "arrow-clockwise");
       if (issue?.action === "proxy") addAction(controls, t("Proxy settings"), "quiet fix-action", openProxySettings, "", "gear");
       if (issue?.action === "cookies") addAction(controls, t("Cookies settings"), "quiet fix-action", () => {
-        $("app-settings-dialog").showModal();
+        showSettingsFor("cookies-mode");
         $("cookies-mode").scrollIntoView({block:"center"});
         $("cookies-mode").focus();
       }, "", "gear");
-      if (issue?.action === "site-login") addAction(controls, t("Sign in to {site}", issue.params), "quiet fix-action", () => siteSignIn(issue.site), "", "play");
+      if (issue?.action === "site-login") addAction(controls, t("Sign in to {site}", issue.params), "quiet fix-action", () => siteSignIn(issue.site, job.id), "", "play");
       if (job.status === "done" && job.file) {
         addAction(controls, t("Watch"), "quiet", () => openPlayer(job.id), t("Play the finished file in Deviload."), "play");
         addAction(controls, t("To phone"), "transfer-button", () => startShare(job.id), t("Send this file to a phone with a QR code."), "phone-transfer");
@@ -1528,7 +1606,7 @@ function render(data) {
           catch (error) { message(errorText(error), true); }
         }, t("Download without the archive check; files still on the disk are not downloaded twice."), "arrow-clockwise");
       }
-      if (["done", "error", "cancelled", "interrupted"].includes(job.status)) {
+      if (["done", "skipped", "error", "cancelled", "interrupted"].includes(job.status)) {
         // Tidying a finished file is occasional; a failed or cancelled task is mostly there to be removed.
         addAction(job.status === "done" ? menu : controls, t("Remove"), "quiet", () => {
           if (job.status === "done" && job.file) askRemove(job, "queue");
@@ -1675,7 +1753,7 @@ function renderMediaLibrary() {
   const channelOf = job => (job.channel || "").trim();
   const byChannel = (a, b) => (!channelOf(a) - !channelOf(b)) || channelOf(a).localeCompare(channelOf(b)) || b.id - a.id;
   const compare = {new:(a, b) => b.id - a.id, old:(a, b) => a.id - b.id, size:(a, b) => (b.bytes || 0) - (a.bytes || 0),
-    length:(a, b) => (b.duration || 0) - (a.duration || 0), name:(a, b) => name(a).localeCompare(name(b)), channel:byChannel}[order] || ((a, b) => b.id - a.id);
+    length:(a, b) => (b.duration || 0) - (a.duration || 0), playlist:(a,b) => (b.libraryParent || b.id) - (a.libraryParent || a.id) || a.id - b.id, name:(a, b) => name(a).localeCompare(name(b)), channel:byChannel}[order] || ((a, b) => b.id - a.id);
   visible.sort(compare);
   const total = done.reduce((sum, job) => sum + (job.bytes > 1 ? job.bytes : 0), 0);
   $("media-library-size").textContent = total ? t("Takes {size}.", {size:bigSizeText(total)}) : "";
@@ -1689,17 +1767,23 @@ function renderMediaLibrary() {
   $("media-library-empty").hidden = visible.length > 0;
   $("media-library-empty-text").textContent = done.length ? t("Nothing matches your search.") : t("Files appear here once downloads finish.");
   setPose($("library-mascot"), done.length ? "look" : "front");
-  let group = null;
+  let group = null, groupNumber = 0, destination = grid;
   for (const job of visible) {
-    if (order === "channel" && channelOf(job) !== group) {
-      group = channelOf(job);
-      const count = visible.filter(item => channelOf(item) === group).length;
-      const heading = node("h3", "library-group", group || t("No channel"));
+    if (["channel", "playlist"].includes(order) && (order === "playlist" ? String(job.libraryParent || job.id) : channelOf(job)) !== group) {
+      group = order === "playlist" ? String(job.libraryParent || job.id) : channelOf(job);
+      const count = visible.filter(item => (order === "playlist" ? String(item.libraryParent || item.id) : channelOf(item)) === group).length;
+      const heading = node(order === "playlist" ? "summary" : "h3", "library-group", order === "playlist" ? t("Download group {id}", {id:++groupNumber}) : group || t("No channel"));
       heading.append(node("span", "", String(count)));
-      grid.append(heading);
+      if (order === "playlist") {
+        const section = node("details", "library-playlist"); section.open = true;
+        destination = node("div", "library-playlist-files");
+        section.append(heading, destination); grid.append(section);
+      } else { destination = grid; grid.append(heading); }
     }
     const card = node("article", "media-library-item");
     const art = node("div", "media-library-art");
+    const fallback = node("span", "media-art-symbol", isLibraryAudio(job) ? "♫" : "▶");
+    fallback.setAttribute("aria-hidden", "true"); art.append(fallback);
     const preview = mediaPreview(job.url);
     if (preview) {
       const image = node("img"); image.src = preview; image.alt = ""; image.loading = "lazy"; image.referrerPolicy = "no-referrer";
@@ -1735,7 +1819,7 @@ function renderMediaLibrary() {
     buttons.append(more);
     info.append(buttons);
     card.append(art, info);
-    grid.append(card);
+    destination.append(card);
   }
 }
 // Removing a finished file asks once whether it leaves the disk too. The task disappears at once
@@ -1746,7 +1830,7 @@ function askRemove(job, from) {
   const dialog = $("remove-dialog");
   $("remove-title").textContent = t(from === "library" ? "Remove from the library?" : "Remove from the queue?");
   $("remove-file").textContent = job.file.split(/[\\/]/).pop();
-  $("remove-disk-label").textContent = tn("Also delete the file from the disk", "Also delete {count} files from the disk", jobFileCount(job));
+  $("remove-disk-label").textContent = tn("Also delete the file from the disk", "Also delete {count} files from the disk", from === "library" ? 1 : jobFileCount(job));
   $("remove-disk").checked = false;
   dialog.dataset.jobId = String(job.id);
   dialog.dataset.from = from;
@@ -2223,6 +2307,7 @@ onLanguageChange(() => {
   devilCut.relabel();
 });
 translateDom();
+labelNavigation();
 syncLanguageButtons();
 syncTitle();
 syncTrayLabels();

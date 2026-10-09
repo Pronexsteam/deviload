@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, path::PathBuf};
+use std::{collections::HashSet, path::{Path, PathBuf}};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -130,7 +130,7 @@ impl Options {
     // Every value is a separate argv element. No shell, interpolation or escaping.
     pub fn args(&self, url: &str, archive: &std::path::Path) -> Vec<String> {
         let mut a: Vec<String> = [
-            "--ignore-config", "--no-simulate", "--newline", "--no-colors", "--encoding", "utf-8",
+            "--ignore-config", "--no-simulate", "--no-quiet", "--newline", "--no-colors", "--encoding", "utf-8",
             "--progress", "--progress-template", "download:DEVI_PROGRESS:%(progress)j",
             "--progress-delta", "0.2",
             "--print", "after_move:DEVI_KEY:%(extractor_key)s %(id)s",
@@ -169,8 +169,8 @@ impl Options {
         a.extend(["-f".into(), selected_format]);
         if !["mp3", "flac", "wav"].contains(&self.quality.as_str()) {
             let container = if self.profile == "mobile" { "mp4" } else { self.container.as_str() };
-            // WebM holds only VP9, AV1 and Opus; streams that do not fit are merged into MKV instead of failing.
-            a.extend(["--merge-output-format".into(), match container { "mp4" => "mp4", "webm" => "webm/mkv", _ => "mkv" }.into()]);
+            // Apply the container even when the source already has both streams. Incompatible codecs produce an explicit FFmpeg error.
+            a.extend(["--merge-output-format".into(), container.into(), "--remux-video".into(), container.into()]);
             // Among streams of the same size, the ones the container plays best come first:
             // H.264 and AAC for an MP4 that plays on phones, TVs and editors, Opus for WebM.
             let sort = match container { "mp4" => "res,vcodec:h264,acodec:m4a", "webm" => "res,acodec:opus", _ => "" };
@@ -185,7 +185,7 @@ impl Options {
         if self.archive && self.clip_start.is_none() {
             // Separate archives per output preset: an MP3 should not suppress a later video download.
             a.extend(["--download-archive".into(),
-                archive.join(format!("archive-{}.txt", self.quality)).to_string_lossy().into()]);
+                self.archive_path(archive).to_string_lossy().into()]);
         }
         if !self.cookies.is_empty() { a.extend(["--cookies".into(), self.cookies.clone()]); }
         if !self.cookies_browser.is_empty() { a.extend(["--cookies-from-browser".into(), self.cookies_browser.clone()]); }
@@ -232,6 +232,15 @@ impl Options {
         }
         a.extend(["-P".into(), self.folder.clone(), "-o".into(), format!("{name}{clip_suffix}.%(ext)s"), "--".into(), url.into()]);
         a
+    }
+
+    pub fn archive_path(&self, dir: &Path) -> PathBuf {
+        // A stable FNV-1a fingerprint separates output contracts and destinations across app versions.
+        let contract = format!("{}|{}|{}|{}|{}|{}|{}|{}|{}|{}", self.folder, self.quality,
+            if self.profile == "mobile" { "mp4" } else { &self.container }, self.format_id,
+            self.folder_rule, self.name_rule, self.split_chapters, self.subtitles, self.sponsorblock, self.profile);
+        let hash = contract.bytes().fold(0xcbf29ce484222325u64, |hash, byte| (hash ^ byte as u64).wrapping_mul(0x100000001b3));
+        dir.join(format!("archive-v2-{hash:016x}.txt"))
     }
 
     pub fn audio_only(&self) -> bool { ["mp3", "flac", "wav"].contains(&self.quality.as_str()) }
@@ -284,7 +293,7 @@ pub fn parse_urls(text: &str) -> Result<Vec<String>, String> {
     Ok(urls)
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Job {
     pub id: u64,
@@ -340,12 +349,16 @@ pub struct Job {
     pub repeat_at: u64,
     #[serde(skip)]
     pub pid: Option<u32>,
-    // The queue and the library can each drop a finished file; the record goes
-    // away only when both did. Files on disk are only moved to the trash on request.
+    // Queue and library visibility are independent. Completed records remain
+    // addressable by projects; files move to the trash only on request.
     #[serde(default)]
     pub hidden_in_queue: bool,
     #[serde(default)]
     pub hidden_in_library: bool,
+    #[serde(default)]
+    pub library_parent: Option<u64>,
+    #[serde(default)]
+    pub stage: String,
 }
 impl Job {
     // Every run records into a new file; the last one was saved or given up.
@@ -358,6 +371,7 @@ impl Job {
     pub fn consume(&mut self, line: &str) {
         if let Some(json) = line.strip_prefix("DEVI_PROGRESS:") {
             if let Ok(p) = serde_json::from_str::<serde_json::Value>(json) {
+                self.stage = if p["status"] == "finished" { "processing" } else { "downloading" }.into();
                 let total = p["total_bytes"].as_f64().or_else(|| p["total_bytes_estimate"].as_f64()).unwrap_or(0.0);
                 if total > 0.0 {
                     self.percent = (100.0 * p["downloaded_bytes"].as_f64().unwrap_or(0.0) / total).clamp(0.0, 100.0);
@@ -384,6 +398,10 @@ impl Job {
                 self.file = file;
             }
         } else {
+            if line.starts_with("[Merger]") { self.stage = "merging".into(); }
+            else if line.starts_with("[VideoRemuxer]") { self.stage = "remuxing".into(); }
+            else if ["[ExtractAudio]", "[VideoConvertor]"].iter().any(|prefix| line.starts_with(prefix)) { self.stage = "converting".into(); }
+            else if ["[Metadata]", "[EmbedThumbnail]", "[MoveFiles]"].iter().any(|prefix| line.starts_with(prefix)) { self.stage = "saving".into(); }
             // The archive skips a video even when its file was deleted since; the UI offers to download it again.
             if line.contains("has already been recorded in the archive") { self.archived += 1; }
             // Keep diagnostic output bounded even for long playlists.
@@ -399,7 +417,7 @@ mod tests {
     #[test] fn saved_items_remember_their_archive_key() {
         let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(), percent: 0.0, speed: String::new(),
             file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None,
-            hidden_in_queue: false, hidden_in_library: false };
+            hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
         job.consume("DEVI_CHANNEL:jawed");
         job.consume("DEVI_CHANNEL:");
         assert_eq!(job.channel, "jawed");
@@ -418,7 +436,7 @@ mod tests {
         assert!(a.iter().any(|arg| arg == "before_dl:DEVI_LIVE:%(is_live)s %(filename)j"));
         let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(), percent: 0.0, speed: String::new(),
             file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None,
-            hidden_in_queue: false, hidden_in_library: false };
+            hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
         job.consume(r#"DEVI_LIVE:False "/video/clip.mp4""#);
         job.consume(r#"DEVI_LIVE:NA "/video/clip.mp4""#);
         assert!(!job.live && job.recording.is_empty());
@@ -434,7 +452,7 @@ mod tests {
     #[test] fn archive_skips_are_counted() {
         let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(), percent: 0.0, speed: String::new(),
             file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None,
-            hidden_in_queue: false, hidden_in_library: false };
+            hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
         job.consume("[download] Song one has already been recorded in the archive");
         job.consume("[download] Downloading item 2 of 2");
         job.consume("[download] Song two has already been recorded in the archive");
@@ -465,7 +483,15 @@ mod tests {
     }
     #[test] fn archive_is_per_format() {
         let o = Options::default();
-        assert!(o.args("https://example.com", std::path::Path::new("/tmp")).iter().any(|s| s.ends_with("archive-1080.txt")));
+        let dir = Path::new("/tmp");
+        let archive = o.archive_path(dir);
+        let args = o.args("https://example.com", dir);
+        assert!(args.windows(2).any(|a| a[0] == "--download-archive" && a[1] == archive.to_string_lossy()));
+        assert!(args.contains(&"--no-quiet".to_string()));
+        assert_ne!(archive, Options { container: "mkv".into(), ..o.clone() }.archive_path(dir));
+        assert_ne!(archive, Options { folder: "/another".into(), ..o.clone() }.archive_path(dir));
+        assert_ne!(archive, Options { subtitles: true, ..o.clone() }.archive_path(dir));
+        assert_eq!(archive, Options { cookies: "private.txt".into(), rate_mbps: 10, ..o }.archive_path(dir));
     }
     #[test] fn playlist_items_chapters_and_browser_cookies_are_argv_values() {
         let o = Options { playlist: true, playlist_items: "2".into(), split_chapters: true,
@@ -499,7 +525,7 @@ mod tests {
         assert!(mp4.windows(2).any(|pair| pair == ["--merge-output-format", "mp4"]));
         assert!(mp4.windows(2).any(|pair| pair == ["-S", "res,vcodec:h264,acodec:m4a"]));
         let webm = Options { container: "webm".into(), ..Default::default() }.args("https://example.com/v", std::path::Path::new("/tmp"));
-        assert!(webm.windows(2).any(|pair| pair == ["--merge-output-format", "webm/mkv"]));
+        assert!(webm.windows(2).any(|pair| pair == ["--merge-output-format", "webm"]));
         assert!(webm.windows(2).any(|pair| pair == ["-S", "res,acodec:opus"]));
         assert!(Options { container: "avi".into(), ..Default::default() }.validate().is_err());
         let o = Options { profile: "mobile".into(), quality: "720".into(), ..Default::default() };
@@ -552,7 +578,7 @@ mod tests {
     }
     #[test] fn progress_is_not_completion() {
         let mut j = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(),
-            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false };
+            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
         j.consume(r#"DEVI_PROGRESS:{"downloaded_bytes":100,"total_bytes":100,"speed":1048576}"#);
         assert_eq!(j.percent, 100.0);
         assert_eq!(j.status, "running");

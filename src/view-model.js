@@ -1,4 +1,4 @@
-export const labels = Object.freeze({queued:"Queued",running:"Downloading",done:"Done",error:"Error",cancelling:"Cancelling…",pausing:"Pausing…",paused:"Paused",cancelled:"Cancelled",interrupted:"Interrupted"});
+export const labels = Object.freeze({queued:"Queued",running:"Downloading",done:"Done",skipped:"Already downloaded",error:"Error",cancelling:"Cancelling…",pausing:"Pausing…",paused:"Paused",cancelled:"Cancelled",interrupted:"Interrupted"});
 export function actions(status) {
   if (["queued","running"].includes(status)) return ["pause","cancel"];
   if (status === "paused") return ["resume","cancel"];
@@ -7,7 +7,7 @@ export function actions(status) {
 }
 export function counts(jobs) {
   const queue = jobs.filter(j=>!j.hiddenInQueue);
-  return {total:queue.length,active:queue.filter(j=>["running","cancelling","pausing"].includes(j.status)).length,done:queue.filter(j=>j.status==="done").length};
+  return {total:queue.length,active:queue.filter(j=>["running","cancelling","pausing"].includes(j.status)).length,done:queue.filter(j=>["done","skipped"].includes(j.status)).length};
 }
 
 // Finished files the library still shows; the queue may have dropped them.
@@ -51,7 +51,7 @@ export function visibleJobs(jobs, filter = "all", query = "") {
     const matchesFilter = filter === "all" ||
       (filter === "active" && !scheduled && ["queued", "running", "cancelling", "pausing", "paused"].includes(status)) ||
       (filter === "scheduled" && scheduled) ||
-      (filter === "done" && status === "done") ||
+      (filter === "done" && ["done", "skipped"].includes(status)) ||
       (filter === "issues" && ["error", "interrupted"].includes(status));
     return matchesFilter && (!term || (job.file + " " + job.url).toLocaleLowerCase().includes(term));
   });
@@ -107,9 +107,21 @@ function isYouTube(url) {
 
 export function diagnoseError(log = [], signedIn = false, url = "") {
   const detail = log.slice(-30).join("\n").toLowerCase();
+  if (url && !isYouTube(url) && /http error 429|too many requests|rate.limit reached/.test(detail)) {
+    return {title:"Too many requests", message:"The site is limiting requests. Wait before retrying and reduce parallel downloads.", action:""};
+  }
+  if (signInSite(url)?.key === "instagram") {
+    if (/not available to everyone|isn't available to everyone|certain audiences|restricted video|18 years/.test(detail)) {
+      return {title:"Audience restriction", message:"Instagram limits this post to certain accounts or audiences. Check that the same account can open it in a browser.", action:"cookies"};
+    }
+    if (/empty media response|api is not granting access/.test(detail)) {
+      return {title:"Instagram did not return the video", message:"Instagram may be limiting access, or its extractor may need an update. Check the post in a browser, update yt-dlp and check the cookies source.", action:"update"};
+    }
+  }
   // Other sites that want an account need cookies from where you are signed in; the Deviload sign-in is YouTube's.
   if (url && !isYouTube(url) && /--cookies-from-browser or --cookies|use --cookies|empty media response|login required|log in to|authentication/.test(detail)) {
     const site = signInSite(url);
+    if (site && signedIn) return {title:"Check the saved sign-in", message:"A saved session does not guarantee access. Check the cookies source and whether this account can open the post.", action:"cookies"};
     if (site) return {title:"Sign-in needed", message:"{site} shows this only to signed-in users. Sign in to {site} in Deviload and retry.", action:"site-login", site:site.key, params:{site:site.name}};
     return {title:"Sign-in needed", message:"This site shows it only to signed-in users. In the settings, pick cookies from a browser where you are signed in, or a cookies.txt file, and retry.", action:"cookies"};
   }

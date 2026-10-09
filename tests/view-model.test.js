@@ -39,8 +39,8 @@ test("error hints identify login, disk, update and network cases",()=>{
  assert.equal(diagnoseError(["ERROR: [youtube] abc: Private video"]).title,"Private video");
  // Another site asking for an account points to the cookies settings, not to the YouTube sign-in.
  const instagram = diagnoseError(["ERROR: [Instagram] x: Instagram sent an empty media response. use --cookies-from-browser or --cookies for the authentication. please report this issue. Confirm you are on the latest version using yt-dlp -U"], true, "https://www.instagram.com/p/x/");
- assert.equal(instagram.action,"site-login");
- assert.equal(instagram.site,"instagram");
+ assert.equal(instagram.action,"update");
+
  assert.doesNotMatch(instagram.message,/YouTube/);
  assert.equal(diagnoseError(["ERROR: [generic] x: login required"], false, "https://example.com/v").action,"cookies");
  assert.equal(diagnoseError(["ERROR: login required"], false, "https://www.youtube.com/watch?v=x").action,"login");
@@ -51,4 +51,13 @@ test("error hints identify login, disk, update and network cases",()=>{
  assert.equal(diagnoseError(["ERROR: [youtube] abc: The uploader has not made this video available in your country"]).action,"proxy");
  assert.equal(diagnoseError(["ERROR: [youtube] x: Unable to download API page: SocksHTTPSConnection(host='www.youtube.com', port=443): Failed to establish a new connection"]).action,"proxy");
  assert.equal(diagnoseError(["something odd"]).title,"Download failed");
+});
+
+test("Instagram restrictions and throttling do not ask for an unrelated YouTube login", () => {
+ const url = "https://www.instagram.com/reel/test/";
+ assert.equal(diagnoseError(["This content isn't available to everyone: certain audiences"], true, url).title, "Audience restriction");
+ assert.equal(diagnoseError(["login required"], true, url).action, "cookies");
+ assert.equal(diagnoseError(["login required"], false, url).action, "site-login");
+ assert.equal(diagnoseError(["HTTP Error 429"], false, "https://example.com/v").action, "");
+ assert.doesNotMatch(diagnoseError(["HTTP Error 429"], false, url).message, /YouTube/);
 });

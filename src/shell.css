@@ -874,3 +874,70 @@ select:not([multiple]) {
 
 /* The window chrome is not text to select: a drag that starts there moves the window. */
 .window-drag-strip, .sidebar { -webkit-user-select: none; user-select: none; }
+
+/* Keep primary actions prominent and supporting controls quiet. */
+.nav.active { background: #44251f; box-shadow: inset 3px 0 #ff7959; border-color: #775043; }
+.download-options, .queue-panel, .media-library, .drawer-card { box-shadow: none; border-color: #303942; }
+.download-options-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.download-options-label { display: none; }
+.download-extras { display: flex; gap: 4px; padding-left: 12px; border-left: 1px solid #36404a; }
+.download-extras .media-mode { background: transparent; border-color: transparent; font-size: 12px; }
+.download-extras .media-mode.selected { background: #28332e; color: #a4dec1; box-shadow: none; border-color: #456c58; }
+.download-picks { display: flex; flex: 1 1 auto; flex-wrap: wrap; gap: 8px; }
+.download-picks .quality-select, .download-picks #container-field, .download-picks .options-toggle { grid-area: auto; }
+.download-picks .download-format-hint { display: none; }
+.download-picks .options-toggle { margin-left: auto; max-width: 300px; }
+.download-options .media-mode.selected { box-shadow: none; }
+.drawer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.drawer-card:last-child { grid-column: 1 / -1; }
+.toolbar-more { position: relative; }
+.toolbar-more[hidden] { display: none; }
+.toolbar-more > summary { display: grid; place-items: center; list-style: none; cursor: pointer; width: 40px; height: 42px; border: 1px solid #39434d; border-radius: 8px; font-size: 22px; }
+.toolbar-more > summary::-webkit-details-marker { display: none; }
+#toolbar-overflow { position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; display: flex; flex-wrap: wrap; gap: 8px; width: 240px; padding: 14px; border: 1px solid #46515c; border-radius: 12px; background: #191f25; box-shadow: 0 16px 36px #0008; }
+.topbar-actions #toolbar-overflow .icon-only, .topbar-actions #toolbar-overflow .youtube-button { display: flex; justify-content: center; }
+.topbar-actions #toolbar-overflow .lang-options { right: auto; left: 0; }
+.app-settings-dialog { width: min(780px, calc(100vw - 40px)); }
+.settings-nav { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 5px; padding: 10px 0; background: #171d22; border-bottom: 1px solid #35404a; }
+.settings-nav button[aria-pressed="true"] { color: #ffae91; background: #392720; border-color: #795241; }
+.settings-group[hidden] { display: none; }
+.settings-group { min-height: 240px; }
+.media-library-art { position: relative; display: grid; place-items: center; background: #19242a; overflow: hidden; }
+.media-art-symbol { color: #83a4b3; font-size: 46px; font-weight: 400; }
+.media-library-art > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.media-library-actions .transfer-button { background: #21332e; color: #b4e1cf; border: 1px solid #476658; box-shadow: none; }
+.media-library-type { z-index: 1; }
+.library-playlist { grid-column: 1 / -1; min-width: 0; }
+.library-playlist > summary { cursor: pointer; padding: 10px 0; }
+.library-playlist-files { display: grid; grid-template-columns: repeat(auto-fill, minmax(235px, 1fr)); gap: 11px; }
+[data-view="small"] .library-playlist-files { grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); }
+[data-view="list"] .library-playlist-files { display: flex; flex-direction: column; }
+.destination-quick { display: inline-flex; align-items: center; gap: 5px; max-width: 165px; color: #b7c5cb; }
+.destination-quick span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hero, .hero-content { min-height: 76px; }
+.hero { border-color: #39424b; }
+.job[data-status="skipped"] { opacity: .8; }
+@media (max-width: 1100px) {
+  .topbar, .custom-window .topbar { grid-template-columns: minmax(140px, 1fr) auto auto; }
+  .topbar-actions, .custom-window .topbar-actions { grid-column: 3; grid-row: 1; display: flex; gap: 6px; }
+  .topbar-actions > .icon-only { display: grid; width: 38px; }
+  .topbar-actions .toolbar-more { order: 10; }
+}
+@media (max-width: 900px) {
+  body:not(.cut-page):not(.convert-page) { display: grid; grid-template-columns: 68px minmax(0, 1fr); }
+  .sidebar { position: sticky; top: 0; height: 100vh; padding: 40px 8px 12px; width: 68px; overflow: visible; }
+  .sidebar .brand-scene, .sidebar .side-foot, .sidebar .nav-label { display: none; }
+  .sidebar { justify-content: flex-start; }
+  .sidebar nav { display: flex; flex: 0 0 auto; margin-top: 12px; flex-direction: column; flex-wrap: nowrap; justify-content: flex-start; gap: 10px; }
+  .sidebar .nav { justify-content: center; min-height: 44px; padding: 10px; }
+  .sidebar .nav > span:nth-child(2), .sidebar .nav b { display: none; }
+  main { min-width: 0; padding: 44px 12px 60px; }
+  .custom-window .window-drag-strip { left: 0; }
+  .download-options { padding: 12px; }
+  .download-picks { flex-basis: 100%; }
+  .drawer-grid { grid-template-columns: 1fr; }
+  .drawer-card:last-child { grid-column: auto; }
+  .quick-link { padding: 0 8px; }
+
+  .cut-body { grid-template-columns: 145px minmax(0, 1fr) 210px; }
+}

@@ -38,7 +38,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libssl-dev libfuse2
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libssl-dev libfuse2 gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
       - run: npm ci
       - run: npm run check
       - run: npm test
@@ -73,9 +73,25 @@ jobs:
       - name: Build macOS app
         if: runner.os == 'macOS'
         run: npm run tauri build -- --target ${{ matrix.target }} --bundles app
-      - name: Build the Debian package
+      - name: Build the Debian package and AppImage
         if: runner.os == 'Linux'
-        run: npm run tauri build -- --target ${{ matrix.target }} --bundles deb --config src-tauri/tauri.ci.conf.json
+        run: npm run tauri build -- --target ${{ matrix.target }} --bundles deb,appimage --config src-tauri/tauri.ci.conf.json
+      - name: Check AppImage startup on Debian 13 and Ubuntu 24.04
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          image=$(find src-tauri/target -name '*.AppImage' -type f | head -n 1)
+          test -n "$image"
+          for distro in debian:13 ubuntu:24.04; do
+            docker run --rm -v "$PWD:/workspace:ro" "$distro" bash -c '
+              set -euo pipefail
+              apt-get update -qq
+              DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb xauth xdotool dbus-x11 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 libxdo3 libasound2t64 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
+              useradd -m tester
+              runuser -u tester -- bash /workspace/scripts/test-appimage.sh "/workspace/$1"
+            ' _ "$image"
+          done
       - name: Archive the macOS app with executable permissions
         if: runner.os == 'macOS'
         run: tar -czf Deviload-${{ matrix.target }}.tar.gz -C src-tauri/target/${{ matrix.target }}/release/bundle/macos "Deviload.app"
@@ -87,4 +103,5 @@ jobs:
             Deviload-*.tar.gz
             src-tauri/target/${{ matrix.target }}/release/deviload.exe
             src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
+            src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
             src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*-setup.exe

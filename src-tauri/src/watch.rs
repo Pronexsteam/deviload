@@ -186,13 +186,13 @@ pub fn add(dir: &Path, url: &str, options: Options, artist: bool, backfill: bool
     Ok((watch, now))
 }
 
-// Returns the new entries in list order and remembers every key it saw.
+// Remembers only entries returned for queueing; overflow remains eligible next time.
 pub fn take_new(watch: &mut Watch, entries: Vec<Entry>) -> Vec<Entry> {
     let known: HashSet<&String> = watch.seen.iter().collect();
     let mut fresh: Vec<Entry> = vec![];
     let mut keys: Vec<String> = vec![];
     for entry in entries {
-        if !known.contains(&entry.key) && !fresh.iter().any(|seen| seen.key == entry.key) {
+        if fresh.len() < MAX_NEW_PER_CHECK && !known.contains(&entry.key) && !fresh.iter().any(|seen| seen.key == entry.key) {
             keys.push(entry.key.clone());
             fresh.push(entry);
         }
@@ -209,7 +209,8 @@ pub fn check(engine: &Engine, id: u64) -> Result<(String, usize), String> {
         let _guard = WATCH_LOCK.lock().unwrap();
         load(&engine.dir).into_iter().find(|w| w.id == id).ok_or("The list is not watched any more")?
     };
-    let result = fetch(&watch.url, &watch.options, 30);
+    let auth = crate::resolve_auth(watch.options.clone(), &watch.url, &engine.dir);
+    let result = fetch(&watch.url, &auth, MAX_SEEN);
     let _guard = WATCH_LOCK.lock().unwrap();
     let mut watches = load(&engine.dir);
     let Some(current) = watches.iter_mut().find(|w| w.id == id) else { return Ok((watch.title, 0)) };
@@ -280,6 +281,7 @@ pub fn watch_list(engine: tauri::State<Engine>) -> Vec<WatchView> {
 
 #[tauri::command]
 pub async fn watch_add(url: String, options: Options, artist: Option<bool>, backfill: Option<bool>, engine: tauri::State<'_, Engine>, app: tauri::AppHandle) -> Result<WatchView, String> {
+    let options = crate::resolve_auth(options, &url, &engine.dir);
     let dir = engine.dir.clone();
     let (artist, backfill) = (artist.unwrap_or(false), backfill.unwrap_or(false));
     let (watch, now) = tauri::async_runtime::spawn_blocking(move || add(&dir, &url, options, artist, backfill)).await.map_err(|e| e.to_string())??;
@@ -351,6 +353,9 @@ mod tests {
         assert!(take_new(&mut watch, vec![entry("a"), entry("b")]).is_empty());
         let many: Vec<Entry> = (0..40).map(|i| entry(&format!("n{i}"))).collect();
         assert_eq!(take_new(&mut watch, many).len(), MAX_NEW_PER_CHECK);
+        let remaining = take_new(&mut watch, (0..40).map(|i| entry(&format!("n{i}"))).collect());
+        assert_eq!(remaining.len(), 20);
+        assert!(take_new(&mut watch, (0..40).map(|i| entry(&format!("n{i}"))).collect()).is_empty());
         watch.seen = (0..MAX_SEEN).map(|i| format!("old{i}")).collect();
         take_new(&mut watch, vec![entry("new")]);
         assert_eq!((watch.seen.len(), watch.seen[0].as_str()), (MAX_SEEN, "new"));

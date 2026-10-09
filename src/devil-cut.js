@@ -102,6 +102,7 @@ export function createDevilCut(env) {
   const $ = id => document.getElementById(id);
   const dialog = $("edit-dialog"), video = $("edit-video"), backdrop = $("cut-backdrop"), music = $("cut-music-player");
   const sources = new Map();
+  let missingSources = [];
   let project = null, projectId = null, saveTimer = 0;
   let selected = -1, selectedSound = -1, current = 0, playhead = 0, pxPerSecond = 60, playing = false, frameRequest = 0;
   // J/K/L: the playback speed on top of each clip's own, and the backwards run.
@@ -209,7 +210,7 @@ export function createDevilCut(env) {
   function normalize(data) {
     const known = new Set(jobs().filter(env.isVideoJob).map(job => job.id));
     const clips = (Array.isArray(data.clips) ? data.clips : [])
-      .filter(clip => Number.isSafeInteger(clip.jobId) && known.has(clip.jobId) && Number.isFinite(clip.start) && Number.isFinite(clip.end) && clip.end > clip.start)
+      .filter(clip => Number.isSafeInteger(clip.jobId) && Number.isFinite(clip.start) && Number.isFinite(clip.end) && clip.end > clip.start)
       .slice(0, MAX_CLIPS).map(clip => ({jobId:clip.jobId, start:clip.start, end:clip.end, look:{...DEFAULT_LOOK, ...(clip.look || {})}}));
     return {name:String(data.name || "").slice(0, 60), canvas:["16:9", "9:16", "1:1", "4:5"].includes(data.canvas) ? data.canvas : "16:9",
       fit:["fit", "fill", "blur"].includes(data.fit) ? data.fit : "fit",
@@ -219,7 +220,7 @@ export function createDevilCut(env) {
   function normalizeSounds(list, known) {
     const volume = value => Number.isFinite(Number(value)) ? clamp(Number(value), 0, 2) : 1;
     return (Array.isArray(list) ? list : [])
-      .filter(sound => Number.isSafeInteger(sound.jobId) && known.has(sound.jobId) && Number.isFinite(sound.start) && Number.isFinite(sound.end) && sound.end > sound.start && Number.isFinite(sound.at))
+      .filter(sound => Number.isSafeInteger(sound.jobId) && Number.isFinite(sound.start) && Number.isFinite(sound.end) && sound.end > sound.start && Number.isFinite(sound.at))
       .slice(0, MAX_SOUNDS).map(sound => ({jobId:sound.jobId, start:Math.max(0, sound.start), end:sound.end, at:Math.max(0, sound.at),
         speed:SPEEDS.includes(sound.speed) ? sound.speed : 1, volume:volume(sound.volume), fadeIn:Boolean(sound.fadeIn), fadeOut:Boolean(sound.fadeOut)}));
   }
@@ -235,13 +236,31 @@ export function createDevilCut(env) {
     defaultStatus();
     renderMedia();
     render();
-    await Promise.all([...project.clips, ...project.audio].map(item => loadSource(item.jobId).catch(() => null)));
+    const missing = [];
+    await Promise.all([...project.clips, ...project.audio].map(item => loadSource(item.jobId).catch(() => { missing.push(item.jobId); })));
+    missingSources = [...new Set(missing)];
+    $("cut-relink").hidden = !missingSources.length;
+    if (missing.length) status(t("Some source files are missing. Your timeline has been kept. Restore the files before exporting."), true);
     await prepareMusic().catch(() => {});
     zoomTouched = false;
     fitZoom();
     render();
     seek(0);
   }
+  $("cut-relink").addEventListener("click", async () => {
+    const pick = window.__TAURI__?.dialog?.open;
+    if (!pick) return;
+    try {
+      for (const id of missingSources) {
+        const path = await pick({multiple:false, directory:false, title:t("Locate source {id}", {id}), filters:[{name:"Video", extensions:["mp4","mkv","mov","webm","m4v"]}]});
+        if (typeof path !== "string") return;
+        await invoke("relink_media", {id, path});
+        sources.delete(id);
+      }
+      await openData(projectId, copy(project));
+    } catch (error) { status(errorText(error), true); }
+  });
+
   async function open(jobId = null) {
     await openData("p" + Date.now().toString(36), {});
     if (jobId !== null) await addClip(jobId);

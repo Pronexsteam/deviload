@@ -115,7 +115,7 @@ jobs:
       - name: Install the libraries Tauri builds against
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libssl-dev libfuse2
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libssl-dev libfuse2 gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
       - run: npm ci
       - name: Fetch yt-dlp, FFmpeg and Deno for Linux
         run: bash scripts/fetch-tools-linux.sh
