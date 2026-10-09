@@ -17,6 +17,7 @@ bin/
 # personal data
 cookies.txt
 *_cookies.txt
+*-cookies.txt
 youtube-cookies.txt
 queue.json
 

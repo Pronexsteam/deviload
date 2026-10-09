@@ -49,15 +49,16 @@ jobs:
       - name: Fetch yt-dlp, FFmpeg and Deno for Linux
         if: runner.os == 'Linux'
         run: bash scripts/fetch-tools-linux.sh
+      - name: Fetch yt-dlp, FFmpeg and Deno for macOS
+        if: runner.os == 'macOS'
+        run: bash scripts/fetch-tools-macos.sh
       # Unit tests run on the host; the build below checks the selected target. Where the engines
       # were fetched, the tests on generated media run too (recording, converter, Devil Cut, audio).
       - name: Run the Rust tests
         shell: bash
         run: |
           set -o pipefail
-          media=""
-          if [ "$RUNNER_OS" != "macOS" ]; then media="--include-ignored"; fi
-          cargo test --manifest-path src-tauri/Cargo.toml --locked -- $media 2>&1 | tee cargo-test.log
+          cargo test --manifest-path src-tauri/Cargo.toml --locked -- --include-ignored 2>&1 | tee cargo-test.log
       # Job logs need a GitHub sign-in; annotations do not, so a failure shows its end there.
       - name: Show the end of a failed test run
         if: failure()
@@ -72,7 +73,18 @@ jobs:
         run: npm run tauri build -- --target ${{ matrix.target }} --config src-tauri/tauri.ci.conf.json
       - name: Build macOS app
         if: runner.os == 'macOS'
-        run: npm run tauri build -- --target ${{ matrix.target }} --bundles app
+        run: npm run tauri build -- --target ${{ matrix.target }} --bundles app --config src-tauri/tauri.macos-bundle.conf.json
+      - name: Verify macOS app resources
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="src-tauri/target/${{ matrix.target }}/release/bundle/macos/Deviload.app"
+          for tool in yt-dlp ffmpeg ffprobe deno; do
+            test -x "$app/Contents/Resources/bin/$tool"
+            "$app/Contents/Resources/bin/$tool" --version >/dev/null 2>&1 || "$app/Contents/Resources/bin/$tool" -version >/dev/null
+          done
+          test -s "$app/Contents/Resources/icon.icns"
       - name: Build the Debian package and AppImage
         if: runner.os == 'Linux'
         run: npm run tauri build -- --target ${{ matrix.target }} --bundles deb,appimage --config src-tauri/tauri.ci.conf.json

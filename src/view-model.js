@@ -15,6 +15,26 @@ export function inLibrary(job) {
   return job.status === "done" && Boolean(job.file) && !job.hiddenInLibrary;
 }
 
+export function mediaIdentity(raw) {
+  try {
+    const url=new URL(raw);
+    if(!['https:','http:'].includes(url.protocol))return '';
+    const host=url.hostname.toLowerCase().replace(/^www\./,'');
+    if(['youtube.com','m.youtube.com','music.youtube.com','youtu.be'].includes(host)){
+      const parts=url.pathname.split('/');
+      const id=host==='youtu.be'?parts[1]:url.searchParams.get('v')||(['shorts','live','embed'].includes(parts[1])?parts[2]:'');
+      if(/^[a-zA-Z0-9_-]{11}$/.test(id||''))return 'youtube:'+id;
+    }
+    url.hostname=host;url.hash='';url.pathname=url.pathname.replace(/\/$/,'');
+    for(const key of [...url.searchParams.keys()])if(/^utm_/i.test(key)||['igsh','igshid','fbclid','si'].includes(key))url.searchParams.delete(key);
+    url.searchParams.sort();return url.href;
+  } catch { return ''; }
+}
+
+export function isProcessing(job) {
+  return job.status==='running'&&!job.live&&(['processing','merging','remuxing','converting','saving'].includes(job.stage)||(!job.stage&&Number(job.percent)>=99.95));
+}
+
 export function orbState(jobs) {
   if (jobs.some(j=>j.status==="running")) return "running";
   if (jobs.some(j=>j.status==="cancelling")) return "cancelling";
@@ -117,7 +137,7 @@ export function diagnoseError(log = [], signedIn = false, url = "") {
     if (/not available to everyone|isn't available to everyone|certain audiences|restricted video|18 years/.test(detail)) {
       return {title:"Audience restriction", message:"Instagram limits this post to certain accounts or audiences. Check that the same account can open it in a browser.", action:"cookies"};
     }
-    if (/empty media response|api is not granting access/.test(detail)) {
+    if (/empty media response|api is not granting access|failed to parse json/.test(detail)) {
       return {title:"Instagram did not return the video", message:"Instagram may be limiting access, or its extractor may need an update. Check the post in a browser, update yt-dlp and check the cookies source.", action:"update"};
     }
   }

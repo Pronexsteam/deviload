@@ -4,6 +4,7 @@
 // video track sit the clips' own sound, sounds detached from clips and music.
 import {setPose} from "./mascot-spot.js";
 import {exportFolder, bindExportFolder} from "./export-folder.js";
+import {exportPresets, trimBounds} from "./cut-editing.js";
 
 const DEFAULT_LOOK = Object.freeze({speed:1, volume:1, fadeIn:false, fadeOut:false, rotate:0, flip:false,
   brightness:0, contrast:1, saturation:1, caption:"", captionPosition:"bottom", captionStyle:"outline", transition:"none"});
@@ -105,6 +106,7 @@ export function createDevilCut(env) {
   let missingSources = [];
   let project = null, projectId = null, saveTimer = 0;
   let selected = -1, selectedSound = -1, current = 0, playhead = 0, pxPerSecond = 60, playing = false, frameRequest = 0;
+  let selectedClips = new Set(), exporting = false;
   // J/K/L: the playback speed on top of each clip's own, and the backwards run.
   let shuttle = 1, rewind = 0, rewindTimer = 0;
   let history = [], future = [], pendingEdit = null, loadedJob = null, mediaTab = "video", lastOutput = "";
@@ -190,6 +192,7 @@ export function createDevilCut(env) {
     seek(playhead);
   }
   function keepSelection() {
+    selectedClips.clear();
     selected = Math.min(selected, project.clips.length - 1);
     selectedSound = Math.min(selectedSound, project.audio.length - 1);
   }
@@ -278,6 +281,7 @@ export function createDevilCut(env) {
       commit();
       project.clips.push({jobId, start:0, end:source.duration, look:{...DEFAULT_LOOK}});
       selected = project.clips.length - 1;
+      selectedClips = new Set([project.clips[selected]]);
       if (!project.name) project.name = source.name.replace(/\.[^.]+$/, "").slice(0, 60);
       if (!zoomTouched) fitZoom();
       changed();
@@ -486,6 +490,9 @@ export function createDevilCut(env) {
   }
   function render() {
     if (!project) return;
+    selectedClips = new Set([...selectedClips].filter(clip => project.clips.includes(clip)));
+    if (selected < 0) selectedClips.clear();
+    if (!selectedClips.size && selected >= 0 && project.clips[selected]) selectedClips.add(project.clips[selected]);
     if (!typingName) $("cut-name").value = project.name;
     for (const button of document.querySelectorAll("[data-canvas]")) button.classList.toggle("selected", button.dataset.canvas === project.canvas);
     for (const button of document.querySelectorAll("[data-fit]")) button.classList.toggle("selected", button.dataset.fit === project.fit);
@@ -501,7 +508,7 @@ export function createDevilCut(env) {
     soundTrack.replaceChildren();
     project.clips.forEach((clip, index) => {
       const source = sources.get(clip.jobId);
-      const block = node("div", "cut-clip" + (index === selected ? " selected" : ""));
+      const block = node("div", "cut-clip" + (selectedClips.has(clip) ? " selected" : ""));
       block.dataset.index = String(index);
       block.style.width = Math.max(10, clipLength(clip) * pxPerSecond) + "px";
       const overlap = overlapOf(index);
@@ -519,7 +526,7 @@ export function createDevilCut(env) {
       block.append(strip, label, info, node("span", "cut-trim cut-trim-start"), node("span", "cut-trim cut-trim-end"));
       track.append(block);
       // The clip's own sound, lined up under the picture.
-      const sound = node("div", "cut-sound" + (index === selected ? " selected" : "") + (clip.look.volume === 0 ? " muted" : ""));
+      const sound = node("div", "cut-sound" + (selectedClips.has(clip) ? " selected" : "") + (clip.look.volume === 0 ? " muted" : ""));
       sound.dataset.index = String(index);
       sound.style.width = block.style.width;
       sound.style.marginLeft = block.style.marginLeft;
@@ -678,6 +685,8 @@ export function createDevilCut(env) {
   function renderExportSummary() {
     if (!project) return;
     const format = chip("format");
+    const exportLabel = t(format === "mp3" ? "Save audio" : format === "gif" ? "Save GIF" : "Save the video");
+    $("cut-export").lastChild.textContent = exportLabel;
     for (const id of ["cut-codec-label", "cut-codec", "cut-codec-note"]) $(id).hidden = format !== "mp4";
     const label = format === "mp3" ? "MP3" : format === "gif" ? "GIF" : `MP4 ${qualityLabel(chip("quality"))}${chip("codec") === "h265" ? " · H.265" : ""}`;
     $("cut-export-summary").textContent = t("{length} · {canvas} · {format}", {length:clock(total()), canvas:project.canvas, format:label});
@@ -702,6 +711,12 @@ export function createDevilCut(env) {
       $("cut-sound-fade-out").checked = sound.fadeOut;
     }
     if (!clip) return;
+    $("cut-selection-note").textContent = selectedClips.size > 1
+      ? t("{count} clips selected. Duplicate and Delete affect all; settings affect the last selected clip.", {count:selectedClips.size})
+      : t("Ctrl-click adds clips; Shift-click selects a range. Ctrl+A selects all clips.");
+    for (const [id, value] of [["cut-trim-in", clip.start], ["cut-trim-out", clip.end]]) {
+      if (document.activeElement !== $(id)) $(id).value = value.toFixed(3);
+    }
     const look = clip.look;
     selectChips("speed", look.speed);
     selectChips("captionPosition", look.captionPosition);
@@ -759,16 +774,38 @@ export function createDevilCut(env) {
     $("cut-detach").disabled = !clip || clip.look.volume === 0 || waves.get(clip.jobId) === "";
   }
   function markSelection() {
-    for (const block of document.querySelectorAll("#cut-video-track .cut-clip, #cut-sound-track .cut-sound")) block.classList.toggle("selected", Number(block.dataset.index) === selected);
+    for (const block of document.querySelectorAll("#cut-video-track .cut-clip, #cut-sound-track .cut-sound")) block.classList.toggle("selected", selectedClips.has(project.clips[Number(block.dataset.index)]));
     for (const block of document.querySelectorAll("#cut-audio-track .cut-piece")) block.classList.toggle("selected", Number(block.dataset.index) === selectedSound);
     renderInspector();
     renderTools();
   }
-  function select(index) { selected = index; selectedSound = -1; markSelection(); }
-  function selectSound(index) { selectedSound = index; selected = -1; markSelection(); }
+  function select(index, event = {}) {
+    if (event.shiftKey && selected >= 0) {
+      for (let i = Math.min(index, selected); i <= Math.max(index, selected); i++) selectedClips.add(project.clips[i]);
+    } else if (event.ctrlKey || event.metaKey) {
+      const clip = project.clips[index]; selectedClips.has(clip) ? selectedClips.delete(clip) : selectedClips.add(clip);
+    } else selectedClips = new Set([project.clips[index]]);
+    selected = selectedClips.has(project.clips[index]) ? index : project.clips.findIndex(clip => selectedClips.has(clip));
+    selectedSound = -1; markSelection();
+  }
+  function selectSound(index) { selectedClips.clear(); selectedSound = index; selected = -1; markSelection(); }
+  function setTrim(edge, value) {
+    const clip = project?.clips[selected];
+    if (!clip) return;
+    pause();
+    try {
+      const bounds = trimBounds(edge === 'start' ? value : clip.start, edge === 'end' ? value : clip.end, sources.get(clip.jobId)?.duration ?? clip.end);
+      commit(); Object.assign(clip, bounds); changed(); seek(offsetOf(selected)); defaultStatus();
+    } catch (error) { status(errorText(error), true); renderInspector(); }
+  }
+  function markTrim(edge) {
+    const clip = project?.clips[selected];
+    if (clip) setTrim(edge, clip.start + (playhead - offsetOf(selected)) * clip.look.speed);
+  }
   function split() {
     if (selectedSound >= 0) { splitSound(); return; }
     if (!project?.clips.length) return;
+    if (project.clips.length >= MAX_CLIPS) { status(t("A project holds up to 60 clips."), true); return; }
     const at = clipAt(Math.min(playhead, total() - 0.001));
     const clip = project.clips[at.index];
     const point = clip.start + (playhead - at.offset) * clip.look.speed;
@@ -779,6 +816,7 @@ export function createDevilCut(env) {
     second.start = point; second.look.fadeIn = false;
     project.clips.splice(at.index + 1, 0, second);
     selected = at.index + 1;
+    selectedClips = new Set([second]);
     changed();
   }
   function splitSound() {
@@ -805,7 +843,8 @@ export function createDevilCut(env) {
     }
     if (selected < 0) return;
     commit();
-    project.clips.splice(selected, 1);
+    project.clips = project.clips.filter(clip => !selectedClips.has(clip));
+    selectedClips.clear();
     selected = Math.min(selected, project.clips.length - 1);
     changed();
     seek(Math.min(playhead, total()));
@@ -820,10 +859,14 @@ export function createDevilCut(env) {
       changed();
       return;
     }
-    if (selected < 0 || project.clips.length >= MAX_CLIPS) return;
+    if (selected < 0) return;
+    const originals = project.clips.filter(clip => selectedClips.has(clip));
+    if (project.clips.length + originals.length > MAX_CLIPS) { status(t("A project holds up to 60 clips."), true); return; }
     commit();
-    project.clips.splice(selected + 1, 0, copy(project.clips[selected]));
-    selected += 1;
+    const last = Math.max(...originals.map(clip => project.clips.indexOf(clip)));
+    const copies = originals.map(copy);
+    project.clips.splice(last + 1, 0, ...copies);
+    selectedClips = new Set(copies); selected = last + 1;
     changed();
   }
   // The clip keeps its picture and goes silent; its sound becomes a piece that can move on its own.
@@ -870,7 +913,9 @@ export function createDevilCut(env) {
     bar.firstElementChild.style.width = percent + "%";
   }
   async function exportProject() {
+    if (exporting) return;
     if (!project?.clips.length) { status(t("Add at least one clip to export."), true); return; }
+    exporting = true;
     $("cut-export-menu").open = false;
     pause();
     setProgress(0);
@@ -893,7 +938,7 @@ export function createDevilCut(env) {
       message(t("Devil Cut saved: {file}", {file:fileName(output)}));
       setPose($("cut-mascot"), "victory", "front", 3600);
     } catch (error) { status(errorText(error), true); setPose($("cut-mascot"), "error", "front", 4200); }
-    finally { button.disabled = false; setTimeout(() => setProgress(null), 900); }
+    finally { exporting = false; button.disabled = false; setTimeout(() => setProgress(null), 900); }
   }
 
   // Timeline pointer work: select, trim edges, reorder, move the playhead.
@@ -912,7 +957,8 @@ export function createDevilCut(env) {
     const track = $("cut-video-track"), startX = event.clientX, original = {start:clip.start, end:clip.end};
     const limit = sources.get(clip.jobId)?.duration ?? clip.end;
     let moved = false;
-    select(index);
+    select(index, event);
+    if (event.ctrlKey || event.metaKey || event.shiftKey) return;
     try { track.setPointerCapture(event.pointerId); } catch { /* synthetic pointer */ }
     const move = moveEvent => {
       const dx = moveEvent.clientX - startX;
@@ -1115,11 +1161,24 @@ export function createDevilCut(env) {
   for (const group of document.querySelectorAll("#cut-export-menu [data-chips]")) {
     for (const button of group.querySelectorAll("button")) {
       button.addEventListener("click", () => {
+        $("cut-export-preset").value = "custom";
         for (const peer of group.querySelectorAll("button")) peer.classList.toggle("selected", peer === button);
         renderExportSummary();
       });
     }
   }
+  $("cut-export-preset").addEventListener("change", () => {
+    const preset = exportPresets[$("cut-export-preset").value];
+    if (!preset) return;
+    for (const [name,value] of Object.entries(preset)) for (const button of document.querySelectorAll(`[data-chips="${name}"] button`)) button.classList.toggle('selected', button.dataset.value === value);
+    renderExportSummary();
+  });
+  for (const [id,edge] of [["cut-trim-in","start"],["cut-trim-out","end"]]) $(id).addEventListener('change', () => {
+    setTrim(edge, $(id).value.trim() ? Number($(id).value) : NaN);
+    $(id).blur(); renderInspector();
+  });
+  $("cut-mark-in").addEventListener('click', () => markTrim('start'));
+  $("cut-mark-out").addEventListener('click', () => markTrim('end'));
   $("cut-name").addEventListener("input", () => { typingName = true; beginEdit(); project.name = $("cut-name").value.slice(0, 60); });
   $("cut-name").addEventListener("change", () => { typingName = false; endEdit(); });
   $("cut-play").addEventListener("click", () => playing ? pause() : play());
@@ -1207,7 +1266,11 @@ export function createDevilCut(env) {
     // Physical keys, so the shortcuts work with any keyboard layout.
     const key = event.code;
     const handled = () => event.preventDefault();
-    if (key === "Space") { handled(); playing ? pause() : play(); }
+    if (mod && key === "KeyA") { handled(); selectedClips = new Set(project.clips); selected = project.clips.length - 1; selectedSound = -1; markSelection(); }
+    else if (mod && key === "KeyE") { handled(); $("cut-export-menu").open = true; $("cut-export-preset").focus(); }
+    else if (!mod && key === "KeyI") { handled(); markTrim('start'); }
+    else if (!mod && key === "KeyO") { handled(); markTrim('end'); }
+    else if (key === "Space") { handled(); playing ? pause() : play(); }
     else if (mod && key === "KeyB") { handled(); split(); }
     else if (mod && key === "KeyD") { handled(); duplicate(); }
     else if (mod && key === "KeyZ") { handled(); event.shiftKey ? redo() : undo(); }

@@ -12,23 +12,10 @@ export function pop(element, distance = 7) {
 
 export function reactToPress(element, event) {
   if (!motionAllowed() || !element || element.disabled) return;
-  const rect = element.getBoundingClientRect();
-  const x = event && event.clientX ? event.clientX - rect.left : rect.width / 2;
-  const y = event && event.clientY ? event.clientY - rect.top : rect.height / 2;
-  const wave = document.createElement("span");
-  wave.className = "tap-wave";
-  const diameter = Math.max(rect.width, rect.height) * 2.1;
-  wave.style.cssText = "width:" + diameter + "px;height:" + diameter + "px;left:" +
-    (x - diameter/2) + "px;top:" + (y - diameter/2) + "px";
-  element.append(wave);
-  const ripple = wave.animate([
-    { transform: "scale(0)", opacity: .28 },
-    { transform: "scale(1)", opacity: 0 }
-  ], { duration: 480, easing: "ease-out" });
-  ripple.onfinish = () => wave.remove();
-  element.animate([
-    { transform: "scale(1)" }, { transform: "scale(.965)" }, { transform: "scale(1)" }
-  ], { duration: 290, easing: "cubic-bezier(.2,.9,.3,1)" });
+  element.pressAnimation?.cancel();
+  element.pressAnimation=element.animate([
+    { transform: "translateY(0)" }, { transform: "translateY(1px)" }, { transform: "translateY(0)" }
+  ], { duration: 160, easing: "ease-out" });
 }
 
 export function animateDetails(details) {

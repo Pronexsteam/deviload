@@ -54,13 +54,52 @@ struct Hub {
 impl Hub {
     fn idle(&self) -> bool {
         let busy = self.offers.iter().any(|o| o.state == OfferState::Receiving)
-            || self.files.iter().any(|f| f.sent.load(Ordering::Relaxed) > 0 && !f.done.load(Ordering::Relaxed));
+            || self.files.iter().any(|f| f.progress.lock().unwrap().active > 0);
         !busy && self.seen.unwrap_or(self.started).max(self.started).elapsed() >= IDLE_OFF
     }
 }
 
 #[derive(Clone)]
-struct Outgoing { id: u64, path: PathBuf, name: String, size: u64, sent: Arc<AtomicU64>, done: Arc<AtomicBool> }
+struct Outgoing { id: u64, path: PathBuf, name: String, size: u64, sent: Arc<AtomicU64>, done: Arc<AtomicBool>, progress: Arc<Mutex<TransferProgress>> }
+
+#[derive(Default)]
+struct TransferProgress { active: usize, ranges: Vec<(u64, u64)> }
+
+struct Transfer<'a>(&'a Outgoing);
+
+impl Drop for Transfer<'_> {
+    fn drop(&mut self) { self.0.progress.lock().unwrap().active -= 1; }
+}
+
+impl Outgoing {
+    fn begin_transfer(&self, start: u64) -> Transfer<'_> {
+        let mut progress = self.progress.lock().unwrap();
+        if progress.active == 0 && start == 0 && self.done.load(Ordering::Relaxed) {
+            progress.ranges.clear();
+            self.sent.store(0, Ordering::Relaxed);
+            self.done.store(false, Ordering::Relaxed);
+        }
+        progress.active += 1;
+        Transfer(self)
+    }
+
+    // Count unique bytes across resumed and overlapping range requests.
+    fn record_range(&self, start: u64, end: u64) {
+        let mut progress = self.progress.lock().unwrap();
+        if end > start { progress.ranges.push((start, end.min(self.size))); }
+        progress.ranges.sort_unstable();
+        let mut merged: Vec<(u64, u64)> = Vec::with_capacity(progress.ranges.len());
+        for &(start, end) in &progress.ranges {
+            if let Some(last) = merged.last_mut().filter(|last| start <= last.1) {
+                last.1 = last.1.max(end);
+            } else { merged.push((start, end)); }
+        }
+        let sent = merged.iter().map(|(start, end)| end - start).sum();
+        progress.ranges = merged;
+        self.sent.store(sent, Ordering::Relaxed);
+        self.done.store(sent == self.size, Ordering::Relaxed);
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Debug, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -245,13 +284,26 @@ pub(super) fn phone_send(id: u64, page: PhonePage, engine: tauri::State<'_, Engi
     let link = ensure_started(page, &engine, &state, &app)?;
     let mut guard = state.0.lock().map_err(|e| e.to_string())?;
     let hub = guard.as_mut().ok_or("The phone link is off")?;
+    add_outgoing(hub, file, name, size)?;
+    Ok(link)
+}
+
+fn add_outgoing(hub: &mut Hub, file: PathBuf, name: String, size: u64) -> Result<(), String> {
+    if let Some(existing) = hub.files.iter().find(|item| item.path == file) {
+        if !existing.done.load(Ordering::Relaxed) { return Ok(()); }
+    } else if hub.files.len() >= MAX_FILES {
+        if let Some(index) = hub.files.iter().rposition(|item| item.done.load(Ordering::Relaxed)) {
+            hub.files.remove(index);
+        } else {
+            return Err("The phone list has 50 pending files. Save them on the phone before sending more.".into());
+        }
+    }
     hub.files.retain(|item| item.path != file);
     let id = hub.next_id;
     hub.next_id += 1;
     hub.started = Instant::now();
-    hub.files.insert(0, Outgoing { id, path: file, name, size, sent: Arc::new(AtomicU64::new(0)), done: Arc::new(AtomicBool::new(false)) });
-    hub.files.truncate(MAX_FILES);
-    Ok(link)
+    hub.files.insert(0, Outgoing { id, path: file, name, size, sent: Arc::new(AtomicU64::new(0)), done: Arc::new(AtomicBool::new(false)), progress: Arc::default() });
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -551,7 +603,6 @@ fn send_file(stream: &mut TcpStream, state: &ShareState, token: &str, file: &Out
         Ok(value) => value,
         Err(()) => { write!(stream, "HTTP/1.1 416 Range Not Satisfiable\r\nContent-Range: bytes */{}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", file.size)?; return Ok(()); }
     };
-    if download && bounds.is_none_or(|(start, _)| start == 0) { file.sent.store(0, Ordering::Relaxed); file.done.store(false, Ordering::Relaxed); }
     let (start, end) = bounds.unwrap_or((0, file.size.saturating_sub(1)));
     let length = if file.size == 0 { 0 } else { end - start + 1 };
     let status = if bounds.is_some() { "206 Partial Content" } else { "200 OK" };
@@ -567,6 +618,7 @@ fn send_file(stream: &mut TcpStream, state: &ShareState, token: &str, file: &Out
     if head { return Ok(()); }
     let mut source = File::open(&file.path)?;
     source.seek(SeekFrom::Start(start))?;
+    let _transfer = download.then(|| file.begin_transfer(start));
     let mut remaining = length;
     let mut buffer = [0u8; 64 * 1024];
     while remaining > 0 && state.with(token, |_| ()).is_some() {
@@ -575,9 +627,9 @@ fn send_file(stream: &mut TcpStream, state: &ShareState, token: &str, file: &Out
         if read == 0 { break; }
         stream.write_all(&buffer[..read])?;
         remaining -= read as u64;
-        if download { file.sent.fetch_add(read as u64, Ordering::Relaxed); }
+        if download { file.record_range(start + length - remaining - read as u64, start + length - remaining); }
     }
-    if download && remaining == 0 { file.done.store(true, Ordering::Relaxed); }
+    if download && file.size == 0 { file.record_range(0, 0); }
     Ok(())
 }
 
@@ -742,6 +794,29 @@ mod tests {
         state
     }
 
+    #[test]
+    fn a_full_phone_list_preserves_pending_transfers() {
+        let state = hub(Arc::new(TestHost::default()), vec![]);
+        let mut guard = state.0.lock().unwrap();
+        let hub = guard.as_mut().unwrap();
+        for index in 0..MAX_FILES {
+            add_outgoing(hub, PathBuf::from(format!("{index}.mp4")), format!("{index}.mp4"), 10).unwrap();
+        }
+        let ids: Vec<_> = hub.files.iter().map(|file| file.id).collect();
+        assert!(add_outgoing(hub, "extra.mp4".into(), "extra.mp4".into(), 10).is_err());
+        assert_eq!(hub.files.iter().map(|file| file.id).collect::<Vec<_>>(), ids);
+        let pending_id = hub.files[0].id;
+        hub.files[0].sent.store(5, Ordering::Relaxed);
+        add_outgoing(hub, "49.mp4".into(), "49.mp4".into(), 10).unwrap();
+        assert_eq!(hub.files[0].id, pending_id);
+        assert_eq!(hub.files[0].sent.load(Ordering::Relaxed), 5);
+        hub.files.last().unwrap().done.store(true, Ordering::Relaxed);
+        add_outgoing(hub, "extra.mp4".into(), "extra.mp4".into(), 10).unwrap();
+        assert_eq!(hub.files.len(), MAX_FILES);
+        assert!(hub.files.iter().any(|file| file.id == pending_id));
+        assert!(!hub.files.iter().any(|file| file.path == Path::new("0.mp4")));
+    }
+
     fn exchange(state: &ShareState, request: &[u8]) -> String {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
@@ -771,7 +846,7 @@ mod tests {
         let mut file = tempfile::NamedTempFile::new().unwrap();
         file.write_all(b"abcdefgh").unwrap();
         let outgoing = Outgoing { id: 3, path: file.path().to_path_buf(), name: "clip.mp4".into(), size: 8,
-            sent: Arc::new(AtomicU64::new(0)), done: Arc::new(AtomicBool::new(false)) };
+            sent: Arc::new(AtomicU64::new(0)), done: Arc::new(AtomicBool::new(false)), progress: Arc::default() };
         let state = hub(Arc::new(TestHost::default()), vec![outgoing.clone()]);
         let response = exchange(&state, b"GET /p/secret/media/3 HTTP/1.1\r\nRange: bytes=2-4\r\n\r\n");
         assert!(response.starts_with("HTTP/1.1 206 Partial Content") && response.ends_with("\r\ncde"), "{response}");
@@ -787,6 +862,51 @@ mod tests {
     }
 
     #[test]
+    fn download_ranges_count_unique_bytes_and_head_does_not_reset_them() {
+        let mut source = tempfile::NamedTempFile::new().unwrap();
+        source.write_all(b"abcdefgh").unwrap();
+        let outgoing = Outgoing { id: 3, path: source.path().into(), name: "clip.mp4".into(), size: 8,
+            sent: Arc::new(AtomicU64::new(0)), done: Arc::new(AtomicBool::new(false)), progress: Arc::default() };
+        let state = hub(Arc::new(TestHost::default()), vec![outgoing.clone()]);
+        exchange(&state, b"GET /p/secret/file/3 HTTP/1.1\r\nRange: bytes=2-4\r\n\r\n");
+        assert_eq!(outgoing.sent.load(Ordering::Relaxed), 3);
+        assert!(!outgoing.done.load(Ordering::Relaxed), "a fragment is not a complete file");
+        exchange(&state, b"GET /p/secret/file/3 HTTP/1.1\r\nRange: bytes=3-6\r\n\r\n");
+        assert_eq!(outgoing.sent.load(Ordering::Relaxed), 5, "overlap is counted once");
+        exchange(&state, b"HEAD /p/secret/file/3 HTTP/1.1\r\n\r\n");
+        assert_eq!(outgoing.sent.load(Ordering::Relaxed), 5);
+        exchange(&state, b"GET /p/secret/file/3 HTTP/1.1\r\nRange: bytes=0-1\r\n\r\n");
+        assert!(!outgoing.done.load(Ordering::Relaxed));
+        exchange(&state, b"GET /p/secret/file/3 HTTP/1.1\r\nRange: bytes=7-\r\n\r\n");
+        assert_eq!(outgoing.sent.load(Ordering::Relaxed), 8);
+        assert!(outgoing.done.load(Ordering::Relaxed));
+        exchange(&state, b"HEAD /p/secret/file/3 HTTP/1.1\r\n\r\n");
+        assert!(outgoing.done.load(Ordering::Relaxed));
+        let guard = outgoing.begin_transfer(0);
+        assert_eq!(outgoing.sent.load(Ordering::Relaxed), 0, "a new full download resets completed progress");
+        drop(guard);
+        assert_eq!(outgoing.progress.lock().unwrap().active, 0);
+    }
+
+    #[test]
+    fn an_interrupted_download_does_not_keep_the_phone_link_alive() {
+        let state = hub(Arc::new(TestHost::default()), vec![]);
+        let outgoing = {
+            let mut guard = state.0.lock().unwrap();
+            let hub = guard.as_mut().unwrap();
+            add_outgoing(hub, "clip.mp4".into(), "clip.mp4".into(), 8).unwrap();
+            hub.started = Instant::now() - IDLE_OFF - Duration::from_secs(1);
+            hub.files[0].clone()
+        };
+        let transfer = outgoing.begin_transfer(0);
+        outgoing.record_range(0, 2);
+        assert!(!state.0.lock().unwrap().as_ref().unwrap().idle());
+        drop(transfer);
+        assert!(state.0.lock().unwrap().as_ref().unwrap().idle());
+        assert_eq!(outgoing.sent.load(Ordering::Relaxed), 2, "partial progress remains resumable");
+    }
+
+    #[test]
     fn large_files_reach_a_slow_phone_through_a_non_blocking_listener() {
         // The real listener is non-blocking, and accepted sockets inherit that on macOS and Windows:
         // a full send buffer must wait for the phone instead of ending the download.
@@ -794,7 +914,7 @@ mod tests {
         let mut file = tempfile::NamedTempFile::new().unwrap();
         file.write_all(&vec![7u8; size]).unwrap();
         let outgoing = Outgoing { id: 4, path: file.path().to_path_buf(), name: "big.mp4".into(), size: size as u64,
-            sent: Arc::new(AtomicU64::new(0)), done: Arc::new(AtomicBool::new(false)) };
+            sent: Arc::new(AtomicU64::new(0)), done: Arc::new(AtomicBool::new(false)), progress: Arc::default() };
         let state = hub(Arc::new(TestHost::default()), vec![outgoing.clone()]);
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();

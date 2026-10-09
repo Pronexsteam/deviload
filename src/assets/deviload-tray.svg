@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44" fill="none">
+  <defs><mask id="square"><rect width="44" height="44" fill="white"/><path d="M20 9 9 35m15-26 11 26" stroke="black" stroke-width="7"/></mask></defs>
+  <path d="m6 20 16 17 16-17" stroke="#ed3655" stroke-width="5" stroke-linecap="square" mask="url(#square)"/>
+  <path d="M20 9 9 35m15-26 11 26M15 17h14" stroke="#ff7968" stroke-width="3.5"/>
+  <path d="m22 2 4 4-4 4-4-4Z" fill="#ed3655"/>
+</svg>

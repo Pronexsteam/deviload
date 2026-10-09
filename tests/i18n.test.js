@@ -20,7 +20,7 @@ function missing(strings) {
 }
 
 function literals(code) {
-  return [...code.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(match => JSON.parse(`"${match[1]}"`));
+  return [...code.matchAll(/"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'/g)].map(match => match[1]!==undefined?JSON.parse(`"${match[1]}"`):match[2].replace(/\\(['\\])/g,'$1'));
 }
 
 // Arguments of every t(...) call, with nested parentheses kept together.
@@ -43,12 +43,14 @@ function translatedLiterals(code, words = false) {
 }
 
 function htmlStrings() {
-  const html = (read("src/index.html") + read("src/cut.html") + read("src/converter.html")).replace(/<(script|style)[\s\S]*?<\/\1>/g, "").replace(/<svg[\s\S]*?<\/svg>/g, "");
+  const profileHtml=[...(read("src/download-profiles.js")+read("src/settings-backup.js")).matchAll(/innerHTML='([^']*)'/g)].map(match=>match[1]).join('');
+  const html = (read("src/index.html") + read("src/cut.html") + read("src/converter.html")+profileHtml).replace(/<(script|style)[\s\S]*?<\/\1>/g, "").replace(/<svg[\s\S]*?<\/svg>/g, "");
   const strings = new Set();
   for (const [, text] of html.matchAll(/>([^<]+)</g)) if (text.trim()) strings.add(text.trim());
   for (const [, , value] of html.matchAll(/\s(placeholder|aria-label|title|alt|label|data-empty-label)="([^"]*)"/g)) {
     if (value.trim()) strings.add(value.trim());
   }
+  for(const file of ['src/download-profiles.js','src/download-profile-data.js','src/settings-backup.js','src/cut-editing.js'])for(const [,message] of read(file).matchAll(/Error\('([^']+)'/g))strings.add(message);
   return strings;
 }
 
@@ -57,7 +59,7 @@ const normalize = text => text.replace(/\{[^}]*\}/g, "{}");
 
 function rustMessages() {
   const found = [];
-  for (const file of ["lib.rs", "model.rs", "share.rs", "watch.rs", "convert.rs", "power.rs", "media_server.rs"]) {
+  for (const file of ["lib.rs", "model.rs", "share.rs", "settings_backup.rs", "watch.rs", "convert.rs", "power.rs", "media_server.rs"]) {
     const source = read(join("src-tauri/src", file)).split("#[cfg(test)]")[0];
     for (const [, text] of source.matchAll(RUST_MESSAGE)) {
       if (/^(?:[A-Z{]|yt-dlp )/.test(text)) found.push({file, text});
@@ -105,7 +107,7 @@ test("static HTML text has a Russian translation", () => {
 });
 
 test("strings passed to t() have a Russian translation", () => {
-  for (const file of ["src/main.js", "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js"]) {
+  for (const file of ["src/main.js", "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js", "src/download-profiles.js", "src/queue-selection.js", "src/settings-backup.js"]) {
     assert.deepEqual(missing(translatedLiterals(read(file))), [], file);
   }
 });
@@ -122,7 +124,7 @@ test("messages from the Rust core have a Russian translation", () => {
 
 test("the Russian locale has no unused strings", () => {
   const used = new Set([...htmlStrings(), ...tableStrings(), "Deviload — Downloads"]);
-  for (const file of ["src/main.js", "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js"]) for (const text of translatedLiterals(read(file), true)) used.add(text);
+  for (const file of ["src/main.js", "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js", "src/download-profiles.js", "src/queue-selection.js", "src/settings-backup.js"]) for (const text of translatedLiterals(read(file), true)) used.add(text);
   const rust = new Set(rustMessages().map(({text}) => normalize(text)));
   const unused = [...keys].filter(key => !used.has(key) && !rust.has(normalize(key)));
   assert.deepEqual(unused, []);
@@ -145,7 +147,7 @@ test("Cyrillic text lives only in the Russian locale", () => {
       if (statSync(path).isDirectory()) { walk(path); continue; }
       if (!/\.(js|mjs|html|css|rs|toml|json|md|yml|ps1|sh|nsh)$/.test(name)) continue;
       const file = relative(root, path).replaceAll("\\", "/");
-      if ((file === "src/locales/ru.js" || file === "src-tauri/windows/locales/ru.nsh") || file === "README.md") continue;
+      if (file === "src/locales/ru.js" || file === "src-tauri/windows/locales/ru.nsh") continue;
       if (/\p{Script=Cyrillic}/u.test(readFileSync(path, "utf8"))) offenders.push(file);
     }
   };

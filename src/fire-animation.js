@@ -1,57 +1,32 @@
-// Two painted frames form the flame head and the fire trail. JS follows real download progress.
-const headFrames = ["assets/fire-front-a.png", "assets/fire-front-b.png"];
-const motionPreference = matchMedia("(prefers-reduced-motion: reduce)");
-const reduced = () => motionPreference.matches || document.documentElement.dataset.motion === "reduced";
+import {BurnProgress} from './burn-progress.js';
 
 export class FireAnimation {
-  constructor(element) {
-    this.element = element;
-    this.track = element.querySelector(".track");
-    this.fill = element.querySelector(".fill");
-    this.trail = element.querySelector(".live-fire-trail");
-    this.head = element.querySelector(".live-fire-head");
-    this.active = false;
-    this.raf = 0;
-    this.frame = -1;
-    for (const source of [...headFrames, "assets/fire-trail-a.png", "assets/fire-trail-b.png"]) {
-      const image = new Image();
-      image.src = source;
+  constructor(element){
+    this.element=element;this.track=element.querySelector('.track');
+    this.fill=element.querySelector('.fill');this.active=false;this.percent=0;this.jobId=null;this.finishing=false;
+    try {this.burn=new BurnProgress();}catch(error){console.warn('Using static download progress.',error.message);}
+  }
+  setActive(active,jobId=null){
+    if(active&&jobId!==this.jobId){
+      clearTimeout(this.finishTimer);this.finishing=false;this.percent=0;this.jobId=jobId;
+      delete this.element.dataset.complete;this.burn?.mount(this.track,0,true);
     }
-    document.addEventListener("visibilitychange", () => this.schedule());
-    document.addEventListener("deviload-motion-change", () => this.schedule());
-    motionPreference.addEventListener("change", () => this.schedule());
+    this.active=active;
+    if(!active&&this.finishing)return;
+    this.element.hidden=!active;
+    if(!active){this.jobId=null;this.burn?.mount(null,0,false);}
   }
-  setProgress(value) {
-    const percent = Math.max(0, Math.min(100, Number(value) || 0));
-    const width = percent + "%";
-    this.fill.style.width = width;
-    this.trail.style.width = width;
-    this.track.style.setProperty("--progress", width);
-    this.track.setAttribute("aria-valuenow", String(Math.round(percent)));
-    this.head.style.left = width;
-    this.head.style.opacity = percent < 2 ? "0" : "1";
+  complete(jobId){
+    if(this.jobId!==jobId||this.finishing)return;
+    this.finishing=true;this.element.dataset.complete='true';this.percent=100;
+    this.fill.style.width='100%';this.track.setAttribute('aria-valuenow','100');
+    this.burn?.finish();
+    clearTimeout(this.finishTimer);
+    this.finishTimer=setTimeout(()=>{this.finishing=false;if(!this.active)this.setActive(false);delete this.element.dataset.complete;},1900);
   }
-  setActive(active) {
-    this.active = active;
-    this.element.hidden = !active;
-    if (!active && this.raf) { cancelAnimationFrame(this.raf); this.raf = 0; }
-    if (active) this.schedule();
-  }
-  schedule() {
-    if (!this.active || this.raf || document.hidden || reduced()) {
-      if (reduced()) this.showFrame(0);
-      return;
-    }
-    this.raf = requestAnimationFrame(now => {
-      this.raf = 0;
-      this.showFrame(Math.floor(now / 220) % 2);
-      this.schedule();
-    });
-  }
-  showFrame(index) {
-    if (index === this.frame) return;
-    this.frame = index;
-    this.head.src = headFrames[index];
-    this.element.dataset.fireFrame = index ? "b" : "a";
+  setProgress(value){
+    this.percent=Math.max(0,Math.min(100,Number(value)||0));
+    this.fill.style.width=this.percent+'%';this.track.setAttribute('aria-valuenow',String(Math.round(this.percent)));
+    if(this.burn){this.burn.burning=true;this.burn.setProgress(this.percent/100);this.burn.schedule();}
   }
 }

@@ -14,7 +14,7 @@ const MAX_NEW_PER_CHECK: usize = 20;
 // Releases looked at when an artist is added and the albums already out are wanted.
 const MAX_DISCOGRAPHY: usize = 100;
 
-static WATCH_LOCK: Mutex<()> = Mutex::new(());
+pub(crate) static WATCH_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

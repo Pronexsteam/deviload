@@ -108,8 +108,8 @@ impl Options {
         if !["", "source", "gif"].contains(&self.clip_format.as_str()) {
             return Err("Unknown clip format".into());
         }
-        if !["", "manual", "media", "source", "server"].contains(&self.folder_rule.as_str()) ||
-            !["", "title", "date", "channel"].contains(&self.name_rule.as_str()) {
+        if !["", "manual", "media", "source", "server", "author", "date", "playlist"].contains(&self.folder_rule.as_str()) ||
+            !["", "title", "date", "channel", "playlist"].contains(&self.name_rule.as_str()) {
             return Err("Unknown save rule".into());
         }
         match (self.clip_start, self.clip_end) {
@@ -201,6 +201,9 @@ impl Options {
             let folder_prefix = match self.folder_rule.as_str() {
                 "media" => if self.audio_only() { "Music/" } else { "Video/" },
                 "source" => "%(extractor_key)s/",
+                "author" => "%(uploader,channel|Unknown author)s/",
+                "date" => "%(upload_date>%Y-%m|Unknown date)s/",
+                "playlist" if !self.playlist => "%(playlist_title|Single videos)s/",
                 _ => "",
             };
             let base = match self.name_rule.as_str() {
@@ -414,6 +417,18 @@ impl Job {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test] fn smart_folders_preserve_playlist_grouping() {
+        for (rule, prefix) in [("author", "%(uploader,channel|Unknown author)s/"), ("date", "%(upload_date>%Y-%m|Unknown date)s/"), ("playlist", "%(playlist_title|Single videos)s/")] {
+            let options = Options { folder_rule: rule.into(), ..Default::default() };
+            options.validate().unwrap();
+            let args = options.args("https://example.com/video", Path::new("/tmp"));
+            assert!(args.iter().any(|arg| arg.starts_with(prefix)));
+        }
+        let options = Options { folder_rule: "playlist".into(), playlist: true, ..Default::default() };
+        let args = options.args("https://example.com/list", Path::new("/tmp"));
+        let template = args.iter().find(|arg| arg.contains("%(playlist_index)")).unwrap();
+        assert_eq!(template.matches("%(playlist_title)").count(), 1);
+    }
     #[test] fn saved_items_remember_their_archive_key() {
         let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(), percent: 0.0, speed: String::new(),
             file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None,

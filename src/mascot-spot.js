@@ -7,7 +7,7 @@ function fill(spot) {
   spot.setAttribute("aria-hidden", "true");
   for (const pose of POSES) {
     const image = document.createElement("img");
-    image.src = `assets/mascot/${pose}.png`;
+    image.src = "assets/mascot-infernal/" + ({victory:"success-pose.png",error:"error-pose.png"}[pose] || "grip-v1.png");
     image.alt = "";
     image.decoding = "async";
     image.dataset.pose = pose;

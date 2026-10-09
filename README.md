@@ -22,6 +22,9 @@ Desktop app for downloading video and music with [yt-dlp](https://github.com/yt-
 
 ## Features
 
+- **Download workspace** with the link field, format controls and queue together, animated flame progress, and a mascot that reacts to completed and failed downloads. Motion respects the system's reduced-motion preference.
+- **Batch actions** to pause, resume, retry or cancel selected tasks and send completed files to a phone. Clearing completed tasks keeps the library and its file count intact.
+- **Saved profiles and settings backup**: reuse download options and destination rules, export profiles, and preview settings imports before restoring them. Backups exclude cookies and account credentials.
 - **Downloads** from YouTube, YouTube Music and every other site yt-dlp supports. Best, 1080p, 720p or 480p video as MP4 (plays everywhere, H.264 and AAC when the site has them), MKV (the best streams as they are) or WebM; MP3, FLAC or WAV audio. Profiles for music, archive, phone (MP4) and maximum quality.
 - **One link field.** Paste one or more links, or drop a link from the browser anywhere on the window. A preview with the title, duration and the real streams of the source appears by itself; an exact stream can be picked.
 - **Playlists**: whole list, first N items or exact ranges, a track picker by title, and splitting by chapters. Subtitles, SponsorBlock removal and a per-format download archive.
@@ -37,7 +40,7 @@ Desktop app for downloading video and music with [yt-dlp](https://github.com/yt-
 - **Library** of finished files with favorites, collections, tags, search, a duplicate finder and a built-in player that remembers the position and shows chapters and subtitles. Sort it by date, size, length or name, group it by channel, and show it as large tiles, small tiles or a list; each file shows its length and size. Removing a file can delete it from the disk too: it goes to the Recycle Bin or Trash, and Undo brings the task back for a few seconds.
 - **Devil Cut**, a video editor in its own window, in the spirit of CapCut:
   - media from your downloads on the left, a live preview in the middle, clip settings on the right, and a timeline you can make taller, with the clips' sound, separate sounds and music on their own rows;
-  - split at the playhead, delete, duplicate, drag to reorder, drag edges to trim, undo and redo, zoom from a two-hour project down to single frames, full screen; long videos stay smooth;
+  - split at the playhead, select multiple clips to delete or duplicate together, drag to reorder, drag edges to trim, enter precise in/out boundaries, undo and redo, zoom from a two-hour project down to single frames, full screen; long videos stay smooth;
   - detach a clip's sound and move, trim or split it on its own track;
   - transitions between clips (crossfade, through black, slide, wipe, circle) and a sound wave on the tracks;
   - per clip: speed 0.5× to 3×, volume, smooth start and end, rotation, mirror, brightness, contrast, saturation and a caption;
@@ -106,10 +109,11 @@ npm run tauri build -- --config src-tauri/tauri.ci.conf.json   # .deb and AppIma
 
 ## Build from source (macOS)
 
-Untested on real hardware so far. Install the Xcode Command Line Tools, Rust and Node.js, then:
+Install the Xcode Command Line Tools, Rust and Node.js, then add both Rust targets for a universal build:
 
 ```sh
 bash scripts/fetch-tools-macos.sh   # yt-dlp, FFmpeg, FFprobe, Deno into ./bin
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
 npm ci
 npm run tauri dev
 npm run tauri build -- --target universal-apple-darwin --bundles app --config src-tauri/tauri.macos-bundle.conf.json
@@ -117,7 +121,7 @@ npm run tauri build -- --target universal-apple-darwin --bundles app --config sr
 
 Without the script, engines from `brew install yt-dlp ffmpeg deno` work too.
 
-Public macOS builds would also need a Developer ID signature and notarization.
+Published macOS builds are not signed with an Apple Developer ID or notarized. The in-app updater signature is separate from Apple code signing.
 
 ## Data and privacy
 
@@ -144,7 +148,7 @@ English is the source language. Russian strings live in `src/locales/ru.js`, key
 
 ## Team
 
-Deviload is maintained by Samvel Avetisyan ([Pronexsteam](https://github.com/Pronexsteam)), who writes, reviews and approves every release. Outside contributions arrive as pull requests and are reviewed by the maintainer. Most of the code is written with AI assistance (Claude) and is reviewed and tested by the maintainer before it ships.
+Deviload is maintained by Samvel Avetisyan ([Pronexsteam](https://github.com/Pronexsteam)). Outside contributions arrive as pull requests and are reviewed by the maintainer.
 
 Deviload transfers no information to other networked systems except the sites you download from, GitHub for update checks, which ask only for the version number and, while you use the phone link, the phone on your local network. See [Data and privacy](#data-and-privacy).
 

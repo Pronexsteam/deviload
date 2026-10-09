@@ -5,6 +5,7 @@ mod model;
 mod power;
 mod share;
 mod watch;
+mod settings_backup;
 use model::{Job, Options};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -251,7 +252,7 @@ impl Engine {
             let d = self.data.lock().unwrap();
             match d.jobs.iter().find(|j| j.id == id) { Some(j) => j.clone(), None => return }
         };
-        let result = self.download(&job).and_then(|_| self.finish_clip_gif(&job)).map(|_| { self.finish_media_server(&job); self.measure(id); });
+        let result = self.download(&job).and_then(|_| self.finish_clip_gif(&job)).map(|_| self.finish_media_server(&job));
         self.unarchive_recording(id);
         let mut d = self.data.lock().unwrap();
         if let Some(j) = d.jobs.iter_mut().find(|j| j.id == id) {
@@ -292,6 +293,13 @@ impl Engine {
         let batch_done = !d.jobs.iter().any(|j| j.options.folder_rule == "server" && (["running", "cancelling", "pausing"].contains(&j.status.as_str()) || ready_to_run(j, now_seconds())));
         let finished = d.jobs.iter().any(|j| j.id == id && j.status == "done");
         drop(d);
+        // Publish completion as soon as the output is ready. Library enrichment
+        // must not hold the task at 100% or occupy a download slot.
+        if finished {
+            self.measure(id);
+            let mut d = self.data.lock().unwrap();
+            self.persist(&mut d);
+        }
         if job.options.folder_rule == "server" && finished && batch_done && !server.kind.is_empty() {
             let engine = self.clone();
             thread::spawn(move || {
@@ -733,7 +741,8 @@ async fn site_sign_in(app: tauri::AppHandle, engine: tauri::State<'_, Engine>, s
 
 #[tauri::command]
 fn site_sessions(engine: tauri::State<Engine>) -> Vec<&'static str> {
-    SITES.iter().filter(|site| site.key != "youtube" && site_cookie_file(&engine.dir, site).is_file()).map(|site| site.key).collect()
+    SITES.iter().filter(|site| site.key != "youtube" && fs::read_to_string(site_cookie_file(&engine.dir, site))
+        .is_ok_and(|text| has_cookie_session(&text, site, now_seconds()))).map(|site| site.key).collect()
 }
 
 #[tauri::command]
@@ -851,7 +860,7 @@ async fn ytdlp_info() -> Result<String, String> {
 }
 
 // Library tags, Devil Cut projects and player positions, kept next to the queue.
-const STORE_SECTIONS: [&str; 3] = ["library", "projects", "positions"];
+const STORE_SECTIONS: [&str; 4] = ["library", "projects", "positions", "downloadProfiles"];
 static STORE_LOCK: Mutex<()> = Mutex::new(());
 
 fn read_store(dir: &Path) -> serde_json::Map<String, serde_json::Value> {
@@ -883,6 +892,28 @@ fn write_store(dir: &Path, store: &serde_json::Map<String, serde_json::Value>) -
     temp.as_file().sync_all().map_err(|e| e.to_string())?;
     temp.persist(dir.join("library.json")).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+async fn export_download_profiles(app: tauri::AppHandle, text: String) -> Result<bool, String> {
+    use tauri_plugin_dialog::DialogExt;
+    if text.len() > 256_000 { return Err("Profile file is too large".into()); }
+    let data: serde_json::Value = serde_json::from_str(&text).map_err(|_| "Invalid profile file")?;
+    if data["format"] != "deviload-profiles" || data["version"] != 1 ||
+        !data["profiles"].as_array().is_some_and(|items| items.len() <= 32) {
+        return Err("Unsupported profile file".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(file) = app.dialog().file().add_filter("Download profiles", &["json"])
+            .set_file_name("deviload-profiles.json").blocking_save_file() else { return Ok(false); };
+        let path = file.into_path().map_err(|e| e.to_string())?;
+        let parent = path.parent().ok_or("Choose a local folder")?;
+        let mut temporary = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+        temporary.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+        temporary.as_file().sync_all().map_err(|e| e.to_string())?;
+        temporary.persist(&path).map_err(|e| e.to_string())?;
+        Ok(true)
+    }).await.map_err(|e| e.to_string())?
 }
 
 fn stored_proxy(dir: &Path) -> String {
@@ -2848,7 +2879,7 @@ fn draw_badge(pixels: &mut [u8], width: u32, height: u32, color: [u8; 3]) {
             let at = ((y * width + x) * 4) as usize;
             let paint = if distance <= radius { color } else if distance <= ring { [16, 19, 23] } else { continue };
             pixels[at..at + 3].copy_from_slice(&paint);
-            pixels[at + 3] = 255;
+            pixels[at + 3] = if cfg!(target_os = "macos") && distance > radius { 0 } else { 255 };
         }
     }
 }
@@ -2859,15 +2890,15 @@ fn set_tray_state(state: String, tooltip: String, app: tauri::AppHandle) -> Resu
     let color = match state.as_str() { "working" => Some([255, 176, 64]), "error" => Some([255, 75, 59]), _ => None };
     let icon = match color {
         Some(color) => {
-            let base = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png")).map_err(|e| e.to_string())?;
+            let base = tray_icon().map_err(|e| e.to_string())?;
             let (width, height) = (base.width(), base.height());
             let mut pixels = base.rgba().to_vec();
             draw_badge(&mut pixels, width, height, color);
             Some(tauri::image::Image::new_owned(pixels, width, height))
         }
-        None => app.default_window_icon().cloned(),
+        None => Some(tray_icon().map_err(|e| e.to_string())?),
     };
-    tray.set_icon(icon).map_err(|e| e.to_string())?;
+    tray.set_icon_with_as_template(icon, cfg!(target_os = "macos")).map_err(|e| e.to_string())?;
     tray.set_tooltip(Some(tooltip.chars().filter(|c| !c.is_control()).take(120).collect::<String>())).map_err(|e| e.to_string())
 }
 
@@ -2916,7 +2947,13 @@ fn configure_appimage() {
     }
 }
 
+fn tray_icon() -> tauri::Result<tauri::image::Image<'static>> {
+    tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))
+}
+
 fn restore_main(app: &tauri::AppHandle) {
+    #[cfg(target_os = "macos")]
+    if let Err(error) = app.show() { eprintln!("Could not show Deviload: {error}"); }
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.unminimize();
@@ -2960,10 +2997,11 @@ pub fn run() {
             let menu = tauri::menu::Menu::with_items(app, &[&open, &quit])?;
             app.manage(TrayItems { open: open.clone(), quit: quit.clone() });
             tauri::tray::TrayIconBuilder::with_id("main")
-                .icon(app.default_window_icon().ok_or("tray icon is missing")?.clone())
+                .icon(tray_icon()?)
+                .icon_as_template(cfg!(target_os = "macos"))
                 .tooltip("Deviload")
                 .menu(&menu)
-                .show_menu_on_left_click(cfg!(target_os = "linux"))
+                .show_menu_on_left_click(!cfg!(windows))
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "tray-open" => {
                         restore_main(app);
@@ -2972,8 +3010,10 @@ pub fn run() {
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
-                    if let tauri::tray::TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, button_state: tauri::tray::MouseButtonState::Up, .. } = event {
-                        restore_main(tray.app_handle());
+                    match event {
+                        tauri::tray::TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, button_state: tauri::tray::MouseButtonState::Up, .. }
+                        | tauri::tray::TrayIconEvent::DoubleClick { button: tauri::tray::MouseButton::Left, .. } => restore_main(tray.app_handle()),
+                        _ => {}
                     }
                 })
                 .build(app)?;
@@ -3052,7 +3092,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_site_browser, open_releases, open_support, window_action, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, site_sign_in, site_sign_out, site_sessions, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, relink_media, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
+        .invoke_handler(tauri::generate_handler![settings_backup::settings_backup_data, settings_backup::inspect_settings_backup, settings_backup::restore_settings_backup, settings_backup::export_settings_backup, set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_site_browser, open_releases, open_support, window_action, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, export_download_profiles, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, site_sign_in, site_sign_out, site_sessions, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, relink_media, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
         .build(tauri::generate_context!()).expect("failed to start Deviload")
         .run(|app, event| {
             #[cfg(target_os = "macos")]

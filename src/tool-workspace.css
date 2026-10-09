@@ -1,0 +1,30 @@
+/* Shared visual language for the two independent tool windows. */
+:root{--accent:#ed3655;--red:#ed3655;--line:#2b323d;--stroke:#2b323d;--ink:#f1f3f7;--muted:#9da8b8}
+html,body.cut-page,body.convert-page{background:#0c1015;color:#f1f3f7;font-family:Inter,'Segoe UI',sans-serif}
+button,input,select,textarea{font-family:inherit}button:focus-visible,summary:focus-visible{outline:2px solid #ff7d94;outline-offset:3px}
+.cut-page .primary,.convert-page .primary{background:#db2f4c;border:1px solid #f55a76;border-radius:8px;color:#fff;box-shadow:none;text-shadow:none}
+.cut-page .primary:hover,.convert-page .primary:hover{background:#ed3655}
+.cut-page .outline,.cut-page .quiet,.convert-page .outline,.convert-page .quiet{background:#19212a;border-color:#303946;color:#c1cad8;box-shadow:none;border-radius:7px}
+.cut-page .outline:hover,.cut-page .quiet:hover,.convert-page .outline:hover,.convert-page .quiet:hover{transform:none;background:#232d3a;border-color:#526175}
+.cut-page input,.cut-page select,.convert-page input,.convert-page select{background-color:#10151b;border-color:#303947;color:#dce4ef}
+.cut-head{background:#101419;border-color:#29313d;min-height:68px;padding:12px 18px;gap:14px}
+.cut-brand .overline{color:#ee5d77;letter-spacing:.14em;font-size:9px}.cut-name{font-size:15px!important;font-weight:600}
+.cut-media,.cut-inspector{background:#11161c;border-color:#29313d}.cut-media-tabs,.cut-transport{border-color:#29313d;background:#14191f}
+.cut-media-tabs button,.cut-canvas button,.cut-fit button,.cut-chips button{color:#aab5c6;border-color:#303946;background:#171e26;box-shadow:none}
+.cut-media-tabs button.selected,.cut-canvas button.selected,.cut-fit button.selected,.cut-chips button.selected{color:#ffe1e9;border-color:#a44359;background:#512331;box-shadow:none}
+.cut-stage-box{background:#080b10}.cut-player{background:#0c1015}.cut-round{background:#212a35;border-color:#354152;color:#e3eaf5}
+.cut-label{color:#aebbcf;font-size:10px;letter-spacing:.05em}.cut-note,.cut-inspector-empty p{color:#92a1b5;line-height:1.6}
+.cut-export-body{background:#151c25;border-color:#3b4758;box-shadow:0 20px 48px #0008;border-radius:10px}
+.cut-timeline,.cut-timeline-wrap,.cut-timeline-head{background:#10151c;border-color:#2b3441}.cut-clip{border-color:#6b3c55;background:#342230}.cut-clip.selected{border-color:#f96a86;box-shadow:0 0 0 1px #f96a8640}
+.cut-empty-mascot,.convert-mascot{display:none}
+.convert-window{max-width:1220px;margin:0 auto;padding:28px 30px 0;gap:20px;background:#0c1015}
+.convert-head h1{font-size:28px;margin:4px 0 9px;font-weight:720}.convert-head .overline{color:#8c9bb0;font-size:9px;letter-spacing:.13em}.convert-head p{max-width:760px;line-height:1.65;color:#95a3b6}
+.convert-drop{min-height:110px;background:#121820;border:1px dashed #455266;border-radius:12px}.convert-drop.dragover{background:#231a24;border-color:#ed3655}
+.convert-options{padding:18px;background:#151b23;border:1px solid #2b3441;border-radius:12px}
+.convert-presets{gap:12px}.convert-presets button{padding:15px;background:#10151b;border-color:#303b4a}.convert-presets button.selected{background:#ed36551b;border-color:#c94863}.convert-presets strong{font-size:13px}.convert-presets small{font-size:11px;color:#98a6bb}
+.convert-save{padding-top:16px;margin-top:16px;border-top:1px solid #2b3441}.convert-list{gap:10px}.convert-item{background:#151b23;border-color:#2b3441;border-radius:10px}.convert-foot{background:#0c1015;border-color:#2b3441;padding-block:16px}
+@media(max-width:900px){.cut-head{flex-wrap:wrap;gap:8px}.cut-body{grid-template-columns:160px minmax(0,1fr) 220px}.cut-head .cut-fit{order:3}.convert-window{padding:20px 18px 0}.convert-presets{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.cut-body{grid-template-columns:110px minmax(0,1fr)}.cut-inspector{grid-column:1/-1;max-height:190px;overflow:auto}.convert-drop{flex-wrap:wrap}.convert-foot{flex-wrap:wrap;gap:10px}.convert-head h1{font-size:24px}}
+.cut-trim-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 8px}
+.cut-trim-fields label{font-size:11px;color:#b0bdd0;min-width:0}.cut-trim-fields input{width:100%;min-width:0;margin-top:5px}
+#cut-selection-note{line-height:1.5}#cut-export-preset{width:100%;margin:5px 0 12px}

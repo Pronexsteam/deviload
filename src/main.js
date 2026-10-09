@@ -1,11 +1,16 @@
+import {CompletionScene} from './completion-scene.js';
+const completionScene = new CompletionScene();
 import {MediaPulse} from "./media-pulse.js";
+import {wireDownloadProfiles} from "./download-profiles.js";
+import {wireQueueSelection} from "./queue-selection.js";
+import {wireSettingsBackup} from "./settings-backup.js";
 import {DevilMascot} from "./devil-mascot.js";
 import {FireAnimation} from "./fire-animation.js";
 import {wireTour} from "./tour.js";
 import {createCutHome} from "./devil-cut.js";
 import {pop, wireMotion} from "./motion.js";
 import {hydrateMascots, mascotSpot, setPose} from "./mascot-spot.js";
-import {labels, actions, counts, orbState, mediaPreview, visibleJobs, playlistSelection, diagnoseError, signInSite, isVideoJob, isLibraryAudio, inLibrary} from "./view-model.js";
+import {labels, actions, counts, orbState, mediaPreview, visibleJobs, playlistSelection, diagnoseError, signInSite, isVideoJob, isLibraryAudio, inLibrary, mediaIdentity, isProcessing} from "./view-model.js";
 import {t, tn, errorText, translateMessage, translateDom, setLanguage, onLanguageChange, language, locale, languageNames} from "./i18n.js";
 
 const $ = id => document.getElementById(id);
@@ -50,6 +55,7 @@ async function loadStore() {
   $("proxy").value = store.network?.proxy || "";
   devilCut.setProjects(store.projects || {});
   cinemaPositions = store.positions || {};
+  await downloadProfiles.load(store.downloadProfiles);
 }
 let folderPaths = {};
 let missingComponents = null;
@@ -121,6 +127,8 @@ function navigate(page, focus = false) {
 }
 function syncTitle() {
   document.title = "Deviload — " + t(pageTitles[document.querySelector("main").dataset.page] || "Downloads");
+  $("workspace-title").textContent=t(pageTitles[document.querySelector("main").dataset.page] || "Downloads");
+  $("workspace-location").textContent=$("workspace-title").textContent;
 }
 function showDownloads(focus = false) {
   if (currentFilter === "all") navigate("downloads", focus);
@@ -170,20 +178,28 @@ function syncSystemPreferences() {
 }
 syncSystemPreferences();
 // Settings keep one category visible; keyboard focus follows the selected category.
-const settingsGroups = [...document.querySelectorAll("#app-settings-dialog > .settings-group")];
+let settingsGroups = [];
 const settingsNav = node("nav", "settings-nav");
+settingsNav.setAttribute("aria-label", t("Settings"));
 function selectSettings(index) {
   settingsGroups.forEach((group, i) => { group.hidden = i !== index; });
   [...settingsNav.children].forEach((button, i) => button.setAttribute("aria-pressed", String(i === index)));
 }
-settingsGroups.forEach((group, index) => {
-  const button = node("button", "quiet small", group.querySelector("h3").textContent);
-  button.type = "button";
-  button.addEventListener("click", () => selectSettings(index));
-  settingsNav.append(button);
-});
+function rebuildSettingsNavigation() {
+  const current = settingsGroups.find(group => !group.hidden);
+  settingsGroups = [...document.querySelectorAll("#app-settings-dialog > .settings-group")];
+  settingsNav.replaceChildren();
+  settingsGroups.forEach((group, index) => {
+    const button = node("button", "quiet small", group.querySelector("h3").textContent);
+    button.type = "button";
+    button.addEventListener("click", () => selectSettings(index));
+    settingsNav.append(button);
+  });
+  selectSettings(Math.max(0, settingsGroups.indexOf(current)));
+}
 $("app-settings-dialog").querySelector(".dialog-head").after(settingsNav);
-selectSettings(0);
+rebuildSettingsNavigation();
+onLanguageChange(rebuildSettingsNavigation);
 function showSettingsFor(id) {
   const index = settingsGroups.findIndex(group => group.contains($(id)));
   if (index >= 0) selectSettings(index);
@@ -203,6 +219,13 @@ function arrangeToolbar() {
 }
 narrowToolbar.addEventListener("change", arrangeToolbar);
 arrangeToolbar();
+document.querySelector('.queue-tools-menu').addEventListener('click', event => {
+  if (event.target.closest('button')) event.currentTarget.open = false;
+});
+document.addEventListener('pointerdown', event => {
+  const menu=document.querySelector('.queue-tools-menu');
+  if(!menu.contains(event.target))menu.open=false;
+});
 function labelNavigation() {
   for (const button of document.querySelectorAll(".sidebar .nav")) {
     button.title = button.querySelector("span:nth-child(2)")?.textContent || "";
@@ -903,6 +926,25 @@ $("profile").addEventListener("change", () => {
   const description = {music:"MP3 with cover art and tags",archive:"Best source and subtitles",mobile:"720p and a final MP4",maximum:"Best available quality"}[profile];
   message(t("Profile: {description}.", {description:t(description)}));
 });
+const downloadProfiles=wireDownloadProfiles({invoke,notify:message,
+  read:()=>({quality,profile:$("profile").value,container:$("container-select").value,folderRule:$("folder-rule").value,nameRule:$("name-rule").value,
+    playlist:$("playlist").checked,splitChapters:$("split-chapters").checked,subtitles:$("subtitles").checked,sponsorblock:$("sponsorblock").checked,
+    archive:$("archive").checked,autoRetry:$("auto-retry").checked,parallel:Number($("parallel").value),rateMbps:Number($("rate").value)}),
+  apply:options=>{
+    clearSelectedFormat();
+    for(const [key,id] of Object.entries({profile:'profile',container:'container-select',folderRule:'folder-rule',nameRule:'name-rule',parallel:'parallel',rateMbps:'rate'}))$(id).value=String(options[key]);
+    for(const [key,id] of Object.entries({playlist:'playlist',splitChapters:'split-chapters',subtitles:'subtitles',sponsorblock:'sponsorblock',archive:'archive',autoRetry:'auto-retry'}))$(id).checked=options[key];
+    $("playlist-items").value='';$("clip-enabled").checked=false;
+    setQuality(options.quality);syncPlaylist();syncClip();syncModeButtons();syncOptionsSummary();
+  }
+});
+wireSettingsBackup({invoke, notify:message, read:() => ({parallel:Number($("parallel").value), options:{
+  folder:$("folder").value.trim(),quality,profile:$("profile").value,container:$("container-select").value,
+  playlist:$("playlist").checked,splitChapters:$("split-chapters").checked,subtitles:$("subtitles").checked,
+  sponsorblock:$("sponsorblock").checked,archive:$("archive").checked,rateMbps:Number($("rate").value),
+  folderRule:$("folder-rule").value,nameRule:$("name-rule").value,
+}})});
+rebuildSettingsNavigation();
 function setDrawer(open) {
   $("download-drawer").hidden = !open;
   $("options-toggle").setAttribute("aria-expanded", String(open));
@@ -918,6 +960,7 @@ function syncOptionsSummary() {
 $("destination-quick").addEventListener("click", () => $("browse-folder").click());
 $("options-toggle").addEventListener("click", () => setDrawer($("download-drawer").hidden));
 $("download-drawer").addEventListener("change", event => {
+  if(event.target.closest('.saved-profiles'))return;
   if (event.target.id === "profile") { clearSelectedFormat(); return; }
   if (["folder", "parallel"].includes(event.target.id)) { syncOptionsSummary(); return; }
   $("profile").value = "custom";
@@ -1268,6 +1311,15 @@ function renderInspect(info, address) {
   if (info.itemCount) parts.push(t("Items: {count}", {count:info.itemCount}));
   if (info.chapterCount) parts.push(t("Chapters: {count}", {count:info.chapterCount}));
   body.append(node("span", "", parts.filter(Boolean).join(" · ")));
+  const identity=mediaIdentity(address);
+  const downloaded=!info.isList&&identity&&jobs.find(job=>inLibrary(job)&&mediaIdentity(job.url)===identity);
+  if(downloaded){
+    const prior=node('div','inspect-existing');
+    prior.append(node('span','',t('Already in your library')));
+    const reveal=node('button','outline small',t('Show in folder'));reveal.type='button';
+    reveal.onclick=async()=>{try{await invoke('reveal_download',{id:downloaded.id});}catch(error){message(errorText(error),true);}};
+    prior.append(reveal);body.append(prior);
+  }
   card.append(body);
   if (info.isList) {
     const follow = node("button", "outline small inspect-watch", t("Watch for new videos"));
@@ -1366,6 +1418,21 @@ function changeStatus(row, status) {
     if (status === "done" || status === "error") heroOrb.bump();
   }
 }
+const queueSelection = wireQueueSelection({
+  root:$("queue-title").closest("section"), rows:$("jobs"), t, getJobs:() => jobs,
+  execute:async (job, action) => {
+    if (!invoke) throw new Error(t("Open Deviload to manage downloads."));
+    if (action === "phone") await invoke("phone_send", {id:job.id, page:phonePageText()});
+    else await invoke("change_job", {id:job.id, action, auth:action === "retry" ? retryAuth(job) : null});
+  },
+  refresh, report:error => message(errorText(error), true), afterPhone:() => openPhone(),
+});
+function retryAuth(job) {
+  const mode = $("cookies-mode").value;
+  return {...job.options, cookiesAccount:mode === "account",
+    cookies:mode === "file" ? $("cookies").value.trim() : "",
+    cookiesBrowser:["chrome","edge","firefox","brave","safari"].includes(mode) ? mode : ""};
+}
 function createCard(job) {
   const row = node("article", "job");
   row.dataset.id = job.id;
@@ -1408,10 +1475,7 @@ function addJobAction(controls, job, action) {
     const button = event.currentTarget;
     button.disabled = true;
     try {
-      const mode = $("cookies-mode").value;
-      const auth = action === "retry" ? {...job.options, cookiesAccount:mode === "account",
-        cookies:mode === "file" ? $("cookies").value.trim() : "",
-        cookiesBrowser:["chrome","edge","firefox","brave","safari"].includes(mode) ? mode : ""} : null;
+      const auth = action === "retry" ? retryAuth(job) : null;
       await invoke("change_job", {id:job.id,action,auth}); await refresh();
     }
     catch (error) { message(errorText(error), true); }
@@ -1439,12 +1503,20 @@ function showJobLog(id) {
   $("log-content").textContent = jobs.find(item => item.id === id)?.log.join("\n") || t("The log is empty so far");
   $("log-dialog").showModal();
 }
-function showReaction(kind, detail) {
+function showReaction(kind, detail, jobId) {
   const overlay = $("reaction-overlay");
   clearTimeout(reactionTimer);
   overlay.hidden = false;
   overlay.dataset.kind = kind;
-  $("reaction-title").textContent = kind === "success" ? t("DONE!") : t("DOWNLOAD FAILED");
+  if (kind === 'success') {
+    requestAnimationFrame(() => {
+      const row = document.querySelector('[data-id="' + jobId + '"]');
+      const live = $("live-download");
+      const target = live.dataset.complete === 'true' ? live : row;
+      completionScene.play(target);
+    });
+  } else completionScene.stop();
+  $("reaction-title").textContent = kind === "success" ? t("Download ready") : t("DOWNLOAD FAILED");
   $("reaction-detail").textContent = detail;
   document.body.dataset.reaction = kind;
   overlay.classList.remove("reaction-appear");
@@ -1458,14 +1530,23 @@ function render(data) {
   jobs = (data.jobs || []).filter(job => !pendingRemovals.has(job.id));
   if (noticeReady) for (const job of jobs) {
     const old = knownJobStates.get(job.id);
-    if (old && old !== job.status && job.status === "running") brandMascot.reactStart();
-    if (old && old !== job.status && ["done","error"].includes(job.status)) {
+    if (old && old !== job.status && job.status === "running") { brandMascot.setSource(job.url); brandMascot.reactStart(); }
+    if (old !== job.status && ["done","error"].includes(job.status)) {
       const detail = job.status === "error" ? t(diagnoseError(job.log, signInSite(job.url) ? siteSessions.includes(signInSite(job.url).key) : Boolean(signedInPath), job.url).title) : (job.file.split(/[\\/]/).pop() || job.url);
       const title = t(job.status === "done" ? "Download ready" : "Download failed");
       addNotice(title, detail);
       systemNotice("Deviload · " + title, detail);
-      if (job.status === "done") brandMascot.celebrate(); else brandMascot.fail();
-      showReaction(job.status === "done" ? "success" : "error", detail);
+      brandMascot.setSource(job.url);
+      if (job.status === "done") {
+        brandMascot.celebrate();
+        if (liveFire.jobId === job.id) {
+          liveFire.complete(job.id);
+          $("live-percent").textContent = "100%";
+          $("live-more").textContent = t("Download ready");
+          $("live-download").querySelector(".track").setAttribute("aria-valuetext", t("Download ready"));
+        }
+      } else brandMascot.fail();
+      showReaction(job.status === "done" ? "success" : "error", detail, job.id);
     }
   }
   knownJobStates = new Map(jobs.map(job => [job.id,job.status])); noticeReady = true;
@@ -1531,7 +1612,7 @@ function render(data) {
       : null;
     const repeatText = nextRun && job.repeatAt ? " · " + t("every day") : "";
     meta.replaceChildren(node("span", "", job.options.quality.toUpperCase()),
-      node("span", recording && !job.stopRequested ? "recording" : "", nextRun && nextRun + repeatText || recording && recordingText(job) || (job.status === "running" ? (job.percent >= 99.95 ? processingLabel(job) : [Math.round(job.percent) + "%", speedText(job.speed)].filter(Boolean).join(" · ")) : statusLabel(job.status))));
+      node("span", recording && !job.stopRequested ? "recording" : "", nextRun && nextRun + repeatText || recording && recordingText(job) || (job.status === "running" ? (isProcessing(job) ? processingLabel(job) : [Math.round(job.percent) + "%", speedText(job.speed)].filter(Boolean).join(" · ")) : statusLabel(job.status))));
     const issue = job.status === "error" ? diagnoseError(job.log, signInSite(job.url) ? siteSessions.includes(signInSite(job.url).key) : Boolean(signedInPath), job.url) : null;
     // yt-dlp skips what the download archive lists, even when the file was deleted since.
     const skipped = ["done", "skipped"].includes(job.status) && job.archived > 0 ? job.archived : 0;
@@ -1619,13 +1700,15 @@ function render(data) {
     syncRecordingLimit(controls, job);
   }
   existing.forEach((row,id) => { taskOrbs.get(id)?.destroy(); taskOrbs.delete(id); row.remove(); });
+  queueSelection.update(visible);
   renderMediaLibrary();
   devilCut.refresh();
   if (data.warning) message(translateMessage(data.warning), true);
 }
 function renderLiveDownload(runningJobs) {
   const current = runningJobs[0];
-  liveFire.setActive(Boolean(current));
+  if (current && current.id !== liveFire.jobId) completionScene.stop();
+  liveFire.setActive(Boolean(current), current?.id);
   // A recording can be stopped or limited from the top panel, without scrolling to its card.
   const controls = $("live-controls");
   const recording = Boolean(current?.live && !current.stopRequested);
@@ -1657,9 +1740,9 @@ function renderLiveDownload(runningJobs) {
     liveFire.setProgress(current.liveLimit ? 100 * elapsed / current.liveLimit : 0);
     return;
   }
-  const finalizing = percent >= 99.95;
+  const finalizing = isProcessing(current);
   const recentLog = (current.log || []).slice(-12).join("\n");
-  const phase = t(/Creating a GIF/i.test(recentLog) ? "Creating a GIF" :
+  const phase = current.stage ? processingLabel(current) : t(/Creating a GIF/i.test(recentLog) ? "Creating a GIF" :
     /\[Merger\]/i.test(recentLog) ? "Merging video and audio" :
     /\[ExtractAudio\]/i.test(recentLog) ? "Creating the audio file" :
     /\[VideoConvertor\]/i.test(recentLog) ? "Converting the video" :
@@ -1669,7 +1752,7 @@ function renderLiveDownload(runningJobs) {
   $("live-percent").textContent = finalizing ? t("PROCESSING") : Math.round(percent) + "%";
   if (finalizing) track.setAttribute("aria-valuetext", phase);
   else track.removeAttribute("aria-valuetext");
-  liveFire.setProgress(finalizing ? 98 : percent);
+  liveFire.setProgress(finalizing ? 100 : percent);
 }
 let libraryEditingId = null;
 function saveLibraryMeta() { persistSection("library", libraryMeta); }
@@ -2038,6 +2121,7 @@ $("add").addEventListener("click", async () => {
     });
     message(count ? t("Tasks added: {count}", {count}) : t("These links are already in the queue."));
     if (count) {
+      setDrawer(false);
       $("start-at").value = ""; selectedFormat = null; $("preflight-status").hidden = true;
       $("record-length").value = "0"; $("repeat-daily").checked = false;
       linkField.value = ""; linkField.dispatchEvent(new Event("input"));
@@ -2221,7 +2305,7 @@ window.__TAURI__?.event?.listen?.("watch-found", event => {
 onLanguageChange(renderWatches);
 setQuality("1080");
 async function init() {
-  if (!invoke) { $("engines").textContent = ""; $("add").disabled = true; return; }
+  if (!invoke) { $("engines").textContent = ""; $("add").disabled = true; await downloadProfiles.load(); return; }
   try {
     const data = await invoke("snapshot"), options = data.options;
     $("folder").value = data.defaultFolder || options.folder;
@@ -2241,7 +2325,7 @@ async function init() {
     $("rate").value = options.rateMbps;
     $("parallel").value = data.parallel;
     $("folder-rule").value = options.folderRule || "manual";
-    $("name-rule").value = options.nameRule || "title";
+    $("name-rule").value = options.nameRule === "playlist" ? "title" : options.nameRule || "title";
     syncNameRule();
     showMediaServer(data.mediaServer);
     $("clip-enabled").checked = Number.isFinite(options.clipStart) && Number.isFinite(options.clipEnd);

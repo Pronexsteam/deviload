@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Devil Cut · Deviload</title><link rel="icon" href="assets/devil-app-icon-32.png"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="rework.css"><link rel="stylesheet" href="shell.css"><script type="module" src="cut-main.js"></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Devil Cut · Deviload</title><link rel="icon" href="assets/devil-app-icon-32.png"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="rework.css"><link rel="stylesheet" href="shell.css"><link rel="stylesheet" href="tool-workspace.css"><script type="module" src="cut-main.js"></script></head>
 <body class="cut-page">
 <div id="edit-dialog" class="cut-dialog cut-window">
   <header class="cut-head">
@@ -10,6 +10,7 @@
     <button id="cut-fullscreen" class="cut-tool cut-full-toggle" type="button" title="Full screen (F11)" aria-label="Full screen" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
     <button id="cut-relink" class="outline small" type="button" hidden>Locate missing files</button><details id="cut-export-menu" class="cut-export"><summary class="primary"><span class="icon" data-icon="download-simple" aria-hidden="true"></span>Export</summary>
       <div class="cut-export-body">
+        <label class="cut-label" for="cut-export-preset">Export preset</label><select id="cut-export-preset"><option value="custom">Custom</option><option value="video">Video · 1080p</option><option value="small">Small video · 720p</option><option value="audio">Audio · MP3</option><option value="gif">Animated GIF · 480p</option></select>
         <span class="cut-label">Format</span><div class="cut-chips" data-chips="format"><button type="button" data-value="mp4" class="selected">MP4</button><button type="button" data-value="gif">GIF</button><button type="button" data-value="mp3">MP3</button></div>
         <span class="cut-label">Quality</span><div class="cut-chips" data-chips="quality"><button type="button" data-value="0">Original</button><button type="button" data-value="2160">4K</button><button type="button" data-value="1440">1440p</button><button type="button" data-value="1080" class="selected">1080p</button><button type="button" data-value="720">720p</button><button type="button" data-value="480">480p</button></div>
         <span id="cut-codec-label" class="cut-label">Codec</span><div id="cut-codec" class="cut-chips" data-chips="codec"><button type="button" data-value="h264" class="selected">H.264</button><button type="button" data-value="h265">H.265</button></div>
@@ -53,6 +54,9 @@
       <div id="cut-inspector-body" hidden>
         <div class="cut-media-tabs" role="tablist"><button type="button" role="tab" data-look-tab="basic" class="selected" aria-selected="true">Basic</button><button type="button" role="tab" data-look-tab="frame" aria-selected="false">Frame</button><button type="button" role="tab" data-look-tab="color" aria-selected="false">Color</button><button type="button" role="tab" data-look-tab="text" aria-selected="false">Text</button></div>
         <section class="cut-look" data-look-pane="basic">
+          <p id="cut-selection-note" class="cut-note"></p>
+          <div class="cut-trim-fields"><label for="cut-trim-in">In · seconds<input id="cut-trim-in" type="number" min="0" step="0.001"></label><label for="cut-trim-out">Out · seconds<input id="cut-trim-out" type="number" min="0" step="0.001"></label></div>
+          <div class="setting-actions"><button id="cut-mark-in" class="outline small" type="button">Set in (I)</button><button id="cut-mark-out" class="outline small" type="button">Set out (O)</button></div>
           <span class="cut-label">Speed</span>
           <div class="cut-chips" data-look="speed"><button type="button" data-value="0.5">0.5×</button><button type="button" data-value="0.75">0.75×</button><button type="button" data-value="1">1×</button><button type="button" data-value="1.25">1.25×</button><button type="button" data-value="1.5">1.5×</button><button type="button" data-value="2">2×</button><button type="button" data-value="3">3×</button></div>
           <label class="cut-slider" for="cut-volume"><span class="cut-label">Volume <b id="cut-volume-value">100%</b></span><input id="cut-volume" type="range" min="0" max="200" step="5" value="100"></label>
