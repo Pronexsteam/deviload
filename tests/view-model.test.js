@@ -55,6 +55,7 @@ test("error hints identify login, disk, update and network cases",()=>{
 
 test("Instagram restrictions and throttling do not ask for an unrelated YouTube login", () => {
  const url = "https://www.instagram.com/reel/test/";
+ assert.equal(diagnoseError(["selected cookies file contains no active Instagram session", "empty media response"], true, url).title, "Instagram session missing");
  assert.equal(diagnoseError(["This content isn't available to everyone: certain audiences"], true, url).title, "Audience restriction");
  assert.equal(diagnoseError(["login required"], true, url).action, "cookies");
  assert.equal(diagnoseError(["login required"], false, url).action, "site-login");

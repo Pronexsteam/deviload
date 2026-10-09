@@ -1080,6 +1080,8 @@ export default {
   "By download": "По загрузке",
   "Download group {id}": "Группа загрузки {id}",
   "Already downloaded": "Уже скачано",
+  "Instagram session missing": "Нет сессии Instagram",
+  "The selected cookies file does not contain an active Instagram login. Choose Deviload sign-in or import fresh Instagram cookies, then retry.": "В выбранном файле cookies нет действующего входа в Instagram. Выберите вход через Deviload или импортируйте свежие cookies Instagram и повторите попытку.",
   "Check the saved sign-in": "Проверьте сохранённый вход",
   "A saved session does not guarantee access. Check the cookies source and whether this account can open the post.": "Сохранённый вход не гарантирует доступ. Проверьте источник cookies и доступ к публикации с этого аккаунта.",
   "The site is limiting requests. Wait before retrying and reduce parallel downloads.": "Сайт ограничивает запросы. Подождите перед повторной попыткой и уменьшите число одновременных загрузок.",

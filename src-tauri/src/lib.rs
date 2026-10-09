@@ -68,6 +68,12 @@ fn index_library(data: &mut Snapshot) {
             media.file = file;
             media.status = "done".into();
             media.percent = 100.0;
+            media.pid = None;
+            media.scheduled_at = None;
+            media.repeat_at = 0;
+            media.forget_recording();
+            media.stage.clear();
+            media.archived = 0;
             media.downloads.clear();
             media.log.clear();
             media.hidden_in_queue = true;
@@ -421,6 +427,17 @@ impl Engine {
         if job.options.archive && job.options.clip_start.is_none() { self.forget_deleted(job); }
         let exe = binary("yt-dlp")?;
         let args = download_args(job, &self.dir)?;
+        let auth = resolve_auth(job.options.clone(), &job.url, &self.dir);
+        if url::Url::parse(&job.url).ok().and_then(|url| url.host_str().map(str::to_owned)).is_some_and(|host| SITES[1].matches(&host)) && !auth.cookies.is_empty() {
+            if let Ok(text) = fs::read_to_string(&auth.cookies) {
+                if !has_cookie_session(&text, &SITES[1], now_seconds()) {
+                    let mut data = self.data.lock().unwrap();
+                    if let Some(current) = data.jobs.iter_mut().find(|j| j.id == job.id) {
+                        current.consume("Deviload: the selected cookies file contains no active Instagram session.");
+                    }
+                }
+            }
+        }
         fs::create_dir_all(&job.options.folder).map_err(|e| e.to_string())?;
         let mut cmd = ytdlp_command(&exe);
         cmd.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -577,6 +594,16 @@ fn find_site(key: &str) -> Result<&'static Site, String> {
 
 fn site_cookie_file(dir: &Path, site: &Site) -> PathBuf {
     if site.key == "youtube" { session_file(dir) } else { dir.join(format!("{}-cookies.txt", site.key)) }
+}
+
+fn has_cookie_session(text: &str, site: &Site, now: u64) -> bool {
+    text.lines().any(|line| {
+        let line = line.strip_prefix("#HttpOnly_").unwrap_or(line);
+        if line.starts_with('#') { return false; }
+        let fields: Vec<_> = line.split('\t').collect();
+        fields.len() == 7 && site.matches(fields[0].trim_start_matches('.')) && site.signed_in.contains(&fields[5])
+            && !fields[6].trim().is_empty() && fields[4].parse::<u64>().is_ok_and(|expiry| expiry == 0 || expiry > now)
+    })
 }
 
 fn site_profile(app: &tauri::AppHandle, site: &Site) -> Result<PathBuf, String> {
@@ -1255,7 +1282,6 @@ fn change_job(id: u64, action: String, auth: Option<Options>, engine: tauri::Sta
             }
             j.status = "queued".into(); j.percent = 0.0; j.log.clear(); j.speed.clear(); j.file.clear(); j.scheduled_at = None; j.retry_attempts = 0;
             j.healed.clear(); j.archived = 0;
-            if j.options.cookies_browser.is_empty() && account_cookies(&j.url, &engine.dir).is_some() && (j.options.cookies_account || j.options.cookies.is_empty()) { j.options.cookies_account = true; }
         }
         // Without the archive yt-dlp fetches what it skipped; files still on the disk are not downloaded twice.
         "again" if ["done", "skipped"].contains(&j.status.as_str()) && j.archived > 0 => {
@@ -3142,12 +3168,13 @@ mod engine_tests {
     #[test]
     fn partial_playlists_keep_successful_files_without_duplicate_cards() {
         let mut data = Snapshot::default();
-        data.jobs.push(Job { id: 1, status: "error".into(), file: "/saved.mp4".into(),
+        data.jobs.push(Job { id: 1, status: "running".into(), pid: Some(42), live: true, repeat_at: 20, file: "/saved.mp4".into(),
             downloads: vec![["a".into(), "/saved.mp4".into()]], ..Job::default() });
         index_library(&mut data);
-        assert_eq!(data.jobs[0].status, "error");
+        assert_eq!(data.jobs[0].status, "running");
         let media_id = data.jobs[1].id;
         assert_eq!(data.jobs[1].status, "done");
+        assert!(data.jobs[1].pid.is_none() && !data.jobs[1].live && data.jobs[1].repeat_at == 0);
         data.jobs.push(Job { id: 3, status: "done".into(), file: "/saved.mp4".into(), ..Job::default() });
         index_library(&mut data);
         let visible: Vec<_> = data.jobs.iter().filter(|j| j.status == "done" && !j.hidden_in_library).collect();
@@ -3171,6 +3198,17 @@ mod engine_tests {
         assert_eq!(args, ["--cookies", instagram.to_str().unwrap()]);
         let manual = Options { cookies_browser: "firefox".into(), ..Options::default() };
         assert_eq!(resolve_auth(manual, url, dir.path()).cookies_browser, "firefox");
+        assert!(resolve_auth(Options::default(), url, dir.path()).cookies.is_empty());
+    }
+
+    #[test]
+    fn instagram_session_checks_domain_value_and_expiry() {
+        let site = &SITES[1];
+        assert!(!has_cookie_session(".instagram.com\tTRUE\t/\tTRUE\t0\tcsrftoken\ttest", site, 100));
+        assert!(!has_cookie_session(".example.com\tTRUE\t/\tTRUE\t0\tsessionid\ttest", site, 100));
+        assert!(!has_cookie_session(".instagram.com\tTRUE\t/\tTRUE\t99\tsessionid\ttest", site, 100));
+        assert!(!has_cookie_session(".instagram.com\tTRUE\t/\tTRUE\t0\tsessionid\t", site, 100));
+        assert!(has_cookie_session("#HttpOnly_.instagram.com\tTRUE\t/\tTRUE\t200\tsessionid\ttest", site, 100));
     }
 
     #[test]

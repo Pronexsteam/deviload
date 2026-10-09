@@ -27,7 +27,7 @@ timeout 40s xvfb-run -a dbus-run-session -- bash -c '
   sleep 4
   kill -0 "$pid" 2>/dev/null || { cat app.log; exit 1; }
   cat app.log
-  if grep -E "undefined symbol|autoaudiosink not found|appsink not found|Aborting|Failed to load module.*(gio|gvfs)" app.log; then exit 1; fi
+  if grep -E "undefined symbol|autoaudiosink not found|appsink not found|Aborting|GLib-GObject-CRITICAL|Failed to load module.*(gio|gvfs)" app.log; then exit 1; fi
 '
 result=$?
 set -e

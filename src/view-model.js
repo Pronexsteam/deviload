@@ -111,6 +111,9 @@ export function diagnoseError(log = [], signedIn = false, url = "") {
     return {title:"Too many requests", message:"The site is limiting requests. Wait before retrying and reduce parallel downloads.", action:""};
   }
   if (signInSite(url)?.key === "instagram") {
+    if (/selected cookies file contains no active instagram session/.test(detail)) {
+      return {title:"Instagram session missing", message:"The selected cookies file does not contain an active Instagram login. Choose Deviload sign-in or import fresh Instagram cookies, then retry.", action:"cookies"};
+    }
     if (/not available to everyone|isn't available to everyone|certain audiences|restricted video|18 years/.test(detail)) {
       return {title:"Audience restriction", message:"Instagram limits this post to certain accounts or audiences. Check that the same account can open it in a browser.", action:"cookies"};
     }

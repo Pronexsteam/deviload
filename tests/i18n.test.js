@@ -85,7 +85,7 @@ function tableStrings() {
     }
   }
   for (const url of ["https://www.instagram.com/p/x/", "https://example.com/v"]) {
-    for (const signed of [true, false]) for (const line of ["login required", "empty media response", "not available to everyone", "HTTP Error 429"]) {
+    for (const signed of [true, false]) for (const line of ["login required", "empty media response", "not available to everyone", "HTTP Error 429", "selected cookies file contains no active Instagram session"]) {
       const issue = diagnoseError([line], signed, url);
       strings.push(issue.title, issue.message);
     }

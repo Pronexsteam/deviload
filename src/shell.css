@@ -927,7 +927,7 @@ select:not([multiple]) {
   body:not(.cut-page):not(.convert-page) { display: grid; grid-template-columns: 68px minmax(0, 1fr); }
   .sidebar { position: sticky; top: 0; height: 100vh; padding: 40px 8px 12px; width: 68px; overflow: visible; }
   .sidebar .brand-scene, .sidebar .side-foot, .sidebar .nav-label { display: none; }
-  .sidebar { justify-content: flex-start; }
+  .sidebar { flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; }
   .sidebar nav { display: flex; flex: 0 0 auto; margin-top: 12px; flex-direction: column; flex-wrap: nowrap; justify-content: flex-start; gap: 10px; }
   .sidebar .nav { justify-content: center; min-height: 44px; padding: 10px; }
   .sidebar .nav > span:nth-child(2), .sidebar .nav b { display: none; }

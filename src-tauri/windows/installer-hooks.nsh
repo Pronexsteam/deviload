@@ -1,6 +1,6 @@
 !include "${__FILEDIR__}\locales\ru.nsh"
 
-﻿; Deviload installs for the current user without administrator rights, and so do its updates.
+; Deviload installs for the current user without administrator rights, and so do its updates.
 ; A folder the user cannot write to (anything inside Program Files) used to fail halfway through
 ; the copy with a cryptic NSIS error, so the folder is checked before a single file is copied.
 ; The texts follow the installer language: Russian (1049), Spanish (1034), English otherwise.
