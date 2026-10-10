@@ -60,9 +60,11 @@ Desktop app for downloading video and music with [yt-dlp](https://github.com/yt-
 
 | Devil Cut | Library |
 |---|---|
-| ![Devil Cut: two clips with a crossfade and music](docs/screenshots/devil-cut.png) | ![Library of finished downloads](docs/screenshots/library.png) |
-| **Watched channels** | **Phone link** |
-| ![Watched channels and playlists](docs/screenshots/watch.png) | <img src="docs/screenshots/phone.png" alt="The phone page of the phone link" width="260"> |
+| ![Devil Cut: timeline and precise trim controls](docs/screenshots/devil-cut.png) | ![Library of finished downloads](docs/screenshots/library.png) |
+| **Settings backup** | **Download profiles** |
+| ![Export and restore settings without account credentials](docs/screenshots/settings-backup.png) | ![Manage saved download profiles](docs/screenshots/download-profiles.png) |
+
+Screenshots show Deviload 2.6.5 with sample media.
 
 ## Install on Windows
 
