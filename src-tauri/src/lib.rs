@@ -1,4 +1,5 @@
 mod convert;
+mod engine_update;
 mod heal;
 mod media_server;
 mod model;
@@ -850,8 +851,10 @@ fn diagnostics() -> Vec<(String, bool)> {
 }
 
 fn ytdlp_version(exe: &Path) -> Result<String, String> {
-    let output = command(exe).arg("--version").output().map_err(|e| e.to_string())?;
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+    let output = engine_update::output(command(exe).args(["--ignore-config", "--version"]), Duration::from_secs(15))?;
+    let version = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    if !output.status.success() || version.is_empty() { return Err("Could not read the yt-dlp version. Try the update again.".into()); }
+    Ok(version)
 }
 
 #[tauri::command]
@@ -996,10 +999,14 @@ async fn update_ytdlp() -> Result<EngineUpdate, String> {
 }
 
 fn update_engine() -> Result<EngineUpdate, String> {
+    static UPDATE_LOCK: Mutex<()> = Mutex::new(());
+    let _guard = UPDATE_LOCK.try_lock().map_err(|_| "A yt-dlp update is already running. Please wait.".to_owned())?;
     let exe = binary("yt-dlp")?;
     let before = ytdlp_version(&exe)?;
-    let output = ytdlp_command(&exe).args(["--update-to", "nightly"]).stdin(Stdio::null())
-        .output().map_err(|e| e.to_string())?;
+    let output = engine_update::output(
+        ytdlp_command(&exe).args(["--ignore-config", "--socket-timeout", "20", "--update-to", "nightly"]),
+        Duration::from_secs(120),
+    )?;
     if !output.status.success() {
         let detail = String::from_utf8_lossy(&output.stderr);
         let detail = detail.lines().rev().find(|line| !line.trim().is_empty()).unwrap_or("").trim();

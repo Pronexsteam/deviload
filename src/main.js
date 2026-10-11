@@ -12,6 +12,7 @@ import {pop, wireMotion} from "./motion.js";
 import {hydrateMascots, mascotSpot, setPose} from "./mascot-spot.js";
 import {labels, actions, counts, orbState, mediaPreview, visibleJobs, playlistSelection, diagnoseError, signInSite, isVideoJob, isLibraryAudio, inLibrary, mediaIdentity, isProcessing} from "./view-model.js";
 import {t, tn, errorText, translateMessage, translateDom, setLanguage, onLanguageChange, language, locale, languageNames} from "./i18n.js";
+import {createEngineUpdater} from "./engine-update.js";
 
 const $ = id => document.getElementById(id);
 const invoke = window.__TAURI__?.core?.invoke;
@@ -264,6 +265,26 @@ $("os-notify-toggle").addEventListener("click", async () => {
 });
 const STALE_DAYS = 14;
 let ytdlpVersion = "";
+let engineUpdateBusy = false;
+let engineUpdateError = "";
+const engineButtonContents = new Map();
+const runEngineUpdate = createEngineUpdater(command => invoke(command), busy => {
+  engineUpdateBusy = busy;
+  if (busy) engineUpdateError = "";
+  for (const button of [$("engine-update"), $("update-ytdlp")]) {
+    button.disabled = busy;
+    button.classList.toggle("is-busy", busy);
+    button.setAttribute("aria-busy", String(busy));
+    if (busy) {
+      engineButtonContents.set(button, button.innerHTML);
+      button.textContent = t("Updating…");
+    } else if (engineButtonContents.has(button)) {
+      button.innerHTML = engineButtonContents.get(button);
+      engineButtonContents.delete(button);
+    }
+  }
+  renderEngineInfo();
+});
 function ytdlpAgeDays(version) {
   const match = /^(\d{4})\.(\d{2})\.(\d{2})/.exec(version || "");
   if (!match) return null;
@@ -279,7 +300,8 @@ function renderEngineInfo() {
   try { snoozed = Number(localStorage.getItem("deviload-engine-later") || 0) > Date.now(); } catch { snoozed = false; }
   const stale = days !== null && days >= STALE_DAYS;
   $("engine-notice").hidden = !stale || snoozed;
-  $("engine-notice-text").textContent = stale ? t("This yt-dlp was built {days} ago. YouTube changes often, and an old yt-dlp is the most common reason downloads fail.", {days:age}) : "";
+  $("engine-notice-text").textContent = engineUpdateBusy ? t("Checking and updating yt-dlp. Please wait…")
+    : engineUpdateError || (stale ? t("This yt-dlp was built {days} ago. YouTube changes often, and an old yt-dlp is the most common reason downloads fail.", {days:age}) : "");
 }
 async function refreshEngineInfo() {
   try { ytdlpVersion = await invoke("ytdlp_info"); } catch { ytdlpVersion = ""; }
@@ -302,7 +324,7 @@ async function autoUpdateYtdlp() {
     localStorage.setItem("deviload-ytdlp-auto-at", String(Date.now()));
   } catch { return; }
   try {
-    const result = await invoke("update_ytdlp");
+    const result = await runEngineUpdate();
     ytdlpVersion = result.after;
     renderEngineInfo();
     if (result.after !== result.before) message(t("yt-dlp updated: {before} → {after}", {before:result.before, after:result.after}));
@@ -314,13 +336,17 @@ async function updateYtdlp(button) {
   button.classList.add("is-busy");
   message(t("Updating yt-dlp to the nightly build…"));
   try {
-    const result = await invoke("update_ytdlp");
+    const result = await runEngineUpdate();
     ytdlpVersion = result.after;
     try { localStorage.removeItem("deviload-engine-later"); } catch { /* storage unavailable */ }
     renderEngineInfo();
     message(result.after === result.before ? t("yt-dlp is up to date: {version}", {version:result.after})
       : t("yt-dlp updated: {before} → {after}", {before:result.before, after:result.after}));
-  } catch (error) { message(errorText(error), true); }
+  } catch (error) {
+    engineUpdateError = errorText(error);
+    renderEngineInfo();
+    message(engineUpdateError, true);
+  }
   finally { button.disabled = false; button.classList.remove("is-busy"); }
 }
 $("update-ytdlp").addEventListener("click", () => updateYtdlp($("update-ytdlp")));
