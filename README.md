@@ -1,26 +1,58 @@
+<div align="center">
+
+<img src="docs/screenshots/mascot-media.png" alt="Deviload infernal mascot holding a media download crystal" width="200">
+
 # Deviload
 
-[![Latest release](https://img.shields.io/github/v/release/Pronexsteam/deviload?label=latest&color=f27050)](https://github.com/Pronexsteam/deviload/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/Pronexsteam/deviload/total?color=f27050)](https://github.com/Pronexsteam/deviload/releases)
-[![CI](https://github.com/Pronexsteam/deviload/actions/workflows/ci.yml/badge.svg)](https://github.com/Pronexsteam/deviload/actions/workflows/ci.yml)
-[![Last commit](https://img.shields.io/github/last-commit/Pronexsteam/deviload)](https://github.com/Pronexsteam/deviload/commits/main)
-[![Stars](https://img.shields.io/github/stars/Pronexsteam/deviload?style=flat)](https://github.com/Pronexsteam/deviload/stargazers)
-[![License: MIT](https://img.shields.io/github/license/Pronexsteam/deviload)](LICENSE)
-[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20test%20%7C%20Linux-lightgrey)](https://github.com/Pronexsteam/deviload/releases/latest)
-[![Built with Rust and Tauri 2](https://img.shields.io/badge/built%20with-Rust%20%2B%20Tauri%202-b7410e)](https://tauri.app)
-[![Support on Ko-fi](https://img.shields.io/badge/support-Ko--fi-f27050?logo=ko-fi&logoColor=white)](https://ko-fi.com/pronexsteam)
+**Video, music and a little fire.**
 
-**[Download Deviload for Windows](https://github.com/Pronexsteam/deviload/releases/latest)**: take `Deviload-<version>-setup.exe` from the latest release.
+Download with yt-dlp. Organize your library. Edit with Devil Cut.
+<br>
+Built with Rust and Tauri 2 · English, Russian and Spanish
 
-**[Download Deviload for Mac](https://github.com/Pronexsteam/deviload/releases/latest)** (test build): take `Deviload-<version>-macos-test.zip`, move the app to Applications and run `xattr -cr /Applications/Deviload.app` once, because it is not signed by Apple yet.
+[![Windows download](https://img.shields.io/badge/Windows-Download-b91c1c?style=for-the-badge&labelColor=171717)](https://github.com/Pronexsteam/deviload/releases/latest)
+[![macOS test download](https://img.shields.io/badge/macOS-Test%20build-b91c1c?style=for-the-badge&labelColor=171717&logo=apple&logoColor=white)](https://github.com/Pronexsteam/deviload/releases/latest)
+[![Linux download](https://img.shields.io/badge/Linux-Download-b91c1c?style=for-the-badge&labelColor=171717&logo=linux&logoColor=white)](https://github.com/Pronexsteam/deviload/releases/latest)
 
-**[Download Deviload for Linux](https://github.com/Pronexsteam/deviload/releases/latest)** (x86_64): take `Deviload-<version>-amd64.deb` for Debian and Ubuntu, or `Deviload-<version>-x86_64.AppImage` for any distribution.
+[![Latest release](https://img.shields.io/github/v/release/Pronexsteam/deviload?style=for-the-badge&label=version&color=b91c1c&labelColor=171717)](https://github.com/Pronexsteam/deviload/releases/latest)
+[![Total release downloads](https://img.shields.io/github/downloads/Pronexsteam/deviload/total?style=for-the-badge&label=downloads&color=b91c1c&labelColor=171717)](https://github.com/Pronexsteam/deviload/releases)
+[![GitHub stars](https://img.shields.io/github/stars/Pronexsteam/deviload?style=for-the-badge&label=stars&color=b91c1c&labelColor=171717)](https://github.com/Pronexsteam/deviload)
+[![CI on main](https://img.shields.io/github/actions/workflow/status/Pronexsteam/deviload/ci.yml?branch=main&style=for-the-badge&label=CI&labelColor=171717)](https://github.com/Pronexsteam/deviload/actions/workflows/ci.yml)
+
+[![Buy me a coffee on Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-dc2626?style=for-the-badge&labelColor=171717&logo=ko-fi&logoColor=white)](https://ko-fi.com/pronexsteam)
+
+Deviload is free. If it saves you time, a coffee helps me keep building it.
+
+**[Install & docs](#installation)** · **[Screenshots](#screenshots)** · **[Report an issue](https://github.com/Pronexsteam/deviload/issues/new)** · **[Suggest a feature](https://github.com/Pronexsteam/deviload/issues/new?title=Feature%20request%3A%20)**
+
+</div>
 
 ![Deviload: the download queue with a link preview](docs/screenshots/downloads.png)
 
-Desktop app for downloading video and music with [yt-dlp](https://github.com/yt-dlp/yt-dlp), built with Rust and [Tauri 2](https://tauri.app). Windows is the main target; the macOS and Linux builds come from CI, and the Mac one has been tried on a real Mac. The interface is available in English, Russian and Spanish and switches instantly from the language menu in the top bar.
+Desktop app for downloading video and music with [yt-dlp](https://github.com/yt-dlp/yt-dlp), built with Rust and [Tauri 2](https://tauri.app). Windows is the main target; macOS and Linux builds come from CI, and the Mac build has been tried on a real Mac. The interface is available in English, Russian and Spanish and switches instantly from the language menu in the top bar.
+
+## Installation
+
+All buttons above open the [latest release](https://github.com/Pronexsteam/deviload/releases/latest). Choose the asset for your system:
+
+| System | Release asset | Instructions |
+|---|---|---|
+| Windows x64 | `Deviload-<version>-setup.exe` or `Deviload-<version>-windows-x64-portable.zip` | [Windows installation](#install-on-windows) |
+| macOS · test build | `Deviload-<version>-macos-test.zip` | [macOS installation](#install-on-macos-test-build) · unsigned and not notarized |
+| Linux x86_64 | `Deviload-<version>-amd64.deb` or `Deviload-<version>-x86_64.AppImage` | [Linux installation](#install-on-linux) |
+
+**Documentation:** [Requirements](#requirements) · [Build from source](#build-from-source-windows) · [Releases](#releases) · [Data and privacy](#data-and-privacy) · [Translations](#translations)
 
 ## Features
+
+- **Download your way:** video, audio, playlists and live streams, with saved profiles and a persistent queue.
+- **Keep a library:** search, favorites, collections, tags and a built-in player.
+- **Create with Devil Cut:** trim, arrange clips and export video, audio or GIFs.
+- **Stay connected:** watched channels, artist releases, media servers and a local phone link.
+- **Make it yours:** three interface languages, proxy settings, settings backups and reduced motion.
+
+<details>
+<summary><strong>Explore all features</strong></summary>
 
 - **Download workspace** with the link field, format controls and queue together, animated flame progress, and a mascot that reacts to completed and failed downloads. Motion respects the system's reduced-motion preference.
 - **Batch actions** to pause, resume, retry or cancel selected tasks and send completed files to a phone. Clearing completed tasks keeps the library and its file count intact.
@@ -50,11 +82,13 @@ Desktop app for downloading video and music with [yt-dlp](https://github.com/yt-
 - **Converter** in its own window: drop any video or audio file from the computer, or send one from the library, and get MP4, MP3, a GIF, or a video that fits a size limit (Discord 10 MB, WhatsApp 16 MB, mail 25 MB or your own) through two-pass encoding. The original stays as it is; results go next to it or into the export folder shared with Devil Cut.
 - **Phone link** over the local network: one QR code opens a page on the phone that downloads the files you send from Deviload, sends photos and videos back to the computer (each one needs your OK), and adds links to the download queue. The link turns off after 30 minutes without the phone, and the page can be added to the phone's home screen.
 - **Search** YouTube and YouTube Music inside the app.
-- **Sign-in in one step** for YouTube, Instagram, TikTok and X: press Sign in, log in in the window that opens, and Deviload keeps the session; each link uses the session of its own site only. Firefox cookies or your own `cookies.txt` also work (and Chrome, Edge, Brave or Safari on macOS).
+- **Site sessions** for YouTube, Instagram, TikTok and X: supported embedded sign-in windows save a session for that site only. YouTube on Linux uses cookies from your regular browser or a `cookies.txt` file instead of embedded Google sign-in. Firefox cookies or your own `cookies.txt` also work on Windows and macOS (and Chrome, Edge, Brave or Safari on macOS).
 - **Updates**: Deviload checks GitHub at start and every 6 hours and updates itself in one click on Windows, macOS and in the AppImage, all from one release (the portable zip and the .deb package point to the releases page); yt-dlp updates itself to the nightly build once a day when nothing is downloading, which can be turned off in the settings.
 - **Proxy** for downloads, search, link checks and yt-dlp updates (HTTP, HTTPS, SOCKS4 and SOCKS5).
 - **Moving from Deviload 1.x**: the history, settings and the list of downloaded videos of the old portable version move over in one click; cookies are not copied.
 - Tray mode and start with Windows, OS notifications, clipboard link suggestions, links from a text file, a copyable yt-dlp command in every task log, keyboard shortcuts (Ctrl/⌘+L links, Ctrl/⌘+K queue search, Ctrl/⌘+Enter download, Escape closes dialogs) and a short guided tour. Only one copy of Deviload runs at a time; starting it again brings the open window forward.
+
+</details>
 
 ## Screenshots
 
@@ -69,6 +103,16 @@ Screenshots show Deviload 2.6.5 with sample media.
 ## Install on Windows
 
 Download `Deviload-<version>-setup.exe` from the releases page and run it. It installs for the current user without administrator rights, adds a Start menu shortcut (in the Pronexsteam folder) and brings yt-dlp, FFmpeg and Deno along. Any folder you can write to works; folders inside Program Files need administrator rights, so the installer stops and says so. Later versions install from inside the app. A portable zip is published next to it.
+
+## Install on macOS (test build)
+
+Download `Deviload-<version>-macos-test.zip` from the [latest release](https://github.com/Pronexsteam/deviload/releases/latest), extract it and move `Deviload.app` to Applications. The build is not signed with an Apple Developer ID or notarized. Before the first start, run:
+
+```sh
+xattr -cr /Applications/Deviload.app
+```
+
+The archive includes yt-dlp, FFmpeg and Deno. The in-app updater signature is separate from Apple code signing.
 
 ## Install on Linux
 
@@ -95,7 +139,7 @@ In-app updates are signed. The script reads the private key and its password fro
 
 ## Releases
 
-Pushing a tag that matches the version, for example `v2.0.0`, runs `.github/workflows/release.yml`: GitHub builds and tests the app and publishes the installer, the portable zip and `latest.json` as the latest release, then adds the macOS and Linux builds. Every build is signed for in-app updates, and a last job joins the Windows, macOS (`Deviload-<version>-macos.app.tar.gz`) and Linux (the AppImage) entries into one `latest.json`, so one release updates all three. If the macOS or Linux build fails, the feed still goes out for Windows, and those systems only show that a new version exists. The release description comes from `.github/release-notes/<tag>.md` when that file exists; changing the file on `main` later updates the published description too. The repository needs two secrets: `TAURI_SIGNING_PRIVATE_KEY` (the content of the key file) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Installed copies read the update feed from the `updates` branch (`raw.githubusercontent.com/Pronexsteam/deviload/updates/latest.json`), so update checks do not count as downloads; the copy attached to each release stays as a fallback for 2.0.0. The same run adds an unsigned macOS test build, `Deviload-<version>-macos-test.zip`, with yt-dlp, FFmpeg and Deno inside (`scripts/fetch-tools-macos.sh`). It is not notarized, so it needs `xattr -cr /Applications/Deviload.app` once before the first start. `.github/workflows/macos.yml` rebuilds only that file for the release of the current version when the `macos-test` branch is pushed.
+Pushing a tag that matches the version, for example `v2.0.0`, runs `.github/workflows/release.yml`: GitHub builds and tests the app and publishes the installer, the portable zip and `latest.json` as the latest release, then adds the macOS and Linux builds. Every build is signed for in-app updates, and a last job joins the Windows, macOS (`Deviload-<version>-macos.app.tar.gz`) and Linux (the AppImage) entries into one `latest.json`, so one release updates all three. If the macOS or Linux build fails, the feed still goes out for Windows, and those systems only show that a new version exists. The release description comes from `.github/release-notes/<tag>.md` when that file exists; changing the file on `main` later updates the published description too. The repository needs two secrets: `TAURI_SIGNING_PRIVATE_KEY` (the content of the key file) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Installed copies read the update feed from the `updates` branch ([update feed](https://raw.githubusercontent.com/Pronexsteam/deviload/updates/latest.json)), so update checks do not count as downloads; the copy attached to each release stays as a fallback for 2.0.0. The same run adds an unsigned macOS test build, `Deviload-<version>-macos-test.zip`, with yt-dlp, FFmpeg and Deno inside (`scripts/fetch-tools-macos.sh`). It is not notarized, so it needs `xattr -cr /Applications/Deviload.app` once before the first start. `.github/workflows/macos.yml` rebuilds only that file for the release of the current version when the `macos-test` branch is pushed.
 
 ## Build from source (Linux)
 
@@ -160,4 +204,4 @@ Deviload is free and stays free. If it saves you time, you can buy me a coffee o
 
 ## Licence
 
-Deviload is MIT licensed (see `LICENSE`). The Windows installer and the portable build ship yt-dlp (Unlicense), FFmpeg (GPL v3 build) and Deno (MIT); see `LICENSES/README.txt` for details and the other bundled components.
+Deviload is [MIT licensed](LICENSE). The Windows installer and the portable build ship yt-dlp (Unlicense), FFmpeg (GPL v3 build) and Deno (MIT); see [bundled licences](LICENSES/README.txt) for details and the other bundled components.

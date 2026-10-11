@@ -3,6 +3,11 @@
 export const name = "Español";
 
 export default {
+  "Updating…": "Actualizando…",
+  "Checking and updating yt-dlp. Please wait…": "Comprobando y actualizando yt-dlp. Espera…",
+  "yt-dlp did not respond in time. Check your connection or proxy and try again.": "yt-dlp no respondió a tiempo. Comprueba tu conexión o proxy e inténtalo de nuevo.",
+  "Could not read the yt-dlp version. Try the update again.": "No se pudo leer la versión de yt-dlp. Intenta actualizar de nuevo.",
+  "A yt-dlp update is already running. Please wait.": "Ya hay una actualización de yt-dlp en curso. Espera.",
   "YOUR MEDIA. YOUR RULES.": "TUS MEDIOS. TUS REGLAS.",
   "By author": "Por autor",
   "By month": "Por mes",
