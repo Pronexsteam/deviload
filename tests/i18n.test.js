@@ -130,11 +130,19 @@ test("messages from the Rust core have a Russian translation", () => {
   assert.deepEqual(absent, []);
 });
 
+test("music engine playback restrictions have translations", () => {
+  const messages = literals(read("engines/music/errors.ts")).filter(text => text.startsWith("Playback "));
+  assert.ok(messages.length > 0);
+  assert.deepEqual(missing(messages), []);
+});
+
 test("the Russian locale has no unused strings", () => {
   const used = new Set([...htmlStrings(), ...tableStrings(), "Deviload — Downloads"]);
   for (const file of translatedSources) for (const text of translatedLiterals(read(file), true)) used.add(text);
   const rust = new Set(rustMessages().map(({text}) => normalize(text)));
-  for (const text of literals(read("engines/music/engine.ts"))) used.add(text);
+  for (const file of ["engines/music/engine.ts", "engines/music/errors.ts"]) {
+    for (const text of literals(read(file))) used.add(text);
+  }
   const unused = [...keys].filter(key => !used.has(key) && !rust.has(normalize(key)));
   assert.deepEqual(unused, []);
 });
