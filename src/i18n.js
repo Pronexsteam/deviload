@@ -77,7 +77,7 @@ export function translateDom(root = document.body) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const parent = node.parentElement;
-    if (!parent || ["SCRIPT", "STYLE", "TEXTAREA"].includes(parent.tagName)) continue;
+    if (!parent || parent.closest('[translate="no"]') || ["SCRIPT", "STYLE", "TEXTAREA"].includes(parent.tagName)) continue;
     let source = textSources.get(node);
     if (source === undefined) {
       const text = node.nodeValue.trim();

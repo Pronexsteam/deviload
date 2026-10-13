@@ -6,7 +6,7 @@
 
 **Video, music and a little fire.**
 
-Download with yt-dlp. Organize your library. Edit with Devil Cut.
+Download with yt-dlp. Listen with Devil Music. Edit with Devil Cut.
 <br>
 Built with Rust and Tauri 2 · English, Russian and Spanish
 
@@ -47,6 +47,7 @@ All buttons above open the [latest release](https://github.com/Pronexsteam/devil
 
 - **Download your way:** video, audio, playlists and live streams, with saved profiles and a persistent queue.
 - **Keep a library:** search, favorites, collections, tags and a built-in player.
+- **Listen with Devil Music:** browse the YouTube Music catalog without an account, build a queue, get recommendations that adapt to your taste and download songs as MP3.
 - **Create with Devil Cut:** trim, arrange clips and export video, audio or GIFs.
 - **Stay connected:** watched channels, artist releases, media servers and a local phone link.
 - **Make it yours:** three interface languages, proxy settings, settings backups and reduced motion.
@@ -82,6 +83,10 @@ All buttons above open the [latest release](https://github.com/Pronexsteam/devil
 - **Converter** in its own window: drop any video or audio file from the computer, or send one from the library, and get MP4, MP3, a GIF, or a video that fits a size limit (Discord 10 MB, WhatsApp 16 MB, mail 25 MB or your own) through two-pass encoding. The original stays as it is; results go next to it or into the export folder shared with Devil Cut.
 - **Phone link** over the local network: one QR code opens a page on the phone that downloads the files you send from Deviload, sends photos and videos back to the computer (each one needs your OK), and adds links to the download queue. The link turns off after 30 minutes without the phone, and the page can be added to the phone's home screen.
 - **Search** YouTube and YouTube Music inside the app.
+- **Devil Music**: guest playback, albums and playlists, a full-screen Now Playing view, shuffle, repeat, queue editing and similar songs when the queue ends. The next song is prepared in advance to reduce waiting. Availability depends on YouTube and your network; restricted or unavailable tracks can still fail.
+- **Download from Devil Music** with the MP3 button on a song card, queued song or the player. It adds a task to the download queue without stopping playback, using your save folder and download authentication settings. Your unfinished download form stays intact.
+- **Your music taste stays local**: likes, listening and early skips shape recommendations. Hide songs or artists, choose familiar music or more discoveries, and export/import a compact profile before reinstalling or changing computers. No Devil Music account or paid server is needed.
+- **Music controls** in the Windows taskbar thumbnail and the tray menu, plus supported system media controls.
 - **Site sessions** for YouTube, Instagram, TikTok and X: supported embedded sign-in windows save a session for that site only. YouTube on Linux uses cookies from your regular browser or a `cookies.txt` file instead of embedded Google sign-in. Firefox cookies or your own `cookies.txt` also work on Windows and macOS (and Chrome, Edge, Brave or Safari on macOS).
 - **Updates**: Deviload checks GitHub at start and every 6 hours and updates itself in one click on Windows, macOS and in the AppImage, all from one release (the portable zip and the .deb package point to the releases page); yt-dlp updates itself to the nightly build once a day when nothing is downloading, which can be turned off in the settings.
 - **Proxy** for downloads, search, link checks and yt-dlp updates (HTTP, HTTPS, SOCKS4 and SOCKS5).
@@ -92,13 +97,17 @@ All buttons above open the [latest release](https://github.com/Pronexsteam/devil
 
 ## Screenshots
 
+| Devil Music · discover | Devil Music · Now Playing |
+|---|---|
+| ![Devil Music: guest catalog, moods and local preferences](docs/screenshots/devil-music.png) | ![Devil Music: Now Playing with MP3 downloads and playback controls](docs/screenshots/devil-music-player.png) |
+
 | Devil Cut | Library |
 |---|---|
 | ![Devil Cut: timeline and precise trim controls](docs/screenshots/devil-cut.png) | ![Library of finished downloads](docs/screenshots/library.png) |
 | **Settings backup** | **Download profiles** |
 | ![Export and restore settings without account credentials](docs/screenshots/settings-backup.png) | ![Manage saved download profiles](docs/screenshots/download-profiles.png) |
 
-Screenshots show Deviload 2.6.5 with sample media.
+Devil Music screenshots show 2.6.7 with the live catalog. The other workspace screenshots show 2.6.5 with sample media.
 
 ## Install on Windows
 
@@ -174,6 +183,8 @@ Published macOS builds are not signed with an Apple Developer ID or notarized. T
 The queue (`queue.json`), per-format download archives and the saved YouTube sign-in (`youtube-cookies.txt`) live in the app data folder: `%APPDATA%\com.deviload.desktop` on Windows, `~/Library/Application Support/com.deviload.desktop` on macOS. The sign-in export keeps only YouTube and Google cookies and never leaves your computer. Library tags, collections, player positions, Devil Cut projects and the proxy are stored in `library.json`, watched lists and artists in `watches.json` and the phone link key in `phone.json`, all in the same folder. The media server address and API key, if you set them, are kept in `queue.json` and are only sent to that server. Files received from a phone go to `Deviload from phone` inside the download folder.
 
 Deviload has no telemetry. Besides the sites you download from, it contacts GitHub to check for a new Deviload (only the version number is requested) and to update yt-dlp; the yt-dlp update can be turned off in the settings. The phone link only listens on the local network address and only while it is on; every file a phone sends needs your confirmation.
+
+Devil Music contacts YouTube Music for catalog results, artwork hosts for covers, and YouTube media servers for audio. Its listening profile stays in local WebView storage, bounded to 500 likes, 80 recent songs and 1,000 learned tracks. Export/import files are limited to 2 MB and contain preferences, not music files or account credentials. Reinstalling the operating system can erase local preferences; export a backup first.
 
 Engines run with an argument list and no shell. A task counts as finished only when yt-dlp exits with code 0, and the queue file is written atomically.
 

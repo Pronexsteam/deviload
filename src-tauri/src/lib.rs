@@ -1,4 +1,14 @@
 mod convert;
+mod cookies;
+mod music;
+mod music_audio;
+mod music_controls;
+mod music_profile;
+
+#[cfg(debug_assertions)]
+pub use music::{catalog as preview_music_catalog, stream as preview_music_stream};
+#[cfg(debug_assertions)]
+pub use music::stream_request as preview_music_stream_request;
 mod engine_update;
 mod heal;
 mod media_server;
@@ -582,6 +592,28 @@ const SESSION_URLS: [&str; 4] = ["https://www.youtube.com/", "https://music.yout
 
 fn session_file(dir: &Path) -> PathBuf { dir.join("youtube-cookies.txt") }
 
+fn save_download_auth(engine: &Engine, mode: &str, path: &str) -> Result<Option<usize>, String> {
+    let count = match mode {
+        "file" => Some(cookies::validate_file(Path::new(path), now_seconds())?),
+        "account" | "none" | "firefox" | "chrome" | "edge" | "brave" | "safari" => None,
+        _ => return Err("Unknown browser for cookies".into()),
+    };
+    let mut data = engine.data.lock().unwrap();
+    let mut next = data.clone();
+    next.options.cookies = if mode == "file" { path.into() } else { String::new() };
+    next.options.cookies_account = mode == "account";
+    next.options.cookies_browser = if ["account", "none", "file"].contains(&mode) { String::new() } else { mode.into() };
+    save(&engine.dir, &next)?;
+    *data = next;
+    Ok(count)
+}
+
+#[tauri::command]
+async fn apply_download_auth(mode: String, path: String, engine: tauri::State<'_, Engine>) -> Result<Option<usize>, String> {
+    let engine = engine.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || save_download_auth(&engine, &mode, path.trim())).await.map_err(|e| e.to_string())?
+}
+
 // Sites with a Deviload sign-in. Each keeps its own window profile and cookie file, and a link
 // is downloaded with the session of its own site only.
 struct Site { key: &'static str, name: &'static str, sign_in: &'static str, hosts: &'static [&'static str], signed_in: &'static [&'static str] }
@@ -1119,7 +1151,7 @@ fn queue_urls(d: &mut Snapshot, urls: Vec<String>, options: &Options, scheduled_
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-fn enqueue(text: String, options: Options, parallel: usize, scheduled_at: Option<u64>, auto_retry: bool, live_limit: Option<u64>, repeat_daily: Option<bool>, engine: tauri::State<Engine>) -> Result<usize, String> {
+fn enqueue(text: String, options: Options, parallel: usize, scheduled_at: Option<u64>, auto_retry: bool, live_limit: Option<u64>, repeat_daily: Option<bool>, preserve_options: Option<bool>, engine: tauri::State<Engine>) -> Result<usize, String> {
     options.validate()?;
     // A live stream can be given its length in advance, and a daily repeat needs one.
     let live_limit = live_limit.unwrap_or(0);
@@ -1144,7 +1176,7 @@ fn enqueue(text: String, options: Options, parallel: usize, scheduled_at: Option
         job.live_limit = live_limit;
         if repeat { job.repeat_at = scheduled_at.unwrap_or_else(now_seconds); }
     }
-    d.options = options; d.parallel = parallel;
+    if !preserve_options.unwrap_or(false) { d.options = options; d.parallel = parallel; }
     if let Err(e) = save(&engine.dir, &d) { *d = old; return Err(e); }
     Ok(count)
 }
@@ -2540,8 +2572,17 @@ struct SearchHit {
     url: String,
 }
 
+fn search_term(query: &str, source: &str, end: usize) -> String {
+    if source == "music" {
+        let mut address = url::Url::parse("https://music.youtube.com/search").unwrap();
+        address.query_pairs_mut().append_pair("q", query);
+        address.set_fragment(Some("songs"));
+        address.to_string()
+    } else { format!("ytsearch{end}:{query}") }
+}
+
 #[tauri::command]
-async fn search_media(query: String, source: String) -> Result<Vec<SearchHit>, String> {
+async fn search_media(query: String, source: String, offset: Option<usize>, engine: tauri::State<'_, Engine>) -> Result<SearchPage, String> {
     let query = query.trim().to_owned();
     if query.is_empty() || query.chars().count() > 120 {
         return Err("Enter a query of 1 to 120 characters".into());
@@ -2550,40 +2591,51 @@ async fn search_media(query: String, source: String) -> Result<Vec<SearchHit>, S
         "youtube" | "music" => source,
         _ => return Err("Unknown search source".into()),
     };
+    let offset = offset.unwrap_or(0);
+    let end = offset.checked_add(21).ok_or("Invalid search offset")?;
+    let options = engine.data.lock().unwrap().options.clone();
+    let dir = engine.dir.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let exe = binary("yt-dlp")?;
-        let term = if source == "music" {
-            let mut address = url::Url::parse("https://music.youtube.com/search").unwrap();
-            address.query_pairs_mut().append_pair("q", &query);
-            address.to_string()
-        } else { format!("ytsearch12:{query}") };
-        let output = ytdlp_command(&exe)
+        let term = search_term(&query, &source, end);
+        let mut command = ytdlp_command(&exe);
+        apply_auth(&mut command, options, "https://www.youtube.com/", &dir);
+        let output = engine_update::json_output(command
             .args(["--ignore-config", "--flat-playlist", "--dump-single-json",
-                "--skip-download", "--no-warnings", "--no-colors", "--"])
-            .arg(term)
-            .output().map_err(|e| e.to_string())?;
+                "--skip-download", "--no-warnings", "--no-colors", "--socket-timeout", "15", "--retries", "1",
+                "--extractor-retries", "1", "--playlist-start", &(offset + 1).to_string(), "--playlist-end", &end.to_string(), "--"])
+            .arg(term), Duration::from_secs(60))?;
         if !output.status.success() {
             let detail = String::from_utf8_lossy(&output.stderr);
             return Err(format!("Search failed: {}", detail.chars().take(280).collect::<String>()));
         }
         let data: serde_json::Value = serde_json::from_slice(&output.stdout)
             .map_err(|_| "yt-dlp returned an invalid search result".to_string())?;
-        let mut hits = Vec::new();
-        for item in data["entries"].as_array().into_iter().flatten() {
-            let id = item["id"].as_str().unwrap_or("");
-            let valid_id = id.len() == 11 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_');
-            if !valid_id { continue; }
-            if hits.len() >= 12 { break; }
-            hits.push(SearchHit {
-                title: item["title"].as_str().unwrap_or("").to_owned(),
-                channel: item["channel"].as_str().or_else(|| item["uploader"].as_str()).unwrap_or("").to_owned(),
-                duration: item["duration"].as_u64(),
-                thumbnail: format!("https://i.ytimg.com/vi/{id}/mqdefault.jpg"),
-                url: format!("https://www.youtube.com/watch?v={id}"),
-            });
-        }
-        Ok(hits)
+        Ok(search_page(&data, offset))
     }).await.map_err(|e| e.to_string())?
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchPage { hits: Vec<SearchHit>, next_offset: Option<usize> }
+
+fn search_page(data: &serde_json::Value, offset: usize) -> SearchPage {
+    let entries = data["entries"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let mut hits = Vec::new();
+    let mut seen = HashSet::new();
+    for item in entries.iter().take(20) {
+        let id = item["id"].as_str().unwrap_or("");
+        let valid_id = id.len() == 11 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_');
+        if !valid_id || !seen.insert(id) { continue; }
+        hits.push(SearchHit {
+            title: item["title"].as_str().unwrap_or("").to_owned(),
+            channel: item["channel"].as_str().or_else(|| item["uploader"].as_str()).unwrap_or("").to_owned(),
+            duration: item["duration"].as_u64(),
+            thumbnail: format!("https://i.ytimg.com/vi/{id}/mqdefault.jpg"),
+            url: format!("https://www.youtube.com/watch?v={id}"),
+        });
+    }
+    SearchPage { hits, next_offset: if entries.len() > 20 { offset.checked_add(20) } else { None } }
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -2866,6 +2918,9 @@ fn open_support() -> Result<(), String> {
 struct TrayItems {
     open: tauri::menu::MenuItem<tauri::Wry>,
     quit: tauri::menu::MenuItem<tauri::Wry>,
+    previous: tauri::menu::MenuItem<tauri::Wry>,
+    play: tauri::menu::MenuItem<tauri::Wry>,
+    next: tauri::menu::MenuItem<tauri::Wry>,
 }
 
 #[tauri::command]
@@ -2919,7 +2974,7 @@ fn open_network_settings() -> Result<(), String> {
 }
 
 #[tauri::command]
-fn window_action(window: tauri::WebviewWindow, action: String) -> Result<(), String> {
+async fn window_action(window: tauri::WebviewWindow, action: String) -> Result<(), String> {
     let result = match action.as_str() {
         "minimize" => window.minimize(),
         "toggle_maximize" => {
@@ -2943,6 +2998,10 @@ fn window_action(window: tauri::WebviewWindow, action: String) -> Result<(), Str
 #[cfg(target_os = "linux")]
 fn configure_appimage() {
     let Some(root) = std::env::var_os("APPDIR").map(PathBuf::from).filter(|p| p.is_absolute()) else { return };
+    // Match the tested AppImage renderer; allow an explicit host override.
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
     let modules = [root.join("usr/lib/gio/modules"), root.join("usr/lib/x86_64-linux-gnu/gio/modules")]
         .into_iter().find(|p| p.is_dir()).unwrap_or_else(|| root.join("usr/lib/deviload-gio-modules"));
     std::env::set_var("GIO_MODULE_DIR", modules);
@@ -2986,6 +3045,7 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(CloseToTray::default())
+        .manage(music_controls::MusicControls::default())
         .manage(convert::Converter::default())
         .manage(power::AfterDownloads::default())
         .manage(PendingUpdate::default())
@@ -2994,6 +3054,7 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 window.set_decorations(false)?;
                 window.set_icon(tauri::image::Image::from_bytes(include_bytes!("../icons/128x128.png"))?)?;
+                music_controls::taskbar::install(&window);
             }
             // Started with Windows: stay in the tray until the user opens the window.
             if !std::env::args().any(|arg| arg == "--minimized") {
@@ -3001,8 +3062,12 @@ pub fn run() {
             }
             let open = tauri::menu::MenuItem::with_id(app, "tray-open", "Open Deviload", true, None::<&str>)?;
             let quit = tauri::menu::MenuItem::with_id(app, "tray-quit", "Quit Deviload", true, None::<&str>)?;
-            let menu = tauri::menu::Menu::with_items(app, &[&open, &quit])?;
-            app.manage(TrayItems { open: open.clone(), quit: quit.clone() });
+            let previous = tauri::menu::MenuItem::with_id(app, "music-previous", "Previous track", false, None::<&str>)?;
+            let play = tauri::menu::MenuItem::with_id(app, "music-play", "Play", false, None::<&str>)?;
+            let next = tauri::menu::MenuItem::with_id(app, "music-next", "Next track", false, None::<&str>)?;
+            let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
+            let menu = tauri::menu::Menu::with_items(app, &[&open, &previous, &play, &next, &separator, &quit])?;
+            app.manage(TrayItems { open: open.clone(), quit: quit.clone(), previous, play, next });
             tauri::tray::TrayIconBuilder::with_id("main")
                 .icon(tray_icon()?)
                 .icon_as_template(cfg!(target_os = "macos"))
@@ -3014,6 +3079,9 @@ pub fn run() {
                         restore_main(app);
                     }
                     "tray-quit" => app.exit(0),
+                    "music-previous" => music_controls::dispatch(app, "previous"),
+                    "music-play" => music_controls::dispatch(app, "play"),
+                    "music-next" => music_controls::dispatch(app, "next"),
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
@@ -3099,7 +3167,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![settings_backup::settings_backup_data, settings_backup::inspect_settings_backup, settings_backup::restore_settings_backup, settings_backup::export_settings_backup, set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_site_browser, open_releases, open_support, window_action, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, export_download_profiles, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, site_sign_in, site_sign_out, site_sessions, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, relink_media, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
+        .invoke_handler(tauri::generate_handler![settings_backup::settings_backup_data, settings_backup::inspect_settings_backup, settings_backup::restore_settings_backup, settings_backup::export_settings_backup, set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_site_browser, open_releases, open_support, window_action, apply_download_auth, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, export_download_profiles, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, site_sign_in, site_sign_out, site_sessions, music::music_catalog, music::music_stream, music_controls::set_music_controls, music_profile::export_music_profile, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, relink_media, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
         .build(tauri::generate_context!()).expect("failed to start Deviload")
         .run(|app, event| {
             #[cfg(target_os = "macos")]
@@ -3111,6 +3179,46 @@ pub fn run() {
 #[cfg(test)]
 mod engine_tests {
     use super::*;
+
+    #[test]
+    fn applying_cookies_persists_without_queuing_a_download_and_invalid_files_keep_previous_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = Engine { data: Arc::new(Mutex::new(Snapshot::default())), dir: dir.path().into(), shutdown: Arc::new(AtomicBool::new(false)) };
+        let file = dir.path().join("session.txt");
+        fs::write(&file, "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tSID\ttest\n").unwrap();
+        assert_eq!(save_download_auth(&engine, "file", file.to_str().unwrap()).unwrap(), Some(1));
+        let saved: Snapshot = serde_json::from_slice(&fs::read(dir.path().join("queue.json")).unwrap()).unwrap();
+        assert_eq!(saved.options.cookies, file.to_str().unwrap());
+        assert!(!saved.options.cookies_account);
+        assert!(saved.jobs.is_empty());
+        assert!(save_download_auth(&engine, "file", dir.path().join("missing").to_str().unwrap()).is_err());
+        assert_eq!(engine.data.lock().unwrap().options.cookies, saved.options.cookies);
+        save_download_auth(&engine, "firefox", "").unwrap();
+        let saved: Snapshot = serde_json::from_slice(&fs::read(dir.path().join("queue.json")).unwrap()).unwrap();
+        assert_eq!(saved.options.cookies_browser, "firefox");
+        assert!(saved.options.cookies.is_empty());
+    }
+
+    #[test]
+    fn search_pages_keep_the_lookahead_and_skip_non_video_entries() {
+        let entries: Vec<_> = (0..21).map(|id| serde_json::json!({"id":format!("{id:011}"),"title":format!("Video {id}")})).collect();
+        let page = search_page(&serde_json::json!({"entries": entries}), 20);
+        assert_eq!(page.hits.len(), 20);
+        assert_eq!(page.next_offset, Some(40));
+        assert!(page.hits[19].url.ends_with("00000000019"));
+        let last = search_page(&serde_json::json!({"entries":[{"id":"playlist"}, {"id":"00000000020"}, {"id":"00000000020"}]}), 40);
+        assert_eq!(last.hits.len(), 1);
+        assert_eq!(last.next_offset, None);
+        assert!(search_page(&serde_json::json!({}), 0).hits.is_empty());
+    }
+
+    #[test]
+    fn music_search_uses_the_paginated_songs_section() {
+        let address = url::Url::parse(&search_term("Bach & cello #1", "music", 41)).unwrap();
+        assert_eq!(address.fragment(), Some("songs"));
+        assert_eq!(address.query_pairs().collect::<Vec<_>>(), [("q".into(), "Bach & cello #1".into())]);
+        assert_eq!(search_term("Bach & cello #1", "youtube", 41), "ytsearch41:Bach & cello #1");
+    }
     #[test]
     fn legacy_import_moves_history_settings_and_archive() {
         let legacy = tempfile::tempdir().unwrap();
@@ -3547,6 +3655,19 @@ mod engine_tests {
             status: "running".into(), percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
         let engine = Engine { dir: dir.path().into(), data: Arc::new(Mutex::new(Snapshot { jobs: vec![job.clone()], ..Snapshot::default() })), shutdown: Arc::new(AtomicBool::new(false)) };
         engine.run_job(1);
+        let mut music_job = job.clone();
+        music_job.id = 80;
+        music_job.options.quality = "mp3".into();
+        music_job.options.profile = "music".into();
+        engine.data.lock().unwrap().jobs.push(music_job);
+        engine.run_job(80);
+        {
+            let data = engine.data.lock().unwrap();
+            let result = data.jobs.iter().find(|j| j.id == 80).unwrap();
+            assert_eq!(result.status, "done", "{:?}", result.log);
+            assert!(result.file.ends_with(".mp3"));
+            assert!(Path::new(&result.file).is_file());
+        }
         let mut mobile_job = job.clone();
         mobile_job.id = 2;
         mobile_job.options = Options { folder: dir.path().join("downloads").to_string_lossy().into(),
@@ -3593,13 +3714,13 @@ mod engine_tests {
         assert!(result.file.ends_with(".wav"), "{:?}", result);
         assert!(Path::new(&result.file).is_file());
         assert!(fs::metadata(&result.file).unwrap().len() > 1000);
-        let mobile = &data.jobs[1];
+        let mobile = data.jobs.iter().find(|job| job.id == 2).unwrap();
         assert_eq!(mobile.status, "done", "{:?}", mobile.log);
         assert!(mobile.file.ends_with(".mp4"), "{:?}", mobile);
-        let clip = &data.jobs[2];
+        let clip = data.jobs.iter().find(|job| job.id == 3).unwrap();
         assert_eq!(clip.status, "done", "{:?}", clip.log);
         assert!(Path::new(&clip.file).is_file());
-        let gif = &data.jobs[3];
+        let gif = data.jobs.iter().find(|job| job.id == 4).unwrap();
         assert_eq!(gif.status, "done", "{:?}", gif.log);
         assert!(gif.file.ends_with(".gif"), "{:?}", gif);
         assert!(Path::new(&gif.file).is_file());

@@ -8,6 +8,18 @@ use std::{
 // Files avoid pipe deadlocks and inherited handles held by updater children.
 // The deadline covers the whole process, including executable replacement.
 pub fn output(command: &mut Command, timeout: Duration) -> Result<Output, String> {
+    run(command, timeout, 65536, true, &|| false)
+}
+
+pub fn json_output(command: &mut Command, timeout: Duration) -> Result<Output, String> {
+    json_output_cancellable(command, timeout, &|| false)
+}
+
+pub fn json_output_cancellable(command: &mut Command, timeout: Duration, cancelled: &dyn Fn() -> bool) -> Result<Output, String> {
+    run(command, timeout, 8 * 1024 * 1024, false, cancelled)
+}
+
+fn run(command: &mut Command, timeout: Duration, stdout_limit: u64, tail: bool, cancelled: &dyn Fn() -> bool) -> Result<Output, String> {
     let mut stdout = tempfile::tempfile().map_err(|e| e.to_string())?;
     let mut stderr = tempfile::tempfile().map_err(|e| e.to_string())?;
     command.stdin(Stdio::null())
@@ -20,6 +32,12 @@ pub fn output(command: &mut Command, timeout: Duration) -> Result<Output, String
     let mut child = command.spawn().map_err(|e| e.to_string())?;
     let started = Instant::now();
     let status = loop {
+        if cancelled() {
+            crate::kill_tree(child.id());
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("Could not open this track".into());
+        }
         match child.try_wait() {
             Ok(Some(status)) => break status,
             Ok(None) if started.elapsed() < timeout => thread::sleep(Duration::from_millis(50)),
@@ -32,20 +50,29 @@ pub fn output(command: &mut Command, timeout: Duration) -> Result<Output, String
             }
         }
     };
-    let read = |file: &mut std::fs::File| -> Result<Vec<u8>, String> {
+    let read = |file: &mut std::fs::File, limit: u64, tail: bool| -> Result<Vec<u8>, String> {
         // Keep the final diagnostic without allocating for unbounded output.
         let length = file.metadata().map_err(|e| e.to_string())?.len();
-        file.seek(SeekFrom::Start(length.saturating_sub(65536))).map_err(|e| e.to_string())?;
+        if !tail && length > limit { return Err("Search results are too large. Try a more specific query.".into()); }
+        file.seek(SeekFrom::Start(length.saturating_sub(limit))).map_err(|e| e.to_string())?;
         let mut bytes = Vec::new();
-        file.take(65536).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+        file.take(limit).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
         Ok(bytes)
     };
-    Ok(Output { status, stdout: read(&mut stdout)?, stderr: read(&mut stderr)? })
+    Ok(Output { status, stdout: read(&mut stdout, stdout_limit, tail)?, stderr: read(&mut stderr, 65536, true)? })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn background_extraction_can_be_cancelled_before_its_timeout() {
+        let began = Instant::now();
+        let result = json_output_cancellable(&mut fixture("hang"), Duration::from_secs(30), &|| began.elapsed() > Duration::from_millis(100));
+        assert!(result.is_err());
+        assert!(began.elapsed() < Duration::from_secs(5));
+    }
 
     fn fixture(mode: &str) -> Command {
         let mut command = crate::command(&std::env::current_exe().unwrap());
@@ -83,5 +110,12 @@ mod tests {
         assert!(noisy.status.success());
         assert_eq!(noisy.stdout.len(), 65536);
         assert_eq!(noisy.stderr.len(), 65536);
+    }
+
+    #[test]
+    fn structured_output_keeps_large_results_and_rejects_truncation() {
+        let result = json_output(&mut fixture("noisy"), Duration::from_secs(10)).unwrap();
+        assert!(result.stdout.len() > 200000);
+        assert!(run(&mut fixture("noisy"), Duration::from_secs(10), 1024, false, &|| false).unwrap_err().contains("too large"));
     }
 }

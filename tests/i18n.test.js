@@ -11,7 +11,7 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const read = path => readFileSync(join(root, path), "utf8");
 const keys = new Set(Object.keys(ru));
 // Brand names, formats and codes read the same in both languages.
-const neutral = new Set(["Deviload", "Devil", "oad", "Devil Cut", "Devil Cut · Deviload", "DEVIL CINEMA", "YouTube", "YouTube Music", "VK", "TikTok",
+const neutral = new Set(["Deviload", "Devil Music", "01 / DM", "Devil", "oad", "Devil Cut", "Devil Cut · Deviload", "DEVIL CINEMA", "YouTube", "YouTube Music", "VK", "TikTok",
   "Instagram", "Twitch", "SoundCloud", "1080p", "720p", "480p", "1440p", "4K", "H.264", "H.265", "MP3", "FLAC", "WAV", "GIF", "GIF · 480px", "Chrome", "Edge",
   "Firefox", "Brave", "Safari", "yt-dlp", "RU", "EN", "I", "O", "MP4", "MKV", "WebM", "16:9", "9:16", "1:1", "4:5", "00:30", "01:15", "https://youtube.com/watch?v=…", "socks5://127.0.0.1:1080", "Plex", "http://192.168.1.10:8096"]);
 
@@ -50,17 +50,18 @@ function htmlStrings() {
   for (const [, , value] of html.matchAll(/\s(placeholder|aria-label|title|alt|label|data-empty-label)="([^"]*)"/g)) {
     if (value.trim()) strings.add(value.trim());
   }
-  for(const file of ['src/download-profiles.js','src/download-profile-data.js','src/settings-backup.js','src/cut-editing.js'])for(const [,message] of read(file).matchAll(/Error\('([^']+)'/g))strings.add(message);
+  for(const file of ['src/download-profiles.js','src/download-profile-data.js','src/settings-backup.js','src/cut-editing.js','src/music-profile.js'])for(const [,message] of read(file).matchAll(/Error\('([^']+)'/g))strings.add(message);
   return strings;
 }
 
-const RUST_MESSAGE = /(?:Err\(|ok_or\(|ok_or_else\(\|\| |push\(|map_err\(\|\w+\| |warning = |warning: )(?:format!\()?"((?:[^"\\]|\\.)*)"/g;
+const RUST_MESSAGE = /(?:Err\(|ok_or\(|ok_or_else\(\|\| |push\(|map_err\(\|\w+\| |warning = |warning: |const CATALOG_ERROR: &str = )(?:format!\()?"((?:[^"\\]|\\.)*)"/g;
 const normalize = text => text.replace(/\{[^}]*\}/g, "{}");
 
 function rustMessages() {
   const found = [];
-  for (const file of ["lib.rs", "engine_update.rs", "model.rs", "share.rs", "settings_backup.rs", "watch.rs", "convert.rs", "power.rs", "media_server.rs"]) {
+  for (const file of ["lib.rs", "music.rs", "music_audio.rs", "music_profile.rs", "cookies.rs", "engine_update.rs", "model.rs", "share.rs", "settings_backup.rs", "watch.rs", "convert.rs", "power.rs", "media_server.rs"]) {
     const source = read(join("src-tauri/src", file)).split("#[cfg(test)]")[0];
+    if(file === "music.rs")for(const text of literals(block(source,"fn stream_error", "pub fn stream(")))if(text.endsWith("."))found.push({file,text});
     for (const [, text] of source.matchAll(RUST_MESSAGE)) {
       if (/^(?:[A-Z{]|yt-dlp )/.test(text)) found.push({file, text});
     }
@@ -107,7 +108,7 @@ test("static HTML text has a Russian translation", () => {
 });
 
 test("strings passed to t() have a Russian translation", () => {
-  for (const file of ["src/main.js", "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js", "src/download-profiles.js", "src/queue-selection.js", "src/settings-backup.js"]) {
+  for (const file of ["src/main.js", "src/devil-music.js", "src/music-presentation.js", "src/music-profile-ui.js", "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js", "src/download-profiles.js", "src/queue-selection.js", "src/settings-backup.js"]) {
     assert.deepEqual(missing(translatedLiterals(read(file))), [], file);
   }
 });
@@ -124,7 +125,7 @@ test("messages from the Rust core have a Russian translation", () => {
 
 test("the Russian locale has no unused strings", () => {
   const used = new Set([...htmlStrings(), ...tableStrings(), "Deviload — Downloads"]);
-  for (const file of ["src/main.js", "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js", "src/download-profiles.js", "src/queue-selection.js", "src/settings-backup.js"]) for (const text of translatedLiterals(read(file), true)) used.add(text);
+  for (const file of ["src/main.js", "src/devil-music.js", "src/music-presentation.js", "src/music-profile-ui.js", "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js", "src/download-profiles.js", "src/queue-selection.js", "src/settings-backup.js"]) for (const text of translatedLiterals(read(file), true)) used.add(text);
   const rust = new Set(rustMessages().map(({text}) => normalize(text)));
   const unused = [...keys].filter(key => !used.has(key) && !rust.has(normalize(key)));
   assert.deepEqual(unused, []);
