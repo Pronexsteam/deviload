@@ -5,7 +5,7 @@ export function wireMusicProfile({invoke,read,restore}){
   const root=document.getElementById("music-profile"),file=root.querySelector("input"),summary=root.querySelector("[data-summary]"),preview=root.querySelector("[data-preview]"),status=root.querySelector("[role=status]");
   const exporting=root.querySelector("[data-export]"),importing=root.querySelector("[data-import]"),apply=root.querySelector("[data-restore]"),cancel=root.querySelector("[data-cancel]");
   let candidate=null,busy=false;
-  function describe(){if(candidate)summary.textContent=t("Likes: {likes}. History: {history}. Learned tracks: {tracks}.",{likes:candidate.saved.favorites.length,history:candidate.saved.recent.length,tracks:Object.keys(candidate.taste.entries).length});}
+  function describe(){if(candidate)summary.textContent=t("Likes: {likes}. History: {history}. Learned tracks: {tracks}. Playlists: {playlists}.",{likes:candidate.saved.favorites.length,history:candidate.saved.recent.length,tracks:Object.keys(candidate.taste.entries).length,playlists:candidate.saved.playlists.length});}
   onLanguageChange(describe);
   async function run(action){
     if(busy)return;busy=true;[exporting,importing,apply,cancel].forEach(button=>button.disabled=true);status.textContent="";

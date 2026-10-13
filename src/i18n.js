@@ -102,6 +102,21 @@ export function translateDom(root = document.body) {
       element.setAttribute(name, t(sources[name]));
     }
   }
+  // Dynamically created labels may start in a translated language. Keep their
+  // English source explicit rather than guessing it from translated text.
+  // Put data-i18n on a text-only element (a span inside an icon button).
+  const explicitSelector = ["[data-i18n]", ...ATTRIBUTES.map(name => `[data-i18n-${name}]`)].join(",");
+  const explicit = [...root.querySelectorAll(explicitSelector)];
+  if (root.matches?.(explicitSelector)) explicit.unshift(root);
+  for (const element of explicit) {
+    if (element.closest('[translate="no"]')) continue;
+    const source = element.getAttribute("data-i18n");
+    if (source && isKey(source)) element.textContent = t(source);
+    for (const name of ATTRIBUTES) {
+      const key = element.getAttribute(`data-i18n-${name}`);
+      if (key && isKey(key)) element.setAttribute(name, t(key));
+    }
+  }
 }
 
 export function setLanguage(next) {

@@ -13,8 +13,11 @@ export function pop(element, distance = 7) {
 export function reactToPress(element, event) {
   if (!motionAllowed() || !element || element.disabled) return;
   element.pressAnimation?.cancel();
+  // Keep layout transforms (for example, a shelf arrow's vertical centering).
+  const base = window.getComputedStyle(element).transform;
+  const transform = base === "none" ? "" : base + " ";
   element.pressAnimation=element.animate([
-    { transform: "translateY(0)" }, { transform: "translateY(1px)" }, { transform: "translateY(0)" }
+    { transform: transform + "translateY(0)" }, { transform: transform + "translateY(1px)" }, { transform: transform + "translateY(0)" }
   ], { duration: 160, easing: "ease-out" });
 }
 

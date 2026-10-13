@@ -3,6 +3,11 @@ use reqwest::{blocking::Client, header::{HeaderMap, HeaderValue, USER_AGENT}};
 use std::{collections::HashMap, io::{Read, Write}, net::{TcpListener, TcpStream}, sync::{Arc, Mutex, OnceLock, atomic::{AtomicBool, AtomicUsize, Ordering}}, thread, time::{Duration, Instant}};
 
 const CHUNK: u64 = 512 * 1024;
+// Verify a small opening buffer; keep later transfers large for efficiency.
+const FIRST_CHUNK: u64 = 64 * 1024;
+fn chunk_offset(position: u64) -> u64 {
+    if position < FIRST_CHUNK { 0 } else { FIRST_CHUNK + (position-FIRST_CHUNK)/CHUNK*CHUNK }
+}
 const MAX_STREAMS: usize = 12;
 const STREAM_LIFETIME: Duration = Duration::from_secs(3600);
 
@@ -36,6 +41,7 @@ pub struct Source {
     fetch_lock: Mutex<()>,
     failed: Mutex<Option<SourceError>>,
     limit: Arc<PlaybackLimit>,
+    available_at: Option<Instant>,
 }
 
 pub fn trusted_url(url: &url::Url) -> bool {
@@ -55,10 +61,27 @@ impl Source {
         let client = builder.build().map_err(|_| "Could not open this track")?;
         let mut headers = HeaderMap::new();
         headers.insert(USER_AGENT, HeaderValue::from_str(agent).map_err(|_| "Could not open this track")?);
-        Ok(Self { url, size, mime, client, headers, chunks: Mutex::new(Vec::new()), fetch_lock: Mutex::new(()), failed: Mutex::new(None), limit })
+        Ok(Self { url, size, mime, client, headers, chunks: Mutex::new(Vec::new()), fetch_lock: Mutex::new(()), failed: Mutex::new(None), limit, available_at: None })
+    }
+
+    pub fn with_availability(mut self, timestamp: Option<u64>) -> Self {
+        if let (Some(timestamp), Ok(now)) = (timestamp, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)) {
+            let remaining=Duration::from_secs(timestamp).saturating_sub(now);
+            if !remaining.is_zero() && remaining<=Duration::from_secs(60) { self.available_at=Some(Instant::now()+remaining); }
+        }
+        self
     }
 
     pub fn failed(&self) -> bool { self.failed.lock().unwrap().is_some() }
+
+    pub fn reusable(&self, age: Duration) -> bool {
+        if self.failed() || age>=Duration::from_secs(3600) { return false; }
+        let expiry=self.url.query_pairs().find(|(key,_)|key=="expire").and_then(|(_,value)|value.parse::<u64>().ok());
+        match expiry {
+            Some(expiry)=>std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).is_ok_and(|now|now.as_secs().saturating_add(60)<expiry),
+            None=>age<Duration::from_secs(300),
+        }
+    }
 
     // Some media servers accept the URL byte range while rejecting an HTTP Range
     // header. Translate here so every WebView gets ordinary seekable HTTP audio.
@@ -67,6 +90,11 @@ impl Source {
     }
 
     fn fetch_chunk_until(&self, start: u64, deadline: Instant) -> Result<Vec<u8>, SourceError> {
+        self.fetch_chunk_cancellable(start, deadline, &|| false)
+    }
+
+    fn fetch_chunk_cancellable(&self, start: u64, deadline: Instant, cancelled: &dyn Fn() -> bool) -> Result<Vec<u8>, SourceError> {
+        if cancelled() { return Err(SourceError::Network); }
         if let Some((_, bytes)) = self.chunks.lock().unwrap().iter().find(|(offset, _)| *offset == start) { return Ok(bytes.clone()); }
         if start >= self.size { return Err(SourceError::Invalid); }
         if Instant::now() >= deadline { return Err(SourceError::Network); }
@@ -74,16 +102,18 @@ impl Source {
         // Share the transfer instead of fetching the same bytes concurrently.
         let _transfer = loop {
             if let Ok(lock) = self.fetch_lock.try_lock() { break lock; }
-            if Instant::now() >= deadline { return Err(SourceError::Network); }
+            if cancelled() || Instant::now() >= deadline { return Err(SourceError::Network); }
             thread::sleep(Duration::from_millis(10));
         };
         if let Some((_, bytes)) = self.chunks.lock().unwrap().iter().find(|(offset, _)| *offset == start) { return Ok(bytes.clone()); }
         if let Some(error) = *self.failed.lock().unwrap() { return Err(error); }
         if self.limit.active() { return Err(SourceError::Limited); }
-        let end = (start + CHUNK - 1).min(self.size - 1);
+        let length=if start==0 { FIRST_CHUNK } else { CHUNK };
+        let end = (start + length - 1).min(self.size - 1);
         let url = ranged_url(&self.url, start, end);
         let mut last = SourceError::Network;
         for attempt in 0..2 {
+            if cancelled() { return Err(SourceError::Network); }
             let remaining = deadline.saturating_duration_since(Instant::now());
             if remaining.is_zero() { break; }
             let fetched = (|| {
@@ -119,9 +149,15 @@ impl Source {
                     // another URL. A 429 never retries and also stops other sources.
                     if error == SourceError::Limited || error == SourceError::Invalid { break; }
                     if attempt == 0 {
-                        let delay = if error == SourceError::Denied { Duration::from_secs(3) } else { Duration::from_millis(100) };
+                        let delay = if error == SourceError::Denied {
+                            self.available_at.map(|at|at.saturating_duration_since(Instant::now())+Duration::from_millis(150)).unwrap_or(Duration::from_secs(3))
+                        } else { Duration::from_millis(100) };
                         if deadline.saturating_duration_since(Instant::now()) <= delay { break; }
-                        thread::sleep(delay);
+                        let retry_at = Instant::now() + delay;
+                        while Instant::now() < retry_at {
+                            if cancelled() { return Err(SourceError::Network); }
+                            thread::sleep(retry_at.saturating_duration_since(Instant::now()).min(Duration::from_millis(25)));
+                        }
                     }
                 }
             }
@@ -130,7 +166,9 @@ impl Source {
         Err(last)
     }
 
-    pub fn verify(&self, deadline: Instant) -> Result<(), SourceError> { self.fetch_chunk_until(0, deadline).map(|_| ()) }
+    pub fn verify_cancellable(&self, deadline: Instant, cancelled: &dyn Fn() -> bool) -> Result<(), SourceError> {
+        self.fetch_chunk_cancellable(0, deadline, cancelled).map(|_| ())
+    }
 }
 
 fn ranged_url(source: &url::Url, start: u64, end: u64) -> url::Url {
@@ -253,11 +291,11 @@ fn serve(mut stream: TcpStream, registry: &Mutex<HashMap<String,Entry>>, port: u
     let Ok((start,end)) = range(requested, source.size) else {
         return write!(stream,"HTTP/1.1 416 Range Not Satisfiable\r\nContent-Range: bytes */{}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",source.size);
     };
-    let mut offset = start / CHUNK * CHUNK;
+    let mut offset = chunk_offset(start);
     let mut chunk = if method == "HEAD" { Vec::new() } else {
         match source.fetch_chunk(offset) { Ok(chunk) => chunk, Err(_) => return error(&mut stream,"502 Bad Gateway") }
     };
-    write!(stream,"HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\nCache-Control: no-store\r\nConnection: close\r\n",if requested.is_some() { "206 Partial Content" } else { "200 OK" },source.mime,end-start+1)?;
+    write!(stream,"HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nAccept-Ranges: bytes\r\nCache-Control: no-store\r\nConnection: close\r\n",if requested.is_some() { "206 Partial Content" } else { "200 OK" },source.mime,end-start+1)?;
     if requested.is_some() { write!(stream,"Content-Range: bytes {start}-{end}/{}\r\n",source.size)?; }
     stream.write_all(b"\r\n")?;
     if method == "HEAD" { return Ok(()); }
@@ -265,7 +303,7 @@ fn serve(mut stream: TcpStream, registry: &Mutex<HashMap<String,Entry>>, port: u
         let from = start.saturating_sub(offset) as usize;
         let to = (end - offset + 1).min(chunk.len() as u64) as usize;
         stream.write_all(&chunk[from..to])?;
-        offset += CHUNK;
+        offset += chunk.len() as u64;
         if offset > end { break; }
         chunk = source.fetch_chunk(offset).map_err(std::io::Error::other)?;
     }
@@ -298,7 +336,7 @@ mod tests {
             }
         });
         // Tests inject loopback directly; production Source::new still rejects it.
-        (Source {url,size:100,mime:"audio/mp4",client:Client::builder().no_proxy().build().unwrap(),headers:HeaderMap::new(),chunks:Mutex::new(vec![]),fetch_lock:Mutex::new(()),failed:Mutex::new(None),limit:Arc::default()},count,thread)
+        (Source {url,size:100,mime:"audio/mp4",client:Client::builder().no_proxy().build().unwrap(),headers:HeaderMap::new(),chunks:Mutex::new(vec![]),fetch_lock:Mutex::new(()),failed:Mutex::new(None),limit:Arc::default(),available_at:None},count,thread)
     }
 
     #[test]
@@ -309,6 +347,19 @@ mod tests {
             assert_eq!(source.fetch_chunk(0).unwrap(),vec![42;100]);
             worker.join().unwrap();assert_eq!(count.load(Ordering::Relaxed),2);
         }
+    }
+
+    #[test]
+    fn cached_links_follow_signed_expiry_with_a_safety_margin_and_hard_lifetime() {
+        let (mut source,_,worker)=fixture(vec![],false);worker.join().unwrap();
+        assert!(source.reusable(Duration::from_secs(299)));
+        assert!(!source.reusable(Duration::from_secs(301)));
+        let now=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        source.url.set_query(Some(&format!("expire={}",now+7200)));
+        assert!(source.reusable(Duration::from_secs(1800)));
+        assert!(!source.reusable(Duration::from_secs(3600)));
+        source.url.set_query(Some(&format!("expire={}",now+30)));
+        assert!(!source.reusable(Duration::from_secs(1)));
     }
 
     #[test]
@@ -339,6 +390,28 @@ mod tests {
         assert_eq!(source.fetch_chunk(0).unwrap(),vec![42;100]);
         assert!(started.elapsed() >= Duration::from_secs(3));
         assert!(!source.failed());worker.join().unwrap();assert_eq!(count.load(Ordering::Relaxed),2);
+    }
+    #[test]
+    fn known_audio_availability_avoids_the_fixed_three_second_retry() {
+        let (mut source,count,worker)=fixture(vec![403,200],false);
+        source.available_at=Some(Instant::now()+Duration::from_millis(100));
+        let began=Instant::now();assert_eq!(source.fetch_chunk(0).unwrap(),vec![42;100]);
+        assert!(began.elapsed()<Duration::from_secs(2));worker.join().unwrap();assert_eq!(count.load(Ordering::Relaxed),2);
+        let (mut source,count,worker)=fixture(vec![200],false);
+        source.available_at=Some(Instant::now()+Duration::from_secs(30));
+        let began=Instant::now();assert!(source.fetch_chunk(0).is_ok());assert!(began.elapsed()<Duration::from_secs(2));
+        worker.join().unwrap();assert_eq!(count.load(Ordering::Relaxed),1);
+    }
+
+    #[test]
+    fn changing_selection_cancels_the_denied_source_wait_without_retrying() {
+        let (source,count,worker)=fixture(vec![403],false);
+        let started=Instant::now();
+        let result=source.verify_cancellable(Instant::now()+Duration::from_secs(10),&||started.elapsed()>Duration::from_millis(150));
+        assert_eq!(result,Err(SourceError::Network));
+        assert!(started.elapsed()<Duration::from_secs(1));
+        worker.join().unwrap();assert_eq!(count.load(Ordering::Relaxed),1);
+        assert!(!source.failed());
     }
 
     #[test]
@@ -408,7 +481,7 @@ mod tests {
     #[test]
     fn relay_serves_seek_ranges_and_head_without_an_upstream_request() {
         let _ = rustls::crypto::ring::default_provider().install_default();
-        let source=Arc::new(Source {url:url::Url::parse("https://rr1.googlevideo.com/a").unwrap(),size:100,mime:"audio/mp4",client:Client::new(),headers:HeaderMap::new(),chunks:Mutex::new(vec![(0,(0..100).collect())]),fetch_lock:Mutex::new(()),failed:Mutex::new(None),limit:Arc::default()});
+        let source=Arc::new(Source {url:url::Url::parse("https://rr1.googlevideo.com/a").unwrap(),size:100,mime:"audio/mp4",client:Client::new(),headers:HeaderMap::new(),chunks:Mutex::new(vec![(0,(0..100).collect())]),fetch_lock:Mutex::new(()),failed:Mutex::new(None),limit:Arc::default(),available_at:None});
         let relay=Relay::start().unwrap();let address=relay.insert(source);
         let client=Client::builder().no_proxy().build().unwrap();
         let response=client.get(&address).header("Range","bytes=20-29").send().unwrap();
@@ -418,5 +491,23 @@ mod tests {
         assert_eq!(client.get(format!("http://127.0.0.1:{}/bad-token",relay.port)).send().unwrap().status(),404);
         assert_eq!(client.get(&address).header("Host","evil.test").send().unwrap().status(),403);
         assert_eq!(client.get(&address).header("Range","bytes=100-").send().unwrap().status(),416);
+    }
+
+    #[test]
+    fn relay_seeks_across_small_initial_buffer_and_larger_following_chunks() {
+        let (mut source,_,worker)=fixture(vec![],false);worker.join().unwrap();
+        source.size=FIRST_CHUNK+CHUNK+13;
+        let expected:Vec<u8>=(0..source.size).map(|n|(n%251)as u8).collect();
+        for start in [0,FIRST_CHUNK,FIRST_CHUNK+CHUNK] {
+            let end=(start+if start==0 {FIRST_CHUNK}else{CHUNK}).min(source.size);
+            source.chunks.lock().unwrap().push((start,expected[start as usize..end as usize].to_vec()));
+        }
+        let relay=Relay::start().unwrap();let address=relay.insert(Arc::new(source));
+        let client=Client::builder().no_proxy().build().unwrap();
+        for (start,end) in [(FIRST_CHUNK-8,FIRST_CHUNK+8),(FIRST_CHUNK+CHUNK-8,FIRST_CHUNK+CHUNK+12),(0,FIRST_CHUNK+CHUNK+12)] {
+            let response=client.get(&address).header("Range",format!("bytes={start}-{end}")).send().unwrap();
+            assert_eq!(response.status(),206);
+            assert_eq!(response.bytes().unwrap().as_ref(),&expected[start as usize..=end as usize]);
+        }
     }
 }

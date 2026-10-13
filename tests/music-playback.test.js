@@ -4,6 +4,7 @@ import {readFileSync} from "node:fs";
 import {runInNewContext} from "node:vm";
 import {tracks,remember,nextIndex} from "../src/music-state.js";
 import {readTaste,recommend,tasteSeeds} from "../src/music-taste.js";
+import {createPlaybackOrder} from "../src/music-session.js";
 
 const source=readFileSync(new URL("../src/devil-music.js",import.meta.url),"utf8");
 const code=source.slice(source.indexOf("  function plannedNext()"),source.indexOf("  function selectView("));
@@ -20,23 +21,64 @@ function player(invoke,items=[song(1)]){
     removeAttribute(){this.src="";},load(){this.currentTime=0;this.ended=false;}};
   Object.defineProperty(audio,"src",{get(){return this.address||"";},set(value){this.address=value;if(value)queueMicrotask(()=>events.loadedmetadata?.());}});
   const ctx={audio,queue:items,index:-1,current:null,resolvedTrack:null,autoplay:true,radioPending:false,streamLoading:false,playRequest:0,
+    needsRefresh:false,privateSession:false,resumeSnapshot:null,discordPresence:{sync(){}},
+    listen:audio.addEventListener,decks:{take:()=>null,stopTail(){},warm(){},ready:()=>false,owns:node=>node===audio},sound:{resume(){},transition:0},lyrics:{update(){}},window:{},
     nextPlan:null,preloadPending:false,preloadAttempts:new Set(),radioAhead:null,time:String,
-    resolution:Promise.resolve(),radioCache:new Map(),repeat:false,shuffle:false,session:0,checkpoint:0,historyAdded:false,recoveryUsed:false,pendingSeek:0,retryPosition:0,bufferingTimer:null,
+    order:createPlaybackOrder(),knownDuration:0,sessionTransition:false,sessionSavedAt:Date.now(),intent:{leave(){}},radioCache:new Map(),repeat:"off",shuffle:false,session:0,checkpoint:0,historyAdded:false,recoveryUsed:false,pendingSeek:0,retryPosition:0,bufferingTimer:null,
     saved:{favorites:[],recent:[]},taste:readTaste(),clock:{seconds:0,reset(){this.seconds=0;},sample() {return this.seconds;}},
     title:field(),artist:field(),artwork:field(),seek:field(),elapsed:field(),duration:field(),previous:{click(){}},
-    invoke,tracks,remember,nextIndex,recommend,tasteSeeds,cover:()=>null,language:()=>"en",t:s=>s,errorText:String,
-    captureListening(){},persist(){},syncDock(){},renderQueue(){},status(message){ctx.message=message;},
+    invoke:(command,args)=>{if(command==="music_cancel_stream"){ctx.cancellations=(ctx.cancellations||0)+1;return Promise.resolve();}return invoke(command,args);},tracks,remember,nextIndex,recommend,tasteSeeds,cover:()=>null,displaySubtitle:item=>item?.artists?.join(", ")||"Unknown artist",language:()=>"en",t:s=>s,errorText:String,
+    captureListening(){},persist(){},persistSession(){},syncDock(){},renderQueue(){},status(message){ctx.message=message;},
     document:{querySelectorAll:()=>[],addEventListener(){}},navigator:{},performance,DOMException,
     setTimeout(fn){const id=++serial;timers.set(id,fn);return id;},clearTimeout(id){timers.delete(id);}};
-  const actions=runInNewContext(`(()=>{${code}\nreturn {playAt,playItems,togglePlay,advance};})()`,ctx);
+  ctx.playbackSource=(id,refresh)=>ctx.invoke("music_stream",{id,refresh});
+  const actions=runInNewContext(`(()=>{${code}\nreturn {playAt,playItems,togglePlay,resumeListening,advance};})()`,ctx);
   return {ctx,...actions,emit:name=>events[name]?.(),expire(){const pending=[...timers.values()];timers.clear();pending.forEach(fn=>fn());}};
 }
+test("source restrictions explain the failure without starting audio or scheduling retries",async()=>{
+  let calls=0;const failure="Playback restricted: YouTube requires sign-in or verification. Try another track.";
+  const p=player(async()=>{calls++;throw failure;});
+  await p.playAt(0);p.expire();await settle();
+  assert.equal(calls,1);assert.equal(p.ctx.audio.paused,true);assert.equal(p.ctx.streamLoading,false);
+  assert.equal(p.ctx.artist.textContent,"Unavailable from source. Try another track.");assert.equal(p.ctx.message,failure);
+});
+
 test("rapid track changes discard stale resolutions and never start the canceled selection",async()=>{
   const first=deferred(),calls=[];
   const p=player(async(_,args)=>{calls.push(args.id);return calls.length===1?first.promise:{url:args.id};},[song(1),song(2),song(3)]);
   const a=p.playAt(0);await settle();const b=p.playAt(1),c=p.playAt(2);
+  await c;assert.equal(p.ctx.audio.src,song(3).id); // The old extraction is still unresolved.
   first.resolve({url:"old"});await Promise.all([a,b,c]);
   assert.deepEqual(calls,[song(1).id,song(3).id]);assert.equal(p.ctx.audio.src,song(3).id);assert.equal(p.ctx.streamLoading,false);
+});
+
+test("continue listening resumes the card's song after another song replaces the queue",async()=>{
+  const p=player(async(_,args)=>({url:args.id}),[song(1),song(2)]);
+  await p.playAt(0);p.ctx.audio.currentTime=42;
+  const snapshot=p.ctx.resumeSnapshot={item:song(1),queue:[song(1),song(2)],position:0};
+  p.playItems([song(3)],song(3).id);await settle();
+  assert.equal(snapshot.position,42);assert.equal(p.ctx.current.id,song(3).id);
+  await p.resumeListening(snapshot);
+  assert.equal(p.ctx.current.id,song(1).id);assert.equal(p.ctx.audio.currentTime,42);
+  assert.equal(p.ctx.audio.paused,false);assert.deepEqual(Array.from(p.ctx.queue,item=>item.id),[song(1).id,song(2).id]);
+});
+
+test("continue listening never pauses an already playing song or cancels its loading",async()=>{
+  const p=player(async(_,args)=>({url:args.id}));await p.playAt(0);
+  const snapshot={item:song(1),queue:[song(1)],position:0};
+  await p.resumeListening(snapshot);assert.equal(p.ctx.audio.paused,false);
+  p.ctx.audio.currentTime=27;p.ctx.audio.pause();await p.resumeListening(snapshot);
+  assert.equal(p.ctx.audio.currentTime,27);assert.equal(p.ctx.audio.paused,false);
+  p.ctx.streamLoading=true;await p.resumeListening(snapshot);assert.equal(p.ctx.streamLoading,true);
+});
+
+test("a prepared decoder activates its backend continuation without reloading its source",async()=>{
+  let calls=0;const p=player(async()=>{calls++;return {url:"already-buffered"};});
+  p.ctx.audio.address="already-buffered";p.ctx.decks.take=()=>p.ctx.audio;
+  p.ctx.audio.load=()=>{throw Error("prepared audio must not reload");};
+  await p.playAt(0,{resume:42});
+  assert.equal(calls,1);assert.equal(p.ctx.audio.src,"already-buffered");
+  assert.equal(p.ctx.audio.currentTime,42);assert.equal(p.ctx.pendingSeek,0);assert.equal(p.ctx.audio.paused,false);
 });
 test("failed resume gets a fresh source on retry and retains the listening position",async()=>{
   const calls=[];const p=player(async(_,args)=>{calls.push(args);return {url:"audio"};});
@@ -92,11 +134,11 @@ test("a sustained outage stops automatic recovery and manual retry resumes the s
   assert.equal(p.ctx.current.id,song(1).id);
 });
 
-test("preload waits for the final window, warms only the next song and reuses the source",async()=>{
+test("preload prepares after two seconds for early Next clicks and reuses the source",async()=>{
   const calls=[],cache=new Map();let resolutions=0;
   const p=player(async(_,args)=>{calls.push(args.id);if(!cache.has(args.id)){resolutions++;cache.set(args.id,{url:args.id});}return cache.get(args.id);},[song(1),song(2),song(3)]);
-  await p.playAt(0);p.ctx.audio.currentTime=134;p.emit("timeupdate");await settle();assert.equal(calls.length,1);
-  p.ctx.audio.currentTime=135;p.emit("timeupdate");await settle();
+  await p.playAt(0);p.ctx.audio.currentTime=1;p.emit("timeupdate");await settle();assert.equal(calls.length,1);
+  p.ctx.audio.currentTime=2;p.emit("timeupdate");await settle();
   assert.deepEqual(calls,[song(1).id,song(2).id]);assert.equal(p.ctx.audio.src,song(1).id);assert.equal(p.ctx.audio.paused,false);
   for(let i=0;i<10;i++)p.emit("timeupdate");await settle();assert.equal(calls.length,2);
   await p.advance();await settle();assert.equal(p.ctx.audio.src,song(2).id);assert.equal(resolutions,2);
@@ -109,7 +151,22 @@ test("preload does not run while paused, seeking, buffering, offline, or just st
     p.ctx.audio[key]=value;p.emit("timeupdate");await settle();p.ctx.audio[key]=restore;
   }
   p.ctx.navigator.onLine=false;p.emit("timeupdate");await settle();p.ctx.navigator.onLine=true;
+  p.ctx.navigator.connection={saveData:true};p.emit("timeupdate");await settle();p.ctx.navigator.connection.saveData=false;
   p.ctx.audio.duration=30;p.ctx.audio.currentTime=1;p.emit("timeupdate");await settle();assert.equal(calls,1);
+});
+
+test("long songs wait until the prepared source will still be fresh at their end",async()=>{
+  let calls=0;const p=player(async(_,args)=>{calls++;return {url:args.id};},[song(1),song(2)]);
+  await p.playAt(0);p.ctx.audio.duration=900;p.ctx.audio.currentTime=659;p.emit("timeupdate");await settle();assert.equal(calls,1);
+  p.ctx.audio.currentTime=660;p.emit("timeupdate");await settle();assert.equal(calls,2);
+});
+
+test("cancel loading stops backend work and a late response cannot start audio",async()=>{
+  const pending=deferred();const p=player(()=>pending.promise);
+  const started=p.playAt(0);await settle();await p.togglePlay();
+  assert.equal(p.ctx.cancellations,1);assert.equal(p.ctx.streamLoading,false);
+  pending.resolve({url:"cancelled"});await started;
+  assert.equal(p.ctx.audio.src,"");assert.equal(p.ctx.audio.paused,true);
 });
 
 test("shuffle advances to the prepared song and queue edits invalidate the old choice",async()=>{
@@ -161,7 +218,13 @@ test("queue churn has a bounded preload budget and repeat wraps to the first son
   const calls=[];const p=player(async(_,args)=>{calls.push(args.id);return {url:args.id};},[song(1),song(2)]);
   await p.playAt(0);p.ctx.audio.currentTime=150;
   for(let i=2;i<=8;i++){p.ctx.queue=[song(1),song(i)];p.emit("timeupdate");await settle();}
-  assert.equal(calls.length,3);
-  p.ctx.queue=[song(1),song(2)];p.ctx.repeat=true;await p.playAt(1);p.ctx.audio.currentTime=150;p.emit("timeupdate");await settle();
+  assert.equal(calls.length,2);
+  p.ctx.queue=[song(1),song(2)];p.ctx.repeat="all";await p.playAt(1);p.ctx.audio.currentTime=150;p.emit("timeupdate");await settle();
   assert.equal(calls.at(-1),song(1).id);await p.advance();await settle();assert.equal(p.ctx.current.id,song(1).id);
+});
+
+test("repeat one repeats on natural completion but a manual skip advances",async()=>{
+  const p=player(async(_,args)=>({url:args.id}),[song(1),song(2)]);
+  p.ctx.repeat="one";await p.playAt(0);await p.advance(false);await settle();assert.equal(p.ctx.current.id,song(1).id);
+  await p.advance(true);await settle();assert.equal(p.ctx.current.id,song(2).id);
 });

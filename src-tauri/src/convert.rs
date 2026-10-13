@@ -196,7 +196,7 @@ pub async fn open_converter(app: tauri::AppHandle, files: Vec<String>, state: ta
     }
     *state.pending.lock().unwrap() = files;
     let window = tauri::WebviewWindowBuilder::new(&app, "converter", tauri::WebviewUrl::App("converter.html".into()))
-        .title("Converter · Deviload")
+        .title("Devil Convert · Deviload")
         .inner_size(920.0, 700.0)
         .min_inner_size(720.0, 540.0)
         .theme(Some(tauri::Theme::Dark))

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync, readdirSync, statSync} from "node:fs";
 import {join, relative} from "node:path";
 import {fileURLToPath} from "node:url";
+import {runInNewContext} from "node:vm";
 import ru from "../src/locales/ru.js";
 import es from "../src/locales/es.js";
 import {labels, diagnoseError} from "../src/view-model.js";
@@ -10,8 +11,9 @@ import {labels, diagnoseError} from "../src/view-model.js";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const read = path => readFileSync(join(root, path), "utf8");
 const keys = new Set(Object.keys(ru));
+const translatedSources = ["src/main.js", "src/app-release-notes.js", "src/devil-music.js", ...readdirSync(join(root,"src")).filter(name=>/^music-.*\.js$/.test(name)).map(name=>"src/"+name), "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js", "src/download-profiles.js", "src/queue-selection.js", "src/settings-backup.js"];
 // Brand names, formats and codes read the same in both languages.
-const neutral = new Set(["Deviload", "Devil Music", "01 / DM", "Devil", "oad", "Devil Cut", "Devil Cut · Deviload", "DEVIL CINEMA", "YouTube", "YouTube Music", "VK", "TikTok",
+const neutral = new Set(["Deviload", "Devil Music", "01 / DM", "Devil", "oad", "Devil Cut", "Devil Cut · Deviload", "Devil Convert", "Devil Convert · Deviload", "DEVIL CINEMA", "YouTube", "YouTube Music", "VK", "TikTok",
   "Instagram", "Twitch", "SoundCloud", "1080p", "720p", "480p", "1440p", "4K", "H.264", "H.265", "MP3", "FLAC", "WAV", "GIF", "GIF · 480px", "Chrome", "Edge",
   "Firefox", "Brave", "Safari", "yt-dlp", "RU", "EN", "I", "O", "MP4", "MKV", "WebM", "16:9", "9:16", "1:1", "4:5", "00:30", "01:15", "https://youtube.com/watch?v=…", "socks5://127.0.0.1:1080", "Plex", "http://192.168.1.10:8096"]);
 
@@ -50,7 +52,9 @@ function htmlStrings() {
   for (const [, , value] of html.matchAll(/\s(placeholder|aria-label|title|alt|label|data-empty-label)="([^"]*)"/g)) {
     if (value.trim()) strings.add(value.trim());
   }
-  for(const file of ['src/download-profiles.js','src/download-profile-data.js','src/settings-backup.js','src/cut-editing.js','src/music-profile.js'])for(const [,message] of read(file).matchAll(/Error\('([^']+)'/g))strings.add(message);
+  for(const file of ['src/download-profiles.js','src/download-profile-data.js','src/settings-backup.js','src/cut-editing.js',...translatedSources.filter(path=>path.startsWith('src/music-'))]) {
+    for(const [,message] of read(file).matchAll(/(?:Error|warn)\(["']([^"']+)["']/g))strings.add(message);
+  }
   return strings;
 }
 
@@ -59,9 +63,12 @@ const normalize = text => text.replace(/\{[^}]*\}/g, "{}");
 
 function rustMessages() {
   const found = [];
-  for (const file of ["lib.rs", "music.rs", "music_audio.rs", "music_profile.rs", "cookies.rs", "engine_update.rs", "model.rs", "share.rs", "settings_backup.rs", "watch.rs", "convert.rs", "power.rs", "media_server.rs"]) {
+  for (const file of ["lib.rs", "music.rs", "music_audio.rs", "music_profile.rs", "music_import.rs", "music_playlist_import.rs", "music_lyrics.rs", "music_offline.rs", "cookies.rs", "engine_update.rs", "model.rs", "share.rs", "settings_backup.rs", "watch.rs", "convert.rs", "power.rs", "media_server.rs"]) {
     const source = read(join("src-tauri/src", file)).split("#[cfg(test)]")[0];
-    if(file === "music.rs")for(const text of literals(block(source,"fn stream_error", "pub fn stream(")))if(text.endsWith("."))found.push({file,text});
+    // Start inside the body so Rust lifetimes such as &'static are not parsed
+    // as single-quoted JavaScript strings by literals().
+    if(file === "music.rs")for(const text of literals(block(source,"let error = String::from_utf8_lossy(stderr)", "struct ResolveFailure")))if(text.endsWith("."))found.push({file,text});
+    if(file === "music_import.rs" || file === "music_playlist_import.rs")for(const [,text] of source.matchAll(/const \w+: &str = "([^"]+)";/g))found.push({file,text});
     for (const [, text] of source.matchAll(RUST_MESSAGE)) {
       if (/^(?:[A-Z{]|yt-dlp )/.test(text)) found.push({file, text});
     }
@@ -108,7 +115,7 @@ test("static HTML text has a Russian translation", () => {
 });
 
 test("strings passed to t() have a Russian translation", () => {
-  for (const file of ["src/main.js", "src/devil-music.js", "src/music-presentation.js", "src/music-profile-ui.js", "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js", "src/download-profiles.js", "src/queue-selection.js", "src/settings-backup.js"]) {
+  for (const file of translatedSources) {
     assert.deepEqual(missing(translatedLiterals(read(file))), [], file);
   }
 });
@@ -123,10 +130,19 @@ test("messages from the Rust core have a Russian translation", () => {
   assert.deepEqual(absent, []);
 });
 
+test("music engine playback restrictions have translations", () => {
+  const messages = literals(read("engines/music/errors.ts")).filter(text => text.startsWith("Playback "));
+  assert.ok(messages.length > 0);
+  assert.deepEqual(missing(messages), []);
+});
+
 test("the Russian locale has no unused strings", () => {
   const used = new Set([...htmlStrings(), ...tableStrings(), "Deviload — Downloads"]);
-  for (const file of ["src/main.js", "src/devil-music.js", "src/music-presentation.js", "src/music-profile-ui.js", "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js", "src/download-profiles.js", "src/queue-selection.js", "src/settings-backup.js"]) for (const text of translatedLiterals(read(file), true)) used.add(text);
+  for (const file of translatedSources) for (const text of translatedLiterals(read(file), true)) used.add(text);
   const rust = new Set(rustMessages().map(({text}) => normalize(text)));
+  for (const file of ["engines/music/engine.ts", "engines/music/errors.ts"]) {
+    for (const text of literals(read(file))) used.add(text);
+  }
   const unused = [...keys].filter(key => !used.has(key) && !rust.has(normalize(key)));
   assert.deepEqual(unused, []);
 });
@@ -169,5 +185,30 @@ test("the Spanish locale matches the Russian one key for key", () => {
     if (Array.isArray(spanish) && placeholders(spanish[0]).some(name => !placeholders(key).includes(name))) problems.push(`placeholders: ${key}`);
   }
   assert.deepEqual(problems, []);
+});
+
+test("explicit dynamic labels switch from Russian to English and Spanish without replacing icons", () => {
+  const element=(attributes={},text="")=>({
+    attributes:{...attributes},textContent:text,children:[],
+    getAttribute(name){return this.attributes[name]??null;},
+    setAttribute(name,value){this.attributes[name]=value;},
+    hasAttribute(name){return name in this.attributes;},
+    closest(){return this.attributes.translate==="no"?this:null;},
+    matches(selector){return selector.split(",").some(part=>this.hasAttribute(part.slice(1,-1)));},
+    querySelectorAll(selector){return this.children.flatMap(child=>[child,...child.querySelectorAll(selector)]).filter(child=>child.matches(selector));}
+  });
+  const body=element(),downloaded=element({"data-i18n":"Downloaded music"},ru["Downloaded music"]);
+  const iconButton=element({"data-i18n-title":"Lyrics","data-i18n-aria-label":"Lyrics"},"icon");
+  const userContent=element({"data-i18n":"Downloaded music",translate:"no"},"My playlist");
+  body.children=[downloaded,iconButton,userContent];
+  const document={body,documentElement:{},createTreeWalker:()=>({nextNode:()=>null})};
+  const code=read("src/i18n.js").replace(/^import .*;\r?\n/gm,"").replace(/\bexport /g,"");
+  const api=runInNewContext(code+";({setLanguage,translateDom})",{ru,es,russian:"ru",spanish:"es",document,NodeFilter:{SHOW_TEXT:4},localStorage:{getItem:()=>"ru",setItem(){}},navigator:{language:"en"}});
+  api.translateDom();assert.equal(downloaded.textContent,ru["Downloaded music"]);
+  api.setLanguage("en");assert.equal(downloaded.textContent,"Downloaded music");assert.equal(iconButton.getAttribute("title"),"Lyrics");assert.equal(iconButton.getAttribute("aria-label"),"Lyrics");
+  api.setLanguage("es");assert.equal(downloaded.textContent,es["Downloaded music"]);assert.equal(iconButton.getAttribute("title"),es.Lyrics);
+  assert.equal(iconButton.textContent,"icon");assert.equal(userContent.textContent,"My playlist");
+  // The explicit root is translated too, useful when a new control is mounted.
+  api.setLanguage("en");downloaded.textContent=ru["Downloaded music"];api.translateDom(downloaded);assert.equal(downloaded.textContent,"Downloaded music");
 });
 

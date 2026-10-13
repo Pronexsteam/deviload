@@ -2,13 +2,25 @@ mod convert;
 mod cookies;
 mod music;
 mod music_audio;
+mod music_engine;
+#[cfg(debug_assertions)]
+pub use music_engine::{music_cache as preview_music_cache, music_engine_update as preview_music_engine_update};
 mod music_controls;
+mod music_presence;
 mod music_profile;
+mod music_import;
+mod music_playlist_import;
+#[cfg(debug_assertions)]
+pub use music_playlist_import::read_public_playlist as preview_spotify_playlist;
+mod music_offline;
+mod music_lyrics;
 
 #[cfg(debug_assertions)]
-pub use music::{catalog as preview_music_catalog, stream as preview_music_stream};
+pub use music::{catalog_page as preview_music_catalog, stream as preview_music_stream};
 #[cfg(debug_assertions)]
-pub use music::stream_request as preview_music_stream_request;
+pub use music_lyrics::lyrics as preview_music_lyrics;
+#[cfg(debug_assertions)]
+pub use music::{prepare_engine as preview_music_prepare, stream_request as preview_music_stream_request, music_cancel_stream as preview_music_cancel_stream};
 mod engine_update;
 mod heal;
 mod media_server;
@@ -2911,6 +2923,15 @@ fn open_releases() -> Result<(), String> {
 }
 
 #[tauri::command]
+fn open_music_import_help(service: String) -> Result<(), String> {
+    let url = match service.as_str() {
+        "spotify" => "https://www.spotify.com/account/privacy/",
+        "youtube" => "https://takeout.google.com/",
+        _ => return Err("Unknown site".into()),
+    };
+    open_in_browser(url).map_err(|_| "Could not open the export page.".to_owned())
+}
+#[tauri::command]
 fn open_support() -> Result<(), String> {
     open_in_browser("https://ko-fi.com/pronexsteam").map_err(|e| format!("Could not open the support page: {e}"))
 }
@@ -3167,7 +3188,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![settings_backup::settings_backup_data, settings_backup::inspect_settings_backup, settings_backup::restore_settings_backup, settings_backup::export_settings_backup, set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_site_browser, open_releases, open_support, window_action, apply_download_auth, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, export_download_profiles, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, site_sign_in, site_sign_out, site_sessions, music::music_catalog, music::music_stream, music_controls::set_music_controls, music_profile::export_music_profile, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, relink_media, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
+        .invoke_handler(tauri::generate_handler![settings_backup::settings_backup_data, settings_backup::inspect_settings_backup, settings_backup::restore_settings_backup, settings_backup::export_settings_backup, set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_site_browser, open_releases, open_support, window_action, apply_download_auth, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, export_download_profiles, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, site_sign_in, site_sign_out, site_sessions, music::music_catalog, music::music_prepare, music_engine::music_cache, music_engine::music_engine_update, music_offline::music_downloaded, music_offline::music_offline_source, music_lyrics::music_lyrics, music::music_stream, music::music_cancel_stream, music_controls::set_music_controls, music_presence::music_presence, music_profile::export_music_profile, music_import::read_music_import, music_playlist_import::music_import_spotify_playlist, open_music_import_help, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, relink_media, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
         .build(tauri::generate_context!()).expect("failed to start Deviload")
         .run(|app, event| {
             #[cfg(target_os = "macos")]

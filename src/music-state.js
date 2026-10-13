@@ -36,7 +36,7 @@ export function restoreRemoved(queue, item, position) {
 export function readMusicState(storage) {
   try {
     const state = JSON.parse(storage.getItem("deviload-music-v1") || "{}");
-    return {favorites:tracks(Array.isArray(state.favorites) ? state.favorites : []).slice(0,500),
+    return {favorites:tracks(Array.isArray(state.favorites) ? state.favorites : []),
       recent:tracks(Array.isArray(state.recent) ? state.recent : []).slice(0,80),
       volume:typeof state.volume === "number" ? Math.max(0,Math.min(1,state.volume)) : .7};
   } catch { return {favorites:[],recent:[],volume:.7}; }

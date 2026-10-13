@@ -204,7 +204,7 @@ window.__TAURI__?.event?.listen?.("converter-add", event => add(Array.isArray(ev
 const showExportFolder = bindExportFolder({name:$("convert-folder"), pick:$("convert-folder-pick"), reset:$("convert-folder-reset")}, t);
 function relabel() {
   showExportFolder();
-  document.title = t("Converter") + " · Deviload";
+  document.title = "Devil Convert · Deviload";
   render();
 }
 translateDom();

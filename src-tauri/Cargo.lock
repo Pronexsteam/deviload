@@ -487,7 +487,7 @@ checksum = "d38f2da7a0a2c4ccf0065be06397cc26a81f4e528be095826eee9d4adbb8c60f"
 dependencies = [
  "byteorder",
  "fnv",
- "uuid",
+ "uuid 1.26.1",
 ]
 
 [[package]]
@@ -813,12 +813,15 @@ dependencies = [
 
 [[package]]
 name = "deviload"
-version = "2.6.7"
+version = "2.7.0"
 dependencies = [
  "base64 0.22.1",
  "dirs 6.0.0",
+ "discord-rich-presence",
+ "flate2",
  "fs2",
  "libc",
+ "minisign-verify",
  "rand",
  "reqwest",
  "rustls",
@@ -836,6 +839,7 @@ dependencies = [
  "trash",
  "url",
  "windows 0.61.3",
+ "zip",
 ]
 
 [[package]]
@@ -887,6 +891,21 @@ dependencies = [
  "option-ext",
  "redox_users 0.5.3",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "discord-rich-presence"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90c55d69cab17c19677ce3a5f8face993a9e6eaf847fecac3547f3a3ff4a2494"
+dependencies = [
+ "log",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "serde_repr",
+ "thiserror 2.0.20",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -2285,7 +2304,7 @@ dependencies = [
  "objc2",
  "objc2-foundation",
  "time",
- "uuid",
+ "uuid 1.26.1",
 ]
 
 [[package]]
@@ -3426,7 +3445,7 @@ dependencies = [
  "serde",
  "serde_json",
  "url",
- "uuid",
+ "uuid 1.26.1",
 ]
 
 [[package]]
@@ -4111,7 +4130,7 @@ dependencies = [
  "thiserror 2.0.20",
  "time",
  "url",
- "uuid",
+ "uuid 1.26.1",
  "walkdir",
 ]
 
@@ -4369,7 +4388,7 @@ dependencies = [
  "toml 1.1.6+spec-1.1.0",
  "url",
  "urlpattern",
- "uuid",
+ "uuid 1.26.1",
  "walkdir",
 ]
 
@@ -4925,6 +4944,15 @@ name = "utf8_iter"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
+
+[[package]]
+name = "uuid"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
+dependencies = [
+ "getrandom 0.2.17",
+]
 
 [[package]]
 name = "uuid"
@@ -5970,7 +5998,7 @@ dependencies = [
  "serde_repr",
  "tracing",
  "uds_windows",
- "uuid",
+ "uuid 1.26.1",
  "windows-sys 0.61.2",
  "winnow 1.0.4",
  "zbus_macros",
@@ -6101,6 +6129,7 @@ checksum = "caa8cd6af31c3b31c6631b8f483848b91589021b28fffe50adada48d4f4d2ed1"
 dependencies = [
  "arbitrary",
  "crc32fast",
+ "flate2",
  "indexmap 2.14.2",
  "memchr",
 ]

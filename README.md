@@ -80,7 +80,7 @@ All buttons above open the [latest release](https://github.com/Pronexsteam/devil
   - frame formats 16:9, 9:16, 1:1 and 4:5 with fit, fill or a blurred background; export to MP4 at the original size, 4K, 1440p, 1080p, 720p or 480p in H.264 or H.265, GIF or MP3 with progress, into the folder the video came from or one you choose;
   - projects are saved automatically, and source files are never changed.
 - **Audio tools** for MP3, FLAC and WAV: tags and loudness normalization, saved as a new copy.
-- **Converter** in its own window: drop any video or audio file from the computer, or send one from the library, and get MP4, MP3, a GIF, or a video that fits a size limit (Discord 10 MB, WhatsApp 16 MB, mail 25 MB or your own) through two-pass encoding. The original stays as it is; results go next to it or into the export folder shared with Devil Cut.
+- **Devil Convert** in its own window: drop any video or audio file from the computer, or send one from the library, and get MP4, MP3, a GIF, or a video that fits a size limit (Discord 10 MB, WhatsApp 16 MB, mail 25 MB or your own) through two-pass encoding. The original stays as it is; results go next to it or into the export folder shared with Devil Cut.
 - **Phone link** over the local network: one QR code opens a page on the phone that downloads the files you send from Deviload, sends photos and videos back to the computer (each one needs your OK), and adds links to the download queue. The link turns off after 30 minutes without the phone, and the page can be added to the phone's home screen.
 - **Search** YouTube and YouTube Music inside the app.
 - **Devil Music**: guest playback, albums and playlists, a full-screen Now Playing view, shuffle, repeat, queue editing and similar songs when the queue ends. The next song is prepared in advance to reduce waiting. Availability depends on YouTube and your network; restricted or unavailable tracks can still fail.
@@ -97,6 +97,8 @@ All buttons above open the [latest release](https://github.com/Pronexsteam/devil
 
 ## Screenshots
 
+![Devil Music 2.7: music workspace, pinned library, playlist import, resume listening and player controls](docs/screenshots/devil-music-workspace-2.7.png)
+
 | Devil Music · discover | Devil Music · Now Playing |
 |---|---|
 | ![Devil Music: guest catalog, moods and local preferences](docs/screenshots/devil-music.png) | ![Devil Music: Now Playing with MP3 downloads and playback controls](docs/screenshots/devil-music-player.png) |
@@ -107,7 +109,7 @@ All buttons above open the [latest release](https://github.com/Pronexsteam/devil
 | **Settings backup** | **Download profiles** |
 | ![Export and restore settings without account credentials](docs/screenshots/settings-backup.png) | ![Manage saved download profiles](docs/screenshots/download-profiles.png) |
 
-Devil Music screenshots show 2.6.7 with the live catalog. The other workspace screenshots show 2.6.5 with sample media.
+The full-width music workspace shows 2.7 with the live catalog and a sample local playlist. The older music views show 2.6.7; the other workspace screenshots show 2.6.5 with sample media.
 
 ## Install on Windows
 
@@ -184,7 +186,11 @@ The queue (`queue.json`), per-format download archives and the saved YouTube sig
 
 Deviload has no telemetry. Besides the sites you download from, it contacts GitHub to check for a new Deviload (only the version number is requested) and to update yt-dlp; the yt-dlp update can be turned off in the settings. The phone link only listens on the local network address and only while it is on; every file a phone sends needs your confirmation.
 
-Devil Music contacts YouTube Music for catalog results, artwork hosts for covers, and YouTube media servers for audio. Its listening profile stays in local WebView storage, bounded to 500 likes, 80 recent songs and 1,000 learned tracks. Export/import files are limited to 2 MB and contain preferences, not music files or account credentials. Reinstalling the operating system can erase local preferences; export a backup first.
+Devil Music contacts YouTube Music for catalog results, artwork hosts for covers, and YouTube media servers for audio. Opening lyrics sends the track title, artist and duration to LRCLIB. Its listening profile stays in local WebView storage. Likes are never automatically evicted; recent history is bounded to 80 songs and recommendation history to 1,000 learned tracks. Profiles also keep up to 30 playlists with 500 total entries and 200 saved artists, albums or catalog playlists. Export/import files are limited to 2 MB and contain metadata and preferences, not music files or account credentials. If a profile reaches the storage limit, saving reports an error rather than removing older likes. Reinstalling the operating system can erase local preferences; export a backup first.
+
+The current development version adds filtered, paginated music search, saved artists and albums, playback from existing full-track downloads, timed lyrics, equalizer presets, volume smoothing and optional track overlap. Smoothing is a compressor, not measured album loudness normalization. Regional charts can be hidden; personal discovery uses local listening signals, likes, followed artists and explicit exclusions. This is adaptive ranking, not a trained neural recommendation model.
+
+Playback prepares the next track and likely selections in advance, with bounded background requests and a second audio decoder. Cached signed links are retained until their expiry safety margin, for at most one hour. Unprepared tracks still depend on upstream extraction and media availability; instant startup is not guaranteed. Rate limits stop requests instead of triggering an endless retry loop.
 
 Engines run with an argument list and no shell. A task counts as finished only when yt-dlp exits with code 0, and the queue file is written atomically.
 

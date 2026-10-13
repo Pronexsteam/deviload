@@ -36,11 +36,17 @@ export function recordListening(profile,item,{seconds=0,duration=0,skipped=false
   const earlySkip=skipped&&seconds<20&&(duration===0||ratio<.2);
   const reward=earlySkip?-2.5:ratio>=.8?2.5:seconds>=30?1:0;
   const old=profile.entries[item.id];
-  // Repeated clicks on the same song must not dominate the taste profile.
+  // Decide repeat eligibility once per session. Later checkpoints must not
+  // turn a suppressed repeat into new listening evidence.
   const recent=old&&now-old.lastPlayed<10*60000;
   const sameSession=session!==undefined&&old?.session===session;
-  const adjustment=sameSession?reward-old.sessionReward:recent?0:reward;
-  profile.entries[item.id]={item,score:clamp((old?old.score*decay(old,now):0)+adjustment,-8,8),at:now,lastPlayed:now,plays:(old?.plays||0)+(recent?0:1),session,sessionReward:reward};
+  const sessionEligible=sameSession?old.sessionEligible:!recent;
+  const sessionReward=sessionEligible?reward:0;
+  const adjustment=sessionReward-(sameSession?finite(old.sessionReward):0);
+  const qualified=seconds>=30||ratio>=.8;
+  const counted=Boolean(sameSession&&old.sessionCounted);
+  const sessionCounted=counted||Boolean(sessionEligible&&qualified);
+  profile.entries[item.id]={item,score:clamp((old?old.score*decay(old,now):0)+adjustment,-8,8),at:now,lastPlayed:now,plays:Math.min(10000,(old?.plays||0)+(sessionCounted&&!counted?1:0)),session,sessionReward,sessionEligible,sessionCounted};
   const all=Object.entries(profile.entries).sort((a,b)=>b[1].at-a[1].at);
   for(const [id]of all.slice(1000))delete profile.entries[id];
   return true;
@@ -75,8 +81,9 @@ export function tasteSeeds(profile,favorites,{now=Date.now(),random=Math.random,
   return chosen;
 }
 
-export function recommend(items,profile,favorites,{now=Date.now(),random=Math.random,limit=20,exclude=[]}={}) {
+export function recommend(items,profile,favorites,{now=Date.now(),random=Math.random,limit=20,exclude=[],followedArtists=[]}={}) {
   const {songs,artists,liked}=affinities(profile,favorites,now),excluded=new Set(exclude);
+  const followed=new Set(followedArtists.map(name=>name.trim().toLocaleLowerCase()));
   const pool=tracks(items).filter(item=>allowed(profile,item)&&!excluded.has(item.id)&&((songs.get(item.id)||0)>-2||liked.has(item.id)))
     .map(item=>{
       const entry=profile.entries[item.id],heard=entry?.lastPlayed>0;
@@ -84,7 +91,7 @@ export function recommend(items,profile,favorites,{now=Date.now(),random=Math.ra
       const keys=artistKeys(item);
       const affinity=keys.length?Math.max(-10,...keys.map(key=>artists.get(key)||0)):0;
       const preference=profile.mode==="discovery"?(!heard?5:-2):profile.mode==="familiar"?(heard||liked.has(item.id)?5:0):0;
-      return {item,heard,score:(songs.get(item.id)||0)*.5+affinity*.6-freshness*5+preference+random()*3};
+      return {item,heard,score:(songs.get(item.id)||0)*.5+affinity*.6-freshness*5+preference+(keys.some(key=>followed.has(key))?3:0)+random()*3};
     }).sort((a,b)=>b.score-a.score);
   const result=[],counts=new Map();
   // Every third slot explores an unheard song. Artist limits prevent a liked

@@ -63,3 +63,51 @@ test("discovery mode ranks an unheard artist ahead of a familiar track",()=>{
   profile.mode="familiar";assert.equal(recommend([a,b],profile,[],{now,random})[0].id,a.id);
   profile.mode="discovery";assert.equal(recommend([a,b],profile,[],{now,random})[0].id,b.id);
 });
+test("followed artists influence discovery without overriding explicit dislikes",()=>{
+  const profile=readTaste(),a=song(1,"A"),b=song(2,"B");
+  assert.equal(recommend([a,b],profile,[],{now,random,followedArtists:["B"]})[0].id,b.id);
+  hideRecommendation(profile,b,true);assert.deepEqual(recommend([a,b],profile,[],{now,random,followedArtists:["B"]}).map(item=>item.id),[a.id]);
+});
+
+test("a suppressed repeat stays suppressed through completion and later checkpoints",()=>{
+  const profile=readTaste(),item=song(1);
+  recordListening(profile,item,{seconds:190,duration:200,session:1},now);
+  const first=profile.entries[item.id].score;
+  recordListening(profile,item,{seconds:30,duration:200,session:2},now+60000);
+  recordListening(profile,item,{seconds:190,duration:200,session:2},now+220000);
+  recordListening(profile,item,{seconds:200,duration:200,session:2},now+1000000);
+  assert.ok(profile.entries[item.id].score<=first);
+  assert.equal(profile.entries[item.id].plays,1);
+  recordListening(profile,item,{seconds:190,duration:200,session:3},now+2000000);
+  assert.ok(profile.entries[item.id].score>first);
+  assert.equal(profile.entries[item.id].plays,2);
+});
+
+test("short exposures preserve skip feedback but do not count as qualified plays",()=>{
+  const profile=readTaste(),skipped=song(1),resumed=song(2),short=song(3);
+  recordListening(profile,skipped,{seconds:3,duration:200,skipped:true,session:1},now);
+  assert.equal(profile.entries[skipped.id].plays,0);
+  assert.equal(profile.entries[skipped.id].score,-2.5);
+  assert.equal(profile.entries[skipped.id].lastPlayed,now);
+  recordListening(profile,resumed,{seconds:5,duration:200,session:2},now);
+  assert.equal(profile.entries[resumed.id].plays,0);
+  recordListening(profile,resumed,{seconds:30,duration:200,session:2},now+30000);
+  assert.equal(profile.entries[resumed.id].plays,1);
+  recordListening(profile,resumed,{seconds:190,duration:200,session:2},now+190000);
+  recordListening(profile,resumed,{seconds:200,duration:200,session:2},now+1000000);
+  assert.equal(profile.entries[resumed.id].plays,1);
+  recordListening(profile,short,{seconds:16,duration:20,session:3},now);
+  assert.equal(profile.entries[short.id].plays,1);
+  assert.equal(profile.entries[short.id].score,2.5);
+});
+
+test("restart strips transient listening state and preserves repeat suppression",()=>{
+  const profile=readTaste(),item=song(1);
+  recordListening(profile,item,{seconds:190,duration:200,session:1},now);
+  const restored=readTaste({getItem:()=>JSON.stringify(profile)});
+  assert.deepEqual(Object.keys(restored.entries[item.id]).sort(),["at","item","lastPlayed","plays","score"]);
+  recordListening(restored,item,{seconds:30,duration:200,session:1},now+60000);
+  recordListening(restored,item,{seconds:190,duration:200,session:1},now+220000);
+  assert.ok(restored.entries[item.id].score<=2.5);
+  assert.equal(restored.entries[item.id].plays,1);
+});
