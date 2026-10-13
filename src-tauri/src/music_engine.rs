@@ -10,6 +10,7 @@ static WORKER: OnceLock<Mutex<Option<Arc<Worker>>>> = OnceLock::new();
 static SERIAL: AtomicU64 = AtomicU64::new(1);
 static FILES: [&str;3] = ["engine.mjs","po-worker.ts","xhr-sync-worker.js"];
 type Reply = Result<Value,String>;
+pub fn restricted_error(error:&str)->bool { error.starts_with("Playback restricted:") || error.contains("temporarily limited") }
 struct Worker { input:Mutex<ChildStdin>,child:Mutex<Child>,pending:Mutex<HashMap<u64,mpsc::Sender<Reply>>>,alive:AtomicBool,port:Mutex<u16> }
 impl Drop for Worker {fn drop(&mut self){if let Ok(child)=self.child.get_mut(){let _=child.kill();let _=child.wait();}}}
 fn root()->Result<PathBuf,String>{
@@ -146,6 +147,12 @@ fn update()->Reply{
 }
 #[cfg(test)]mod tests{
     use super::*;
+    #[test]fn source_restrictions_do_not_trigger_legacy_retry(){
+        assert!(restricted_error("Playback restricted: YouTube requires sign-in or verification. Try another track."));
+        assert!(restricted_error("Playback temporarily limited by YouTube. Wait before trying again."));
+        assert!(restricted_error("Playback unavailable or temporarily limited"));
+        assert!(!restricted_error("Opening audio timed out"));
+    }
     #[test]fn bundled_engine_is_complete_and_bounded(){let data=unpack(EMBEDDED).unwrap();assert_eq!(data["version"],VERSION);assert!(unpack(&vec![0;4*1024*1024+1]).is_err());}
     #[test]fn unsigned_updates_are_rejected(){assert!(verified(br#"{"payload":"e30=","signature":"eA=="}"#).is_err());}
     #[test]fn signed_updates_reject_tampering_and_untrusted_keys(){

@@ -35,6 +35,14 @@ function player(invoke,items=[song(1)]){
   const actions=runInNewContext(`(()=>{${code}\nreturn {playAt,playItems,togglePlay,resumeListening,advance};})()`,ctx);
   return {ctx,...actions,emit:name=>events[name]?.(),expire(){const pending=[...timers.values()];timers.clear();pending.forEach(fn=>fn());}};
 }
+test("source restrictions explain the failure without starting audio or scheduling retries",async()=>{
+  let calls=0;const failure="Playback restricted: YouTube requires sign-in or verification. Try another track.";
+  const p=player(async()=>{calls++;throw failure;});
+  await p.playAt(0);p.expire();await settle();
+  assert.equal(calls,1);assert.equal(p.ctx.audio.paused,true);assert.equal(p.ctx.streamLoading,false);
+  assert.equal(p.ctx.artist.textContent,"Unavailable from source. Try another track.");assert.equal(p.ctx.message,failure);
+});
+
 test("rapid track changes discard stale resolutions and never start the canceled selection",async()=>{
   const first=deferred(),calls=[];
   const p=player(async(_,args)=>{calls.push(args.id);return calls.length===1?first.promise:{url:args.id};},[song(1),song(2),song(3)]);

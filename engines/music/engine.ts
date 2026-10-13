@@ -2,6 +2,7 @@ import { Innertube, UniversalCache, Constants } from 'youtubei.js';
 import { SabrStream } from 'googlevideo/sabr-stream';
 import { buildSabrFormat, EnabledTrackTypes } from 'googlevideo/utils';
 import { safe } from './runtime.ts';
+import { restricted, playbackError } from './errors.ts';
 import { fileURLToPath } from 'node:url';
 import { AudioCache, TRACK_LIMIT, byteRange, readBytes, writeBytes, same, validId } from './storage.ts';
 
@@ -17,7 +18,6 @@ const inflight = new Map<string,Promise<Track>>();
 const resolving = new Map<string,AbortController>();
 const openingDeadlines = new Map<string,AbortSignal>();
 const tokens = new Map<number,{resolve:(token:string)=>void;reject:(error:Error)=>void;timer:ReturnType<typeof setTimeout>}>();
-const restricted = (error: unknown) => /403|429|LOGIN_REQUIRED|UNPLAYABLE|AGE_CHECK_REQUIRED|not a bot|sign in|rate limit/i.test(safe(error));
 const aborted = (error: unknown) => /abort|cancel/i.test(safe(error));
 async function network(input: RequestInfo | URL, init?: RequestInit) {
   if (Date.now() < limitedUntil) throw Error('429 Playback temporarily limited');
@@ -213,7 +213,7 @@ async function command(cmd:any){
     if(generation!==selection&&selected!==cmd.id)throw Error('Cancelled');
     if(!cmd.preload)track.start();
     emit({key:cmd.key,data:{url:`http://127.0.0.1:${server.addr.port}/${track.token}`}});
-  }catch(error){emit({key:cmd.key,error:restricted(error)?'Playback unavailable or temporarily limited':aborted(error)?'Cancelled':safe(error),restricted:restricted(error)});}
+  }catch(error){emit({key:cmd.key,error:playbackError(error),restricted:restricted(error)});}
 }
 let buffer='';
 for await(const chunk of Deno.stdin.readable.pipeThrough(new TextDecoderStream())){

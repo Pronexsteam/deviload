@@ -377,7 +377,7 @@ export function createMusic({invoke,onDownload}) {
       needsRefresh=false;artist.textContent=displaySubtitle(current)||"YouTube Music";status("");
     } catch(error) {
       if(token!==playRequest)return;
-      needsRefresh=true;retryPosition=Math.max(retryPosition,audio.currentTime||0);audio.pause();audio.removeAttribute("src");audio.load();resolvedTrack=null;artist.textContent=t("Could not play. Press play to retry.");artist.title=errorText(error);status(errorText(error),true);
+      needsRefresh=true;retryPosition=Math.max(retryPosition,audio.currentTime||0);audio.pause();audio.removeAttribute("src");audio.load();resolvedTrack=null;artist.textContent=t(/Playback restricted:|Playback temporarily limited/.test(String(error))?"Unavailable from source. Try another track.":"Could not play. Press play to retry.");artist.title=errorText(error);status(errorText(error),true);
     } finally {if(token===playRequest){streamLoading=false;syncDock();}}
   }
   function playItems(items,startId) {

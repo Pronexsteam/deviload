@@ -3,6 +3,11 @@
 export const name = "Русский";
 
 export default {
+  "Playback temporarily limited by YouTube. Wait before trying again.": "YouTube временно ограничил воспроизведение. Подождите перед повторной попыткой.",
+  "Playback restricted: YouTube requires sign-in or verification. Try another track.": "YouTube требует вход или проверку для воспроизведения. Попробуйте другой трек.",
+  "Playback restricted: this track is unavailable from YouTube. Try another track.": "Этот трек недоступен на YouTube. Попробуйте другой трек.",
+  "Playback restricted: YouTube denied access to the audio. Try another track.": "YouTube отказал в доступе к аудио. Попробуйте другой трек.",
+  "Unavailable from source. Try another track.": "Недоступно у источника. Выберите другой трек.",
   "All results": "Всё",
   "Songs": "Песни",
   "Albums": "Альбомы",

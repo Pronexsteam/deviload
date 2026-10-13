@@ -310,7 +310,7 @@ fn stream_reserved(id: &str, proxy: &str, refresh: bool, preload: bool, generati
         match crate::music_engine::play(id, refresh, preload, generation, &cancelled) {
             Ok(url) if !cancelled() => return Ok(Stream { url }),
             Ok(_) => return Err("Cancelled".into()),
-            Err(error) if cancelled() || preload || error.contains("temporarily limited") || error.contains("Cancelled") => return Err(error),
+            Err(error) if cancelled() || preload || crate::music_engine::restricted_error(&error) || error.contains("Cancelled") => return Err(error),
             Err(_) => {}, // Bounded legacy path if the bundled worker is unavailable.
         }
     }
