@@ -13,6 +13,8 @@ import {hydrateMascots, mascotSpot, setPose} from "./mascot-spot.js";
 import {labels, actions, counts, orbState, mediaPreview, visibleJobs, playlistSelection, diagnoseError, signInSite, isVideoJob, isLibraryAudio, inLibrary, mediaIdentity, isProcessing} from "./view-model.js";
 import {t, tn, errorText, translateMessage, translateDom, setLanguage, onLanguageChange, language, locale, languageNames} from "./i18n.js";
 import {createEngineUpdater} from "./engine-update.js";
+import {createMusic} from "./devil-music.js";
+import {downloadMusic} from "./music-download.js";
 
 const $ = id => document.getElementById(id);
 const invoke = window.__TAURI__?.core?.invoke;
@@ -24,8 +26,18 @@ const liveFire = new FireAnimation($("live-download"));
 const taskOrbs = new Map();
 const stateNames = {idle:"Ready to download",running:"Downloading",queued:"Tasks in the queue",done:"All done",error:"There are errors",interrupted:"Can be resumed",cancelling:"Stopping…",pausing:"Pausing…",paused:"The queue is paused"};
 const filters = {all:["all-tab","All tasks"],active:["active-tab","Current tasks"],scheduled:["scheduled-tab","Scheduled"],issues:["issues-tab","Problems"]};
-const pageTabs = {downloads:"downloads-tab",library:"library-tab",search:"search-tab",editor:"devilcut-tab"};
-const pageTitles = {downloads:"Downloads",library:"Library",search:"Media search",editor:"Devil Cut"};
+const pageTabs = {downloads:"downloads-tab",library:"library-tab",search:"search-tab",editor:"devilcut-tab",music:"music-tab"};
+const pageTitles = {downloads:"Downloads",library:"Library",search:"Media search",editor:"Devil Cut",music:"Devil Music"};
+const devilMusic = createMusic({invoke,onDownload:async item=>{
+  const count=await downloadMusic(invoke,item,{
+    folder:$("folder").value.trim(),cookiesMode:$("cookies-mode").value,cookies:$("cookies").value.trim(),signedInPath,
+    sponsorblock:$("sponsorblock").checked,archive:$("archive").checked,rateMbps:Number($("rate").value),
+    folderRule:$("folder-rule").value,nameRule:$("name-rule").value,parallel:Number($("parallel").value),autoRetry:$("auto-retry").checked
+  });
+  refresh().catch(error=>message(errorText(error),true));
+  return count;
+}});
+$("music-tab").addEventListener("click", () => navigate("music"));
 let quality = "1080", currentFilter = "all", search = "", mediaFilter = "all", mediaSearch = "", jobs = [], currentAudioId = null;
 let cinemaIds = [], currentPlayerId = null;
 let cinemaPositions = {}, libraryMeta = {};
@@ -116,6 +128,7 @@ function renderEngines() {
 function navigate(page, focus = false) {
   if (!pageTabs[page]) return;
   document.querySelector("main").dataset.page = page;
+  if (page === "music") devilMusic.open();
   syncTitle();
   for (const [name,id] of Object.entries(pageTabs)) {
     const active = name === page;
@@ -752,6 +765,10 @@ function syncAuth() {
     : mode === "file" ? t("Pick a Netscape cookies.txt file. It stays on your computer only.")
     : mode === "none" ? t("Downloads run without an account. Private and age-restricted videos will fail.")
     : t("Sign in to YouTube in the selected browser. yt-dlp reads its cookies only while downloading.");
+  $("account-hint").textContent = !["account", "none"].includes(mode)
+    ? t("Downloads use the selected cookies source. A separate Deviload sign-in is not needed.")
+    : signedInPath ? t("Signed in. Links from {site} use this session.", {site:"YouTube"})
+    : t("Not signed in. Needed for age-restricted, private and members-only videos.");
 }
 function renderAccount() {
   const signed = Boolean(signedInPath);
@@ -762,8 +779,6 @@ function renderAccount() {
   button.setAttribute("aria-label", button.title);
   // One row per site in the Accounts group, YouTube first.
   $("account-state").textContent = "YouTube";
-  $("account-hint").textContent = signed ? t("Signed in. Links from {site} use this session.", {site:"YouTube"})
-    : t("Not signed in. Needed for age-restricted, private and members-only videos.");
   $("account-action").textContent = signed ? t("Sign out") : t("Sign in");
   $("account-action").className = signed ? "outline small" : "primary small";
   syncAuth();
@@ -791,8 +806,25 @@ async function signIn() {
   } catch (error) { message(errorText(error), true); }
 }
 $("cookies-mode").addEventListener("change", () => {
-  try { localStorage.setItem("deviload-cookies-mode", $("cookies-mode").value); } catch { /* storage unavailable */ }
+  $("cookies-status").textContent = t("Not saved yet. Press Apply cookies to use this source.");
   syncAuth();
+});
+$("cookies").addEventListener("input", () => { $("cookies-status").textContent = t("Not saved yet. Press Apply cookies to use this source."); });
+$("apply-cookies").addEventListener("click", async () => {
+  if (!invoke) return;
+  const mode = $("cookies-mode").value, path = $("cookies").value.trim();
+  const controls = ["apply-cookies", "cookies-mode", "cookies", "browse-cookies"].map($);
+  controls.forEach(control => { control.disabled = true; });
+  $("cookies-status").textContent = t("Checking cookies…");
+  try {
+    const count = await invoke("apply_download_auth", {mode, path});
+    try { localStorage.setItem("deviload-cookies-mode", mode); } catch { /* storage unavailable */ }
+    $("cookies-status").textContent = mode === "file"
+      ? t("Saved: {count} unexpired cookies. Site access is checked when downloading.", {count})
+      : t("Cookies source saved for new downloads.");
+    syncAuth();
+  } catch (error) { $("cookies-status").textContent = errorText(error); }
+  finally { controls.forEach(control => { control.disabled = false; }); }
 });
 $("account-action").addEventListener("click", async () => {
   if (!signedInPath) { signIn(); return; }
@@ -813,7 +845,10 @@ $("browse-cookies").addEventListener("click", async () => {
   if (!open) return;
   try {
     const path = await open({multiple:false, directory:false, filters:[{name:"cookies.txt", extensions:["txt"]}]});
-    if (typeof path === "string" && path) $("cookies").value = path;
+    if (typeof path === "string" && path) {
+      $("cookies").value = path;
+      $("cookies").dispatchEvent(new Event("input"));
+    }
   } catch (error) { message(errorText(error), true); }
 });
 window.__TAURI__?.event?.listen?.("youtube-session", async event => {
@@ -1256,24 +1291,32 @@ window.__TAURI__?.event?.listen?.("power-simulated", () => { closePower(); messa
 window.__TAURI__?.event?.listen?.("power-failed", event => { closePower(); message(errorText(event.payload), true); });
 $("power-cancel").addEventListener("click", () => invoke("cancel_power").catch(() => {}));
 $("power-dialog").addEventListener("cancel", event => { event.preventDefault(); invoke("cancel_power").catch(() => {}); });
-let searchRequest = 0;
+let searchRequest = 0, searchPage = null;
 $("media-search-form").addEventListener("submit", async event => {
   event.preventDefault();
   if (!invoke) { $("media-search-status").textContent = t("Search works in the installed Deviload app."); return; }
   const query = $("media-query").value.trim();
   if (!query) return;
-  const request = ++searchRequest;
-  const button = $("media-search-button");
-  button.disabled = true;
-  $("media-search-status").textContent = t("Searching…");
+  searchPage = {request:++searchRequest, query, source:$("media-source").value, offset:0, urls:new Set(), busy:false};
   $("media-results").replaceChildren();
+  await loadSearchPage(searchPage);
+});
+$("media-search-more").addEventListener("click", () => { if (searchPage) loadSearchPage(searchPage); });
+async function loadSearchPage(page) {
+  if (page.busy || page.offset === null) return;
+  page.busy = true;
+  const request = page.request, button = $("media-search-more");
+  button.disabled = true; button.hidden = true;
+  $("media-search-button").disabled = true;
+  $("media-search-status").textContent = t("Searching…");
   setPose($("search-mascot"), "working");
   try {
-    const hits = await invoke("search_media", {query,source:$("media-source").value});
+    const result = await invoke("search_media", {query:page.query, source:page.source, offset:page.offset});
     if (request !== searchRequest) return;
-    $("media-search-status").textContent = hits.length ? t("Found: {count}", {count:hits.length}) : t("Nothing found. Try another query.");
-    setPose($("search-mascot"), hits.length ? "victory" : "look", hits.length ? "look" : null);
-    for (const hit of hits) {
+    page.offset = result.nextOffset;
+    for (const hit of result.hits) {
+      if (page.urls.has(hit.url)) continue;
+      page.urls.add(hit.url);
       const card = node("article", "search-result");
       if (hit.thumbnail) {
         const picture = node("img", "search-thumb");
@@ -1299,10 +1342,16 @@ $("media-search-form").addEventListener("submit", async event => {
       card.append(body, add);
       $("media-results").append(card);
     }
+    $("media-search-status").textContent = page.urls.size ? t("Found: {count}", {count:page.urls.size}) : t("Nothing found. Try another query.");
+    setPose($("search-mascot"), page.urls.size ? "victory" : "look", page.urls.size ? "look" : null);
   } catch (error) {
     if (request === searchRequest) { $("media-search-status").textContent = errorText(error); setPose($("search-mascot"), "error", "look", 3500); }
-  } finally { if (request === searchRequest) button.disabled = false; }
-});let inspectTimer = 0, inspectSerial = 0, inspectedInfo = null;
+  } finally {
+    page.busy = false;
+    if (request === searchRequest) { $("media-search-button").disabled = false; button.disabled = false; button.hidden = page.offset === null; }
+  }
+}
+let inspectTimer = 0, inspectSerial = 0, inspectedInfo = null;
 function linksIn(text) {
   return text.trim().split(/\s+/).filter(item => /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i.test(item));
 }
@@ -2346,6 +2395,7 @@ async function init() {
       : options.cookiesBrowser && modes.includes(options.cookiesBrowser) ? options.cookiesBrowser
       : options.cookies && options.cookies !== signedInPath ? "file" : "account";
     $("cookies").value = options.cookies && options.cookies !== signedInPath ? options.cookies : "";
+    if ($("cookies-mode").value === "file" && $("cookies").value) $("cookies-status").textContent = t("Saved cookies file. Press Apply cookies to check it again.");
     $("playlist-items").value = options.playlistItems || "";
     $("split-chapters").checked = !!options.splitChapters;
     $("rate").value = options.rateMbps;
