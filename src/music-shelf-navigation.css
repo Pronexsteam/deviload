@@ -1,0 +1,15 @@
+.music-shelf-navigation{position:relative;min-width:0}
+.music-shelf-scroll{scrollbar-width:none;-ms-overflow-style:none}
+.music-shelf-scroll::-webkit-scrollbar{display:none;width:0;height:0}
+.music-shelf-arrow{position:absolute;z-index:4;top:var(--music-shelf-control-y,50%);display:grid;place-items:center;width:42px;height:42px;padding:0;border:1px solid #ffffff52;border-radius:50%;background:#141416ed;color:#fff;box-shadow:0 3px 15px #0009,0 0 0 1px #0005;transform:translateY(-50%);opacity:0;pointer-events:none;cursor:pointer;transition:opacity .15s,background .15s,box-shadow .15s}
+.music-shelf-arrow-previous{left:8px}
+.music-shelf-arrow-next{right:8px}
+.music-shelf-arrow[hidden]{display:none}
+.music-shelf-navigation:hover>.music-shelf-arrow:not(:disabled),.music-shelf-navigation:focus-within>.music-shelf-arrow:not(:disabled),.music-shelf-arrow:focus-visible{opacity:1;pointer-events:auto}
+.music-shelf-arrow:hover{background:#343436;box-shadow:0 4px 18px #000b,0 0 0 1px #ffffff36}
+.music-shelf-arrow:focus-visible{outline:3px solid #f4b499;outline-offset:3px}
+.music-shelf-chevron{display:block;width:9px;height:9px;border-top:2px solid currentColor;border-right:2px solid currentColor;transform:translateX(-2px) rotate(45deg)}
+.music-shelf-arrow-previous .music-shelf-chevron{transform:translateX(2px) rotate(-135deg)}
+@media(hover:none),(pointer:coarse){.music-shelf-arrow:not(:disabled){opacity:1;pointer-events:auto}}
+@media(prefers-reduced-motion:reduce){.music-shelf-arrow{transition:none}.music-shelf-scroll{scroll-behavior:auto}}
+@media(forced-colors:active){.music-shelf-arrow{background:Canvas;color:CanvasText;border:2px solid ButtonText;box-shadow:none}.music-shelf-arrow:focus-visible{outline-color:Highlight}}

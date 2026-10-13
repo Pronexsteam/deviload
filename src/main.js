@@ -14,6 +14,7 @@ import {labels, actions, counts, orbState, mediaPreview, visibleJobs, playlistSe
 import {t, tn, errorText, translateMessage, translateDom, setLanguage, onLanguageChange, language, locale, languageNames} from "./i18n.js";
 import {createEngineUpdater} from "./engine-update.js";
 import {createMusic} from "./devil-music.js";
+import {wireReleaseNotes} from "./app-release-notes.js";
 import {downloadMusic} from "./music-download.js";
 
 const $ = id => document.getElementById(id);
@@ -128,6 +129,7 @@ function renderEngines() {
 function navigate(page, focus = false) {
   if (!pageTabs[page]) return;
   document.querySelector("main").dataset.page = page;
+  setMusicFocus(page === "music");
   if (page === "music") devilMusic.open();
   syncTitle();
   for (const [name,id] of Object.entries(pageTabs)) {
@@ -219,6 +221,16 @@ function showSettingsFor(id) {
   if (index >= 0) selectSettings(index);
   if (!$("app-settings-dialog").open) $("app-settings-dialog").showModal();
 }
+const musicNavigation=document.createElement("button");musicNavigation.type="button";musicNavigation.className="music-navigation-toggle";musicNavigation.hidden=true;
+const appNavigation=document.querySelector(".sidebar");appNavigation.id="deviload-navigation";musicNavigation.setAttribute("aria-controls",appNavigation.id);
+document.querySelector(".workspace-breadcrumb").prepend(musicNavigation);
+function setMusicFocus(enabled){
+  document.body.classList.toggle("music-focus",enabled);musicNavigation.hidden=document.querySelector("main").dataset.page!=="music";
+  musicNavigation.setAttribute("aria-expanded",String(!enabled));musicNavigation.textContent=t("Deviload sections");
+}
+musicNavigation.addEventListener("click",()=>setMusicFocus(!document.body.classList.contains("music-focus")));
+onLanguageChange(()=>{musicNavigation.textContent=t("Deviload sections");});
+wireReleaseNotes(document.querySelector("main"));
 const toolbar = document.querySelector(".topbar-actions");
 const overflowControls = [document.querySelector(".lang-menu"), $("open-youtube-view"), $("notice-button"), $("open-folder")];
 const narrowToolbar = matchMedia("(max-width: 1100px)");
@@ -251,7 +263,7 @@ document.addEventListener("pointerdown", event => {
   if (!$("toolbar-more").contains(event.target)) $("toolbar-more").open = false;
 });
 document.addEventListener("keydown", event => { if (event.key === "Escape") $("toolbar-more").open = false; });
-$("settings-open").addEventListener("click", () => $("app-settings-dialog").showModal());
+$("settings-open").addEventListener("click", () => {setMusicFocus(false);$("app-settings-dialog").showModal();});
 $("settings-close").addEventListener("click", () => $("app-settings-dialog").close());
 $("tray-toggle").addEventListener("click", async () => {
   if (!invoke) return;

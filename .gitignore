@@ -26,5 +26,9 @@ queue.json
 .idea/
 .DS_Store
 *.log
+engines/music/.cache/
+src-tauri/music-engine/*.mjs
+src-tauri/music-engine/*.ts
+src-tauri/music-engine/*.js
 # Updater signing key: never commit it
 keys/

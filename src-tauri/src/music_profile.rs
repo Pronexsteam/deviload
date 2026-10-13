@@ -7,7 +7,7 @@ fn validate(text: &str) -> Result<(), String> {
     if value["format"] != "devil-music-profile" || !value["saved"].is_object() || !value["taste"].is_object() {
         return Err("Invalid music profile.".into());
     }
-    if value["version"] != 1 { return Err("This music profile version is not supported.".into()); }
+    if value["version"] != 1 && value["version"] != 2 { return Err("This music profile version is not supported.".into()); }
     Ok(())
 }
 
@@ -34,7 +34,8 @@ mod tests {
     #[test]
     fn rejects_other_documents_and_oversized_exports() {
         assert!(validate(r#"{"format":"devil-music-profile","version":1,"saved":{},"taste":{}}"#).is_ok());
-        for text in ["{}", "not JSON", r#"{"format":"devil-music-profile","version":2,"saved":{},"taste":{}}"#] {
+        assert!(validate(r#"{"format":"devil-music-profile","version":2,"saved":{},"taste":{}}"#).is_ok());
+        for text in ["{}", "not JSON", r#"{"format":"devil-music-profile","version":3,"saved":{},"taste":{}}"#] {
             assert!(validate(text).is_err());
         }
         assert!(validate(&"x".repeat(2 * 1024 * 1024 + 1)).is_err());

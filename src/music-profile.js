@@ -1,5 +1,6 @@
 import {readMusicState} from "./music-state.js";
 import {readTaste} from "./music-taste.js";
+import {playlistCover} from "./music-library-model.js";
 
 export const PROFILE_LIMIT=2*1024*1024;
 export const PROFILE_KEY="deviload-music-profile-v1";
@@ -21,13 +22,37 @@ function item(value){
   return {id:value.id,kind:"song",title:text(value.title,240),subtitle:text(value.subtitle,180),
     artists:[...new Set((Array.isArray(value.artists)?value.artists:[]).filter(name=>typeof name==="string").map(name=>text(name,80)).filter(Boolean))].slice(0,4),image};
 }
+export const sanitizeMusicTrack=item;
+export function sanitizeMusicCollection(value){
+  if(!object(value)||!['album','artist','playlist'].includes(value.kind)||typeof value.id!=="string"||! /^(MPRE|UC|VL)[\w-]{1,156}$/.test(value.id))fail();
+  const track=item({...value,kind:"song",id:"___________"});
+  return {...track,id:value.id,kind:value.kind};
+}
+function collections(values=[]){
+  if(!Array.isArray(values)||values.length>200)fail();
+  const seen=new Set();return values.map(sanitizeMusicCollection).filter(value=>!seen.has(value.id)&&seen.add(value.id));
+}
+function playlists(values=[],strict=false){
+  if(!Array.isArray(values)||values.length>30)fail();
+  let count=0;const ids=new Set();
+  return values.map(value=>{
+    if(!object(value)||typeof value.id!=="string"||!/^[-\w]{1,64}$/.test(value.id)||ids.has(value.id)||typeof value.name!=="string"||!value.name.trim())fail();
+    ids.add(value.id);const items=list(value.items,500,strict);count+=items.length;if(count>500)fail();
+    return {id:value.id,name:text(value.name,160),items,
+      ...(value.description?{description:text(value.description,600)}:{}),
+      ...(value.pinned===true?{pinned:true}:{}),
+      ...(playlistCover(value.cover)?{cover:playlistCover(value.cover)}:{})};
+  });
+}
 function list(values,limit,strict){
   if(!Array.isArray(values)||(strict&&values.length>limit))fail();
   const seen=new Set();return values.slice(0,limit).map(item).filter(track=>!seen.has(track.id)&&seen.add(track.id));
 }
 function normalize(saved,taste,strict=false){
   if(!object(saved)||!object(taste)||!object(taste.entries))fail();
-  const favorites=list(saved.favorites,500,strict),recent=list(saved.recent,80,strict);
+  // Likes are an explicit collection, never an automatically evicted history.
+  // The serialized profile limit bounds storage without dropping older likes.
+  const favorites=list(saved.favorites,Number.MAX_SAFE_INTEGER,strict),recent=list(saved.recent,80,strict);
   const entries=Object.create(null),source=Object.values(taste.entries);
   if(strict&&source.length>1000)fail();
   for(const entry of source.sort((a,b)=>(b?.at||0)-(a?.at||0)).slice(0,1000)){
@@ -41,12 +66,12 @@ function normalize(saved,taste,strict=false){
   const hiddenSongs=[...new Set(taste.hiddenSongs.filter(id=>typeof id==="string"&&idPattern.test(id)))].slice(0,500);
   const blockedArtists=[...new Set(taste.blockedArtists.filter(name=>typeof name==="string").map(name=>text(name,160).toLocaleLowerCase()).filter(Boolean))].slice(0,300);
   if(!["balanced","familiar","discovery"].includes(taste.mode))fail();
-  return {saved:{favorites,recent,volume:Number.isFinite(saved.volume)?Math.max(0,Math.min(1,saved.volume)):.7},
+  return {saved:{favorites,recent,playlists:playlists(saved.playlists,strict),collections:collections(saved.collections),showRegional:saved.showRegional!==false,volume:Number.isFinite(saved.volume)?Math.max(0,Math.min(1,saved.volume)):.7},
     taste:{version:1,entries,hiddenSongs,blockedArtists,mode:taste.mode}};
 }
 export function exportMusicProfile(saved,taste){
   const profile=normalize(saved,taste);
-  const result=JSON.stringify({format:"devil-music-profile",version:1,...profile});
+  const result=JSON.stringify({format:"devil-music-profile",version:2,...profile});
   if(bytes(result)>PROFILE_LIMIT)throw Error("Music profile is too large (maximum 2 MB).");
   return result;
 }
@@ -54,7 +79,7 @@ export function importMusicProfile(source){
   if(typeof source!=="string"||bytes(source)>PROFILE_LIMIT)throw Error("Music profile is too large (maximum 2 MB).");
   let raw;try{raw=JSON.parse(source);}catch{fail();}
   if(!object(raw)||raw.format!=="devil-music-profile")fail();
-  if(raw.version!==1)throw Error("This music profile version is not supported.");
+  if(![1,2].includes(raw.version))throw Error("This music profile version is not supported.");
   return normalize(raw.saved,raw.taste,true);
 }
 export function saveMusicProfile(storage,saved,taste){

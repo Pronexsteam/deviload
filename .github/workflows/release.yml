@@ -48,7 +48,7 @@ jobs:
           # Hand-written notes in .github/release-notes/<tag>.md win over generated ones.
           $notes = ".github/release-notes/${{ github.ref_name }}.md"
           $source = if (Test-Path $notes) { @('--notes-file', $notes) } else { @('--generate-notes') }
-          gh release create "${{ github.ref_name }}" --latest --title "Deviload ${{ github.ref_name }}" @source @files
+          gh release create "${{ github.ref_name }}" --draft --title "Deviload ${{ github.ref_name }}" @source @files
       # The Windows part of the update feed; the feed job adds the other systems.
       - uses: actions/upload-artifact@v4
         with:
@@ -149,12 +149,10 @@ jobs:
           path: feed-linux.json
           if-no-files-found: error
 
-  # One feed for all systems. It is published even if the macOS or Linux build
-  # failed, so Windows copies are never held back; those systems then keep reading
-  # the version from the Windows entry and link to the release page.
+  # Keep the release a draft until every platform has built successfully.
   feed:
     needs: [windows, macos, linux]
-    if: always() && needs.windows.result == 'success'
+    if: needs.windows.result == 'success' && needs.macos.result == 'success' && needs.linux.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -175,6 +173,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$GITHUB_REF_NAME" latest.json --clobber --repo "$GITHUB_REPOSITORY"
+      - name: Publish only after all platform packages are ready
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "${{ github.ref_name }}" --draft=false --latest --repo "$GITHUB_REPOSITORY"
       # The update feed also lives on the updates branch: files served from there
       # are not counted as release downloads, so the download badge counts people.
       - name: Publish the update feed

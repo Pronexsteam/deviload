@@ -1,0 +1,11 @@
+.app-release-open{padding:7px 9px;border:0;border-radius:7px;background:transparent;color:#c1aaa0;font:inherit;font-size:11px;white-space:nowrap}
+.app-release-open:hover,.app-release-open[aria-expanded="true"]{background:#f2b99a0c;color:#f0c2a8}
+.app-release-notes{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:14px 16px;margin:16px 20px 8px;border:1px solid #c48e7d25;border-radius:12px;background:linear-gradient(115deg,#d5927010,#ffffff02);color:#f6f2ed}
+.app-release-notes[hidden]{display:none!important}
+.app-release-notes h4{margin:0 0 8px;color:#edc2ac;font-size:12px;font-weight:650;line-height:1.5}
+.app-release-notes ul{display:flex;flex-wrap:wrap;gap:5px 20px;list-style:none;margin:0;padding:0;color:#b4aba5;font-size:11px;line-height:1.7}
+.app-release-notes li{position:relative;padding-left:11px}
+.app-release-notes li::before{content:"";position:absolute;left:0;top:.72em;width:3px;height:3px;border-radius:50%;background:#c48e7d}
+.app-release-close{display:grid;place-items:center;flex:none;width:30px;height:30px;padding:0;border:0;border-radius:50%;background:transparent;color:#b4a39b;font-size:22px;line-height:1}
+.app-release-close:hover{background:#ffffff0a;color:#fff}
+@media(max-width:720px){.app-release-notes ul{display:block}.app-release-notes li+li{margin-top:3px}}

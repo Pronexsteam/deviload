@@ -1,0 +1,15 @@
+{
+  "imports": {
+    "crypto": "node:crypto",
+    "jsdom": "npm:jsdom@24.1.3",
+    "bgutils-js/botguard": "npm:bgutils-js@4.0.3/botguard",
+    "bgutils-js/webpo": "npm:bgutils-js@4.0.3/webpo",
+    "bgutils-js/utils": "npm:bgutils-js@4.0.3/utils",
+    "youtubei.js": "npm:youtubei.js@18.1.0",
+    "googlevideo/sabr-stream": "npm:googlevideo@4.1.1/sabr-stream",
+    "googlevideo/utils": "npm:googlevideo@4.1.1/utils",
+    "googlevideo/protos": "npm:googlevideo@4.1.1/protos",
+    "googlevideo/ump": "npm:googlevideo@4.1.1/ump"
+  },
+  "nodeModulesDir": "auto"
+}
