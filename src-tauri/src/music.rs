@@ -177,12 +177,22 @@ fn parse(value: &Value, grouped: bool) -> Catalog {
     Catalog { sections, continuation }
 }
 
+fn mix_body(value: &str) -> Result<Value, String> {
+    if value.len() > 256 { return Err("Invalid music request".into()); }
+    let data: Value = serde_json::from_str(value).map_err(|_| "Invalid music request")?;
+    let playlist = data["playlistId"].as_str().unwrap_or("");
+    let video = data["videoId"].as_str().unwrap_or("");
+    if !playlist.starts_with("RD") || playlist.len() < 13 || playlist.len() > 150 || !valid_id(playlist) || !video_id(video) { return Err("Invalid music request".into()); }
+    Ok(json!({"videoId":video,"playlistId":playlist,"isAudioOnly":true}))
+}
+
 pub fn catalog_page(kind: &str, value: &str, language: &str, proxy: &str, filter: &str, continuation: &str) -> Result<Catalog, String> {
     let (endpoint, mut body) = match kind {
         "home" => ("browse", json!({"browseId":"FEmusic_home"})),
         "search" if !value.trim().is_empty() && value.chars().count() <= 120 => ("search", json!({"query":value.trim()})),
         "browse" if valid_id(value) && ["MPRE", "UC", "VL"].iter().any(|p| value.starts_with(p)) => ("browse", json!({"browseId":value})),
         "radio" if video_id(value) => ("next", json!({"videoId":value,"playlistId":format!("RDAMVM{value}"),"isAudioOnly":true})),
+        "mix" => ("next", mix_body(value)?),
         _ => return Err("Invalid music request".into()),
     };
     if continuation.len() > 8192 || continuation.chars().any(char::is_control) { return Err("Invalid music request".into()); }
@@ -534,6 +544,22 @@ mod tests {
                 std::fs::write(std::path::Path::new(&folder).join(format!("{name}.json")), serde_json::to_vec(data).unwrap()).unwrap();
             }
         }
+    }
+
+    #[test]
+    fn mixes_validate_the_playlist_and_seed_before_network() {
+        let value = json!({"playlistId":"RDajBoh2XK6kU","videoId":"kpafW1g-Arg"}).to_string();
+        assert_eq!(mix_body(&value).unwrap()["playlistId"], "RDajBoh2XK6kU");
+        for value in ["{}", "https://localhost", "{\"playlistId\":\"LL\",\"videoId\":\"kpafW1g-Arg\"}"] { assert!(mix_body(value).is_err()); }
+    }
+
+    #[test]
+    #[ignore = "live YouTube Mix import"]
+    fn live_youtube_mix_import() {
+        if std::env::var_os("DEVILOAD_LIVE_IMPORT_TEST").is_none() { return; }
+        let value = json!({"playlistId":"RDajBoh2XK6kU","videoId":"kpafW1g-Arg"}).to_string();
+        let page = catalog_page("mix", &value, "en", "", "all", "").unwrap();
+        assert!(!page.sections.iter().flat_map(|s| &s.items).collect::<Vec<_>>().is_empty());
     }
 
     #[test]

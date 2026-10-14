@@ -29,7 +29,32 @@ test("playlist pagination deduplicates IDs, keeps source evidence and reports re
   assert.equal(page,2);assert.equal(result.entries.length,2);assert.ok(result.entries.every(row=>!row.liked&&row.plays===0));assert.match(result.warnings[0],/pagination repeated/);assert.deepEqual(result.playlists[0].keys,result.entries.map(row=>row.key));
 });
 test("playlist links reject private shortcuts, spoofed hosts, credentials and unrelated URLs",async()=>{
-  for(const url of ["http://music.youtube.com/playlist?list=PLabcdefghijk123",link.replace("music.youtube.com","music.youtube.com.evil.test"),"https://x@youtube.com/playlist?list=PLabcdefghijk123","https://youtube.com/playlist?list=LL","https://youtube.com/playlist?list=WL","https://youtube.com/playlist?list=RDabcdefghijk","https://youtube.com/watch?v=abcdefghijk","file:///secret"]){await assert.rejects(readPlaylistLink(url,{invoke:()=>{throw Error("must not invoke");}}),/public YouTube Music playlist/);}
+  for(const url of ["http://music.youtube.com/playlist?list=PLabcdefghijk123",link.replace("music.youtube.com","music.youtube.com.evil.test"),"https://x@youtube.com/playlist?list=PLabcdefghijk123","https://youtube.com/playlist?list=LL","https://youtube.com/playlist?list=WL","https://youtube.com/playlist?list=RDinvalid","https://youtube.com/watch?v=abcdefghijk","file:///secret"]){await assert.rejects(readPlaylistLink(url,{invoke:()=>{throw Error("must not invoke");}}),/public YouTube playlist or Mix/);}
+});
+
+test("Spotify album share links use the native metadata reader",async()=>{
+ const result={source:'spotify',name:'MUSIC - SORRY 4 DA WAIT',entries:[entry(1)],playlists:[],warnings:[]};
+ assert.equal(await readPlaylistLink('https://open.spotify.com/album/7sFZGbkCitoqQz7Rt3LoKg?si=share',{invoke:async(command,args)=>{assert.equal(command,'music_import_spotify_playlist');assert.match(args.link,/\/album\//);return result;}}),result);
+});
+
+test("Mix import retains the supplied playlist and video, bounds the snapshot and skips matching",async()=>{
+ let requests=0;
+ const result=await readPlaylistLink('https://www.youtube.com/watch?v=kpafW1g-Arg&list=RDajBoh2XK6kU&index=2',{delay,invoke:async(command,args)=>{
+   assert.equal(args.kind,'mix');assert.deepEqual(JSON.parse(args.value),{playlistId:'RDajBoh2XK6kU',videoId:'kpafW1g-Arg'});
+   const offset=60*requests++;return {...catalog(Array.from({length:70},(_,i)=>song(i+offset))),continuation:'page'+requests};
+ }});
+ assert.equal(requests,2);assert.equal(result.entries.length,100);assert.match(result.warnings[0],/will not update automatically/);
+ const rows=await resolveMusicImport(result.entries,{invoke:()=>assert.fail('known Mix songs need no matching')});assert.equal(rows.length,result.entries.length);
+});
+
+test("Mix pages stop at 100 songs and cancellation suppresses late results",async()=>{
+ let page=0;
+ const result=await readPlaylistLink('https://youtu.be/kpafW1g-Arg?list=RDajBoh2XK6kU',{delay,invoke:async()=>{const offset=60*page++;return {...catalog(Array.from({length:60},(_,i)=>song(i+offset))),continuation:'more'+page};}});
+ assert.equal(result.entries.length,100);
+ const controller=new AbortController();let finish;
+ const pending=readPlaylistLink('https://youtube.com/playlist?list=RDajBoh2XK6kU',{signal:controller.signal,invoke:()=>new Promise(resolve=>finish=resolve)});
+ controller.abort();await assert.rejects(pending,{name:'AbortError'});finish(catalog([song(1)]));
+ for(const bad of ['https://youtube.com/watch?v=bad&list=RDajBoh2XK6kU','https://youtube.com/watch?v=kpafW1g-Arg&v=ajBoh2XK6kU&list=RDajBoh2XK6kU'])await assert.rejects(readPlaylistLink(bad,{invoke:()=>assert.fail('invalid Mix')}),/public YouTube/);
 });
 test("playlist import bounds pages and songs and marks partial network failures",async()=>{
   let page=0;const pages=await readPlaylistLink(link,{delay,concurrency:1,invoke:async()=>({...catalog([song(++page)]),continuation:"next"+page})});assert.equal(page,10);assert.match(pages.warnings[0],/10 playlist pages/);

@@ -71,29 +71,39 @@ export async function resolveMusicImport(entries,{invoke,language="en",signal,on
   await Promise.all(Array.from({length:count},worker));check(signal);if(fatal)throw fatal;return rows;
 }
 
-function playlistId(input){
+function youtubeCollection(input){
   try{
     const url=new URL(typeof input==="string"?input.trim():"");
-    if(url.protocol!=="https:"||url.username||url.password||url.port||url.hash||!["music.youtube.com","youtube.com","www.youtube.com"].includes(url.hostname)||url.pathname!=="/playlist"||url.searchParams.getAll("list").length!==1)throw Error();
+    if(url.protocol!=="https:"||url.username||url.password||url.port||url.hash||!["music.youtube.com","youtube.com","www.youtube.com","m.youtube.com","youtu.be"].includes(url.hostname)||url.searchParams.getAll("list").length!==1)throw Error();
+    const short=url.hostname==='youtu.be';
+    if(short?!/^\/[\w-]{11}$/.test(url.pathname):!['/playlist','/watch'].includes(url.pathname))throw Error();
     const id=url.searchParams.get("list");
-    if(!/^(?:PL[\w-]{10,150}|OLAK[\w-]{10,146})$/.test(id))throw Error();return id;
-  }catch{throw Error("Enter a public YouTube Music playlist link.");}
+    if(/^RD[\w-]{11,148}$/.test(id)){
+      if(url.searchParams.getAll('v').length>1)throw Error();
+      const videoId=short?url.pathname.slice(1):url.searchParams.get('v')||(/^RD(?:AMVM)?([\w-]{11})$/.exec(id)?.[1]);
+      if(!validId(videoId))throw Error();
+      return {kind:'mix',value:JSON.stringify({playlistId:id,videoId}),limit:100,pages:4};
+    }
+    if(!/^(?:PL[\w-]{10,150}|OLAK[\w-]{10,146})$/.test(id))throw Error();
+    return {kind:'browse',value:'VL'+id,limit:500,pages:10};
+  }catch{throw Error("Enter a public YouTube playlist or Mix link.");}
 }
 export async function readPlaylistLink(input,{invoke,language="en",signal,onProgress=()=>{},delay=sleep}={}){
   let url;try{url=new URL(typeof input==='string'?input.trim():'');}catch{}
   if(url?.hostname==='open.spotify.com'){
-    if(url.protocol!=='https:'||url.username||url.password||url.port||url.hash||!/^\/(?:intl-[a-zA-Z-]{2,7}\/)?playlist\/[a-zA-Z0-9]{22}\/?$/.test(url.pathname))throw Error("Enter a public Spotify playlist link.");
+    if(url.protocol!=='https:'||url.username||url.password||url.port||url.hash||!/^\/(?:intl-[a-zA-Z-]{2,7}\/)?(?:playlist|album)\/[a-zA-Z0-9]{22}\/?$/.test(url.pathname))throw Error("Enter a public Spotify playlist or album link.");
     if(typeof invoke!=="function")throw Error("Music catalog is unavailable.");check(signal);
     const result=await wait(invoke("music_import_spotify_playlist",{link:url.href}),signal);check(signal);
-    if(!Array.isArray(result?.entries)||!result.entries.length||result.entries.length>500)throw Error("Could not read this public Spotify playlist. Try a music export instead.");
+    if(!Array.isArray(result?.entries)||!result.entries.length||result.entries.length>500)throw Error("Could not read this public Spotify playlist or album. Try a music export instead.");
     onProgress(result.entries.length,result.entries.length);return result;
   }
-  const id=playlistId(input);if(typeof invoke!=="function")throw Error("Music catalog is unavailable.");check(signal);
-  const result={source:"youtube",name:"Imported YouTube Music playlist",entries:[],playlists:[],warnings:[]},request=caller(invoke,signal,delay),seen=new Set(),tokens=new Set();
+  const collection=youtubeCollection(input),mix=collection.kind==='mix';if(typeof invoke!=="function")throw Error("Music catalog is unavailable.");check(signal);
+  const result={source:"youtube",name:mix?"Imported YouTube Mix":"Imported YouTube Music playlist",entries:[],playlists:[],warnings:[]},request=caller(invoke,signal,delay),seen=new Set(),tokens=new Set();
+  if(mix)result.warnings.push("A Mix is saved as a playlist of up to 100 songs. It may differ from your personalized YouTube Mix and will not update automatically.");
   let continuation;
-  for(let page=0;page<10;page++){
+  for(let page=0;page<collection.pages;page++){
     check(signal);let response;
-    try{response=await request({kind:"browse",value:"VL"+id,language,...(continuation?{continuation}:{})});}
+    try{response=await request({kind:collection.kind,value:collection.value,language,...(continuation?{continuation}:{})});}
     catch(error){
       if(signal?.aborted||error?.name==="AbortError")throw canceled();
       const message=isRateLimit(error)?RATE_LIMIT:"Only part of the playlist could be read.";
@@ -102,20 +112,21 @@ export async function readPlaylistLink(input,{invoke,language="en",signal,onProg
     }
     const items=candidates(response);let overflow=false;
     for(const item of items){
-      if(seen.has(item.id))continue;if(result.entries.length>=500){overflow=true;break;}
+      if(seen.has(item.id))continue;if(result.entries.length>=collection.limit){overflow=true;break;}
       seen.add(item.id);result.entries.push({key:"youtube:"+item.id,title:item.title,artists:item.artists,videoId:item.id,liked:false,plays:0});
     }
-    onProgress(result.entries.length,500);check(signal);
+    onProgress(result.entries.length,collection.limit);check(signal);
     const invalidContinuation=response?.continuation&&(typeof response.continuation!=="string"||response.continuation.length>20000);
     if(invalidContinuation){result.warnings.push("Only part of the playlist could be read.");break;}
     const next=typeof response?.continuation==="string"?response.continuation:"";
-    if(overflow||result.entries.length>=500&&next){result.warnings.push("Only the first 500 playlist songs were imported.");break;}
+    if(overflow||result.entries.length>=collection.limit&&next){if(!mix)result.warnings.push("Only the first 500 playlist songs were imported.");break;}
     if(!next)break;
     if(tokens.has(next)){result.warnings.push("Playlist pagination repeated. Only part of the playlist was imported.");break;}
     tokens.add(next);continuation=next;
-    if(page===9)result.warnings.push("Only the first 10 playlist pages were imported.");
+    if(page===collection.pages-1){if(mix)result.warnings.push("Only part of the playlist could be read.");else result.warnings.push("Only the first 10 playlist pages were imported.");}
   }
   check(signal);
   if(!result.entries.length)result.warnings.push("No songs were found in this playlist.");
+  if(mix&&result.entries.length)result.name='YouTube Mix · '+result.entries[0].title;
   result.playlists.push({name:result.name,keys:result.entries.map(entry=>entry.key)});return result;
 }

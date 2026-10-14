@@ -115,7 +115,7 @@ jobs:
       - name: Install the libraries Tauri builds against
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libssl-dev libfuse2 gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
+          sudo apt-get install -y squashfs-tools libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libssl-dev libfuse2 gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
       - run: npm ci
       - name: Fetch yt-dlp, FFmpeg and Deno for Linux
         run: bash scripts/fetch-tools-linux.sh
@@ -134,6 +134,7 @@ jobs:
           bundle="src-tauri/target/release/bundle"
           deb="$(ls "$bundle"/deb/*.deb | head -n 1)"
           appimage="$(ls "$bundle"/appimage/*.AppImage | head -n 1)"
+          python3 scripts/check-appimage-permissions.py "$appimage"
           # For the log: engines that lost the executable bit run from a copy (see runnable() in lib.rs).
           dpkg-deb -c "$deb" | grep -E '/bin/(yt-dlp|ffmpeg|ffprobe|deno)$' || true
           cp "$deb" "Deviload-${version}-amd64.deb"

@@ -2,6 +2,7 @@
 # Run as an unprivileged user with Xvfb, D-Bus and xdotool installed.
 set -euo pipefail
 image=$(realpath "$1")
+python3 "$(dirname "$(realpath "$0")")/check-appimage-permissions.py" "$image"
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 cd "$work"

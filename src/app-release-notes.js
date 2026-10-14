@@ -1,6 +1,6 @@
 import {t,onLanguageChange} from "./i18n.js";
 
-const RELEASE_ID="deviload-2.7.0";
+const RELEASE_ID="deviload-2.7.1";
 const STORAGE_KEY="deviload-app-release-notes";
 const instances=new WeakMap();
 
@@ -17,7 +17,7 @@ export function wireReleaseNotes(workspace){
   card.setAttribute("aria-labelledby","app-release-title");
   const copy=document.createElement("div"),title=document.createElement("h4"),list=document.createElement("ul");
   title.id="app-release-title";
-  const items=Array.from({length:4},()=>document.createElement("li"));
+  const items=Array.from({length:3},()=>document.createElement("li"));
   list.append(...items);copy.append(title,list);
   const close=document.createElement("button");
   close.type="button";close.className="app-release-close";close.textContent="×";
@@ -25,10 +25,9 @@ export function wireReleaseNotes(workspace){
   const translate=()=>{
     button.textContent=t("What's new");title.textContent="Deviload · "+t("What's new");
     close.setAttribute("aria-label",t("Dismiss release notes"));
-    items[0].textContent=t("Faster music playback.");
-    items[1].textContent=t("Easier playlist management.");
-    items[2].textContent=t("Bring playlists from Spotify and YouTube Music.");
-    items[3].textContent=t("Share what is playing in Discord.");
+    items[0].textContent=t("Import Spotify albums into your music library.");
+    items[1].textContent=t("Save up to 100 songs from a YouTube Mix.");
+    items[2].textContent=t("Fixed Linux AppImage startup permissions.");
   };
   const show=visible=>{card.hidden=!visible;button.setAttribute("aria-expanded",String(visible));};
   let dismissed=false;

@@ -54,6 +54,7 @@ function htmlStrings() {
   }
   for(const file of ['src/download-profiles.js','src/download-profile-data.js','src/settings-backup.js','src/cut-editing.js',...translatedSources.filter(path=>path.startsWith('src/music-'))]) {
     for(const [,message] of read(file).matchAll(/(?:Error|warn)\(["']([^"']+)["']/g))strings.add(message);
+    for(const [,message] of read(file).matchAll(/warnings\.push\("([^"]+)"/g))strings.add(message);
   }
   return strings;
 }
