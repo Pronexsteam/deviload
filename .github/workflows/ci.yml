@@ -1,8 +1,8 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
+  # main is protected by all four PR checks. Do not repeat the same matrix
+  # after merging that tested tree; tag publication has its own Release job.
   pull_request:
   workflow_dispatch:
 
@@ -99,7 +99,7 @@ jobs:
             docker run --rm -v "$PWD:/workspace:ro" "$distro" bash -c '
               set -euo pipefail
               apt-get update -qq
-              DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb xauth xdotool dbus-x11 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 libxdo3 libasound2t64 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
+              DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 squashfs-tools xvfb xauth xdotool dbus-x11 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 libxdo3 libasound2t64 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
               useradd -m tester
               runuser -u tester -- bash /workspace/scripts/test-appimage.sh "/workspace/$1"
             ' _ "$image"
