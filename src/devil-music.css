@@ -177,3 +177,73 @@ body.music-focus .music-library-sidebar{min-height:calc(100dvh - 205px)}
 .music-toolbar>.music-tabs{grid-column:1 / -1;grid-row:2;display:flex;flex-wrap:wrap;gap:22px;justify-content:flex-start}
 @media(max-width:760px){.music-toolbar{grid-template-columns:auto minmax(0,1fr)}.music-toolbar>.music-search{grid-column:1 / -1;grid-row:2}.music-toolbar>.music-tabs{grid-row:3;gap:14px}.music-toolbar>.music-navigation{justify-content:flex-end}}
 .music-sound-actions{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:22px}
+
+.music-interest-section{min-width:0;margin:24px 0 30px}
+.music-interest-head{flex-wrap:wrap;margin:0 0 12px;gap:14px}
+.music-interest-head h4{margin:0;font-size:18px;line-height:1.4}
+.music-interest-head button{max-width:100%;white-space:normal;text-align:center}
+.music-interest-help{margin:0 0 18px;color:#b4a9ac;font-size:12px;line-height:1.7;overflow-wrap:anywhere}
+.music-interest-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:16px}
+.music-interest-card{display:grid;grid-template-columns:76px minmax(0,1fr);align-items:center;gap:14px;padding:16px;border:1px solid #ffffff0d;border-radius:15px;background:linear-gradient(130deg,#a6503514,#ffffff03);min-width:0}
+.music-interest-art{width:76px;align-self:start;border-radius:10px}
+.music-interest-copy{display:flex;flex-direction:column;gap:7px;min-width:0}
+.music-interest-copy>strong{font-size:15px;line-height:1.45;overflow-wrap:anywhere;color:#f7f0ec}
+.music-interest-copy>span,.music-interest-copy>small{font-size:11px;line-height:1.6;color:#b4a9ac;overflow-wrap:anywhere}
+.music-interest-copy>small{color:#e4b69f}
+.music-interest-actions{display:flex;grid-column:1/-1;flex-wrap:wrap;align-items:center;gap:8px;margin-top:2px;min-width:0}
+.music-interest-actions button{max-width:100%;min-height:36px;white-space:normal;overflow-wrap:anywhere;text-align:center;line-height:1.4}
+.music-interest-actions .icon,.music-interest-head .icon{flex:none}
+.music-interest-banner{margin:0 0 26px;padding:26px;border:1px solid #ffffff0d;border-radius:18px;background:linear-gradient(115deg,#a6503529,#ffffff03)}
+.music-interest-banner>div{min-width:0}
+.music-interest-banner h2{margin:10px 0;font-size:32px;line-height:1.15;letter-spacing:-.8px;overflow-wrap:anywhere}
+.music-interest-banner p{color:#b4a9ac;font-size:13px;line-height:1.6}
+.music-interest-banner .music-library-actions{justify-content:flex-start;flex-wrap:wrap;margin-top:18px}
+.music-interest-banner button{max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.4}
+.music-interest-dialog{width:min(560px,92vw);max-height:85vh;scrollbar-gutter:stable}
+.music-interest-dialog .music-library-dialog-head{align-items:flex-start;gap:14px}
+.music-interest-dialog .music-library-dialog-head h3{min-width:0;overflow-wrap:anywhere;line-height:1.35}
+.music-interest-dialog .music-library-dialog-head>button{flex:none}
+.music-interest-form{min-width:0}
+.music-interest-form>label{font-size:12px;line-height:1.5;color:#bcb0af}
+.music-interest-form>label>input{box-sizing:border-box;min-width:0;margin-bottom:18px}
+.music-interest-form .music-interest-choices{min-width:0;margin:0;padding:0;border:0;max-height:min(38vh,330px);overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.music-interest-choices legend{padding:0 0 10px;color:#c9bbb6;font-size:12px;line-height:1.5}
+.music-interest-form .music-interest-choice{display:flex;align-items:center;gap:12px;min-width:0;margin:0 0 7px;padding:11px 12px;border:1px solid #ffffff0c;border-radius:9px;background:#ffffff03;cursor:pointer}
+.music-interest-choice>input[type="checkbox"]{display:block;flex:none;width:16px;height:16px;margin:0;padding:0;accent-color:#efb69a;cursor:pointer}
+.music-interest-choice>span{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}
+.music-interest-choice strong{font-size:12px;line-height:1.5;font-weight:600;overflow-wrap:anywhere;color:#e9dfd9}
+.music-interest-choice small{font-size:11px;line-height:1.4;color:#a89b98}
+.music-interest-choice:has(input:checked){background:#a650351b;border-color:#e6a78645}
+.music-interest-choice:has(input:disabled){opacity:.5;cursor:default}
+.music-interest-choice:focus-within{outline:2px solid #e4ae90;outline-offset:1px}
+.music-interest-count{margin:12px 0 0;color:#b4a9ac;font-size:12px;line-height:1.5}
+.music-interest-dialog .music-library-actions{gap:10px;flex-wrap:wrap}
+.music-interest-dialog .music-library-actions button{max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.4}
+.music-interest-delete{margin-right:auto}
+.music-interest-section button:disabled,.music-interest-dialog button:disabled{opacity:.45;cursor:default;transform:none}
+.music-interest-section button:focus-visible,.music-interest-dialog button:focus-visible{outline:2px solid #f1b995;outline-offset:3px}
+
+.music-recording-dialog{width:min(620px,92vw);max-height:85vh;scrollbar-gutter:stable}
+.music-recording-dialog .music-library-dialog-head{align-items:flex-start;gap:14px}
+.music-recording-dialog .music-library-dialog-head h3{min-width:0;line-height:1.35;overflow-wrap:anywhere}
+.music-recording-dialog .music-library-dialog-head>button{flex:none}
+.music-recording-dialog .music-library-dialog-body>p{margin:0 0 18px}
+.music-recording-dialog .music-duplicate-group{min-width:0;margin:12px 0;padding:14px;border:1px solid #ffffff0d;border-radius:12px;background:#ffffff03}
+.music-recording-dialog .music-duplicate-group>strong{display:block;margin-bottom:10px;font-size:11px;font-weight:600;color:#cbb1a4}
+.music-recording-dialog .music-artist-choice{display:flex;align-items:center;gap:12px;min-width:0}
+.music-recording-dialog .music-artist-choice>.music-art{flex:none;width:54px;height:54px;aspect-ratio:1;border-radius:7px;overflow:hidden}
+.music-recording-dialog .music-artist-choice strong{display:block;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.music-recording-dialog .music-artist-choice p{margin:4px 0;font-size:12px;line-height:1.5;color:#b4a9ac;overflow-wrap:anywhere}
+.music-recording-dialog .music-artist-choice small{font-size:11px;color:#a89b98}
+.music-recording-dialog form{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap;margin:22px 0}
+.music-recording-dialog form>input[type="search"]{box-sizing:border-box;flex:1 1 230px;min-width:0;width:auto;margin:0;font-size:12px}
+.music-recording-dialog form>button{flex:none;min-height:38px}
+.music-recording-dialog .music-duplicate-group>p{margin:10px 0;font-size:11px;line-height:1.6;color:#a99b96}
+.music-recording-dialog .music-duplicate-group>.music-import-review{color:#eac2a9;background:#b66a2f14;border:1px solid #c69a4826;border-radius:8px;padding:9px 10px}
+.music-recording-dialog .music-duplicate-group>button{margin-top:3px;max-width:100%;white-space:normal;overflow-wrap:anywhere;text-align:center;line-height:1.5}
+.music-recording-dialog .music-library-actions{gap:10px;flex-wrap:wrap}
+.music-recording-dialog .music-library-actions button{max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.5}
+.music-recording-dialog button:disabled{opacity:.45;cursor:default;transform:none}
+.music-recording-dialog button:focus-visible{outline:2px solid #f1b995;outline-offset:3px}
+@media(max-width:760px){.music-interest-grid{grid-template-columns:minmax(0,1fr)}.music-interest-banner{padding:20px}.music-interest-banner h2{font-size:27px}.music-interest-dialog,.music-recording-dialog{padding:20px}.music-interest-dialog .music-library-dialog-head h3,.music-recording-dialog .music-library-dialog-head h3{font-size:19px}.music-interest-actions{gap:8px}.music-interest-actions button{flex:1 1 auto}.music-recording-dialog .music-library-actions{justify-content:flex-start}}
+@media(max-width:440px){.music-interest-card{grid-template-columns:62px minmax(0,1fr);gap:12px;padding:13px}.music-interest-art{width:62px}.music-interest-dialog,.music-recording-dialog{padding:17px}.music-recording-dialog form>input[type="search"]{flex-basis:100%}.music-recording-dialog form>button{width:100%}.music-interest-dialog .music-library-actions button{flex:1 1 auto}.music-interest-delete{margin-right:0}}

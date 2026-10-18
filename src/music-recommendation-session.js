@@ -85,6 +85,7 @@ export function createRecommendationSession(){
     },
     fail(id,now=Date.now()){if(!validId(id))return;now=time(now);put(unavailable,id,{at:now});prune(now);},
     recover(id){unavailable.delete(id);},
+    forgetTrack(id){shown.delete(id);skips.delete(id);unavailable.delete(id);},
     allowed(items,now=Date.now()){
       now=time(now);prune(now);
       const all=clean(items),available=all.filter(item=>!unavailable.has(item.id));

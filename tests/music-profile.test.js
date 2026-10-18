@@ -118,3 +118,27 @@ test("playlist transfer persists as one complete update and quota failure retain
   assert.deepEqual(readMusicProfile(storage).saved.playlists,changed.playlists);
   assert.equal(changed.playlists[0].items.length,0);assert.equal(changed.playlists[1].items.length,3);
 });
+
+test("interest mixes and confirmed source choices survive restart and backup without changing logical collections",()=>{
+  const state={...saved(),playlists:[{id:"work",name:"Work",items:[{...song(1),duration:180}]}],
+    interestMixes:[{id:"focus",name:"Focus",playlistIds:["work"]}],
+    sourceBindings:[{trackId:song(1).id,track:{...song(1),duration:180,path:"C:/private"},source:{...song(9),duration:181,url:"https://signed/private"}}]};
+  const file=exportMusicProfile(state,taste()),restored=importMusicProfile(file);
+  assert.equal(restored.saved.interestMixes[0].id,"focus");assert.equal(restored.saved.sourceBindings[0].trackId,song(1).id);
+  assert.equal(restored.saved.sourceBindings[0].source.id,song(9).id);assert.equal(restored.saved.sourceBindings[0].source.duration,181);
+  assert.equal(restored.saved.sourceBindings[0].track.duration,180);assert.ok(!file.includes("private"));
+  assert.deepEqual(restored.saved.favorites,state.favorites);assert.deepEqual(restored.saved.recent,state.recent);
+  assert.equal(restored.saved.playlists[0].items[0].id,song(1).id);
+  const memory=new Map(),storage={getItem:key=>memory.get(key),setItem:(key,value)=>memory.set(key,value)};
+  saveMusicProfile(storage,state,taste());assert.deepEqual(readMusicProfile(storage),restored);
+});
+
+test("invalid new profile fields cannot replace a saved profile and old backups receive safe defaults",()=>{
+  const state={...saved(),playlists:[{id:"work",name:"Work",items:[song(1)]}]},raw=JSON.parse(exportMusicProfile(state,taste()));
+  for(const bindings of [[{trackId:11111111111,source:song(9)}],[{trackId:song(1).id,source:song(1)}],[{trackId:song(1).id,source:song(9),track:song(2)}],Array.from({length:201},(_,n)=>({trackId:song(n).id,source:song(999)}))]){
+    assert.throws(()=>importMusicProfile(JSON.stringify({...raw,saved:{...raw.saved,sourceBindings:bindings}})));
+  }
+  assert.throws(()=>importMusicProfile(JSON.stringify({...raw,saved:{...raw.saved,interestMixes:[{id:"mix",name:"Mix",playlistIds:Array(9).fill("work")}]}})));
+  delete raw.saved.sourceBindings;delete raw.saved.interestMixes;
+  const old=importMusicProfile(JSON.stringify(raw));assert.deepEqual(old.saved.sourceBindings,[]);assert.deepEqual(old.saved.interestMixes,[]);
+});

@@ -171,11 +171,19 @@ export function recommendationReason(item,profile,favorites,{now=Date.now(),foll
   now=safeNow(now);return reasonFor(item,affinities(profile,favorites,now,followedArtists),now);
 }
 
+// A scoped mix may narrow positive preferences without making globally heard
+// artists unfamiliar. Return identity only, never their global affinity score.
+export function familiarArtistKeys(profile,favorites,{now=Date.now(),followedArtists=[]}={}) {
+  return [...affinities(profile,favorites,safeNow(now),followedArtists).knownArtists];
+}
+
 // Context is most-recent-first. It affects recommendations only, never a manually
 // assembled queue. Artist cooldown is soft so a one-artist radio can still continue.
-export function recommendWithReasons(items,profile,favorites,{now=Date.now(),random=Math.random,limit=20,exclude=[],followedArtists=[],contextItems=[],recentArtists=[],sessionItems=[],candidateScores,itemAdjustments}={}) {
+export function recommendWithReasons(items,profile,favorites,{now=Date.now(),random=Math.random,limit=20,exclude=[],followedArtists=[],contextItems=[],recentArtists=[],sessionItems=[],candidateScores,itemAdjustments,familiarArtists=[],familiarBoostIds}={}) {
   now=safeNow(now);limit=limitValue(limit,20);if(!limit)return [];
   const evidence=affinities(profile,favorites,now,followedArtists),excluded=new Set(Array.isArray(exclude)?exclude.filter(validId):[]);
+  for(const key of names(Array.isArray(familiarArtists)?familiarArtists.slice(0,1000):[]))evidence.knownArtists.add(key);
+  const familiarBoost=Array.isArray(familiarBoostIds)?new Set(familiarBoostIds.slice(0,MAX_CANDIDATES).filter(validId)):null;
   const mode=["familiar","discovery"].includes(profile?.mode)?profile.mode:"balanced",context=new Map();
   // Positive session fit is deliberately limited to named artists. Candidate
   // retrieval may add bounded source evidence, never invented audio/genre labels.
@@ -190,7 +198,7 @@ export function recommendWithReasons(items,profile,favorites,{now=Date.now(),ran
       if((score<=-2&&!evidence.liked.has(item.id))||(heard&&since<TRACK_COOLDOWN))return null;
       const knownArtist=keys.some(key=>evidence.knownArtists.has(key)),affinity=keys.length?Math.max(...keys.map(key=>evidence.artists.get(key)||0)):0;
       const freshness=heard?Math.exp(-since/(2*DAY)):0;
-      const preference=mode==="discovery"?(!knownArtist?5:heard?-2.5:-1):mode==="familiar"?(knownArtist?4:0)+(heard||evidence.liked.has(item.id)?2:0):!knownArtist?.45:0;
+      const preference=mode==="discovery"?(!knownArtist?5:heard?-2.5:-1):mode==="familiar"?(!familiarBoost||familiarBoost.has(item.id)?(knownArtist?4:0)+(heard||evidence.liked.has(item.id)?2:0):0):!knownArtist?.45:0;
       const artistCooldown=Math.max(0,...keys.map(key=>Math.min(2.5,Math.log1p(evidence.recentArtists.get(key)||0))));
       const contextPenalty=Math.max(0,...keys.map(key=>Math.min(3,context.get(key)||0)))*1.5;
       const sessionFit=Math.max(0,...keys.map(key=>sessionArtists.get(key)||0))*2;

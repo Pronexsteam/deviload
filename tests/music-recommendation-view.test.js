@@ -6,6 +6,8 @@ import {mergeRecommendationPools,recommendationLabel} from "../src/music-recomme
 import {readTaste,tasteSeeds,recommendWithReasons,canonicalArtistKey} from "../src/music-taste.js";
 import {tracks} from "../src/music-state.js";
 import {createRecommendationSession} from "../src/music-recommendation-session.js";
+import {rankMusicRecommendations} from "../src/music-recommendation-engine.js";
+import {createRecordingView} from "../src/music-recording-view.js";
 
 const song=(n,artist=`Artist ${n}`)=>({id:String(n).padStart(11,"0"),kind:"song",title:`Song ${n}`,artists:[artist]});
 const deferred=()=>{let resolve;const promise=new Promise(done=>{resolve=done;});return {promise,resolve};};
@@ -30,11 +32,11 @@ test("an older home personalization cannot replace a newer taste choice",async()
   const source=readFileSync(new URL("../src/devil-music.js",import.meta.url),"utf8");
   const code=source.slice(source.indexOf("  async function personalize("),source.indexOf("  function prepareHomeSelection("));
   const old=deferred(),fresh=deferred(),rendered=[],ctx={
-    personalization:0,request:1,saved:{favorites:[song(1)],recent:[],collections:[]},taste:readTaste(),
+    personalization:0,request:1,queue:[],saved:{favorites:[song(1)],recent:[],collections:[],playlists:[],sourceBindings:[],interestMixes:[]},taste:readTaste(),
     current:null,playbackContext:[],playbackSourceContext:{kind:"manual"},followedCursor:0,privateSession:false,discoveryCandidates:[],sections:[],recommendationSession:createRecommendationSession(),
-    recommendationReasons:new Map(),captureListening(){},tasteSeeds,tracks,canonicalArtistKey,
+    recommendationReasons:new Map(),captureListening(){},tasteSeeds,tracks,canonicalArtistKey,createRecordingView,
     radio:seed=>seed.id===song(1).id?old.promise:fresh.promise,invoke(){throw Error("no artist request expected");},
-    mergeRecommendationPools,recommendWithReasons,recommendationOptions:()=>({random:()=>.5}),homeSections:(_,items)=>items,
+    mergeRecommendationPools,recommendWithReasons,rankMusicRecommendations,recommendationOptions:()=>({random:()=>.5}),homeSections:(_,items)=>items,
     render(){rendered.push(ctx.sections.map(item=>item.id));},prepareHomeSelection(){},language:()=>"en",t:s=>s
   };
   const personalize=runInNewContext(`(()=>{${code};return personalize;})()`,ctx);

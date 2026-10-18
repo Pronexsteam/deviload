@@ -17,6 +17,8 @@ pub struct Item {
     subtitle: String,
     artists: Vec<String>,
     image: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    duration: Option<u32>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -100,6 +102,55 @@ fn artists(value: &Value) -> Vec<String> {
     names
 }
 
+// Only visible clock-shaped labels are duration evidence. Plain years/counts,
+// linked artist/album names and arbitrary nested metadata must not become time.
+fn clock_seconds(value: &str) -> Option<u32> {
+    let value = value.trim();
+    if value.len() > 10 { return None; }
+    let parts: Vec<&str> = value.split(':').collect();
+    if !(2..=3).contains(&parts.len()) || parts.iter().any(|part| part.is_empty() || !part.bytes().all(|b| b.is_ascii_digit())) { return None; }
+    if parts.last()?.len() != 2 || parts.last()?.parse::<u32>().ok()? >= 60 { return None; }
+    let seconds = match parts.as_slice() {
+        [minutes, seconds] if minutes.len() <= 4 => minutes.parse::<u32>().ok()?.checked_mul(60)?.checked_add(seconds.parse().ok()?)?,
+        [hours, minutes, seconds] if hours.len() <= 2 && minutes.len() == 2 && minutes.parse::<u32>().ok()? < 60 =>
+            hours.parse::<u32>().ok()?.checked_mul(3600)?.checked_add(minutes.parse::<u32>().ok()?.checked_mul(60)?)?.checked_add(seconds.parse().ok()?)?,
+        _ => return None,
+    };
+    (1..=86400).contains(&seconds).then_some(seconds)
+}
+
+fn duration_labels(value: &Value, durations: &mut Vec<u32>) {
+    let mut add = |label: &str| {
+        for part in label.split(['·', '•']) {
+            if let Some(seconds) = clock_seconds(part) {
+                if !durations.contains(&seconds) { durations.push(seconds); }
+            }
+        }
+    };
+    if let Some(label) = value["simpleText"].as_str() { add(label); }
+    if let Some(runs) = value["runs"].as_array() {
+        for run in runs {
+            if run.get("navigationEndpoint").is_none() {
+                if let Some(label) = run["text"].as_str() { add(label); }
+            }
+        }
+    }
+}
+
+fn item_duration(value: &Value) -> Option<u32> {
+    let mut durations = Vec::new();
+    if let Some(columns) = value["fixedColumns"].as_array() {
+        for column in columns { duration_labels(&column["musicResponsiveListItemFixedColumnRenderer"]["text"], &mut durations); }
+    }
+    // A fixed column is the explicit duration field. Conflicting clocks are
+    // unknown instead of choosing one arbitrarily or falling back to a label.
+    if !durations.is_empty() { return (durations.len() == 1).then(|| durations[0]); }
+    if let Some(columns) = value["flexColumns"].as_array() {
+        for column in columns.iter().skip(1) { duration_labels(&column["musicResponsiveListItemFlexColumnRenderer"]["text"], &mut durations); }
+    } else { duration_labels(&value["subtitle"], &mut durations); }
+    (durations.len() == 1).then(|| durations[0])
+}
+
 fn item(value: &Value) -> Option<Item> {
     let columns = value["flexColumns"].as_array();
     let title_value = if let Some(columns) = columns { &columns.first()?["musicResponsiveListItemFlexColumnRenderer"]["text"] } else { &value["title"] };
@@ -119,7 +170,8 @@ fn item(value: &Value) -> Option<Item> {
     let subtitle = columns.map(|cols| cols.iter().skip(1).map(|v| text(&v["musicResponsiveListItemFlexColumnRenderer"]["text"]))
         .filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ")).unwrap_or_else(|| text(&value["subtitle"]));
     let byline = if columns.is_some() { &value["flexColumns"] } else { &value["subtitle"] };
-    Some(Item { id: id.into(), kind: kind.into(), title, subtitle, artists: artists(byline), image: image(value) })
+    Some(Item { id: id.into(), kind: kind.into(), title, subtitle, artists: artists(byline), image: image(value),
+        duration: if kind == "song" { item_duration(value) } else { None } })
 }
 
 fn collect_items(value: &Value, items: &mut Vec<Item>) {
@@ -129,7 +181,8 @@ fn collect_items(value: &Value, items: &mut Vec<Item>) {
             if matches!(key.as_str(), "musicCardShelfRenderer" | "musicTwoRowItemRenderer" | "musicResponsiveListItemRenderer" | "playlistPanelVideoRenderer") {
                 let parsed = if key == "playlistPanelVideoRenderer" {
                     v["videoId"].as_str().filter(|id| video_id(id)).map(|id| Item { id: id.into(), kind: "song".into(),
-                        title: text(&v["title"]), subtitle: text(&v["longBylineText"]), artists: artists(&v["longBylineText"]), image: image(v) })
+                        title: text(&v["title"]), subtitle: text(&v["longBylineText"]), artists: artists(&v["longBylineText"]), image: image(v),
+                        duration: clock_seconds(&text(&v["lengthText"])) })
                 } else { item(v) };
                 if let Some(item) = parsed { items.push(item); }
                 if key == "musicCardShelfRenderer" { collect_items(&v["contents"], items); }
@@ -489,6 +542,70 @@ mod tests {
         assert_eq!(parsed.sections[0].items.len(), 2);
         assert_eq!(parsed.sections[0].items[0].kind, "album");
         assert_eq!(parsed.sections[0].items[1].image, "");
+    }
+
+    #[test]
+    fn catalog_duration_clocks_are_strict_and_bounded() {
+        for (label, seconds) in [("0:01", 1), (" 3:45 ", 225), ("62:03", 3723), ("1:02:03", 3723), ("24:00:00", 86400), ("1440:00", 86400)] {
+            assert_eq!(clock_seconds(label), Some(seconds), "{label}");
+        }
+        for label in ["", "0:00", "00:00:00", "3:5", "1:60", "1:2:03", "1:60:00", "24:00:01", "1440:01", "99999:00", "2024", "1,234", "3.45", "3:45 views", "-3:45", "NaN", "Infinity", "３:４５"] {
+            assert_eq!(clock_seconds(label), None, "{label}");
+        }
+    }
+
+    #[test]
+    fn catalog_responsive_items_read_explicit_clock_columns() {
+        let fixed = json!({"musicResponsiveListItemRenderer":{"playlistItemData":{"videoId":"abcdefghijk"},
+            "flexColumns":[{"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Song"}]}}},
+                {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Artist","navigationEndpoint":{"browseEndpoint":{"browseId":"UCartist"}}}]}}}],
+            "fixedColumns":[{"musicResponsiveListItemFixedColumnRenderer":{"text":{"simpleText":"3:45"}}}]}});
+        let parsed = parse(&fixed, false);
+        let track = &parsed.sections[0].items[0];
+        assert_eq!(track.duration, Some(225));
+        assert_eq!(track.artists, ["Artist"]);
+        assert_eq!(track.subtitle, "Artist");
+        assert_eq!(serde_json::to_value(track).unwrap()["duration"], 225);
+
+        let flexible = json!({"musicResponsiveListItemRenderer":{"playlistItemData":{"videoId":"lmnopqrstuv"},
+            "flexColumns":[{"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Other song"}]}}},
+                {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Artist","navigationEndpoint":{"browseEndpoint":{"browseId":"UCartist"}}},{"text":" • "},{"text":"1:02:03"}]}}}]}});
+        assert_eq!(parse(&flexible, false).sections[0].items[0].duration, Some(3723));
+    }
+
+    #[test]
+    fn catalog_two_row_and_radio_duration_preserve_legacy_shape() {
+        let song = json!({"musicTwoRowItemRenderer":{"title":{"simpleText":"Song"},"subtitle":{"simpleText":"Artist • 2024 • 2:09"},
+            "navigationEndpoint":{"watchEndpoint":{"videoId":"abcdefghijk"}}}});
+        assert_eq!(parse(&song, false).sections[0].items[0].duration, Some(129));
+        let panel = json!({"playlistPanelVideoRenderer":{"videoId":"lmnopqrstuv","title":{"simpleText":"Radio song"},"longBylineText":{"simpleText":"Artist"},"lengthText":{"runs":[{"text":"6:20"}]}}});
+        assert_eq!(parse(&panel, false).sections[0].items[0].duration, Some(380));
+
+        let legacy = json!({"musicTwoRowItemRenderer":{"title":{"simpleText":"Song"},"subtitle":{"simpleText":"Artist • 2024 • 1.2M views"},
+            "navigationEndpoint":{"watchEndpoint":{"videoId":"abcdefghijk"}}}});
+        let serialized = serde_json::to_value(&parse(&legacy, false).sections[0].items[0]).unwrap();
+        assert_eq!(serialized, json!({"id":"abcdefghijk","kind":"song","title":"Song","subtitle":"Artist • 2024 • 1.2M views","artists":[],"image":""}));
+        let album = json!({"musicTwoRowItemRenderer":{"title":{"simpleText":"Album"},"subtitle":{"simpleText":"2024 • 42:00"},
+            "navigationEndpoint":{"browseEndpoint":{"browseId":"MPREalbum"}}}});
+        assert!(serde_json::to_value(&parse(&album, false).sections[0].items[0]).unwrap().get("duration").is_none());
+    }
+
+    #[test]
+    fn catalog_durations_do_not_guess_from_metadata_or_conflicting_clocks() {
+        let base = json!({"playlistItemData":{"videoId":"abcdefghijk"},"duration":900,"lengthSeconds":"800",
+            "flexColumns":[{"musicResponsiveListItemFlexColumnRenderer":{"text":{"simpleText":"3:45"}}},
+                {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"4:20","navigationEndpoint":{"browseEndpoint":{"browseId":"UCartist"}}},{"text":" • 2024 • 1,234 views"}]}}}]});
+        assert_eq!(item(&base).unwrap().duration, None);
+        let mut conflicting = base.clone();
+        conflicting["fixedColumns"] = json!([
+            {"musicResponsiveListItemFixedColumnRenderer":{"text":{"simpleText":"3:45"}}},
+            {"musicResponsiveListItemFixedColumnRenderer":{"text":{"simpleText":"4:20"}}}]);
+        assert_eq!(item(&conflicting).unwrap().duration, None);
+        conflicting["fixedColumns"][1]["musicResponsiveListItemFixedColumnRenderer"]["text"]["simpleText"] = json!("3:45");
+        assert_eq!(item(&conflicting).unwrap().duration, Some(225));
+        let mut flexible = base;
+        flexible["flexColumns"][1]["musicResponsiveListItemFlexColumnRenderer"]["text"] = json!({"simpleText":"Artist • 3:45 • 4:20"});
+        assert_eq!(item(&flexible).unwrap().duration, None);
     }
 
     #[test]
