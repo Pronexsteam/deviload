@@ -66,11 +66,18 @@ export function mergeMusicImport(saved,taste,{rows=[],name='Imported music',sour
     added+=items.length;
   }
   if(useForTaste){
+    let available=Math.max(0,1000-Object.keys(nextTaste.entries).length);
     for(const row of chosen.values()){
-      const old=nextTaste.entries[row.item.id],score=row.plays>=3?2.5:row.plays>0?1.5:1;
-      // Import is evidence with bounded weight, not a simulated playback event.
-      // Reimporting the same archive must not increase either reward or count.
-      nextTaste.entries[row.item.id]={...old,item:row.item,score:Math.max(old?.score||0,score),plays:Math.max(old?.plays||0,row.plays),at:old?.at??now,lastPlayed:Math.max(old?.lastPlayed||0,row.lastPlayed)};
+      const old=nextTaste.entries[row.item.id],score=row.lastPlayed>0?(row.plays>=3?2.5:row.plays>0?1.5:.35):.35;
+      // Library membership is a weak, opt-in preference prior, not a recent
+      // listen. at dates receipt of undated evidence; lastPlayed stays unknown.
+      // Dated history decays from its real date. Reimport cannot overwrite
+      // observed taste (including a rejection). Explicit likes live above.
+      if(old)continue;
+      // Importing an archive must not evict existing observed preferences to
+      // make room for fresh weak priors. Library membership still merges.
+      if(!available)continue;available--;
+      nextTaste.entries[row.item.id]={item:row.item,score,plays:row.plays,at:row.lastPlayed||now,lastPlayed:row.lastPlayed};
     }
     const ordered=Object.entries(nextTaste.entries).sort((a,b)=>b[1].at-a[1].at);
     for(const [id]of ordered.slice(1000))delete nextTaste.entries[id];

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {selectImportMatch,mergeMusicImport} from '../src/music-import-model.js';
-import {readTaste} from '../src/music-taste.js';
+import {readTaste,tasteSeeds,recommendationReason} from '../src/music-taste.js';
 
 const song=(n,title='Night Drive',artists=['Artist'])=>({id:String(n).padStart(11,'0'),kind:'song',title,artists});
 const state=()=>({favorites:[],recent:[song(8)],playlists:[],collections:[],volume:.6});
@@ -77,7 +77,35 @@ test('taste learning can be disabled and imported evidence remains bounded witho
   assert.deepEqual(disabled.taste,taste);
   for(let n=0;n<1000;n++)taste.entries[song(n).id]={item:song(n),score:1,at:n+1,lastPlayed:0,plays:0};
   const result=mergeMusicImport(saved,taste,{rows:[row(2000,{liked:true,plays:50000})]},{now:5000});
-  assert.equal(Object.keys(result.taste.entries).length,1000);assert.ok(result.taste.entries[song(2000).id]);
-  assert.equal(result.taste.entries[song(2000).id].plays,10000);assert.equal(result.taste.entries[song(2000).id].lastPlayed,0);
+  assert.equal(Object.keys(result.taste.entries).length,1000);
+  assert.equal(result.taste.entries[song(2000).id],undefined);
+  assert.ok(result.saved.favorites.some(item=>item.id===song(2000).id));
   assert.deepEqual(result.taste.hiddenSongs,taste.hiddenSongs);assert.deepEqual(result.taste.blockedArtists,taste.blockedArtists);
+});
+
+test('old and undated imports do not become fresh listening and cannot overwrite observed rejection',()=>{
+  const saved=state(),taste=readTaste(),day=86400000,now=1800000000000;
+  const history=row(1,{plays:9,lastPlayed:now-365*day}),membership=row(2),undated=row(3,{plays:50000});
+  const result=mergeMusicImport(saved,taste,{rows:[history,membership,undated]},{now});
+  assert.equal(result.taste.entries[song(1).id].at,now-365*day);
+  assert.equal(result.taste.entries[song(2).id].at,now);assert.equal(result.taste.entries[song(2).id].plays,0);
+  assert.equal(result.taste.entries[song(2).id].lastPlayed,0);assert.equal(result.taste.entries[song(2).id].score,.35);
+  assert.equal(result.taste.entries[song(3).id].at,now);assert.equal(result.taste.entries[song(3).id].plays,10000);
+  assert.equal(result.taste.entries[song(3).id].lastPlayed,0);assert.equal(result.taste.entries[song(3).id].score,.35);
+  assert.ok(tasteSeeds(result.taste,[],{now,random:()=>.5}).some(item=>item.id===song(2).id));
+  assert.notEqual(recommendationReason(song(2),result.taste,[],{now}).code,'listening_history');
+  taste.entries[song(1).id]={item:song(1),score:-2.5,at:now-1000,lastPlayed:now-1000,plays:2};
+  const retried=mergeMusicImport(saved,taste,{rows:[row(1,{plays:100,lastPlayed:now})]},{now});
+  assert.deepEqual(retried.taste.entries[song(1).id],taste.entries[song(1).id]);
+  assert.deepEqual(taste.entries[song(1).id].score,-2.5);
+});
+
+test('a full history retains old learned evidence when a new archive is imported',()=>{
+  const taste=readTaste();
+  for(let n=0;n<1000;n++)taste.entries[song(n).id]={item:song(n),score:n===0?-2.5:1,at:n+1,lastPlayed:n+1,plays:n===0?0:2};
+  const before=JSON.stringify(taste.entries);
+  const result=mergeMusicImport(state(),taste,{rows:[row(2000),row(2001,{liked:true,plays:5,lastPlayed:1500})]},{now:2000});
+  assert.equal(JSON.stringify(result.taste.entries),before);
+  assert.ok(result.saved.playlists[0].items.some(item=>item.id===song(2000).id));
+  assert.ok(result.saved.favorites.some(item=>item.id===song(2001).id));
 });

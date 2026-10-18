@@ -68,7 +68,7 @@ pub fn apply(job: &mut Job, fix: &Fix, cookies: &Path, now: u64) {
     job.healed.push(fix.key().into());
     let note = match fix {
         Fix::SignIn => { job.options.cookies = cookies.to_string_lossy().into_owned(); "YouTube asked to sign in; trying again with your account" }
-        Fix::AnyFormat => { job.options.format_id.clear(); job.options.format_has_audio = false; "that stream is gone; trying again with the usual quality choice" }
+        Fix::AnyFormat => { job.options.format_id.clear(); job.options.format_has_audio = false; job.options.source_size = None; "that stream is gone; trying again with the usual quality choice" }
         Fix::UpdateEngine => { UPDATE_WANTED.store(true, Ordering::Relaxed); "yt-dlp looks outdated; updating it and trying again" }
         Fix::Wait => { job.scheduled_at = Some(now + WAIT_AFTER_LIMIT); "YouTube asked to slow down; trying again in 10 minutes" }
     };

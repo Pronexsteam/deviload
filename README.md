@@ -4,9 +4,9 @@
 
 # Deviload
 
-**Video, music and a little fire.**
+**Your music, videos and clips in one desktop app.**
 
-Download with yt-dlp. Listen with Devil Music. Edit with Devil Cut.
+Discover and listen with Devil Music. Download with yt-dlp. Edit with Devil Cut.
 <br>
 Built with Rust and Tauri 2 · English, Russian and Spanish
 
@@ -23,13 +23,58 @@ Built with Rust and Tauri 2 · English, Russian and Spanish
 
 Deviload is free. If it saves you time, a coffee helps me keep building it.
 
-**[Install & docs](#installation)** · **[Screenshots](#screenshots)** · **[Report an issue](https://github.com/Pronexsteam/deviload/issues/new)** · **[Suggest a feature](https://github.com/Pronexsteam/deviload/issues/new?title=Feature%20request%3A%20)**
+**[Devil Music](#devil-music)** · **[What can I do with it?](#what-can-i-do-with-it)** · **[Install](#installation)** · **[Screenshots](#screenshots)** · **[Report an issue](https://github.com/Pronexsteam/deviload/issues/new)**
 
 </div>
 
-![Deviload: the download queue with a link preview](docs/screenshots/downloads.png)
+![Devil Music: discover music, bring your playlists and keep listening in one workspace](docs/screenshots/devil-music-workspace-2.7.png)
 
-Desktop app for downloading video and music with [yt-dlp](https://github.com/yt-dlp/yt-dlp), built with Rust and [Tauri 2](https://tauri.app). Windows is the main target; macOS and Linux builds come from CI, and the Mac build has been tried on a real Mac. The interface is available in English, Russian and Spanish and switches instantly from the language menu in the top bar.
+Deviload is a free, open-source desktop app for discovering music, keeping a local media collection and making clips. Listen in **Devil Music**, save video or audio with [yt-dlp](https://github.com/yt-dlp/yt-dlp), and send downloaded files to **Devil Cut** or **Devil Convert**.
+
+Built with Rust and [Tauri 2](https://tauri.app), with English, Russian and Spanish interfaces. Windows is the main target; Linux packages and an unsigned macOS test build are also available. See [installation](#installation) for the differences between platforms.
+
+## Devil Music
+
+Open the YouTube Music catalog and start listening without a Devil Music account or a YouTube Music subscription.
+
+- **Find something to play:** search songs, artists, albums and playlists; save favorites and keep a queue.
+- **Bring your collection:** import public Spotify playlists and albums, YouTube playlists, or a snapshot of a YouTube Mix. Review uncertain matches before accepting them.
+- **Make discovery your own:** likes and listening shape local recommendations. Choose familiar music or more discoveries, and hide songs or artists you do not want.
+- **Keep listening:** resume a track, open the full-screen player, follow timed lyrics, or adjust the equalizer. The next track is prepared in advance to reduce waiting.
+- **Keep a copy:** queue an MP3 download from a song card or the player without interrupting playback. Supported completed audio downloads can play offline.
+- **Take your preferences with you:** export and restore a local music profile with likes, playlists and taste settings. The backup contains metadata, not music files or account credentials.
+
+Playback and catalog availability depend on YouTube, your region and your connection. Spotify imports match metadata to playable catalog tracks; they do not download Spotify audio. A Spotify preview may omit tracks, and a YouTube Mix import is a snapshot of up to 100 songs rather than a continuously synced playlist. See [data and privacy](#data-and-privacy) for the services contacted.
+
+## What can I do with it?
+
+### Build a music collection
+
+Open **Devil Music**, find an album or use **Bring your music** to import a public playlist. Save favorites, arrange a listening queue and download the songs you want to keep as MP3. Your local preferences help shape the next recommendations.
+
+### Save a video and make a clip
+
+Paste a link in **Downloads**, choose video or audio and check the available source streams. Open the finished file in **Devil Cut** to trim or arrange clips, then export a video, GIF or audio file. **Devil Convert** can also convert a local file or fit an export to a size limit. The source file stays unchanged.
+
+### Keep a channel in your media library
+
+Follow a channel or playlist to check for new uploads every six hours while Deviload runs. For a home media server, choose **For Jellyfin / Plex** as the download subfolder and configure Jellyfin, Emby or Plex in settings. Deviload organizes the files and can ask the server to scan after the download batch finishes.
+
+### Record a live stream
+
+Add a live link to record from that moment, then stop when you have what you need or set a duration limit. A scheduled recording can repeat daily while Deviload is running. The result stays in your local library; its container depends on the selected format and whether final packaging succeeds.
+
+## Next update
+
+These improvements are being prepared together and are **not yet included in the published installers**. The download buttons above open the latest published release.
+
+- **Personal interest mixes:** combine existing playlists into a named mix. Each mix uses its own listening context and can learn from time spent actually listening within that mix.
+- **Better recommendations:** balance artists and familiar/new music, explain recommendation reasons, and temporarily reduce repeats, early-skipped automatic suggestions and unavailable sources. Private listening does not train taste; manual queues stay under your control.
+- **Choose the right recording:** compare source tracks and explicitly choose an original, slowed, live or remix version while keeping the song's likes, history and playlist entries. You can restore the original source.
+- **More discoveries without signing up:** optional, default-enabled ListenBrainz and MusicBrainz lookups add candidates in the background. Existing recommendations remain available if a service fails. The setting can be disabled and is off during private sessions; see [privacy details](#data-and-privacy).
+- **More control over playback and downloads:** finer quiet-volume adjustment, an exportable playback diagnostic report, audio/subtitle language choices, queue-aware disk-space estimates, and lossless trimming of a single compatible clip.
+
+Read the [scope and limits of this update](docs/playback-download-polish.md).
 
 ## Installation
 
@@ -47,7 +92,7 @@ All buttons above open the [latest release](https://github.com/Pronexsteam/devil
 
 - **Download your way:** video, audio, playlists and live streams, with saved profiles and a persistent queue.
 - **Keep a library:** search, favorites, collections, tags and a built-in player.
-- **Listen with Devil Music:** browse the YouTube Music catalog without an account, build a queue, get recommendations that adapt to your taste and download songs as MP3.
+- **Listen with Devil Music:** discover music, bring playlists, build a queue, get recommendations that adapt to your taste and download songs as MP3.
 - **Create with Devil Cut:** trim, arrange clips and export video, audio or GIFs.
 - **Stay connected:** watched channels, artist releases, media servers and a local phone link.
 - **Make it yours:** three interface languages, proxy settings, settings backups and reduced motion.
@@ -61,7 +106,7 @@ All buttons above open the [latest release](https://github.com/Pronexsteam/devil
 - **Downloads** from YouTube, YouTube Music and every other site yt-dlp supports. Best, 1080p, 720p or 480p video as MP4 (plays everywhere, H.264 and AAC when the site has them), MKV (the best streams as they are) or WebM; MP3, FLAC or WAV audio. Profiles for music, archive, phone (MP4) and maximum quality.
 - **One link field.** Paste one or more links, or drop a link from the browser anywhere on the window. A preview with the title, duration and the real streams of the source appears by itself; an exact stream can be picked.
 - **Playlists**: whole list, first N items or exact ranges, a track picker by title, and splitting by chapters. Subtitles, SponsorBlock removal and a per-format download archive.
-- **Live streams** record from the moment you add the link: the task shows the time recorded and the size so far, "Stop recording" keeps what was recorded as a normal MP4, and an optional limit (15 minutes to 24 hours) stops it by itself. With a start time, a length and "Repeat every day" it records the same stream at the same time daily. A recording cut off when Deviload closes is saved at the next start.
+- **Live streams** record from the moment you add the link: the task shows the time recorded and the size so far, "Stop recording" keeps the captured media, and an optional limit (15 minutes to 24 hours) stops it by itself. With a start time, a length and "Repeat every day" it records the same stream at the same time daily while Deviload runs. A recording cut off when Deviload closes is recovered at the next start where possible; if final packaging fails, the original capture is kept.
 - **Watched channels and playlists**: new videos in a followed list download by themselves, in the format picked when the list was added. Lists are checked every 6 hours while Deviload runs, including from the tray.
 - **Follow an artist**: give the link of an artist's channel on YouTube or YouTube Music, and every album, EP and single from its Releases tab downloads as MP3 or FLAC into Artist / Album folders, with track numbers, the release year and a square cover. The albums already out can be fetched too; new releases follow by themselves.
 - **For Jellyfin, Emby and Plex**: one subfolder choice lays videos out as dated episodes of their channel (Channel / Season year / Channel - date - title) with an `.nfo`, a thumbnail, a `tvshow.nfo` and a poster, and music by artist and album. With the server address and an API key, Deviload asks the server to scan once the downloads finish.
@@ -98,7 +143,7 @@ All buttons above open the [latest release](https://github.com/Pronexsteam/devil
 
 ## Screenshots
 
-![Devil Music 2.7: music workspace, pinned library, playlist import, resume listening and player controls](docs/screenshots/devil-music-workspace-2.7.png)
+![Deviload: the download queue with a link preview](docs/screenshots/downloads.png)
 
 | Devil Music · discover | Devil Music · Now Playing |
 |---|---|
@@ -110,7 +155,7 @@ All buttons above open the [latest release](https://github.com/Pronexsteam/devil
 | **Settings backup** | **Download profiles** |
 | ![Export and restore settings without account credentials](docs/screenshots/settings-backup.png) | ![Manage saved download profiles](docs/screenshots/download-profiles.png) |
 
-The full-width music workspace shows 2.7 with the live catalog and a sample local playlist. The older music views show 2.6.7; the other workspace screenshots show 2.6.5 with sample media.
+The lead music screenshot shows 2.7 with the live catalog and a sample local playlist. The older music views show 2.6.7; the other workspace screenshots show 2.6.5 with sample media. They do not show the upcoming personal mixes or recording picker.
 
 ## Install on Windows
 
@@ -185,11 +230,15 @@ Published macOS builds are not signed with an Apple Developer ID or notarized. T
 
 The queue (`queue.json`), per-format download archives and the saved YouTube sign-in (`youtube-cookies.txt`) live in the app data folder: `%APPDATA%\com.deviload.desktop` on Windows, `~/Library/Application Support/com.deviload.desktop` on macOS. The sign-in export keeps only YouTube and Google cookies and never leaves your computer. Library tags, collections, player positions, Devil Cut projects and the proxy are stored in `library.json`, watched lists and artists in `watches.json` and the phone link key in `phone.json`, all in the same folder. The media server address and API key, if you set them, are kept in `queue.json` and are only sent to that server. Files received from a phone go to `Deviload from phone` inside the download folder.
 
-Deviload has no telemetry. Besides the sites you download from, it contacts GitHub to check for a new Deviload (only the version number is requested) and to update yt-dlp; the yt-dlp update can be turned off in the settings. The phone link only listens on the local network address and only while it is on; every file a phone sends needs your confirmation.
+Deviload has no telemetry. It contacts source sites to inspect and download media, and GitHub for app and engine updates; automatic yt-dlp updates can be turned off in settings. The phone link only listens on the local network address and only while it is on; every file a phone sends needs your confirmation. If you configure a media server, its address and API key are used to request library scans from that server.
 
 Devil Music contacts YouTube Music for catalog results, artwork hosts for covers, and YouTube media servers for audio. Opening lyrics sends the track title, artist and duration to LRCLIB. Its listening profile stays in local WebView storage. Likes are never automatically evicted; recent history is bounded to 80 songs and recommendation history to 1,000 learned tracks. Profiles also keep up to 30 playlists with 500 total entries and 200 saved artists, albums or catalog playlists. Export/import files are limited to 2 MB and contain metadata and preferences, not music files or account credentials. If a profile reaches the storage limit, saving reports an error rather than removing older likes. Reinstalling the operating system can erase local preferences; export a backup first.
 
-The current development version adds filtered, paginated music search, saved artists and albums, playback from existing full-track downloads, timed lyrics, equalizer presets, volume smoothing and optional track overlap. Smoothing is a compressor, not measured album loudness normalization. Regional charts can be hidden; personal discovery uses local listening signals, likes, followed artists and explicit exclusions. This is adaptive ranking, not a trained neural recommendation model.
+The [next update](#next-update) adds optional public ListenBrainz and MusicBrainz lookups, enabled by default. Requests contain up to two artist names and two allowlisted genre tags. Those services can see the queries and your connection's IP address, but Deviload does not upload your listening history, create an account, send a user identifier or submit scrobbles. Turn the source off in music settings to stop new requests; it is also disabled during private sessions, while offline and on connections that report data-saving mode. Lyrics and ordinary music playback use their own services as described above.
+
+Personal mixes and recording choices travel with the music profile in the next update. Mixes are limited to eight, each referencing up to eight playlists and retaining up to 100 learned track references; explicit recording choices are limited to 200. Diagnostic reports are exported only on request, exclude track names, links, paths and account data, and are never uploaded automatically.
+
+Music playback includes saved artists and albums, playback from supported existing full-track audio downloads, timed lyrics, equalizer presets, volume smoothing and optional track overlap. Smoothing is a compressor, not measured album loudness normalization. Regional charts can be hidden; personal discovery uses local listening signals, likes, followed artists and explicit exclusions. This is adaptive ranking, not a trained neural recommendation model. Private sessions do not add listening evidence to it.
 
 Playback prepares the next track and likely selections in advance, with bounded background requests and a second audio decoder. Cached signed links are retained until their expiry safety margin, for at most one hour. Unprepared tracks still depend on upstream extraction and media availability; instant startup is not guaranteed. Rate limits stop requests instead of triggering an endless retry loop.
 
@@ -204,7 +253,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --locked
 cargo test --manifest-path src-tauri/Cargo.toml --locked -- --include-ignored   # also runs FFmpeg/yt-dlp integration tests
 ```
 
-The integration tests generate their own media and serve it from a local HTTP server, so they need the engines but no network. `npm test` also checks that every interface string has a Russian translation. The integration tests also render Devil Cut projects with transitions, music, captions, GIF and MP3 output through FFmpeg.
+Generated-media integration tests use a local HTTP server and the bundled engines, including FFmpeg renders of Devil Cut projects with transitions, music, captions, GIF and MP3 output. Running with `--include-ignored` also enables live music playback, playlist import and catalog checks that need internet access. The live ListenBrainz check has an additional opt-in flag; see its test in `src-tauri/src/music_discovery.rs`. `npm test` also checks that every interface string has a Russian translation.
 
 ## Translations
 
@@ -214,7 +263,7 @@ English is the source language. Russian strings live in `src/locales/ru.js`, key
 
 Deviload is maintained by Samvel Avetisyan ([Pronexsteam](https://github.com/Pronexsteam)). Outside contributions arrive as pull requests and are reviewed by the maintainer.
 
-Deviload transfers no information to other networked systems except the sites you download from, GitHub for update checks, which ask only for the version number and, while you use the phone link, the phone on your local network. See [Data and privacy](#data-and-privacy).
+For the services Deviload contacts and the information each feature sends, see [Data and privacy](#data-and-privacy).
 
 ## Support
 

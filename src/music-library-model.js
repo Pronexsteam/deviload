@@ -1,16 +1,22 @@
 import {tracks} from './music-state.js';
+import {canonicalArtistKey,tasteArtistKeys} from './music-taste.js';
 export const playlistCover=value=>typeof value==='string'&&value.length<=110000&&/^data:image\/(webp|png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(value)?value:'';
 export function movePlaylistTracks(items,ids,beforeId){const selected=new Set(ids);if(selected.has(beforeId))return items;const moving=items.filter(x=>selected.has(x.id)),rest=items.filter(x=>!selected.has(x.id));if(!moving.length)return items;const at=beforeId==null?rest.length:rest.findIndex(x=>x.id===beforeId);if(at<0)return items;return [...rest.slice(0,at),...moving,...rest.slice(at)];}
 export function transferPlaylistTracks(lists,sourceId,targetId,ids,move=false){if(sourceId===targetId)return lists;const source=lists.find(x=>x.id===sourceId),target=lists.find(x=>x.id===targetId);if(!source||!target)return lists;const chosen=new Set(ids),items=source.items.filter(x=>chosen.has(x.id));return lists.map(list=>list.id===targetId?{...list,items:tracks([...list.items,...items])}:move&&list.id===sourceId?{...list,items:list.items.filter(x=>!chosen.has(x.id))}:list);}
 export function selectTrackRange(selected,id,visible,anchor,range=false){const next=new Set(selected),a=visible.indexOf(anchor),b=visible.indexOf(id);if(range&&a>=0&&b>=0)visible.slice(Math.min(a,b),Math.max(a,b)+1).forEach(id=>next.add(id));else next.has(id)?next.delete(id):next.add(id);return next;}
 export function duplicateGroups(items){const keys=new Map();for(const item of items){const normalize=s=>String(s||'').normalize('NFKC').toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu,'');const names=(item.artists||[]).map(normalize).filter(Boolean).sort();if(!names.length)continue;const artist=JSON.stringify(names);const key=normalize(item.title)+'|'+artist;if(!keys.has(key))keys.set(key,[]);keys.get(key).push(item);}return [...keys.values()].filter(group=>group.length>1);}
 export function smartPlaylists(saved,taste,candidates=[],now=Date.now()){
- const entries=Object.values(taste.entries),blocked=new Set(taste.blockedArtists),hidden=new Set(taste.hiddenSongs);
- const allowed=item=>!hidden.has(item.id)&&!(item.artists||[]).some(a=>blocked.has(a.trim().toLocaleLowerCase()));
+ const entries=Object.values(taste.entries),blocked=new Set(taste.blockedArtists.map(name=>canonicalArtistKey(name)).filter(Boolean)),hidden=new Set(taste.hiddenSongs);
+ const allowed=item=>!hidden.has(item.id)&&!tasteArtistKeys(item).some(key=>blocked.has(key));
  const pool=tracks([...saved.favorites,...saved.recent,...entries.map(e=>e.item)]).filter(allowed);
  const frequent=entries.filter(e=>e.plays>=2&&e.score>0&&allowed(e.item)).sort((a,b)=>b.plays-a.plays||b.lastPlayed-a.lastPlayed).map(e=>e.item);
  const rediscover=pool.filter(x=>taste.entries[x.id]?.lastPlayed>0&&now-taste.entries[x.id].lastPlayed>=14*86400000&&(taste.entries[x.id].score>0||saved.favorites.some(f=>f.id===x.id))).sort((a,b)=>taste.entries[a.id].lastPlayed-taste.entries[b.id].lastPlayed);
  const unheard=tracks(candidates).filter(x=>allowed(x)&&!taste.entries[x.id]?.lastPlayed&&!saved.favorites.some(f=>f.id===x.id));
  return {frequent:frequent.slice(0,100),rediscover:rediscover.slice(0,100),liked:saved.favorites.filter(allowed).slice(0,100),discover:unheard.slice(0,100)};
 }
-export function recommendationArtist(item,taste,favorites){const keys=new Set((item.artists||[]).map(a=>a.toLocaleLowerCase()));const evidence=[...favorites,...Object.values(taste.entries).filter(e=>e.score>0).map(e=>e.item)];return evidence.flatMap(e=>e.artists||[]).find(a=>keys.has(a.toLocaleLowerCase()))||'';}
+export function recommendationArtist(item,taste,favorites){
+ const keys=new Set(tasteArtistKeys(item)),blocked=new Set(taste.blockedArtists.map(name=>canonicalArtistKey(name)).filter(Boolean));
+ if(!keys.size||[...keys].some(key=>blocked.has(key)))return '';
+ const evidence=[...favorites,...Object.values(taste.entries).filter(entry=>entry.score>0).map(entry=>entry.item)];
+ return evidence.flatMap(track=>Array.isArray(track?.artists)?track.artists:[]).find(artist=>keys.has(canonicalArtistKey(artist)))||'';
+}

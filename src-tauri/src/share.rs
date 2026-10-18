@@ -177,6 +177,20 @@ fn load_pairing(dir: &Path) -> Pairing {
 
 struct AppHost { app: tauri::AppHandle, engine: Engine }
 
+fn phone_download_options(mut options: crate::model::Options) -> Result<crate::model::Options, String> {
+    // Phone links inherit portable preferences, never a selection or estimate for a desktop URL.
+    options.clip_start = None;
+    options.clip_end = None;
+    options.clip_format = "source".into();
+    options.format_id.clear();
+    options.format_has_audio = false;
+    options.audio_format_id.clear();
+    options.source_size = None;
+    options.playlist_items.clear();
+    options.validate()?;
+    Ok(options)
+}
+
 impl PhoneHost for AppHost {
     fn emit(&self, event: &str, payload: serde_json::Value) { let _ = self.app.emit(event, payload); }
     fn queue_link(&self, url: &str) -> Result<usize, String> {
@@ -185,13 +199,7 @@ impl PhoneHost for AppHost {
         crate::binary("yt-dlp")?;
         let mut d = self.engine.data.lock().unwrap();
         // The phone sends a plain link: the current defaults apply, without a clip or a picked stream.
-        let mut options = d.options.clone();
-        options.clip_start = None;
-        options.clip_end = None;
-        options.clip_format = "source".into();
-        options.format_id.clear();
-        options.playlist_items.clear();
-        options.validate()?;
+        let options = phone_download_options(d.options.clone())?;
         let old = d.clone();
         let count = crate::queue_urls(&mut d, urls, &options, None, true);
         if let Err(e) = crate::save(&self.engine.dir, &d) { *d = old; return Err(e); }
@@ -760,6 +768,21 @@ poll();
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn phone_links_keep_preferences_without_desktop_stream_ids_or_estimates() {
+        let original=crate::model::Options{format_id:"137".into(),format_has_audio:true,audio_format_id:"140".into(),audio_language:"ja".into(),
+            subtitle_languages:vec!["ja".into()],subtitle_auto:false,clip_start:Some(1.0),clip_end:Some(5.0),
+            source_size:Some(crate::download_details::SourceSize{url:"https://example.com/desktop".into(),bytes:1000,approximate:false,complete:true}),
+            ..crate::model::Options::default()};
+        let options=super::phone_download_options(original.clone()).unwrap();
+        let mut data=crate::Snapshot::default();
+        crate::queue_urls(&mut data,vec!["https://example.com/phone".into()],&options,None,true);
+        let queued=&data.jobs[0].options;
+        assert!(queued.format_id.is_empty() && queued.audio_format_id.is_empty() && !queued.format_has_audio && queued.source_size.is_none());
+        assert!(queued.clip_start.is_none() && queued.clip_end.is_none());
+        assert_eq!(queued.audio_language,"ja");assert_eq!(queued.subtitle_languages,vec!["ja"]);assert!(!queued.subtitle_auto);
+        assert_eq!(original.audio_format_id,"140");assert!(original.source_size.is_some());
+    }
     use super::*;
 
     #[test]

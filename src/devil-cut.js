@@ -5,6 +5,7 @@
 import {setPose} from "./mascot-spot.js";
 import {exportFolder, bindExportFolder} from "./export-folder.js";
 import {exportPresets, trimBounds} from "./cut-editing.js";
+import {losslessSelection, preciseCutTime} from "./quick-cut.js";
 
 const DEFAULT_LOOK = Object.freeze({speed:1, volume:1, fadeIn:false, fadeOut:false, rotate:0, flip:false,
   brightness:0, contrast:1, saturation:1, caption:"", captionPosition:"bottom", captionStyle:"outline", transition:"none"});
@@ -107,6 +108,7 @@ export function createDevilCut(env) {
   let project = null, projectId = null, saveTimer = 0;
   let selected = -1, selectedSound = -1, current = 0, playhead = 0, pxPerSecond = 60, playing = false, frameRequest = 0;
   let selectedClips = new Set(), exporting = false;
+  let quickBusy = false, quickSession = 0, quickRequest = null;
   // J/K/L: the playback speed on top of each clip's own, and the backwards run.
   let shuttle = 1, rewind = 0, rewindTimer = 0;
   let history = [], future = [], pendingEdit = null, loadedJob = null, mediaTab = "video", lastOutput = "";
@@ -690,6 +692,7 @@ export function createDevilCut(env) {
     for (const id of ["cut-codec-label", "cut-codec", "cut-codec-note"]) $(id).hidden = format !== "mp4";
     const label = format === "mp3" ? "MP3" : format === "gif" ? "GIF" : `MP4 ${qualityLabel(chip("quality"))}${chip("codec") === "h265" ? " · H.265" : ""}`;
     $("cut-export-summary").textContent = t("{length} · {canvas} · {format}", {length:clock(total()), canvas:project.canvas, format:label});
+    $("cut-quick-open").disabled = exporting || quickBusy;
   }
   function selectChips(name, value) {
     for (const button of document.querySelectorAll(`[data-look="${name}"] button`)) {
@@ -913,9 +916,10 @@ export function createDevilCut(env) {
     bar.firstElementChild.style.width = percent + "%";
   }
   async function exportProject() {
-    if (exporting) return;
+    if (exporting || quickBusy) return;
     if (!project?.clips.length) { status(t("Add at least one clip to export."), true); return; }
     exporting = true;
+    renderExportSummary();
     $("cut-export-menu").open = false;
     pause();
     setProgress(0);
@@ -938,7 +942,81 @@ export function createDevilCut(env) {
       message(t("Devil Cut saved: {file}", {file:fileName(output)}));
       setPose($("cut-mascot"), "victory", "front", 3600);
     } catch (error) { status(errorText(error), true); setPose($("cut-mascot"), "error", "front", 4200); }
-    finally { exporting = false; button.disabled = false; setTimeout(() => setProgress(null), 900); }
+    finally { exporting = false; button.disabled = false; renderExportSummary(); setTimeout(() => setProgress(null), 900); }
+  }
+
+  function quickStatus(value, error = false) {
+    $("cut-quick-status").textContent = value;
+    $("cut-quick-status").classList.toggle("error", error);
+  }
+  async function openQuickCut() {
+    if (exporting || quickBusy) return;
+    try { quickRequest = losslessSelection(project); }
+    catch (error) { status(errorText(error), true); return; }
+    const token = ++quickSession;
+    $("cut-export-menu").open = false;
+    $("cut-quick-requested").textContent = `${preciseCutTime(quickRequest.start)} → ${preciseCutTime(quickRequest.end)}`;
+    $("cut-quick-effective").textContent = "—";
+    $("cut-quick-format").textContent = "—";
+    $("cut-quick-save").disabled = true;
+    $("cut-quick-progress").hidden = true;
+    quickStatus(t("Reading source keyframes…"));
+    $("cut-quick-dialog").showModal();
+    quickBusy = true;
+    renderExportSummary();
+    try {
+      const planned = await invoke("quick_cut_plan", quickRequest);
+      if (token !== quickSession) return;
+      $("cut-quick-effective").textContent = `${preciseCutTime(planned.start)} → ${preciseCutTime(planned.end)}`;
+      const [frames,seconds] = planned.frameRate.split("/").map(Number);
+      const rate = seconds > 0 ? Number((frames / seconds).toFixed(3)) : 0;
+      $("cut-quick-format").textContent = `${planned.container.toUpperCase()} · ${planned.codec.toUpperCase()}${rate > 0 ? ` · ${rate} FPS` : ""}`;
+      quickStatus(t("The original file stays unchanged. The copy uses the save folder selected in Export."));
+      $("cut-quick-save").disabled = false;
+    } catch (error) { if (token === quickSession) quickStatus(errorText(error), true); }
+    finally { quickBusy = false; renderExportSummary(); if (token !== quickSession) status(t("Lossless trim was cancelled.")); }
+  }
+  function closeQuickCut() {
+    ++quickSession;
+    if (quickBusy) {
+      status(t("Stopping lossless trim…"));
+      invoke("quick_cut_stop").catch(error => status(errorText(error), true));
+    }
+    $("cut-quick-dialog").close();
+    $("cut-quick-open").focus();
+  }
+  async function exportQuickCut() {
+    if (exporting || quickBusy || !quickRequest || $("cut-quick-save").disabled) return;
+    const token = quickSession;
+    quickBusy = true; exporting = true; pause(); renderExportSummary();
+    $("cut-export").disabled = true;
+    $("cut-quick-save").disabled = true;
+    $("cut-quick-progress").hidden = false;
+    $("cut-quick-progress").value = 0;
+    setProgress(0); setPose($("cut-mascot"), "working");
+    quickStatus(t("Copying the selected keyframe range without re-encoding…"));
+    try {
+      const result = await invoke("quick_cut_export", {...quickRequest,folder:exportFolder()});
+      lastOutput = result.path;
+      if (token !== quickSession) return;
+      $("cut-quick-dialog").close();
+      status(t("Done: {file}", {file:fileName(result.path)}));
+      $("edit-status").append(" · ", t("Duration: {duration}", {duration:preciseCutTime(result.duration)}));
+      const reveal = node("button", "outline small", t("Show in folder"));
+      reveal.type = "button";
+      reveal.addEventListener("click", () => invoke("reveal_file", {path:result.path}).catch(error => status(errorText(error), true)));
+      $("edit-status").append(" ", reveal);
+      message(t("Devil Cut saved: {file}", {file:fileName(result.path)}));
+      setPose($("cut-mascot"), "victory", "front", 3600);
+      $("cut-quick-open").focus();
+    } catch (error) {
+      if (token === quickSession) { quickStatus(errorText(error), true); status(errorText(error), true); setPose($("cut-mascot"), "error", "front", 4200); }
+      else status(errorText(error), true);
+    } finally {
+      quickBusy = false; exporting = false; $("cut-export").disabled = false;
+      if (token === quickSession) $("cut-quick-save").disabled = false;
+      renderExportSummary(); setTimeout(() => setProgress(null), 900);
+    }
   }
 
   // Timeline pointer work: select, trim edges, reorder, move the playhead.
@@ -1255,12 +1333,21 @@ export function createDevilCut(env) {
   $("cut-fullscreen").addEventListener("click", () => setFullscreen(!fullscreen));
   $("cut-zoom-out").addEventListener("click", () => zoom(1 / 1.4));
   $("cut-export").addEventListener("click", exportProject);
-  window.addEventListener("pagehide", () => { pause(); endEdit(); flushSave(); });
+  $("cut-quick-open").addEventListener("click", openQuickCut);
+  $("cut-quick-save").addEventListener("click", exportQuickCut);
+  $("cut-quick-close").addEventListener("click", closeQuickCut);
+  $("cut-quick-dialog").addEventListener("cancel", event => { event.preventDefault(); closeQuickCut(); });
+  window.addEventListener("pagehide", () => { if (quickBusy) invoke("quick_cut_stop").catch(() => {}); pause(); endEdit(); flushSave(); });
   video.addEventListener("error", () => { if (video.getAttribute("src")) status(t("The built-in player cannot play this codec. Export still works."), true); });
   window.__TAURI__?.event?.listen?.("devilcut-progress", event => setProgress(Number(event.payload)));
+  window.__TAURI__?.event?.listen?.("quick-cut-progress", event => {
+    if (!quickBusy) return;
+    const value = clamp(Number(event.payload) || 0, 0, 1);
+    $("cut-quick-progress").value = value; setProgress(value);
+  });
 
   document.addEventListener("keydown", event => {
-    if (!project) return;
+    if (!project || $("cut-quick-dialog").open) return;
     if (event.target.closest?.("input, textarea, select")) return;
     const mod = event.ctrlKey || event.metaKey;
     // Physical keys, so the shortcuts work with any keyboard layout.

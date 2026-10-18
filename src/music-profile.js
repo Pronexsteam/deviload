@@ -1,6 +1,8 @@
 import {readMusicState} from "./music-state.js";
 import {readTaste} from "./music-taste.js";
 import {playlistCover} from "./music-library-model.js";
+import {musicGain} from "./music-volume.js";
+import {sanitizeInterestMixes} from "./music-interest-mixes.js";
 
 export const PROFILE_LIMIT=2*1024*1024;
 export const PROFILE_KEY="deviload-music-profile-v1";
@@ -20,7 +22,8 @@ function item(value){
   if(!object(value)||value.kind!=="song"||typeof value.id!=="string"||!idPattern.test(value.id)||typeof value.title!=="string"||!value.title.trim())fail();
   const image=typeof value.image==="string"&&/^https:\/\/(i\.ytimg\.com|lh3\.googleusercontent\.com|yt3\.googleusercontent\.com)\//.test(value.image)&&bytes(value.image)<=256?value.image:"";
   return {id:value.id,kind:"song",title:text(value.title,240),subtitle:text(value.subtitle,180),
-    artists:[...new Set((Array.isArray(value.artists)?value.artists:[]).filter(name=>typeof name==="string").map(name=>text(name,80)).filter(Boolean))].slice(0,4),image};
+    artists:[...new Set((Array.isArray(value.artists)?value.artists:[]).filter(name=>typeof name==="string").map(name=>text(name,80)).filter(Boolean))].slice(0,4),image,
+    ...(Number.isFinite(value.duration)&&value.duration>0&&value.duration<=86400?{duration:value.duration}:{})};
 }
 export const sanitizeMusicTrack=item;
 export function sanitizeMusicCollection(value){
@@ -48,6 +51,16 @@ function list(values,limit,strict){
   if(!Array.isArray(values)||(strict&&values.length>limit))fail();
   const seen=new Set();return values.slice(0,limit).map(item).filter(track=>!seen.has(track.id)&&seen.add(track.id));
 }
+function sourceBindings(values=[],strict=false){
+  if(!Array.isArray(values)||values.length>200)fail();
+  const seen=new Set();return values.map(value=>{
+    if(!object(value)||typeof value.trackId!=="string"||!idPattern.test(value.trackId)||seen.has(value.trackId))fail();
+    seen.add(value.trackId);const source=item(value.source);
+    if(source.id===value.trackId)fail();
+    const track=value.track===undefined?null:item(value.track);if(track&&track.id!==value.trackId)fail();
+    return {trackId:value.trackId,source,...(track?{track}:{})};
+  });
+}
 function normalize(saved,taste,strict=false){
   if(!object(saved)||!object(taste)||!object(taste.entries))fail();
   // Likes are an explicit collection, never an automatically evicted history.
@@ -66,7 +79,10 @@ function normalize(saved,taste,strict=false){
   const hiddenSongs=[...new Set(taste.hiddenSongs.filter(id=>typeof id==="string"&&idPattern.test(id)))].slice(0,500);
   const blockedArtists=[...new Set(taste.blockedArtists.filter(name=>typeof name==="string").map(name=>text(name,160).toLocaleLowerCase()).filter(Boolean))].slice(0,300);
   if(!["balanced","familiar","discovery"].includes(taste.mode))fail();
-  return {saved:{favorites,recent,playlists:playlists(saved.playlists,strict),collections:collections(saved.collections),showRegional:saved.showRegional!==false,volume:Number.isFinite(saved.volume)?Math.max(0,Math.min(1,saved.volume)):.7},
+  const lists=playlists(saved.playlists,strict);
+  return {saved:{favorites,recent,playlists:lists,collections:collections(saved.collections),showRegional:saved.showRegional!==false,publicDiscovery:saved.publicDiscovery!==false,volume:musicGain(saved.volume),
+      interestMixes:sanitizeInterestMixes(saved.interestMixes,lists,{strict}),sourceBindings:sourceBindings(saved.sourceBindings,strict),
+      ...(Number.isFinite(saved.volumeBeforeMute)&&saved.volumeBeforeMute>0?{volumeBeforeMute:musicGain(saved.volumeBeforeMute)}:{})},
     taste:{version:1,entries,hiddenSongs,blockedArtists,mode:taste.mode}};
 }
 export function exportMusicProfile(saved,taste){

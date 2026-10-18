@@ -25,8 +25,13 @@ test("untrusted sound settings cannot enable arbitrary gains or transitions",()=
   assert.deepEqual(JSON.parse(JSON.stringify(soundSettings({preset:"evil",soft:"true",transition:999}))),{preset:"flat",soft:false,transition:0});
 });
 test("an existing download takes priority over the network and a missing file falls back",async()=>{
-  const calls=[],ctx={window:{__TAURI__:{core:{convertFileSrc:path=>`asset:${path}`}}},invoke:async(command,args)=>{calls.push(command);return command==="music_offline_source"?"local.mp3":{url:"remote"};}};
-  const resolve=runInNewContext(`(()=>{${source.slice(source.indexOf('  async function playbackSource('),source.indexOf('  async function showOffline('))};return playbackSource;})()`,ctx);
-  assert.equal((await resolve("abcdefghijk")).url,"asset:local.mp3");assert.deepEqual(calls,["music_offline_source"]);
-  ctx.invoke=async command=>command==="music_offline_source"?null:{url:"remote"};assert.equal((await resolve("abcdefghijk")).url,"remote");
+  for(const bound of [false,true]){
+    const logical={kind:"song",id:"abcdefghijk",title:"Logical song"},physical={kind:"song",id:"lmnopqrstuv",title:"Chosen recording"},calls=[],stages=[];
+    const ctx={saved:{sourceBindings:bound?[{trackId:logical.id,track:logical,source:physical}]:[]},diagnostics:{record:(stage,code)=>stages.push({stage,code})},streamLoading:false,window:{__TAURI__:{core:{convertFileSrc:path=>`asset:${path}`}}},invoke:async(command,args)=>{calls.push({command,...args});return command==="music_offline_source"?"local.mp3":{url:"remote"};}};
+    const resolve=runInNewContext(`(()=>{${source.slice(source.indexOf('  async function playbackSource('),source.indexOf('  async function showOffline('))};return playbackSource;})()`,ctx),selectedId=bound?physical.id:logical.id;
+    assert.equal((await resolve(logical.id)).url,"asset:local.mp3");assert.deepEqual(calls,[{command:"music_offline_source",id:selectedId}]);
+    ctx.invoke=async(command,args)=>{calls.push({command,...args});return command==="music_offline_source"?null:{url:"remote"};};assert.equal((await resolve(logical.id)).url,"remote");
+    assert.deepEqual(calls.slice(1),[{command:"music_offline_source",id:selectedId},{command:"music_stream",id:selectedId,refresh:false,preload:false}]);
+    assert.deepEqual(stages,[{stage:"source",code:"offline"},{stage:"resolve",code:"requested"},{stage:"resolve",code:"ready"}]);assert.equal(logical.id,"abcdefghijk");
+  }
 });

@@ -7,11 +7,12 @@ import {runInNewContext} from "node:vm";
 import ru from "../src/locales/ru.js";
 import es from "../src/locales/es.js";
 import {labels, diagnoseError} from "../src/view-model.js";
+import {playbackFailure} from "../src/music-diagnostics.js";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const read = path => readFileSync(join(root, path), "utf8");
 const keys = new Set(Object.keys(ru));
-const translatedSources = ["src/main.js", "src/app-release-notes.js", "src/devil-music.js", ...readdirSync(join(root,"src")).filter(name=>/^music-.*\.js$/.test(name)).map(name=>"src/"+name), "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js", "src/download-profiles.js", "src/queue-selection.js", "src/settings-backup.js"];
+const translatedSources = ["src/main.js", "src/app-release-notes.js", "src/devil-music.js", ...readdirSync(join(root,"src")).filter(name=>/^music-.*\.js$/.test(name)).map(name=>"src/"+name), "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/quick-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js", "src/download-profiles.js", "src/download-options.js", "src/queue-selection.js", "src/settings-backup.js"];
 // Brand names, formats and codes read the same in both languages.
 const neutral = new Set(["Deviload", "Devil Music", "01 / DM", "Devil", "oad", "Devil Cut", "Devil Cut · Deviload", "Devil Convert", "Devil Convert · Deviload", "DEVIL CINEMA", "YouTube", "YouTube Music", "VK", "TikTok",
   "Instagram", "Twitch", "SoundCloud", "1080p", "720p", "480p", "1440p", "4K", "H.264", "H.265", "MP3", "FLAC", "WAV", "GIF", "GIF · 480px", "Chrome", "Edge",
@@ -52,28 +53,34 @@ function htmlStrings() {
   for (const [, , value] of html.matchAll(/\s(placeholder|aria-label|title|alt|label|data-empty-label)="([^"]*)"/g)) {
     if (value.trim()) strings.add(value.trim());
   }
-  for(const file of ['src/download-profiles.js','src/download-profile-data.js','src/settings-backup.js','src/cut-editing.js',...translatedSources.filter(path=>path.startsWith('src/music-'))]) {
+  for(const file of ['src/download-profiles.js','src/download-profile-data.js','src/download-options.js','src/quick-cut.js','src/settings-backup.js','src/cut-editing.js',...translatedSources.filter(path=>path.startsWith('src/music-'))]) {
     for(const [,message] of read(file).matchAll(/(?:Error|warn)\(["']([^"']+)["']/g))strings.add(message);
     for(const [,message] of read(file).matchAll(/warnings\.push\("([^"]+)"/g))strings.add(message);
+  }
+  for(const error of ["HTTP 429", "restricted", "timed out", "Music engine is busy", "Could not start music engine", "Network failed", "decode", "unsupported", "unknown", "unplayable", "HTTP 403", "not available in your country"]){
+    strings.add(playbackFailure(error).message);
   }
   return strings;
 }
 
-const RUST_MESSAGE = /(?:Err\(|ok_or\(|ok_or_else\(\|\| |push\(|map_err\(\|\w+\| |warning = |warning: |const CATALOG_ERROR: &str = )(?:format!\()?"((?:[^"\\]|\\.)*)"/g;
+const RUST_MESSAGE = /(?:Err\(\s*|ok_or\(\s*|ok_or_else\(\|\|\s*|push\(\s*|map_err\(\|\w+\|\s*|warning = |warning: |const CATALOG_ERROR: &str = )(?:format!\()?"((?:[^"\\]|\\.)*)"/g;
 const normalize = text => text.replace(/\{[^}]*\}/g, "{}");
 
 function rustMessages() {
   const found = [];
-  for (const file of ["lib.rs", "music.rs", "music_audio.rs", "music_profile.rs", "music_import.rs", "music_playlist_import.rs", "music_lyrics.rs", "music_offline.rs", "cookies.rs", "engine_update.rs", "model.rs", "share.rs", "settings_backup.rs", "watch.rs", "convert.rs", "power.rs", "media_server.rs"]) {
+  for (const file of ["lib.rs", "music.rs", "music_audio.rs", "music_profile.rs", "music_import.rs", "music_playlist_import.rs", "music_lyrics.rs", "music_offline.rs", "music_engine_diagnostics.rs", "download_details.rs", "quick_cut.rs", "cookies.rs", "engine_update.rs", "model.rs", "share.rs", "settings_backup.rs", "watch.rs", "convert.rs", "power.rs", "media_server.rs"]) {
     const source = read(join("src-tauri/src", file)).split("#[cfg(test)]")[0];
     // Start inside the body so Rust lifetimes such as &'static are not parsed
     // as single-quoted JavaScript strings by literals().
     if(file === "music.rs")for(const text of literals(block(source,"let error = String::from_utf8_lossy(stderr)", "struct ResolveFailure")))if(text.endsWith("."))found.push({file,text});
-    if(file === "music_import.rs" || file === "music_playlist_import.rs")for(const [,text] of source.matchAll(/const \w+: &str = "([^"]+)";/g))found.push({file,text});
+    if(file === "music_import.rs" || file === "music_playlist_import.rs" || file === "quick_cut.rs")for(const [,text] of source.matchAll(/const \w+: &str = "([^"]+)";/g))found.push({file,text});
+    if(file === "quick_cut.rs")for(const [,text]of source.matchAll(/Some\("([A-Z][^"]*[.!?])"/g))found.push({file,text});
     for (const [, text] of source.matchAll(RUST_MESSAGE)) {
       if (/^(?:[A-Z{]|yt-dlp )/.test(text)) found.push({file, text});
     }
   }
+  const reportCommand=block(read("src-tauri/src/music_engine.rs"),"pub async fn export_music_diagnostics", "\nfn update()");
+  for(const [,text]of reportCommand.matchAll(/"([^"\n]+\.)"/g))found.push({file:"music_engine.rs",text});
   return found;
 }
 

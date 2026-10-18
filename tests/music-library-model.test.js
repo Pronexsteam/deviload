@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {playlistCover,movePlaylistTracks,transferPlaylistTracks,selectTrackRange,duplicateGroups,smartPlaylists} from '../src/music-library-model.js';
+import {playlistCover,movePlaylistTracks,transferPlaylistTracks,selectTrackRange,duplicateGroups,smartPlaylists,recommendationArtist} from '../src/music-library-model.js';
 import {readTaste} from '../src/music-taste.js';
 
 const song=(n,artists=['Artist'],title=`Track ${n}`)=>({kind:'song',id:String(n).padStart(11,'0'),title,artists});
@@ -68,4 +68,27 @@ test('smart lists remain bounded and an empty profile can discover candidates wi
   const result=smartPlaylists(saved,taste,candidates);
   assert.equal(result.discover.length,100);
   assert.deepEqual(result.frequent,[]);assert.deepEqual(result.rediscover,[]);assert.deepEqual(result.liked,[]);
+});
+
+test('smart lists use canonical Unicode and space-normalized exclusions for every collaborator',()=>{
+  const now=1800000000000,taste=readTaste(),blocked=song(1,['Other','DJ A']),allowed=song(2,['Different']);
+  taste.blockedArtists=['  ＤＪ\u00a0\u00a0Ａ  '];
+  for(const item of [blocked,allowed])taste.entries[item.id]={item,plays:3,score:2,lastPlayed:now-20*86400000,at:now-20*86400000};
+  const result=smartPlaylists({favorites:[blocked,allowed],recent:[blocked,allowed]},taste,[song(3,['Dj   A']),song(4,['New'])],now);
+  assert.deepEqual(ids(result.frequent),[allowed.id]);assert.deepEqual(ids(result.rediscover),[allowed.id]);assert.deepEqual(ids(result.liked),[allowed.id]);assert.deepEqual(ids(result.discover),[song(4).id]);
+});
+
+test('recommendation artist reasons match canonical collaborators and retain their original label',()=>{
+  const taste=readTaste(),favorite=song(1,['  ＤＪ\u00a0Ａ  ']),candidate=song(2,['Guest','dj   a']);
+  assert.equal(recommendationArtist(candidate,taste,[favorite]),favorite.artists[0]);
+  taste.entries[song(3).id]={item:song(3,['Ｇｕｅｓｔ']),score:2};assert.equal(recommendationArtist(candidate,taste,[]),'Ｇｕｅｓｔ');
+  taste.blockedArtists=[' ＤＪ Ａ '];assert.equal(recommendationArtist(candidate,taste,[favorite]),'');
+});
+
+test('recommendation artist reasons require positive evidence and ignore empty or malformed labels',()=>{
+  const taste=readTaste(),candidate=song(1,['Artist']);
+  taste.entries[song(2).id]={item:song(2,['artist']),score:0};taste.entries[song(3).id]={item:song(3,['ARTIST']),score:-2};
+  assert.equal(recommendationArtist(candidate,taste,[]),'');
+  assert.equal(recommendationArtist(song(4,[' ',null,{}]),taste,[song(5,[''])]),'');
+  assert.equal(recommendationArtist(candidate,taste,[song(6,['ＡＲＴＩＳＴ'])]),'ＡＲＴＩＳＴ');
 });

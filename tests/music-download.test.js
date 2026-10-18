@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import {downloadMusic} from "../src/music-download.js";
 import {readFileSync} from "node:fs";
 import {runInNewContext} from "node:vm";
+import {resolveRecordingSource} from "../src/music-recordings.js";
 
-const item={kind:"song",id:"5NV6Rdv1a3I"};
+const item={kind:"song",id:"5NV6Rdv1a3I",title:"Get Lucky",artists:["Daft Punk"]};
 const settings={folder:"/downloads",cookiesMode:"file",cookies:"/cookies.txt",signedInPath:"/account.txt",
   sponsorblock:false,archive:true,rateMbps:0,folderRule:"manual",nameRule:"title",parallel:2,autoRetry:true};
 test("music downloads preflight then enqueue one complete MP3 without a draft clip or schedule",async()=>{
@@ -22,14 +23,14 @@ test("music downloads preflight then enqueue one complete MP3 without a draft cl
 test("repeated clicks enqueue once and report failures without changing playback",async()=>{
   const source=readFileSync(new URL("../src/devil-music.js",import.meta.url),"utf8");
   const code=source.slice(source.indexOf("  async function downloadTrack("),source.indexOf("  function syncDock()"));
-  let finish,calls=0;const notices=[];
-  const ctx={downloadsPending:new Set(),syncDock(){},t:s=>s,errorText:String,status:s=>notices.push(s),presentation:{notify(){}},
-    onDownload:()=>{calls++;return new Promise(resolve=>{finish=resolve;});}};
+  let finish,calls=0;const notices=[],chosen={...item,id:"abcdefghijk",title:"Get Lucky (Live)"},before=JSON.stringify(item);
+  const ctx={saved:{sourceBindings:[{trackId:item.id,track:item,source:chosen}]},resolveRecordingSource,downloadsPending:new Set(),syncDock(){},t:s=>s,errorText:String,status:s=>notices.push(s),presentation:{notify(){}},
+    onDownload:selected=>{assert.equal(selected,chosen);calls++;return new Promise(resolve=>{finish=resolve;});}};
   const download=runInNewContext(`(()=>{${code};return downloadTrack;})()`,ctx);
   const first=download(item);await download(item);assert.equal(calls,1);finish(1);await first;
   assert.equal(ctx.downloadsPending.size,0);assert.match(notices.at(-1),/MP3 added/);
   ctx.onDownload=()=>Promise.reject(Error("Disk full"));await download(item);
-  assert.match(notices.at(-1),/Disk full$/);assert.equal(ctx.downloadsPending.size,0);
+  assert.match(notices.at(-1),/Disk full$/);assert.equal(ctx.downloadsPending.size,0);assert.equal(JSON.stringify(item),before);
 });
 test("preflight blockers and backend errors do not silently add a download",async()=>{
   let calls=0;await assert.rejects(downloadMusic(async()=>{calls++;return {ready:false,blockers:["Folder is not writable"]};},item,settings),/Folder is not writable/);

@@ -37,6 +37,17 @@ pub struct Options {
     pub format_id: String,
     #[serde(default)]
     pub format_has_audio: bool,
+    #[serde(default)]
+    pub audio_format_id: String,
+    #[serde(default)]
+    pub audio_language: String,
+    #[serde(default = "default_subtitle_languages")]
+    pub subtitle_languages: Vec<String>,
+    #[serde(default = "default_subtitle_auto")]
+    pub subtitle_auto: bool,
+    // A preview estimate belongs to this URL, never to a portable profile.
+    #[serde(default)]
+    pub source_size: Option<crate::download_details::SourceSize>,
     // The file a video lands in: MP4 plays everywhere, MKV keeps the best streams as they are,
     // WebM is the open format of browsers.
     #[serde(default = "default_container")]
@@ -44,6 +55,16 @@ pub struct Options {
 }
 
 fn default_container() -> String { "mp4".into() }
+fn default_subtitle_languages() -> Vec<String> { vec!["ru".into(), "en".into()] }
+fn default_subtitle_auto() -> bool { true }
+
+pub fn valid_format_id(value: &str) -> bool {
+    value.len() <= 80 && !value.starts_with('-') && value.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c))
+}
+pub fn valid_language(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 32 && value.bytes().next().is_some_and(|b| b.is_ascii_alphabetic()) &&
+        value.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+}
 
 // The system Downloads folder. Linux reports it only when the XDG user folders are
 // set up, so a minimal system falls back to ~/Downloads.
@@ -68,6 +89,8 @@ impl Default for Options {
             clip_start: None, clip_end: None, clip_format: "source".into(),
             folder_rule: "manual".into(), name_rule: "title".into(),
             format_id: String::new(), format_has_audio: false, container: default_container(),
+            audio_format_id: String::new(), audio_language: String::new(),
+            subtitle_languages: default_subtitle_languages(), subtitle_auto: true, source_size: None,
         }
     }
 }
@@ -101,9 +124,7 @@ impl Options {
             return Err("Choose one cookies source: a browser or a file".into());
         }
         if self.rate_mbps > 1000 { return Err("Speed limit: 0–1000 MB/s".into()); }
-        if self.format_id.len() > 80 || !self.format_id.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c)) {
-            return Err("Invalid source format ID".into());
-        }
+        self.validate_selection()?;
         if !["mp4", "mkv", "webm"].contains(&self.container.as_str()) { return Err("Unknown video container".into()); }
         if !["", "source", "gif"].contains(&self.clip_format.as_str()) {
             return Err("Unknown clip format".into());
@@ -125,6 +146,48 @@ impl Options {
             _ => return Err("Enter the clip start and end in seconds (up to 4 hours)".into()),
         }
         Ok(())
+    }
+
+    pub fn validate_selection(&self) -> Result<(), String> {
+        if !valid_format_id(&self.format_id) || !valid_format_id(&self.audio_format_id) { return Err("Invalid source format ID".into()); }
+        if !self.audio_language.is_empty() && !valid_language(&self.audio_language) { return Err("Invalid audio language".into()); }
+        if self.subtitle_languages.len() > 12 || self.subtitle_languages.iter().any(|lang| !valid_language(lang)) {
+            return Err("Choose up to 12 subtitle languages".into());
+        }
+        if self.subtitles && !self.audio_only() && self.subtitle_languages.is_empty() { return Err("Choose at least one subtitle language".into()); }
+        if !self.audio_only() && self.format_has_audio && !self.format_id.is_empty() && (!self.audio_format_id.is_empty() || !self.audio_language.is_empty()) {
+            return Err("Choose a video-only stream to select separate audio".into());
+        }
+        if self.source_size.as_ref().is_some_and(|s| s.bytes > 1_000_000_000_000 || s.url.len() > 8192) { return Err("Invalid download size estimate".into()); }
+        Ok(())
+    }
+
+    pub fn format_selector(&self) -> String {
+        let preferred_audio = !self.audio_format_id.is_empty() || !self.audio_language.is_empty();
+        let audio = if !self.audio_format_id.is_empty() { self.audio_format_id.clone() }
+            else if !self.audio_language.is_empty() { format!("(bestaudio[language={}]/bestaudio[language^={}-])", self.audio_language, self.audio_language) }
+            else { "bestaudio".into() };
+        if self.audio_only() {
+            return if !self.audio_format_id.is_empty() || !self.audio_language.is_empty() { audio }
+                else if !self.format_id.is_empty() { self.format_id.clone() } else { "bestaudio/best".into() };
+        }
+        if !self.format_id.is_empty() {
+            return if self.format_has_audio { self.format_id.clone() }
+                else if preferred_audio { format!("{}+{audio}", self.format_id) }
+                else { format!("{}+bestaudio/best", self.format_id) };
+        }
+        if preferred_audio {
+            return if self.quality == "best" { format!("bestvideo+{audio}") }
+                else { format!("bestvideo[height<={}]+{audio}", self.quality) };
+        }
+        if self.quality == "best" { "bv*+ba/b".into() }
+        else { format!("bv*[height<={}]+ba/b[height<={}]/b", self.quality, self.quality) }
+    }
+
+    pub fn format_sort(&self) -> &str {
+        match if self.profile == "mobile" { "mp4" } else { self.container.as_str() } {
+            "mp4" => "res,vcodec:h264,acodec:m4a", "webm" => "res,acodec:opus", _ => "",
+        }
     }
 
     // Every value is a separate argv element. No shell, interpolation or escaping.
@@ -150,35 +213,28 @@ impl Options {
             a.extend(["--split-chapters".into(), "-o".into(),
                 "chapter:%(title)s - %(section_number)02d %(section_title)s.%(ext)s".into()]);
         }
-        let format = match self.quality.as_str() {
+        match self.quality.as_str() {
             "mp3" | "flac" | "wav" => {
                 a.extend(["-x".into(), "--audio-format".into(), self.quality.clone(), "--add-metadata".into()]);
                 if self.quality == "mp3" { a.extend(["--audio-quality".into(), "320K".into()]); }
                 if ["mp3", "flac"].contains(&self.quality.as_str()) { a.push("--embed-thumbnail".into()); }
-                "bestaudio/best".to_string()
+                ()
             }
-            "best" => "bv*+ba/b".into(),
-            height => format!("bv*[height<={height}]+ba/b[height<={height}]/b"),
+            _ => (),
         };
-        let selected_format = if self.format_id.is_empty() { format } else if
-            ["mp3", "flac", "wav"].contains(&self.quality.as_str()) || self.format_has_audio {
-            self.format_id.clone()
-        } else {
-            format!("{}+bestaudio/best", self.format_id)
-        };
-        a.extend(["-f".into(), selected_format]);
+        a.extend(["-f".into(), self.format_selector()]);
         if !["mp3", "flac", "wav"].contains(&self.quality.as_str()) {
             let container = if self.profile == "mobile" { "mp4" } else { self.container.as_str() };
             // Apply the container even when the source already has both streams. Incompatible codecs produce an explicit FFmpeg error.
             a.extend(["--merge-output-format".into(), container.into(), "--remux-video".into(), container.into()]);
             // Among streams of the same size, the ones the container plays best come first:
             // H.264 and AAC for an MP4 that plays on phones, TVs and editors, Opus for WebM.
-            let sort = match container { "mp4" => "res,vcodec:h264,acodec:m4a", "webm" => "res,acodec:opus", _ => "" };
+            let sort = self.format_sort();
             if !sort.is_empty() && self.format_id.is_empty() { a.extend(["-S".into(), sort.into()]); }
             if self.profile == "mobile" { a.extend(["--recode-video".into(), "mp4".into()]); }
             if self.subtitles {
-                a.extend(["--write-subs".into(), "--write-auto-subs".into(),
-                    "--sub-langs".into(), "ru,en".into(), "--embed-subs".into()]);
+                a.extend(["--write-subs".into(), "--sub-langs".into(), self.subtitle_languages.join(","), "--embed-subs".into()]);
+                if self.subtitle_auto { a.push("--write-auto-subs".into()); }
             }
         }
         if self.sponsorblock { a.extend(["--sponsorblock-remove".into(), "sponsor,selfpromo".into()]); }
@@ -239,9 +295,17 @@ impl Options {
 
     pub fn archive_path(&self, dir: &Path) -> PathBuf {
         // A stable FNV-1a fingerprint separates output contracts and destinations across app versions.
-        let contract = format!("{}|{}|{}|{}|{}|{}|{}|{}|{}|{}", self.folder, self.quality,
+        let mut contract = format!("{}|{}|{}|{}|{}|{}|{}|{}|{}|{}", self.folder, self.quality,
             if self.profile == "mobile" { "mp4" } else { &self.container }, self.format_id,
             self.folder_rule, self.name_rule, self.split_chapters, self.subtitles, self.sponsorblock, self.profile);
+        // Keep old archive paths exactly for the legacy default contract.
+        if !self.audio_language.is_empty() || !self.audio_format_id.is_empty() {
+            contract.push_str(&format!("|audio:{}:{}", self.audio_language, self.audio_format_id));
+        }
+        let mut languages = self.subtitle_languages.clone(); languages.sort(); languages.dedup();
+        if self.subtitles && (languages != ["en", "ru"] || !self.subtitle_auto) {
+            contract.push_str(&format!("|subs:{}:{}", languages.join(","), self.subtitle_auto));
+        }
         let hash = contract.bytes().fold(0xcbf29ce484222325u64, |hash, byte| (hash ^ byte as u64).wrapping_mul(0x100000001b3));
         dir.join(format!("archive-v2-{hash:016x}.txt"))
     }
@@ -416,6 +480,43 @@ impl Job {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn language_preferences_are_backward_compatible_and_keep_legacy_archives() {
+        let options = super::Options::default();
+        let mut value = serde_json::to_value(&options).unwrap();
+        for key in ["audioFormatId","audioLanguage","subtitleLanguages","subtitleAuto","sourceSize"] { value.as_object_mut().unwrap().remove(key); }
+        let restored: super::Options = serde_json::from_value(value).unwrap();
+        assert_eq!(restored.subtitle_languages,vec!["ru","en"]);assert!(restored.subtitle_auto);
+        assert!(restored.audio_language.is_empty() && restored.audio_format_id.is_empty());
+        assert_eq!(restored.archive_path(std::path::Path::new(".")),options.archive_path(std::path::Path::new(".")));
+    }
+
+    #[test]
+    fn requested_audio_and_subtitles_are_separate_safe_arguments() {
+        let options=super::Options{audio_language:"ja".into(),format_id:"v137".into(),subtitle_languages:vec!["ja".into(),"es-419".into()],
+            subtitles:true,subtitle_auto:false,..super::Options::default()};
+        options.validate().unwrap();
+        let args=options.args("https://example.com/video",std::path::Path::new("."));
+        assert!(args.windows(2).any(|p| p[0]=="-f" && p[1]=="v137+(bestaudio[language=ja]/bestaudio[language^=ja-])"));
+        assert!(args.windows(2).any(|p| p[0]=="--sub-langs" && p[1]=="ja,es-419"));
+        assert!(!args.iter().any(|arg| arg=="--write-auto-subs"));
+        for bad in ["--exec","en]/best","en,ru","en.*","en\nru"] {
+            assert!(super::Options{audio_language:bad.into(),..super::Options::default()}.validate().is_err());
+            assert!(super::Options{subtitle_languages:vec![bad.into()],..super::Options::default()}.validate().is_err());
+        }
+        for id in ["140+--exec","--exec"] { assert!(super::Options{audio_format_id:id.into(),..super::Options::default()}.validate().is_err()); }
+    }
+
+    #[test]
+    fn language_contracts_and_exact_audio_separate_archives_without_estimate_pollution() {
+        let base=super::Options::default();let dir=std::path::Path::new(".");
+        let original=base.archive_path(dir);
+        assert_ne!(original,super::Options{audio_language:"ja".into(),..base.clone()}.archive_path(dir));
+        assert_ne!(original,super::Options{audio_format_id:"a140".into(),..base.clone()}.archive_path(dir));
+        let mut changed=base.clone();changed.source_size=Some(crate::download_details::SourceSize{url:"https://example.com".into(),bytes:42,approximate:true,complete:true});
+        assert_eq!(original,changed.archive_path(dir));
+        let audio=super::Options{quality:"mp3".into(),audio_format_id:"a140".into(),..base};assert_eq!(audio.format_selector(),"a140");
+    }
     use super::*;
     #[test] fn smart_folders_preserve_playlist_grouping() {
         for (rule, prefix) in [("author", "%(uploader,channel|Unknown author)s/"), ("date", "%(upload_date>%Y-%m|Unknown date)s/"), ("playlist", "%(playlist_title|Single videos)s/")] {
