@@ -80,7 +80,7 @@ function normalize(saved,taste,strict=false){
   const blockedArtists=[...new Set(taste.blockedArtists.filter(name=>typeof name==="string").map(name=>text(name,160).toLocaleLowerCase()).filter(Boolean))].slice(0,300);
   if(!["balanced","familiar","discovery"].includes(taste.mode))fail();
   const lists=playlists(saved.playlists,strict);
-  return {saved:{favorites,recent,playlists:lists,collections:collections(saved.collections),showRegional:saved.showRegional!==false,volume:musicGain(saved.volume),
+  return {saved:{favorites,recent,playlists:lists,collections:collections(saved.collections),showRegional:saved.showRegional!==false,publicDiscovery:saved.publicDiscovery!==false,volume:musicGain(saved.volume),
       interestMixes:sanitizeInterestMixes(saved.interestMixes,lists,{strict}),sourceBindings:sourceBindings(saved.sourceBindings,strict),
       ...(Number.isFinite(saved.volumeBeforeMute)&&saved.volumeBeforeMute>0?{volumeBeforeMute:musicGain(saved.volumeBeforeMute)}:{})},
     taste:{version:1,entries,hiddenSongs,blockedArtists,mode:taste.mode}};

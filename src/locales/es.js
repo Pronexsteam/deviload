@@ -3,6 +3,9 @@
 export const name = "Español";
 
 export default {
+  "Discover more music with ListenBrainz": "Descubrir más música con ListenBrainz",
+  "No account needed. Artist and genre queries go to ListenBrainz and MusicBrainz; your listening history stays on this device. Disabled in private sessions.": "No necesitas una cuenta. Las consultas sobre artistas y géneros se envían a ListenBrainz y MusicBrainz; tu historial de escucha permanece en este dispositivo. Se desactiva en las sesiones privadas.",
+  "Explore with ListenBrainz": "Descubre con ListenBrainz",
   "From your liked songs": "De tus canciones favoritas",
   "You follow {artist}": "Sigues a {artist}",
   "From artists you follow": "De artistas que sigues",

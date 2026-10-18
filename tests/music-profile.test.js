@@ -142,3 +142,13 @@ test("invalid new profile fields cannot replace a saved profile and old backups 
   delete raw.saved.sourceBindings;delete raw.saved.interestMixes;
   const old=importMusicProfile(JSON.stringify(raw));assert.deepEqual(old.saved.sourceBindings,[]);assert.deepEqual(old.saved.interestMixes,[]);
 });
+
+test("public discovery opt-out survives backup and restart while old profiles default to enabled",()=>{
+  const state={...saved(),publicDiscovery:false},file=exportMusicProfile(state,taste());
+  assert.equal(importMusicProfile(file).saved.publicDiscovery,false);
+  const memory=new Map(),storage={getItem:key=>memory.get(key),setItem:(key,value)=>memory.set(key,value)};
+  saveMusicProfile(storage,state,taste());assert.equal(readMusicProfile(storage).saved.publicDiscovery,false);
+  const old=JSON.parse(file);delete old.saved.publicDiscovery;
+  for(const version of [1,2])assert.equal(importMusicProfile(JSON.stringify({...old,version})).saved.publicDiscovery,true);
+  assert.equal(importMusicProfile(exportMusicProfile(saved(),taste())).saved.publicDiscovery,true);
+});

@@ -5,13 +5,16 @@ import {runInNewContext} from "node:vm";
 import {createRecommendationSession} from "../src/music-recommendation-session.js";
 import {canonicalArtistKey} from "../src/music-taste.js";
 import {createRecordingView} from "../src/music-recording-view.js";
+import {resolveRecordingSource} from "../src/music-recordings.js";
 const source=readFileSync(new URL("../src/devil-music.js",import.meta.url),"utf8");
-const code=source.slice(source.indexOf("  async function personalize("),source.indexOf("  function showLocal("));
+const code=source.slice(source.indexOf("  function resetPublicDiscovery("),source.indexOf("  function recommendationOptions("))+
+  source.slice(source.indexOf("  async function personalize("),source.indexOf("  function showLocal("));
 const song=(n,title)=>({kind:"song",id:String(n).padStart(11,"0"),title,artists:["Artist"]});
 const local=song(1,"Regional release"),personal=song(2,"Related to liked artist"),recent=song(3,"Last played"),liked=song(4,"Liked song");
 const base=[{title:"New releases",items:[local]}];
 function home(showRegional){
   const ctx={saved:{favorites:[],recent:[recent],showRegional,sourceBindings:[],interestMixes:[],playlists:[],collections:[]},taste:{},queue:[],request:1,personalization:0,playbackContext:[],playbackSourceContext:{kind:"manual"},followedCursor:0,privateSession:false,recommendationReasons:new Map(),current:null,sections:[],audio:{paused:true},prepared:[],tracks:items=>items,intent:{enter:id=>ctx.prepared.push(id)},captureListening(){},tasteSeeds:()=>[liked],radio:async()=>[personal],createRecordingView,recommendationSession:{seeds:(_,seeds)=>seeds,contextItems:()=>[],mergePools:pools=>({items:pools.flatMap(pool=>pool.items),scores:new Map()}),allowed:items=>items},recommendationOptions:()=>({}),rankMusicRecommendations:items=>items.map(item=>({item,reason:{code:"catalog"}})),t:s=>s,render(){}};
+  Object.assign(ctx,{publicDiscovery:{candidates:async()=>[],clear(){}},publicGeneration:0,sourceRevision:0,navigator:{},resolveRecordingSource,language:()=>"en",view:"home",lastQuery:{kind:"home"}});
   return {ctx,...runInNewContext(`(()=>{${code};return {personalize,homeSections};})()`,ctx)};
 }
 test("regional catalog is never presented as learned personal recommendations",async()=>{

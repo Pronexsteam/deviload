@@ -8,6 +8,7 @@ import {tracks} from "../src/music-state.js";
 import {createRecommendationSession} from "../src/music-recommendation-session.js";
 import {rankMusicRecommendations} from "../src/music-recommendation-engine.js";
 import {createRecordingView} from "../src/music-recording-view.js";
+import {resolveRecordingSource} from "../src/music-recordings.js";
 
 const song=(n,artist=`Artist ${n}`)=>({id:String(n).padStart(11,"0"),kind:"song",title:`Song ${n}`,artists:[artist]});
 const deferred=()=>{let resolve;const promise=new Promise(done=>{resolve=done;});return {promise,resolve};};
@@ -30,7 +31,8 @@ test("recommendation reasons describe actual local evidence without inventing mu
 });
 test("an older home personalization cannot replace a newer taste choice",async()=>{
   const source=readFileSync(new URL("../src/devil-music.js",import.meta.url),"utf8");
-  const code=source.slice(source.indexOf("  async function personalize("),source.indexOf("  function prepareHomeSelection("));
+  const code=source.slice(source.indexOf("  function resetPublicDiscovery("),source.indexOf("  function recommendationOptions("))+
+    source.slice(source.indexOf("  async function personalize("),source.indexOf("  function prepareHomeSelection("));
   const old=deferred(),fresh=deferred(),rendered=[],ctx={
     personalization:0,request:1,queue:[],saved:{favorites:[song(1)],recent:[],collections:[],playlists:[],sourceBindings:[],interestMixes:[]},taste:readTaste(),
     current:null,playbackContext:[],playbackSourceContext:{kind:"manual"},followedCursor:0,privateSession:false,discoveryCandidates:[],sections:[],recommendationSession:createRecommendationSession(),
@@ -39,6 +41,7 @@ test("an older home personalization cannot replace a newer taste choice",async()
     mergeRecommendationPools,recommendWithReasons,rankMusicRecommendations,recommendationOptions:()=>({random:()=>.5}),homeSections:(_,items)=>items,
     render(){rendered.push(ctx.sections.map(item=>item.id));},prepareHomeSelection(){},language:()=>"en",t:s=>s
   };
+  Object.assign(ctx,{publicDiscovery:{candidates:async()=>[],clear(){}},publicGeneration:0,sourceRevision:0,navigator:{},resolveRecordingSource,view:"home",lastQuery:{kind:"home"}});
   const personalize=runInNewContext(`(()=>{${code};return personalize;})()`,ctx);
   const first=personalize(1,[]);await settle();ctx.saved.favorites=[song(2)];
   const second=personalize(1,[]);await settle();fresh.resolve([song(4)]);await second;

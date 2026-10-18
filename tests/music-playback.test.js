@@ -51,6 +51,7 @@ function player(invoke,items=[song(1)]){
     captureListening(){},persist(){},persistSession(){},syncDock(){},renderQueue(){},status(message){ctx.message=message;},
     document:{querySelectorAll:()=>[],addEventListener(){}},navigator:{},performance,DOMException,
     setTimeout(fn){const id=++serial;timers.set(id,fn);return id;},clearTimeout(id){timers.delete(id);}};
+  Object.assign(ctx,{publicDiscovery:{candidates:async()=>[],clear(){}},publicGeneration:0});
   const actions=runInNewContext(`(()=>{${code}\nreturn {playAt,playItems,togglePlay,resumeListening,advance,preloadNext,clearRecommendationContext,plannedNext,rankRadioPool,radioCandidates,playbackSource,invalidateRecommendations,chooseRecording,refreshCurrentRecording,restoreProfile:profileActions.restore,downloadTrack,showInterestMix,renderInterestPool};})()`,ctx);
   return {ctx,...actions,emit:name=>events[name]?.(),expire(){const pending=[...timers.values()];timers.clear();pending.forEach(fn=>fn());}};
 }
