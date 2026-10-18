@@ -66,6 +66,12 @@ Add a live link to record from that moment, then stop when you have what you nee
 
 ## Latest update
 
+Deviload **2.7.3** adds a visible Ko-fi supporter board to the main window, with a grateful version of the current mascot. Public names are maintained manually and included with the app; donation amounts, messages and account details are not included. The empty download queue now lines up with the download controls.
+
+The release publication command also handles both handwritten and generated notes correctly.
+
+### Music and download improvements in 2.7.2
+
 Deviload **2.7.2** brings these improvements together. The download buttons above open the latest published release.
 
 - **Personal interest mixes:** combine existing playlists into a named mix. Each mix uses its own listening context and can learn from time spent actually listening within that mix.
@@ -231,6 +237,8 @@ Published macOS builds are not signed with an Apple Developer ID or notarized. T
 The queue (`queue.json`), per-format download archives and the saved YouTube sign-in (`youtube-cookies.txt`) live in the app data folder: `%APPDATA%\com.deviload.desktop` on Windows, `~/Library/Application Support/com.deviload.desktop` on macOS. The sign-in export keeps only YouTube and Google cookies and never leaves your computer. Library tags, collections, player positions, Devil Cut projects and the proxy are stored in `library.json`, watched lists and artists in `watches.json` and the phone link key in `phone.json`, all in the same folder. The media server address and API key, if you set them, are kept in `queue.json` and are only sent to that server. Files received from a phone go to `Deviload from phone` inside the download folder.
 
 Deviload has no telemetry. It contacts source sites to inspect and download media, and GitHub for app and engine updates; automatic yt-dlp updates can be turned off in settings. The phone link only listens on the local network address and only while it is on; every file a phone sends needs your confirmation. If you configure a media server, its address and API key are used to request library scans from that server.
+
+The supporter board reads a small list of public Ko-fi display names bundled with the app. It makes no network requests. Names are maintained manually in `src/supporters-data.js`; changing the bundled list requires an app update. Donation amounts, messages and email addresses are not included.
 
 Devil Music contacts YouTube Music for catalog results, artwork hosts for covers, and YouTube media servers for audio. Opening lyrics sends the track title, artist and duration to LRCLIB. Its listening profile stays in local WebView storage. Likes are never automatically evicted; recent history is bounded to 80 songs and recommendation history to 1,000 learned tracks. Profiles also keep up to 30 playlists with 500 total entries and 200 saved artists, albums or catalog playlists. Export/import files are limited to 2 MB and contain metadata and preferences, not music files or account credentials. If a profile reaches the storage limit, saving reports an error rather than removing older likes. Reinstalling the operating system can erase local preferences; export a backup first.
 

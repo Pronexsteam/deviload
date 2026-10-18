@@ -1,0 +1,19 @@
+.supporters-board{display:grid;grid-template-columns:minmax(270px,350px) minmax(0,1fr) auto;grid-template-areas:"heading names support";align-items:center;column-gap:24px;margin:0 0 22px;padding:16px 20px;min-height:84px;border:1px solid #d8a89722;border-left:3px solid #d9aa93;border-radius:10px;background:linear-gradient(105deg,#2b202155,#14171c 60%);color:#f0e7e4;min-width:0}
+.supporters-heading{grid-area:heading;display:flex;align-items:center;gap:14px;min-width:0}
+.supporters-heading>div{min-width:0}
+.supporters-mascot{display:block;flex:none;width:76px;height:76px;margin:-12px 0;object-fit:contain;filter:drop-shadow(0 0 10px #ff7b251c);pointer-events:none}
+.supporters-heading h2{font-size:16px;line-height:1.35;margin:0 0 5px;letter-spacing:-.2px;font-weight:700;color:#f3e9e4}
+.supporters-heading p{font-size:12px;line-height:1.4;color:#b6aaa6;margin:0}
+.supporters-support{grid-area:support;display:inline-flex;align-items:center;justify-content:center;color:#f2cbb8;border-color:#dbac954f;background:#d9aa9310;min-height:38px;font-size:12px;padding:9px 13px}
+.supporters-support:hover{background:#d9aa9322;border-color:#dbac9580;transform:none}
+.supporters-list{grid-area:names;display:flex;align-items:center;justify-content:center;gap:14px 28px;list-style:none;margin:0;padding:0;min-width:0}
+.supporter{display:flex;align-items:center;gap:10px;min-width:0;max-width:100%;color:#f2e8e1;line-height:1.4}
+.supporter-rank{display:inline-flex;align-items:center;justify-content:center;flex:none;width:32px;height:32px;border:1px solid #ddb29850;border-radius:9px;background:linear-gradient(145deg,#e4bba526,#c1847716);color:#f2c9ae;font-size:12px;font-weight:750;font-variant-numeric:tabular-nums}
+.supporter-name{display:block;min-width:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f5ece6;font-size:18px;font-weight:650;letter-spacing:-.2px;unicode-bidi:plaintext}
+.supporter:only-child .supporter-name{max-width:320px}
+.supporters-board[hidden]{display:none}
+.supporters-board [hidden]{display:none}
+body.music-focus .supporters-board{margin-top:10px;margin-bottom:20px}
+@media(max-width:1120px){.supporters-board{grid-template-columns:minmax(245px,300px) minmax(0,1fr) auto;column-gap:16px;padding:15px 17px}.supporters-list{gap:14px}.supporter{gap:8px}.supporter-name{font-size:17px;max-width:140px}.supporters-support{font-size:11px;padding:8px 10px}}
+@media(max-width:960px){.supporters-board{grid-template-columns:minmax(230px,270px) minmax(0,1fr) auto;gap:0 14px}.supporters-list{flex-wrap:wrap;justify-content:flex-start;gap:8px 16px}.supporter-name{font-size:16px;max-width:150px}.supporter-rank{width:28px;height:28px;font-size:11px}.supporters-heading h2{font-size:15px}.supporters-support{max-width:150px;white-space:normal;line-height:1.4;text-align:center}.supporter:only-child .supporter-name{max-width:220px}.supporters-mascot{width:62px;height:70px;margin:-8px 0}.supporters-heading{gap:10px}}
+@media(max-width:720px){.supporters-board{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"heading support" "names names";row-gap:13px;padding:14px 16px}.supporters-list{justify-content:flex-start;gap:10px 20px}.supporters-support{font-size:12px;max-width:170px}.supporters-heading p{font-size:12px}.supporter-name{max-width:200px}.supporter:only-child .supporter-name{max-width:calc(100vw - 185px)}}
