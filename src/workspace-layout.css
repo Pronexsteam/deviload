@@ -79,6 +79,13 @@
 .queue-column .live-controls{order:4;flex-wrap:wrap}.queue-column .live-download .track{margin-top:0}
 .queue-column .empty{border:0;padding:28px 6px;min-height:200px}.queue-column .empty h3{font-size:13px}.queue-column .empty p{font-size:11px;line-height:1.6}
 .queue-column .empty-mascot{display:none}
+/* Keep the empty queue level with the composer; its status badge sits below both cards. */
+@media(min-width:1121px){
+  .downloads-workspace:has(#empty:not([hidden])){grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:stretch;padding-bottom:60px}
+  .downloads-workspace:has(#empty:not([hidden]))>.queue-column{position:relative}
+  .downloads-workspace:has(#empty:not([hidden]))>.queue-column>.library{flex:1}
+  .downloads-workspace:has(#empty:not([hidden]))>.queue-column>.hero-slim{position:absolute;top:calc(100% + 12px);left:0;right:0}
+}
 .job-controls .transfer-button,.media-library-actions .transfer-button{background:#1b2b30;border-color:#344c55;color:#b6dce0;box-shadow:none}
 .engine-notice{padding:11px 14px;border-color:#4c3b32;background:#1c1918;box-shadow:none;gap:12px;margin-bottom:16px}.engine-notice img{display:none}.engine-notice strong{font-size:12px}.engine-notice p{font-size:11px;line-height:1.5}.engine-notice .primary{background:#2e2520;border-color:#6b4735;color:#f5c09e}
 .media-library,.discover,.editor-card{padding:24px;margin-top:0!important}.media-library-heading .overline,.discover .overline,.editor-card .overline{display:none}

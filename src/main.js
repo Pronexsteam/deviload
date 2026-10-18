@@ -15,6 +15,7 @@ import {t, tn, errorText, translateMessage, translateDom, setLanguage, onLanguag
 import {createEngineUpdater} from "./engine-update.js";
 import {createMusic} from "./devil-music.js";
 import {wireReleaseNotes} from "./app-release-notes.js";
+import {wireSupporters} from "./supporters.js";
 import {downloadMusic} from "./music-download.js";
 import {wireDownloadDetails,inspectionKey,sourceEstimate} from "./download-options.js";
 
@@ -481,6 +482,7 @@ function openSupport() {
 }
 $("open-support").addEventListener("click", openSupport);
 $("support-float").addEventListener("click", openSupport);
+wireSupporters({onSupport:openSupport});
 $("check-updates").addEventListener("click", async () => {
   const button = $("check-updates");
   button.disabled = true;

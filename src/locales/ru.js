@@ -3,6 +3,8 @@
 export const name = "Русский";
 
 export default {
+  "Top supporters": "Больше всех поддержали",
+  "Thank you for your support.": "Спасибо за поддержку.",
   "Discover more music with ListenBrainz": "Открывать больше музыки с ListenBrainz",
   "No account needed. Artist and genre queries go to ListenBrainz and MusicBrainz; your listening history stays on this device. Disabled in private sessions.": "Аккаунт не нужен. Запросы по исполнителям и жанрам отправляются в ListenBrainz и MusicBrainz; история прослушиваний остаётся на этом устройстве. Отключено в приватных сессиях.",
   "Explore with ListenBrainz": "Открытия с ListenBrainz",
