@@ -5,6 +5,7 @@ import {runInNewContext} from 'node:vm';
 import {readTaste,recordListening} from '../src/music-taste.js';
 import {remember} from '../src/music-state.js';
 import {createWeeklyStats} from '../src/music-weekly.js';
+import {createRecommendationSession} from '../src/music-recommendation-session.js';
 
 const source=readFileSync(new URL('../src/devil-music.js',import.meta.url),'utf8');
 const capture=source.slice(source.indexOf('  function captureListening('),source.indexOf('  function plannedNext('));
@@ -19,9 +20,10 @@ function player(){
   const memory=new Map(),storage={getItem:key=>memory.get(key),setItem:(key,value)=>memory.set(key,value)},handlers={},events={},control={checked:false,addEventListener:(name,fn)=>handlers[name]=fn};
   const ctx={current:song(1),privateSession:false,discordPresence:{sync(){}},statsSession:null,statsSeconds:0,statsCounted:false,session:1,checkpoint:0,historyAdded:false,
     audio:{duration:200,currentTime:0,paused:false,readyState:4,volume:.7,muted:false,seeking:false},clock:{seconds:0,reset(){this.seconds=0;},sample(){}},taste:readTaste(),saved:{favorites:[],recent:[]},playbackContext:[],diagnostics:{record(){}},
-    weekly:createWeeklyStats(storage,{now:()=>1800000000000}),recordListening,remember,profileWrites:0,sessionWrites:0,
+    weekly:createWeeklyStats(storage,{now:()=>1800000000000}),recommendationSession:createRecommendationSession(),recommendationRevision:0,recordListening,remember,profileWrites:0,sessionWrites:0,
     persist(){ctx.profileWrites++;},saveMusicSession(){ctx.sessionWrites++;},storage,sessionTransition:false,queue:[song(1)],resolvedTrack:song(1).id,retryPosition:0,knownDuration:200,repeat:'off',shuffle:false,autoplay:true,sessionSavedAt:0,
-    status(){},t:value=>value,$:()=>control,listen:(name,fn)=>events[name]=fn,clearTimeout(){},bufferingTimer:null,artist:{},syncDock(){},performance:{now:()=>0}};
+    status(){},view:'favorites',homeCache:null,clearRecommendationContext(){ctx.recommendationSession.reset();ctx.playbackContext=[];},
+    t:value=>value,$:()=>control,listen:(name,fn)=>events[name]=fn,clearTimeout(){},bufferingTimer:null,artist:{},syncDock(){},performance:{now:()=>0}};
   const actions=runInNewContext(`(()=>{${subtitle}\n${capture}\n${persistence}\n${toggle}\n${boundary}\n${playing}\nreturn {captureListening,persistSession};})()`,ctx);
   return {ctx,...actions,toggle(value){control.checked=value;handlers.change();},playing(){events.playing();},listen(seconds){ctx.clock.seconds=seconds;actions.captureListening();}};
 }

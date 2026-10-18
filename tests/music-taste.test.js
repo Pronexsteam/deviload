@@ -154,7 +154,7 @@ test("old history fades instead of winning through its size, while explicit like
   recordListening(profile,fresh,{seconds:190,duration:200},now-3*86400000);
   const oldNew=song(901,"Old"),newNew=song(902,"New");
   assert.equal(recommend([oldNew,newNew],profile,[],{now,random})[0].id,newNew.id);
-  assert.equal(recommendationReason(oldNew,profile,[],{now}).code,"discovery");
+  assert.equal(recommendationReason(oldNew,profile,[],{now}).code,"catalog");
   assert.equal(recommendationReason(oldNew,profile,[song(1,"Old")],{now}).code,"related_artist");
 });
 
@@ -244,4 +244,119 @@ test("missing artist metadata cannot claim a newly discovered artist",()=>{
   const item={...song(1),artists:[]},profile=readTaste();
   assert.equal(recommendationReason(item,profile,[],{now}).code,"catalog");
   assert.equal(recommendWithReasons([item],profile,[],{now,random})[0].reason.code,"catalog");
+});
+
+test("retained qualified familiarity outlasts affinity decay without inventing fresh positive evidence",()=>{
+  const profile=readTaste(),heard=song(1,"Old artist"),related=song(2,"Old artist"),unknown=song(3,"New artist");
+  recordListening(profile,heard,{seconds:190,duration:200},now-2*365*86400000);
+  profile.mode="discovery";
+  assert.equal(recommendationReason(related,profile,[],{now}).code,"catalog");
+  assert.equal(recommend([related,unknown],profile,[],{now,random})[0].id,unknown.id);
+  const restored=readTaste({getItem:()=>JSON.stringify(profile)});
+  assert.equal(recommendationReason(related,restored,[],{now}).code,"catalog");
+  assert.ok(!tasteSeeds(restored,[],{now,random}).some(item=>item.id===related.id));
+});
+
+test("familiarity uses valid qualified history even when current affinity is negative, never passive or future history",()=>{
+  const profile=readTaste(),heard=song(1,"Known"),passive=song(2,"Passive"),future=song(3,"Future");
+  profile.entries[heard.id]={item:heard,score:-4,plays:2,at:now-86400000,lastPlayed:now-86400000};
+  profile.entries[passive.id]={item:passive,score:0,plays:0,at:now-86400000,lastPlayed:now-86400000};
+  profile.entries[future.id]={item:future,score:8,plays:10,at:now+86400000,lastPlayed:now+86400000};
+  assert.equal(recommendationReason(song(11,"Known"),profile,[],{now}).code,"catalog");
+  assert.equal(recommendationReason(song(12,"Passive"),profile,[],{now}).code,"discovery");
+  assert.equal(recommendationReason(song(13,"Future"),profile,[],{now}).code,"discovery");
+});
+
+test("navigation and recommendation Next do not teach a permanent track or artist dislike, while legacy skips remain compatible",()=>{
+  for(const intent of ["navigation","next"]){
+    const profile=readTaste(),item=song(1,"Chosen"),sameArtist=song(2,"Chosen"),other=song(3,"Other");
+    recordListening(profile,item,{seconds:5,duration:200,skipped:true,intent,session:1},now);
+    recordListening(profile,item,{seconds:5,duration:200,skipped:true,intent,session:1},now+1);
+    assert.equal(profile.entries[item.id].score,0);assert.equal(profile.entries[item.id].plays,0);
+    assert.equal(recommendationReason(sameArtist,profile,[],{now}).code,"discovery");
+    assert.equal(recommend([other,sameArtist],profile,[],{now,random})[0].id,other.id);
+    assert.ok(recommend([item],profile,[],{now,random}).some(value=>value.id===item.id));
+    assert.deepEqual(profile.blockedArtists,[]);assert.deepEqual(profile.hiddenSongs,[]);
+  }
+  const legacy=readTaste(),item=song(1);
+  recordListening(legacy,item,{seconds:5,duration:200,skipped:true,session:1},now);
+  assert.equal(legacy.entries[item.id].score,-2.5);assert.deepEqual(recommend([item],legacy,[],{now,random}),[]);
+});
+
+test("qualified positive listening still teaches taste regardless of navigation or Next transition intent",()=>{
+  for(const intent of ["navigation","next"]){
+    const profile=readTaste(),item=song(1);
+    recordListening(profile,item,{seconds:40,duration:200,skipped:true,intent,session:1},now);
+    assert.equal(profile.entries[item.id].score,1);assert.equal(profile.entries[item.id].plays,1);
+    recordListening(profile,item,{seconds:190,duration:200,skipped:true,intent,session:1},now+150000);
+    assert.ok(profile.entries[item.id].score>2.49);assert.equal(profile.entries[item.id].plays,1);
+  }
+});
+
+test("positive session fit is bounded named-artist evidence and does not fabricate acoustic similarity or persistent familiarity",()=>{
+  const profile=readTaste(),other=song(1,"Other"),related=song(2," MASSIVE   ATTACK "),context=song(3,"ＭＡＳＳＩＶＥ\u00a0ＡＴＴＡＣＫ"),before=JSON.stringify(profile);
+  const rows=recommendWithReasons([other,related],profile,[],{now,random,sessionItems:[context]});
+  assert.equal(rows[0].item.id,related.id);assert.equal(rows[0].reason.code,"discovery");
+  assert.equal(JSON.stringify(profile),before);
+  const noArtist={...context,artists:[],title:related.title};
+  assert.equal(recommend([other,related],profile,[],{now,random,sessionItems:[noArtist]})[0].id,other.id);
+  const forty=Array.from({length:40},(_,i)=>song(100+i,"Other"));
+  assert.deepEqual(recommend([other,related],profile,[],{now,random,sessionItems:forty}),recommend([other,related],profile,[],{now,random,sessionItems:[...forty,...Array.from({length:500},(_,i)=>song(1000+i,related.artists[0]))]}));
+});
+
+test("source evidence and transient item adjustments change rank within finite bounds without changing reasons or preferences",()=>{
+  const profile=readTaste(),a=song(1,"A"),b=song(2,"B"),before=JSON.stringify(profile),items=Object.freeze([a,b]);
+  const ranked=options=>recommend(items,profile,[],{now,random,...options});
+  assert.equal(ranked({candidateScores:new Map([[b.id,100]])})[0].id,b.id);
+  assert.deepEqual(ranked({candidateScores:new Map([[b.id,100]])}),ranked({candidateScores:new Map([[b.id,3]])}));
+  assert.equal(ranked({itemAdjustments:new Map([[a.id,-100]])})[0].id,b.id);
+  assert.deepEqual(ranked({itemAdjustments:new Map([[a.id,-100]])}),ranked({itemAdjustments:new Map([[a.id,-6]])}));
+  assert.equal(ranked({candidateScores:new Map([[b.id,-3]]),itemAdjustments:new Map([[b.id,3]])})[0].id,a.id);
+  assert.equal(ranked({candidateScores:new Map([[b.id,Infinity]]),itemAdjustments:new Map([[a.id,NaN]])})[0].id,a.id);
+  assert.equal(recommend(items,profile,[a],{now,random,candidateScores:new Map([[b.id,100]]),sessionItems:Array.from({length:40},(_,i)=>song(100+i,"B"))})[0].id,a.id,"source/session evidence must not be unbounded");
+  assert.equal(recommend(items,profile,[a],{now,random,itemAdjustments:new Map([[a.id,-100]])})[0].id,a.id,"an adjustment is bounded, not an implicit hard exclusion");
+  const invalid={get(){throw Error("must not invoke imported scoring objects");}};
+  assert.equal(ranked({candidateScores:invalid,itemAdjustments:invalid})[0].id,a.id);
+  const rows=recommendWithReasons(items,profile,[],{now,random,candidateScores:new Map([[b.id,3]]),sessionItems:[b]});
+  assert.ok(rows.every(row=>row.reason.code==="discovery"));assert.equal(JSON.stringify(profile),before);
+});
+
+test("session and source boosts cannot override explicit exclusions or track cooldown and preserve a manual queue",()=>{
+  const profile=readTaste(),hidden=song(1,"Hidden"),blocked=song(2,"Blocked"),heard=song(3,"Heard"),allowed=song(4,"Allowed"),manual=[hidden,blocked,heard,allowed];
+  hideRecommendation(profile,hidden);hideRecommendation(profile,blocked,true);
+  recordListening(profile,heard,{seconds:190,duration:200},now);
+  const rows=recommend(manual,profile,manual,{now:now+60000,random,sessionItems:manual,candidateScores:new Map(manual.map(item=>[item.id,1000])),itemAdjustments:new Map([[allowed.id,-Infinity]])});
+  assert.deepEqual(rows,[allowed]);assert.deepEqual(manual,[hidden,blocked,heard,allowed]);
+});
+
+test("a short revisit does not renew qualified cooldown, while a qualified suppressed repeat does",()=>{
+  for(const intent of ["navigation","next"]){
+    const profile=readTaste(),item=song(1),earlier=now-3600000;
+    recordListening(profile,item,{seconds:190,duration:200,session:1},earlier);
+    recordListening(profile,item,{seconds:5,duration:200,skipped:true,intent,session:2},now);
+    assert.equal(profile.entries[item.id].lastPlayed,earlier);
+    assert.equal(profile.entries[item.id].plays,1);
+    assert.deepEqual(recommend([item],profile,[item],{now,random}),[item]);
+    recordListening(profile,item,{seconds:40,duration:200,intent,session:2},now+35000);
+    assert.equal(profile.entries[item.id].lastPlayed,now+35000);
+    assert.equal(profile.entries[item.id].plays,2);
+    assert.deepEqual(recommend([item],profile,[item],{now:now+35001,random}),[]);
+    const score=profile.entries[item.id].score;
+    recordListening(profile,item,{seconds:40,duration:200,intent,session:3},now+60000);
+    assert.equal(profile.entries[item.id].lastPlayed,now+60000);
+    assert.equal(profile.entries[item.id].plays,2);
+    assert.ok(profile.entries[item.id].score<=score,"repeat reward remains suppressed even though actual listening renews cooldown");
+  }
+});
+
+test("legacy negative skips and previously unqualified exposures retain timestamp compatibility",()=>{
+  const profile=readTaste(),legacy=song(1),passive=song(2);
+  recordListening(profile,legacy,{seconds:190,duration:200,session:1},now-3600000);
+  recordListening(profile,legacy,{seconds:5,duration:200,skipped:true,session:2},now);
+  assert.equal(profile.entries[legacy.id].lastPlayed,now);
+  recordListening(profile,passive,{seconds:5,duration:200,session:3},now);
+  assert.equal(profile.entries[passive.id].lastPlayed,now);
+  recordListening(profile,passive,{seconds:5,duration:200,intent:"navigation",session:4},now+1000);
+  assert.equal(profile.entries[passive.id].lastPlayed,now+1000);
+  assert.equal(profile.entries[passive.id].plays,0);
 });

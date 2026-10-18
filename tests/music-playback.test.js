@@ -3,13 +3,14 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {runInNewContext} from "node:vm";
 import {tracks,remember,nextIndex} from "../src/music-state.js";
-import {readTaste,recordListening,recommend,tasteSeeds,listeningClock,tasteArtistKeys} from "../src/music-taste.js";
+import {readTaste,recordListening,recommend,tasteSeeds,listeningClock,tasteArtistKeys,canonicalArtistKey} from "../src/music-taste.js";
 import {mergeRecommendationPools} from "../src/music-recommendation-view.js";
+import {createRecommendationSession} from "../src/music-recommendation-session.js";
 import {createPlaybackOrder} from "../src/music-session.js";
 import {createMusicDiagnostics,playbackFailure} from "../src/music-diagnostics.js";
 
 const source=readFileSync(new URL("../src/devil-music.js",import.meta.url),"utf8");
-const code=source.slice(source.indexOf("  function plannedNext()"),source.indexOf("  function selectView("));
+const code=source.slice(source.indexOf("  function invalidateRecommendations("),source.indexOf("  function visibleRecommendation("))+source.slice(source.indexOf("  function plannedNext()"),source.indexOf("  function selectView("));
 const song=n=>({id:String(n).padStart(11,"0"),title:`Song ${n}`,subtitle:"Artist",artists:[`Artist ${n}`],kind:"song"});
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
@@ -27,14 +28,16 @@ function player(invoke,items=[song(1)]){
     listen:audio.addEventListener,decks:{take:()=>null,stopTail(){},warm(){},ready:()=>false,owns:node=>node===audio},sound:{resume(){},transition:0},lyrics:{update(){}},window:{},
     nextPlan:null,preloadPending:false,preloadAttempts:new Set(),radioAhead:null,time:String,
     order:createPlaybackOrder(),knownDuration:0,sessionTransition:false,sessionSavedAt:Date.now(),intent:{leave(){}},radioCache:new Map(),repeat:"off",shuffle:false,session:0,checkpoint:0,historyAdded:false,recoveryUsed:false,pendingSeek:0,retryPosition:0,bufferingTimer:null,
-    saved:{favorites:[],recent:[]},playbackContext:[],taste:readTaste(),clock:{seconds:0,reset(){this.seconds=0;},sample() {return this.seconds;}},
+    saved:{favorites:[],recent:[]},playbackContext:[],playbackOrigin:"manual",contextRevision:0,personalization:0,recommendationRevision:0,playbackSourceContext:{kind:"restored"},recommendationSession:createRecommendationSession(),automaticQueueIds:new Set(),impressionTimers:new Map(),refreshRecommendationImpressions(){},clearRecommendationObservations(){},discoveryCandidates:[],recommendationReasons:new Map(),
+    view:"home",lastQuery:{kind:"home"},activeMood:"",playlistId:null,browseItem:null,getPlaylist:()=>null,
+    taste:readTaste(),clock:{seconds:0,reset(){this.seconds=0;},sample() {return this.seconds;}},
     title:field(),artist:field(),artwork:field(),seek:field(),elapsed:field(),duration:field(),previous:{click(){}},
-    invoke:(command,args)=>{if(command==="music_cancel_stream"){ctx.cancellations=(ctx.cancellations||0)+1;return Promise.resolve();}return invoke(command,args);},tracks,remember,nextIndex,recommend,tasteSeeds,tasteArtistKeys,mergeRecommendationPools,cover:()=>null,displaySubtitle:item=>item?.artists?.join(", ")||"Unknown artist",language:()=>"en",t:s=>s,errorText:String,
+    invoke:(command,args)=>{if(command==="music_cancel_stream"){ctx.cancellations=(ctx.cancellations||0)+1;return Promise.resolve();}return invoke(command,args);},tracks,remember,nextIndex,recommend,recordListening,tasteSeeds,tasteArtistKeys,canonicalArtistKey,mergeRecommendationPools,cover:()=>null,displaySubtitle:item=>item?.artists?.join(", ")||"Unknown artist",language:()=>"en",t:s=>s,errorText:String,
     captureListening(){},persist(){},persistSession(){},syncDock(){},renderQueue(){},status(message){ctx.message=message;},
     document:{querySelectorAll:()=>[],addEventListener(){}},navigator:{},performance,DOMException,
     setTimeout(fn){const id=++serial;timers.set(id,fn);return id;},clearTimeout(id){timers.delete(id);}};
   ctx.playbackSource=(id,refresh)=>ctx.invoke("music_stream",{id,refresh});
-  const actions=runInNewContext(`(()=>{${code}\nreturn {playAt,playItems,togglePlay,resumeListening,advance};})()`,ctx);
+  const actions=runInNewContext(`(()=>{${code}\nreturn {playAt,playItems,togglePlay,resumeListening,advance,preloadNext,clearRecommendationContext,plannedNext,rankRadioPool,radioCandidates};})()`,ctx);
   return {ctx,...actions,emit:name=>events[name]?.(),expire(){const pending=[...timers.values()];timers.clear();pending.forEach(fn=>fn());}};
 }
 test("source restrictions explain the failure without starting audio or scheduling retries",async()=>{
@@ -119,13 +122,13 @@ test("autoplay passes actual recent playback across batches, even after the queu
   assert.deepEqual(Array.from(context,item=>item.id),[song(2).id,song(1).id]);
   assert.equal(p.ctx.current.id,song(4).id);
 });
-test("natural completion after a short audible portion is not learned as an explicit early skip",async()=>{
+test("natural completion and manual navigation after a short portion are not explicit dislikes",async()=>{
   for(const manual of [false,true]){
     const p=player(async(_,args)=>({url:args.id}),[song(1),song(2)]);await p.playAt(0);
-    p.ctx.captureListening=skipped=>recordListening(p.ctx.taste,p.ctx.current,{seconds:p.ctx.clock.seconds,duration:p.ctx.audio.duration,session:p.ctx.session,skipped},1800000000000);
+    p.ctx.captureListening=(skipped,intent)=>recordListening(p.ctx.taste,p.ctx.current,{seconds:p.ctx.clock.seconds,duration:p.ctx.audio.duration,session:p.ctx.session,skipped,intent},1800000000000);
     p.ctx.clock.seconds=5;p.ctx.audio.currentTime=180;p.ctx.audio.ended=true;
     await p.advance(manual);await settle();
-    assert.equal(p.ctx.taste.entries[song(1).id].score,manual?-2.5:0);
+    assert.equal(p.ctx.taste.entries[song(1).id].score,0);
     assert.equal(p.ctx.taste.entries[song(1).id].plays,0);
     assert.equal(p.ctx.current.id,song(2).id);
   }
@@ -264,4 +267,81 @@ test("repeat one repeats on natural completion but a manual skip advances",async
   const p=player(async(_,args)=>({url:args.id}),[song(1),song(2)]);
   p.ctx.repeat="one";await p.playAt(0);await p.advance(false);await settle();assert.equal(p.ctx.current.id,song(1).id);
   await p.advance(true);await settle();assert.equal(p.ctx.current.id,song(2).id);
+});
+
+test("autoplay uses the selected listening context and preserves raw station provenance within two requests",async()=>{
+  const queries=[],jazzA={...song(1),artists:["Jazz A"]},jazzB={...song(2),artists:["Jazz B"]},global={...song(9),artists:["Phonk"]};
+  const p=player(async(command,args)=>{if(command==="music_stream")return {url:args.id};queries.push(args.value);return {sections:[{items:[song(3),song(4)]}]};});
+  p.ctx.saved.favorites=[global];p.playItems([jazzA,jazzB,global],jazzB.id,{kind:"playlist",id:"jazz-list",label:"Evening jazz"},[jazzA,jazzB]);await settle();
+  const raw=await p.radioCandidates(p.ctx.current);
+  assert.deepEqual(queries,[jazzB.id,jazzA.id]);assert.ok(!queries.includes(global.id));
+  assert.equal(raw.pools.length,2);assert.ok(raw.pools.every(pool=>pool.contextual&&pool.source.kind==="playlist"&&pool.source.id==="jazz-list"));
+  assert.deepEqual(Array.from(p.ctx.queue,item=>item.id),[jazzA.id,jazzB.id,global.id]);
+});
+
+test("a prepared raw radio pool is reranked with latest mode, favorites and exclusions on consumption",async()=>{
+  for(const change of ["mode","favorite","hidden"]){
+    const a={...song(2),artists:["Familiar"]},b={...song(3),artists:["New"]},liked={...song(9),artists:["Familiar"]},calls=[];
+    const p=player(async(command,args)=>{calls.push({command,...args});return command==="music_stream"?{url:args.id}:{sections:[{items:[a,b]}]};});
+    p.ctx.saved.favorites=[liked];p.ctx.taste.mode="familiar";await p.playAt(0);p.ctx.audio.currentTime=150;p.emit("timeupdate");await settle();await settle();
+    assert.equal(calls.find(call=>call.preload)?.id,a.id);assert.equal(p.ctx.queue.length,1);const fetched=calls.filter(call=>call.command==="music_catalog").length;assert.ok(fetched<=2);
+    if(change==="mode")p.ctx.taste.mode="discovery";
+    else if(change==="favorite")p.ctx.saved.favorites=[b];
+    else p.ctx.taste.hiddenSongs=[a.id];
+    await p.advance(false);await settle();
+    assert.equal(p.ctx.current.id,b.id,change);assert.equal(calls.filter(call=>call.command==="music_catalog").length,fetched);
+  }
+});
+
+test("private context reset rejects an old radio error without clearing a newer request",async()=>{
+  const old=deferred(),fresh=deferred();let catalogs=0;
+  const p=player(async(command,args)=>command==="music_stream"?{url:args.id}:(++catalogs===1?old.promise:fresh.promise));
+  await p.playAt(0);const first=p.advance(false);await settle();
+  const queueBefore=Array.from(p.ctx.queue,item=>item.id);p.ctx.privateSession=true;p.clearRecommendationContext();
+  assert.deepEqual(Array.from(p.ctx.recommendationSession.contextItems()),[]);assert.equal(p.ctx.radioPending,false);
+  assert.deepEqual(Array.from(p.ctx.queue,item=>item.id),queueBefore);
+  const second=p.advance(false);await settle();old.reject(Error("stale radio failure"));await first;
+  assert.equal(p.ctx.radioPending,true);assert.notEqual(p.ctx.message,"stale radio failure");
+  fresh.resolve({sections:[{items:[song(2)]}]});await second;await settle();
+  assert.equal(p.ctx.current.id,song(2).id);assert.equal(p.ctx.radioPending,false);
+});
+
+test("manual navigation is neutral while recommendation Next creates only temporary exact-track fatigue",async()=>{
+  const captureCode=source.slice(source.indexOf("  function captureListening("),source.indexOf("  function plannedNext("));
+  for(const automatic of [false,true]){
+    const p=player(async(_,args)=>({url:args.id}),[song(1),song(2)]);await p.playAt(0);
+    Object.assign(p.ctx,{statsSession:null,statsSeconds:0,statsCounted:false,weekly:{record(){}}});
+    p.ctx.captureListening=runInNewContext(`(()=>{${captureCode};return captureListening;})()`,p.ctx);
+    p.ctx.playbackOrigin=automatic?"recommendation":"manual";p.ctx.clock.seconds=5;
+    await p.advance(true);await settle();
+    assert.equal(p.ctx.taste.entries[song(1).id].score,0);assert.equal(p.ctx.taste.entries[song(1).id].plays,0);
+    assert.equal(p.ctx.recommendationSession.options().itemAdjustments.has(song(1).id),automatic);
+  }
+});
+
+test("automatic queue eligibility applies new blocks without changing manually selected entries",async()=>{
+  const p=player(async(_,args)=>({url:args.id}),[song(1),song(2),song(3)]);await p.playAt(0);
+  p.ctx.automaticQueueIds.add(song(2).id);p.ctx.taste.hiddenSongs=[song(2).id,song(3).id];
+  const before=Array.from(p.ctx.queue,item=>item.id);assert.equal(p.plannedNext(),2);
+  await p.advance(false);await settle();assert.equal(p.ctx.current.id,song(3).id);
+  assert.deepEqual(Array.from(p.ctx.queue,item=>item.id),before);
+});
+
+test("private boundary clears temporary context, fatigue and old playback provenance",()=>{
+  const p=player(async()=>({url:"audio"}));const item=song(1);
+  p.ctx.recommendationSession.setContext([item]);p.ctx.recommendationSession.markShown([item]);
+  p.ctx.recommendationSession.fail(song(2).id);p.ctx.playbackContext=[item];p.ctx.playbackOrigin="recommendation";p.ctx.playbackSourceContext={kind:"playlist",id:"private"};
+  p.ctx.discoveryCandidates=[item];p.ctx.recommendationReasons.set(item.id,{code:"discovery"});p.ctx.privateSession=false;p.clearRecommendationContext();
+  assert.equal(p.ctx.recommendationSession.contextItems().length,0);assert.equal(p.ctx.recommendationSession.options().itemAdjustments.size,0);
+  assert.equal(p.ctx.recommendationSession.allowed([song(2)]).length,1);assert.equal(p.ctx.playbackContext.length,0);
+  assert.equal(p.ctx.playbackOrigin,"manual");assert.equal(p.ctx.playbackSourceContext.id,undefined);
+  assert.equal(p.ctx.discoveryCandidates.length,0);assert.equal(p.ctx.recommendationReasons.size,0);
+});
+
+test("an empty or excluded prepared pool is not fully reranked on every media timeupdate",async()=>{
+  const p=player(async(command,args)=>command==="music_stream"?{url:args.id}:{sections:[{items:[song(2)]}]});
+  p.ctx.taste.hiddenSongs=[song(2).id];let rankings=0;p.ctx.recommend=(...args)=>{rankings++;return recommend(...args);};
+  await p.playAt(0);p.ctx.audio.currentTime=150;p.emit("timeupdate");await settle();await settle();const before=rankings;
+  assert.ok(before>0);for(let i=0;i<30;i++)p.emit("timeupdate");await settle();assert.equal(rankings,before);
+  p.ctx.taste.hiddenSongs=[];await p.advance(false);await settle();assert.equal(p.ctx.current.id,song(2).id);
 });

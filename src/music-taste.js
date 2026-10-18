@@ -49,16 +49,19 @@ export function hideRecommendation(profile,item,artist=false) {
   else profile.hiddenSongs=[...new Set([item.id,...(Array.isArray(profile.hiddenSongs)?profile.hiddenSongs:[]).filter(validId)])].slice(0,500);
 }
 
-// Short passive exposure has zero reward and zero qualified plays. An explicit early
-// skip is negative evidence; a later checkpoint replaces the same session's reward.
+// Short passive exposure has zero reward and zero qualified plays. Navigation and
+// recommendation Next are not durable dislikes: transient fatigue belongs to the
+// caller's session state. Calls without an intent retain legacy skip semantics.
 export function recordListening(profile,item,evidence={},now=Date.now()) {
   if(!validSong(item)||!profile?.entries||typeof profile.entries!=="object")return false;
-  const {seconds:rawSeconds=0,duration:rawDuration=0,skipped=false,session}=evidence||{};
+  const {seconds:rawSeconds=0,duration:rawDuration=0,skipped=false,session,intent}=evidence||{};
   const seconds=Math.max(0,finite(rawSeconds)),duration=Math.max(0,finite(rawDuration));now=safeNow(now);
   if(seconds<2)return false;
   const ratio=duration>0?Math.min(1,seconds/duration):0;
   const earlySkip=skipped===true&&seconds<20&&(duration===0||ratio<.2);
-  const reward=earlySkip?-2.5:ratio>=.8?2.5:seconds>=30?1:0;
+  const negativeSkip=earlySkip&&intent!=="navigation"&&intent!=="next";
+  const currentQualified=seconds>=30||ratio>=.8;
+  const reward=negativeSkip?-2.5:ratio>=.8?2.5:seconds>=30?1:0;
   const old=Object.hasOwn(profile.entries,item.id)?profile.entries[item.id]:null;
   // A short passive exposure (including one restored after restart) must not
   // prevent the first qualified listen from teaching taste.
@@ -68,8 +71,11 @@ export function recordListening(profile,item,evidence={},now=Date.now()) {
   const sessionReward=sessionEligible?reward:0;
   const adjustment=sessionReward-(sameSession?finite(old.sessionReward):0);
   const counted=Boolean(sameSession&&old.sessionCounted);
-  const sessionCounted=counted||Boolean(sessionEligible&&(seconds>=30||ratio>=.8));
-  profile.entries[item.id]={item,score:clamp((old?clamp(finite(old.score),-8,8)*decay(old,now):0)+adjustment,-8,8),at:now,lastPlayed:now,
+  const sessionCounted=counted||Boolean(sessionEligible&&currentQualified);
+  // A brief revisit must not turn cumulative old plays into a new qualified
+  // cooldown. Legacy negative skips retain their original timestamp semantics.
+  const lastPlayed=qualified(old)&&!currentQualified&&!negativeSkip?Math.max(0,finite(old.lastPlayed)):now;
+  profile.entries[item.id]={item,score:clamp((old?clamp(finite(old.score),-8,8)*decay(old,now):0)+adjustment,-8,8),at:now,lastPlayed,
     plays:Math.min(10000,Math.max(0,finite(old?.plays))+(sessionCounted&&!counted?1:0)),session,sessionReward,sessionEligible,sessionCounted};
   const all=Object.entries(profile.entries).sort((a,b)=>finite(b[1]?.at)-finite(a[1]?.at));
   for(const [id]of all.slice(MAX_ENTRIES))delete profile.entries[id];
@@ -96,7 +102,9 @@ function affinities(profile,favorites,now,followedArtists=[]) {
     entries.set(entry.item.id,entry);songScores.set(entry.item.id,score);
     for(const key of keys) {
       addEvidence(history,key,score/keys.length,timestamp(entry.at,now)||0);
-      if(qualified(entry)&&score>.25&&age(entry.lastPlayed,now)<=180*DAY)knownArtists.add(key);
+      // Interest can fade or turn negative without making a previously heard
+      // artist a discovery again. Familiarity lasts within the retained history.
+      if(qualified(entry)&&age(entry.lastPlayed,now)<Infinity)knownArtists.add(key);
       const since=age(entry.lastPlayed,now);
       if(qualified(entry)&&since<6*3600000)recentArtists.set(key,(recentArtists.get(key)||0)+Math.exp(-since/(2*3600000))/keys.length);
     }
@@ -114,6 +122,20 @@ function affinities(profile,favorites,now,followedArtists=[]) {
 }
 function jitter(random) {
   try{return (clamp(finite(typeof random==="function"?random():.5),0,1)-.5)*.2;}catch{return 0;}
+}
+function rankingAdjustment(values,id,minimum,maximum) {
+  // Only actual Maps are accepted; arbitrary imported objects/getters are not a
+  // scoring callback. Non-finite values cannot poison comparisons or exclusions.
+  return values instanceof Map?clamp(finite(Map.prototype.get.call(values,id)),minimum,maximum):0;
+}
+function sessionAffinity(items) {
+  const artists=new Map();
+  const context=songs(Array.isArray(items)?items.slice(0,40):[]);
+  context.forEach((item,index)=>{
+    const keys=tasteArtistKeys(item),weight=Math.exp(-index/6)/Math.max(1,keys.length);
+    for(const key of keys)artists.set(key,Math.min(1,(artists.get(key)||0)+weight));
+  });
+  return artists;
 }
 
 export function tasteSeeds(profile,favorites,{now=Date.now(),random=Math.random,limit=3}={}) {
@@ -151,10 +173,13 @@ export function recommendationReason(item,profile,favorites,{now=Date.now(),foll
 
 // Context is most-recent-first. It affects recommendations only, never a manually
 // assembled queue. Artist cooldown is soft so a one-artist radio can still continue.
-export function recommendWithReasons(items,profile,favorites,{now=Date.now(),random=Math.random,limit=20,exclude=[],followedArtists=[],contextItems=[],recentArtists=[]}={}) {
+export function recommendWithReasons(items,profile,favorites,{now=Date.now(),random=Math.random,limit=20,exclude=[],followedArtists=[],contextItems=[],recentArtists=[],sessionItems=[],candidateScores,itemAdjustments}={}) {
   now=safeNow(now);limit=limitValue(limit,20);if(!limit)return [];
   const evidence=affinities(profile,favorites,now,followedArtists),excluded=new Set(Array.isArray(exclude)?exclude.filter(validId):[]);
   const mode=["familiar","discovery"].includes(profile?.mode)?profile.mode:"balanced",context=new Map();
+  // Positive session fit is deliberately limited to named artists. Candidate
+  // retrieval may add bounded source evidence, never invented audio/genre labels.
+  const sessionArtists=sessionAffinity(sessionItems);
   const past=songs(contextItems).slice(0,40),recent=(Array.isArray(recentArtists)?recentArtists:[]).slice(0,40).map(canonicalArtistKey).filter(Boolean);
   past.forEach((item,index)=>{for(const key of tasteArtistKeys(item))context.set(key,(context.get(key)||0)+Math.exp(-index/6));});
   recent.forEach((key,index)=>context.set(key,(context.get(key)||0)+Math.exp(-index/6)));
@@ -168,7 +193,9 @@ export function recommendWithReasons(items,profile,favorites,{now=Date.now(),ran
       const preference=mode==="discovery"?(!knownArtist?5:heard?-2.5:-1):mode==="familiar"?(knownArtist?4:0)+(heard||evidence.liked.has(item.id)?2:0):!knownArtist?.45:0;
       const artistCooldown=Math.max(0,...keys.map(key=>Math.min(2.5,Math.log1p(evidence.recentArtists.get(key)||0))));
       const contextPenalty=Math.max(0,...keys.map(key=>Math.min(3,context.get(key)||0)))*1.5;
-      return {item,index,keys,knownArtist,score:score*.8+affinity*.8-freshness*3+preference+(keys.some(key=>evidence.followed.has(key))?4:0)-artistCooldown-contextPenalty+jitter(random)};
+      const sessionFit=Math.max(0,...keys.map(key=>sessionArtists.get(key)||0))*2;
+      const sourceFit=rankingAdjustment(candidateScores,item.id,0,3),adjustment=rankingAdjustment(itemAdjustments,item.id,-6,0);
+      return {item,index,keys,knownArtist,score:score*.8+affinity*.8-freshness*3+preference+(keys.some(key=>evidence.followed.has(key))?4:0)+sessionFit+sourceFit+adjustment-artistCooldown-contextPenalty+jitter(random)};
     }).filter(Boolean);
   const counts=new Map(),artists=new Set(pool.flatMap(row=>row.keys)),cap=Math.max(2,Math.ceil(limit/Math.max(1,artists.size))),flexible=artists.size<3,result=[];
   const frequency=mode==="discovery"?2:mode==="familiar"?6:3;
