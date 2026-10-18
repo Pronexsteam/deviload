@@ -2,6 +2,9 @@
 use base64::Engine as _;
 use serde_json::{json, Value};
 use std::{collections::HashMap, fs, io::{BufRead, BufReader, Read, Write}, path::{Path,PathBuf}, process::{Child,ChildStdin,Stdio}, sync::{Arc,Mutex,OnceLock,mpsc,atomic::{AtomicBool,AtomicU64,Ordering}}, thread, time::{Duration,Instant}};
+#[path="music_engine_diagnostics.rs"]
+pub(crate) mod diagnostics;
+use diagnostics::{Stage as DiagnosticStage,Code as DiagnosticCode};
 
 const EMBEDDED: &[u8] = include_bytes!("../music-engine/payload.json.gz");
 const VERSION: u64 = 1;
@@ -11,7 +14,7 @@ static SERIAL: AtomicU64 = AtomicU64::new(1);
 static FILES: [&str;3] = ["engine.mjs","po-worker.ts","xhr-sync-worker.js"];
 type Reply = Result<Value,String>;
 pub fn restricted_error(error:&str)->bool { error.starts_with("Playback restricted:") || error.contains("temporarily limited") }
-struct Worker { input:Mutex<ChildStdin>,child:Mutex<Child>,pending:Mutex<HashMap<u64,mpsc::Sender<Reply>>>,alive:AtomicBool,port:Mutex<u16> }
+struct Worker { input:Mutex<ChildStdin>,child:Mutex<Child>,pending:Mutex<HashMap<u64,mpsc::Sender<Reply>>>,alive:AtomicBool,port:Mutex<u16>,version:u64 }
 impl Drop for Worker {fn drop(&mut self){if let Ok(child)=self.child.get_mut(){let _=child.kill();let _=child.wait();}}}
 fn root()->Result<PathBuf,String>{
     #[cfg(debug_assertions)]
@@ -60,39 +63,45 @@ impl Worker {
     fn request(&self,mut value:Value,timeout:Duration,cancelled:&dyn Fn()->bool)->Reply{
         if !self.alive.load(Ordering::Relaxed){return Err("Music engine stopped".into());}
         let key=SERIAL.fetch_add(1,Ordering::Relaxed);value["key"]=json!(key);let(tx,rx)=mpsc::channel();
+        let stage=match value["action"].as_str(){Some("play") if value["preload"]==true=>DiagnosticStage::Preload,Some("cache")=>DiagnosticStage::Cache,_=>DiagnosticStage::Resolve};
         {let mut pending=self.pending.lock().unwrap();if pending.len()>=16{return Err("Music engine is busy".into());}pending.insert(key,tx);}
         if let Err(e)=self.send(value){self.pending.lock().unwrap().remove(&key);return Err(e);}
-        let deadline=Instant::now()+timeout;
+        let started=Instant::now();diagnostics::record(stage,DiagnosticCode::Requested,None);
+        let deadline=started+timeout;
         let answer=loop{if cancelled(){break Err("Cancelled".into());}if Instant::now()>deadline{break Err("Music engine timed out".into());}
             match rx.recv_timeout(Duration::from_millis(20)){Ok(v)=>break v,Err(mpsc::RecvTimeoutError::Disconnected)=>break Err("Music engine stopped".into()),Err(_)=>{}}};
-        self.pending.lock().unwrap().remove(&key);answer
+        self.pending.lock().unwrap().remove(&key);diagnostics::result(stage,&answer,Some(started.elapsed().as_millis() as u64));answer
     }
     fn start(folder:&Path,root:&Path)->Result<Arc<Self>,String>{
+        diagnostics::record(DiagnosticStage::Worker,DiagnosticCode::Requested,None);
         fs::create_dir_all(root).map_err(|_|"Could not prepare music cache")?;
         let deno=crate::binary("deno")?;let mut command=crate::command(&deno);
         command.env_clear();for name in ["SystemRoot","TEMP","TMP"]{if let Some(value)=std::env::var_os(name){command.env(name,value);}}
         command.current_dir(root).args(["run","--no-config","--no-npm","--no-remote","--no-prompt","--unstable-worker-options","--allow-env","--allow-net"])
             .arg(format!("--allow-read={},{}",folder.display(),root.display())).arg(format!("--allow-write={}",root.display()))
-            .arg(folder.join("engine.mjs")).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+            .arg(folder.join("engine.mjs")).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
         let mut child=command.spawn().map_err(|_|"Could not start music engine")?;
         let output=child.stdout.take().ok_or("No music engine output")?;let input=child.stdin.take().ok_or("No music engine input")?;
-        let worker=Arc::new(Self{input:Mutex::new(input),child:Mutex::new(child),pending:Mutex::new(HashMap::new()),alive:AtomicBool::new(true),port:Mutex::new(0)});
+        if let Some(stderr)=child.stderr.take(){thread::spawn(move||diagnostics::drain_stderr(stderr));}
+        let version=folder.file_name().and_then(|name|name.to_str()).and_then(|name|name.strip_prefix("engine-")).and_then(|number|number.parse::<u64>().ok()).unwrap_or(VERSION);
+        let worker=Arc::new(Self{input:Mutex::new(input),child:Mutex::new(child),pending:Mutex::new(HashMap::new()),alive:AtomicBool::new(true),port:Mutex::new(0),version});
         let weak=Arc::downgrade(&worker);let(tx,rx)=mpsc::channel();
         thread::spawn(move||{
             let mut reader=BufReader::new(output);
             loop{
                 let mut line=String::new();match reader.by_ref().take(65537).read_line(&mut line){Ok(0)|Err(_)=>break,_=>{}}
                 if line.len()>65536{break;}let Ok(value)=serde_json::from_str::<Value>(&line)else{continue;};let Some(worker)=weak.upgrade()else{break;};
-                if value["event"]=="ready" {if let Some(port)=value["port"].as_u64().filter(|p|*p>0&&*p<=65535){*worker.port.lock().unwrap()=port as u16;let _=tx.send(());}continue;}
+                if value["event"]=="ready" {if let Some(port)=value["port"].as_u64().filter(|p|*p>0&&*p<=65535){*worker.port.lock().unwrap()=port as u16;diagnostics::record(DiagnosticStage::Worker,DiagnosticCode::Ready,None);let _=tx.send(());}continue;}
+                if diagnostics::protocol(&value){continue;}
                 if value["event"]=="fallback" {
                     let key=value["key"].clone();let id=value["id"].as_str().unwrap_or("").to_owned();let weak=Arc::downgrade(&worker);
-                    thread::spawn(move||{let result=crate::music::reserve_audio(&id);if let Some(worker)=weak.upgrade(){let response=match result{Ok(url)=>json!({"action":"reserve","key":key,"url":url}),Err(e)=>json!({"action":"reserve","key":key,"error":e})};let _=worker.send(response);}});continue;
+                    thread::spawn(move||{diagnostics::record(DiagnosticStage::Fallback,DiagnosticCode::Requested,None);let started=Instant::now();let result=crate::music::reserve_audio(&id);diagnostics::result(DiagnosticStage::Fallback,&result,Some(started.elapsed().as_millis() as u64));if let Some(worker)=weak.upgrade(){let response=match result{Ok(url)=>json!({"action":"reserve","key":key,"url":url}),Err(e)=>json!({"action":"reserve","key":key,"error":e})};let _=worker.send(response);}});continue;
                 }
                 if let Some(key)=value["key"].as_u64(){if let Some(sender)=worker.pending.lock().unwrap().remove(&key){let reply=if let Some(error)=value["error"].as_str(){Err(error.to_owned())}else{Ok(value["data"].clone())};let _=sender.send(reply);}}
             }
-            if let Some(worker)=weak.upgrade(){worker.alive.store(false,Ordering::Relaxed);worker.pending.lock().unwrap().clear();let mut child=worker.child.lock().unwrap();let _=child.kill();let _=child.wait();}
+            if let Some(worker)=weak.upgrade(){diagnostics::record(DiagnosticStage::Worker,DiagnosticCode::WorkerStopped,None);worker.alive.store(false,Ordering::Relaxed);worker.pending.lock().unwrap().clear();let mut child=worker.child.lock().unwrap();let _=child.kill();let _=child.wait();}
         });
-        if rx.recv_timeout(Duration::from_secs(18)).is_err(){worker.alive.store(false,Ordering::Relaxed);let _=worker.child.lock().unwrap().kill();return Err("Music engine did not start".into());}
+        if rx.recv_timeout(Duration::from_secs(18)).is_err(){diagnostics::record(DiagnosticStage::Worker,DiagnosticCode::Timeout,None);worker.alive.store(false,Ordering::Relaxed);let _=worker.child.lock().unwrap().kill();return Err("Music engine did not start".into());}
         Ok(worker)
     }
 }
@@ -117,7 +126,7 @@ fn worker()->Result<Arc<Worker>,String>{
 pub fn prepare(){if let Ok(worker)=worker(){let _=worker.send(json!({"action":"prepare"}));}}
 pub fn cancel(generation:u64){if let Some(state)=WORKER.get(){if let Some(worker)=state.lock().unwrap().as_ref(){let _=worker.send(json!({"action":"cancel","generation":generation}));}}}
 pub fn play(id:&str,refresh:bool,preload:bool,generation:u64,cancelled:&dyn Fn()->bool)->Result<String,String>{
-    let worker=worker()?;
+    let worker=worker().inspect_err(|error|diagnostics::record(DiagnosticStage::Worker,diagnostics::classify(error),None))?;
     if cancelled(){return Err("Cancelled".into());}
     let data=worker.request(json!({"action":"play","id":id,"refresh":refresh,"preload":preload,"generation":generation}),Duration::from_secs(16),cancelled)?;
     let raw=data["url"].as_str().ok_or("Invalid music engine response")?;let url=url::Url::parse(raw).map_err(|_|"Invalid music engine response")?;
@@ -129,7 +138,26 @@ pub async fn music_cache(clear:Option<bool>,limit:Option<u64>)->Reply{
     tauri::async_runtime::spawn_blocking(move||worker()?.request(json!({"action":"cache","clear":clear.unwrap_or(false),"limit":limit}),Duration::from_secs(8),&||false)).await.map_err(|_|"Music cache unavailable".to_owned())?
 }
 #[tauri::command]
-pub async fn music_engine_update()->Reply{tauri::async_runtime::spawn_blocking(update).await.map_err(|_|"Music engine update failed".to_owned())?}
+pub async fn music_engine_update()->Reply{diagnostics::record(DiagnosticStage::Update,DiagnosticCode::Requested,None);let result=tauri::async_runtime::spawn_blocking(update).await.map_err(|_|"Music engine update failed".to_owned())?;diagnostics::result(DiagnosticStage::Update,&result,None);result}
+fn engine_diagnostics()->Value{
+    let active=WORKER.get().and_then(|state|state.lock().unwrap().as_ref().filter(|worker|worker.alive.load(Ordering::Relaxed)).map(|worker|worker.version));
+    json!({"running":active.is_some(),"bundledVersion":VERSION,"activeVersion":active})
+}
+#[tauri::command]
+pub async fn music_diagnostics()->Reply{Ok(json!({"engine":engine_diagnostics(),"events":diagnostics::snapshot()}))}
+#[tauri::command]
+pub async fn export_music_diagnostics(app:tauri::AppHandle,window:tauri::WebviewWindow,events:Vec<diagnostics::Event>)->Result<bool,String>{
+    use tauri_plugin_dialog::DialogExt;
+    if window.label()!="main"{return Err("Invalid playback report.".into());}
+    let report=diagnostics::report(events,engine_diagnostics())?;
+    tauri::async_runtime::spawn_blocking(move||{
+        let Some(file)=app.dialog().file().add_filter("Playback report",&["txt"]).set_file_name("devil-music-playback-report.txt").blocking_save_file()else{return Ok(false);};
+        let path=file.into_path().map_err(|_|"Choose a local folder.")?;let parent=path.parent().ok_or("Choose a local folder.")?;
+        let mut temporary=tempfile::NamedTempFile::new_in(parent).map_err(|_|"Could not save playback report.")?;
+        temporary.write_all(report.as_bytes()).and_then(|_|temporary.as_file().sync_all()).map_err(|_|"Could not save playback report.")?;
+        temporary.persist(path).map_err(|_|"Could not save playback report.")?;Ok(true)
+    }).await.map_err(|_|"Could not save playback report.".to_owned())?
+}
 fn update()->Reply{
     let _=rustls::crypto::ring::default_provider().install_default();
     let client=reqwest::blocking::Client::builder().timeout(Duration::from_secs(20)).redirect(reqwest::redirect::Policy::none()).build().map_err(|_|"Could not check music engine update")?;

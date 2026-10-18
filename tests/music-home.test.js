@@ -7,7 +7,7 @@ const code=source.slice(source.indexOf("  async function personalize("),source.i
 const local={id:"local",title:"Regional release"},personal={id:"personal",title:"Related to liked artist"},recent={id:"recent",title:"Last played"};
 const base=[{title:"New releases",items:[local]}];
 function home(showRegional){
-  const ctx={saved:{favorites:[],recent:[recent],showRegional},taste:{},request:1,current:null,sections:[],audio:{paused:true},prepared:[],tracks:items=>items,intent:{enter:id=>ctx.prepared.push(id)},captureListening(){},tasteSeeds:()=>[{id:"liked"}],radio:async()=>[personal],recommend:items=>items,t:s=>s,render(){}};
+  const ctx={saved:{favorites:[],recent:[recent],showRegional},taste:{},request:1,personalization:0,playbackContext:[],privateSession:false,recommendationReasons:new Map(),current:null,sections:[],audio:{paused:true},prepared:[],tracks:items=>items,intent:{enter:id=>ctx.prepared.push(id)},captureListening(){},tasteSeeds:()=>[{id:"liked"}],radio:async()=>[personal],mergeRecommendationPools:pools=>pools.flat(),recommendWithReasons:items=>items.map(item=>({item,reason:{code:"catalog"}})),t:s=>s,render(){}};
   return {ctx,...runInNewContext(`(()=>{${code};return {personalize,homeSections};})()`,ctx)};
 }
 test("regional catalog is never presented as learned personal recommendations",async()=>{

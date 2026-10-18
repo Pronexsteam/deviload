@@ -1,4 +1,6 @@
 mod convert;
+mod quick_cut;
+mod download_details;
 mod cookies;
 mod music;
 mod music_audio;
@@ -1101,6 +1103,10 @@ struct Preflight {
     warnings: Vec<String>,
     available_bytes: Option<u64>,
     estimated_bytes: Option<u64>,
+    queue_bytes: u64,
+    unknown_items: usize,
+    required_bytes: u64,
+    approximate: bool,
 }
 
 fn check_preflight(text: &str, options: &Options, estimated_bytes: Option<u64>, jobs: &[Job]) -> Result<Preflight, String> {
@@ -1108,13 +1114,32 @@ fn check_preflight(text: &str, options: &Options, estimated_bytes: Option<u64>, 
     let urls = model::parse_urls(text)?;
     let mut blockers = Vec::new();
     let mut warnings = Vec::new();
-    if !options.format_id.is_empty() && urls.len() != 1 {
+    if (!options.format_id.is_empty() || !options.audio_format_id.is_empty()) && urls.len() != 1 {
         blockers.push("The selected stream fits only a single link.".into());
     }
     for name in ["yt-dlp", "ffmpeg", "ffprobe", "deno"] {
         if binary(name).is_err() { blockers.push(format!("{name} was not found next to the app or in PATH.")); }
     }
     let folder = PathBuf::from(&options.folder);
+    let _ = fs::create_dir_all(&folder);
+    let current_size = if urls.len() == 1 { download_details::matching_size(options,&urls[0]) } else { None };
+    let estimated_bytes = current_size.map(|size| size.bytes).or(estimated_bytes.filter(|_| urls.len() == 1 && !options.playlist));
+    let mut unknown_items = if current_size.is_some_and(|size| size.complete) { 0 } else { urls.len() };
+    let mut approximate = current_size.is_none_or(|size| size.approximate);
+    let mut queue_bytes = 0u64;
+    for job in jobs.iter().filter(|job| ["running","queued","paused","interrupted"].contains(&job.status.as_str()) &&
+        download_details::same_volume(&folder,Path::new(&job.options.folder))) {
+        let size = model::parse_urls(&job.url).ok().and_then(|urls| urls.first().and_then(|url| download_details::matching_size(&job.options,url)));
+        if let Some(size) = size { queue_bytes = queue_bytes.saturating_add(size.bytes); approximate |= size.approximate; }
+        if size.is_none_or(|size| !size.complete) { unknown_items += 1; }
+    }
+    // Sources and a conservative extra copy for muxing can coexist. Transcodes may need more;
+    // unknown data is explicitly reported, never presented as a guaranteed total.
+    let required_bytes = estimated_bytes.unwrap_or(0).saturating_add(queue_bytes).saturating_mul(2).saturating_add(256 * 1024 * 1024);
+    if unknown_items > 0 { warnings.push("Some items have unknown size. Playlist totals and live recordings are not scanned.".into()); }
+    if options.audio_only() || options.profile == "mobile" || options.clip_start.is_some() || options.split_chapters {
+        warnings.push("Conversion and clip output sizes are unknown; this is a budget for known source data.".into());
+    }
     let mut available_bytes = None;
     match fs::create_dir_all(&folder) {
         Ok(()) => {
@@ -1126,10 +1151,8 @@ fn check_preflight(text: &str, options: &Options, estimated_bytes: Option<u64>, 
                 available_bytes = Some(free);
                 if free < 256 * 1024 * 1024 { blockers.push("Less than 256 MB free on the disk.".into()); }
                 else if free < 1024 * 1024 * 1024 { warnings.push("Less than 1 GB free on the disk.".into()); }
-                if let Some(size) = estimated_bytes {
-                    if size.saturating_add(256 * 1024 * 1024) > free {
-                        blockers.push("By estimate the source will not fit on the disk with a 256 MB margin.".into());
-                    }
+                if required_bytes > free {
+                    blockers.push("Known downloads and working space exceed the free disk space.".into());
                 }
             } else { warnings.push("Could not determine the free disk space.".into()); }
         },
@@ -1139,7 +1162,7 @@ fn check_preflight(text: &str, options: &Options, estimated_bytes: Option<u64>, 
         ["queued", "running", "paused", "done"].contains(&job.status.as_str()))).count();
     if duplicates > 0 { warnings.push(format!("Already in the history or the queue: {duplicates} links.")); }
     if estimated_bytes.is_none() { warnings.push("Size unknown: the source may report it only during the download.".into()); }
-    Ok(Preflight { ready: blockers.is_empty(), blockers, warnings, available_bytes, estimated_bytes })
+    Ok(Preflight { ready: blockers.is_empty(), blockers, warnings, available_bytes, estimated_bytes, queue_bytes, unknown_items, required_bytes, approximate })
 }
 
 #[tauri::command]
@@ -1171,7 +1194,7 @@ fn enqueue(text: String, options: Options, parallel: usize, scheduled_at: Option
     let repeat = repeat_daily.unwrap_or(false);
     if repeat && live_limit == 0 { return Err("A daily recording needs a recording length".into()); }
     let urls = model::parse_urls(&text)?;
-    if !options.format_id.is_empty() && urls.len() != 1 {
+    if (!options.format_id.is_empty() || !options.audio_format_id.is_empty()) && urls.len() != 1 {
         return Err("The selected stream belongs to one link. For several links choose a standard quality.".into());
     }
     if !(1..=8).contains(&parallel) { return Err("Parallel downloads: from 1 to 8".into()); }
@@ -2652,29 +2675,11 @@ fn search_page(data: &serde_json::Value, offset: usize) -> SearchPage {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct InspectInfo {
-    title: String,
-    channel: String,
-    duration: Option<f64>,
-    thumbnail: String,
-    item_count: Option<u64>,
-    chapter_count: usize,
-    is_list: bool,
-    formats: Vec<FormatChoice>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct FormatChoice {
-    id: String,
-    extension: String,
-    width: Option<u64>,
-    height: Option<u64>,
-    fps: Option<f64>,
-    video_codec: String,
-    audio_codec: String,
-    bytes: Option<u64>,
-    has_audio: bool,
-    has_video: bool,
+    title: String, channel: String, duration: Option<f64>, thumbnail: String,
+    item_count: Option<u64>, chapter_count: usize, is_list: bool,
+    formats: Vec<download_details::FormatChoice>,
+    subtitle_languages: Vec<download_details::SubtitleLanguage>,
+    selected_format_ids: Vec<String>, source_size: Option<download_details::SourceSize>,
 }
 
 #[tauri::command]
@@ -2683,11 +2688,14 @@ async fn inspect_media(address: String, options: Option<Options>, engine: tauri:
     if urls.len() != 1 { return Err("Check one link at a time".into()); }
     let dir = engine.dir.clone();
     let auth = options.unwrap_or_else(|| engine.data.lock().unwrap().options.clone());
+    auth.validate()?;
     tauri::async_runtime::spawn_blocking(move || {
         let exe = binary("yt-dlp")?;
         let mut cmd = ytdlp_command(&exe);
         cmd.args(["--ignore-config", "--flat-playlist", "--dump-single-json", "--skip-download",
-            "--playlist-items", "1", "--no-warnings", "--no-colors"]);
+            "--playlist-items", "1", "--ignore-no-formats-error", "--no-warnings", "--no-colors", "--socket-timeout", "12", "--retries", "0", "--extractor-retries", "0"]);
+        cmd.args(["-f", &auth.format_selector()]);
+        if auth.format_id.is_empty() && !auth.audio_only() && !auth.format_sort().is_empty() { cmd.args(["-S",auth.format_sort()]); }
         apply_auth(&mut cmd, auth, &urls[0], &dir);
         let output = cmd.arg("--").arg(&urls[0]).output().map_err(|e| e.to_string())?;
         if !output.status.success() {
@@ -2699,41 +2707,17 @@ async fn inspect_media(address: String, options: Option<Options>, engine: tauri:
         let thumbnail = info["id"].as_str().filter(|id| id.len() == 11 &&
             id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_'))
             .map(|id| format!("https://i.ytimg.com/vi/{id}/mqdefault.jpg")).unwrap_or_default();
-        let mut formats: Vec<FormatChoice> = info["formats"].as_array().into_iter().flatten()
-            .filter_map(|entry| {
-                let id = entry["format_id"].as_str()?.to_owned();
-                if id.is_empty() || id.len() > 80 || !id.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c)) { return None; }
-                let video_codec = entry["vcodec"].as_str().unwrap_or("none").to_owned();
-                let audio_codec = entry["acodec"].as_str().unwrap_or("none").to_owned();
-                let has_video = video_codec != "none";
-                let has_audio = audio_codec != "none";
-                if !has_video && !has_audio { return None; }
-                Some(FormatChoice {
-                    id, extension: entry["ext"].as_str().unwrap_or("").to_owned(),
-                    width: entry["width"].as_u64(), height: entry["height"].as_u64(),
-                    fps: entry["fps"].as_f64(), video_codec, audio_codec,
-                    bytes: entry["filesize"].as_u64().or_else(|| entry["filesize_approx"].as_u64()),
-                    has_audio, has_video,
-                })
-            }).collect();
-        formats.sort_by(|a,b| b.has_video.cmp(&a.has_video)
-            .then_with(|| b.height.cmp(&a.height))
-            .then_with(|| b.fps.partial_cmp(&a.fps).unwrap_or(std::cmp::Ordering::Equal))
-            .then_with(|| b.bytes.cmp(&a.bytes)));
-        let mut chosen: Vec<FormatChoice> = formats.iter().filter(|f| f.has_video).take(38)
-            .map(|f| FormatChoice { id:f.id.clone(), extension:f.extension.clone(), width:f.width,
-                height:f.height, fps:f.fps, video_codec:f.video_codec.clone(), audio_codec:f.audio_codec.clone(),
-                bytes:f.bytes, has_audio:f.has_audio, has_video:f.has_video }).collect();
-        chosen.extend(formats.into_iter().filter(|f| !f.has_video).take(10));
+        let formats = download_details::formats(&info);
+        let selected_format_ids = download_details::selected_ids(&info);
+        let source_size = download_details::source_size(&info,&urls[0],&formats,&selected_format_ids);
         Ok(InspectInfo {
-            title: info["title"].as_str().unwrap_or("").to_owned(),
-            channel: info["channel"].as_str().or_else(|| info["uploader"].as_str()).unwrap_or("").to_owned(),
-            duration: info["duration"].as_f64(),
-            thumbnail,
+            title: info["title"].as_str().unwrap_or("").chars().take(500).collect(),
+            channel: info["channel"].as_str().or_else(|| info["uploader"].as_str()).unwrap_or("").chars().take(200).collect(),
+            duration: info["duration"].as_f64(), thumbnail,
             item_count: info["playlist_count"].as_u64().or_else(|| info["n_entries"].as_u64()),
             chapter_count: info["chapters"].as_array().map_or(0, Vec::len),
-            is_list: info["_type"].as_str() == Some("playlist"),
-            formats: chosen,
+            is_list: info["_type"].as_str() == Some("playlist"), formats,
+            subtitle_languages: download_details::subtitles(&info), selected_format_ids, source_size,
         })
     }).await.map_err(|e| e.to_string())?
 }
@@ -3068,6 +3052,7 @@ pub fn run() {
         .manage(CloseToTray::default())
         .manage(music_controls::MusicControls::default())
         .manage(convert::Converter::default())
+        .manage(quick_cut::QuickCut::default())
         .manage(power::AfterDownloads::default())
         .manage(PendingUpdate::default())
         .setup(|app| {
@@ -3188,7 +3173,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![settings_backup::settings_backup_data, settings_backup::inspect_settings_backup, settings_backup::restore_settings_backup, settings_backup::export_settings_backup, set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_site_browser, open_releases, open_support, window_action, apply_download_auth, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, export_download_profiles, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, site_sign_in, site_sign_out, site_sessions, music::music_catalog, music::music_prepare, music_engine::music_cache, music_engine::music_engine_update, music_offline::music_downloaded, music_offline::music_offline_source, music_lyrics::music_lyrics, music::music_stream, music::music_cancel_stream, music_controls::set_music_controls, music_presence::music_presence, music_profile::export_music_profile, music_import::read_music_import, music_playlist_import::music_import_spotify_playlist, open_music_import_help, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, relink_media, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
+        .invoke_handler(tauri::generate_handler![quick_cut::quick_cut_plan, quick_cut::quick_cut_export, quick_cut::quick_cut_stop, settings_backup::settings_backup_data, settings_backup::inspect_settings_backup, settings_backup::restore_settings_backup, settings_backup::export_settings_backup, set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_site_browser, open_releases, open_support, window_action, apply_download_auth, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, export_download_profiles, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, site_sign_in, site_sign_out, site_sessions, music::music_catalog, music::music_prepare, music_engine::music_cache, music_engine::music_engine_update, music_engine::music_diagnostics, music_engine::export_music_diagnostics, music_offline::music_downloaded, music_offline::music_offline_source, music_lyrics::music_lyrics, music::music_stream, music::music_cancel_stream, music_controls::set_music_controls, music_presence::music_presence, music_profile::export_music_profile, music_import::read_music_import, music_playlist_import::music_import_spotify_playlist, open_music_import_help, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, relink_media, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
         .build(tauri::generate_context!()).expect("failed to start Deviload")
         .run(|app, event| {
             #[cfg(target_os = "macos")]

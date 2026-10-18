@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 use std::{fs, io::Write, path::Path};
 
 const LIMIT: usize = 2_000_000;
-const OPTION_KEYS: &[&str] = &["folder", "quality", "profile", "playlist", "splitChapters", "subtitles", "sponsorblock", "archive", "rateMbps", "folderRule", "nameRule", "container"];
+const OPTION_KEYS: &[&str] = &["folder", "quality", "profile", "playlist", "splitChapters", "subtitles", "sponsorblock", "archive", "rateMbps", "folderRule", "nameRule", "container", "audioLanguage", "subtitleLanguages", "subtitleAuto"];
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -40,7 +40,7 @@ fn preferences(value: &Value) -> Value {
 }
 
 fn options(value: &Value, fallback: &str, reset: &mut usize) -> Result<Options, String> {
-    if !value.is_object() || OPTION_KEYS.iter().any(|key| value.get(key).is_none()) { return Err("Invalid settings backup".into()); }
+    if !value.is_object() || OPTION_KEYS.iter().filter(|key| !["audioLanguage","subtitleLanguages","subtitleAuto"].contains(key)).any(|key| value.get(key).is_none()) { return Err("Invalid settings backup".into()); }
     let mut base = serde_json::to_value(Options::default()).unwrap();
     for (key, value) in portable_options(value).as_object().unwrap() { base[key] = value.clone(); }
     let mut options: Options = serde_json::from_value(base).map_err(|_| "Invalid settings backup")?;
@@ -180,6 +180,19 @@ fn restore(text: &str, engine: &Engine) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn settings_backups_keep_languages_but_not_link_specific_audio_or_estimates() {
+        let dir=tempfile::tempdir().unwrap();
+        let mut value:Value=serde_json::from_str(&sample(dir.path())).unwrap();
+        value["options"]["audioLanguage"]=json!("ja");value["options"]["subtitleLanguages"]=json!(["ja","es-419"]);value["options"]["subtitleAuto"]=json!(false);
+        value["options"]["audioFormatId"]=json!("140");value["options"]["sourceSize"]=json!({"url":"https://private.example.com/a","bytes":100});
+        let (backup,_)=checked(&value.to_string()).unwrap();
+        assert_eq!(backup.options["audioLanguage"],"ja");assert_eq!(backup.options["subtitleLanguages"],json!(["ja","es-419"]));
+        assert_eq!(backup.options["subtitleAuto"],false);assert!(backup.options.get("audioFormatId").is_none());assert!(backup.options.get("sourceSize").is_none());
+        for key in ["audioLanguage","subtitleLanguages","subtitleAuto"] { value["options"].as_object_mut().unwrap().remove(key); }
+        assert!(checked(&value.to_string()).is_ok());
+    }
 
     fn sample(folder: &Path) -> String {
         let settings = Options {folder:folder.to_string_lossy().into(), ..Options::default()};

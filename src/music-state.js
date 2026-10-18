@@ -1,3 +1,4 @@
+import {musicGain,DEFAULT_MUSIC_GAIN} from "./music-volume.js";
 export function tracks(items) {
   const seen = new Set();
   return items.filter(item => item?.kind === "song" && typeof item.title === "string" && /^[\w-]{11}$/.test(item.id) && !seen.has(item.id) && seen.add(item.id));
@@ -38,6 +39,6 @@ export function readMusicState(storage) {
     const state = JSON.parse(storage.getItem("deviload-music-v1") || "{}");
     return {favorites:tracks(Array.isArray(state.favorites) ? state.favorites : []),
       recent:tracks(Array.isArray(state.recent) ? state.recent : []).slice(0,80),
-      volume:typeof state.volume === "number" ? Math.max(0,Math.min(1,state.volume)) : .7};
-  } catch { return {favorites:[],recent:[],volume:.7}; }
+      volume:musicGain(state.volume),...(Number.isFinite(state.volumeBeforeMute)&&state.volumeBeforeMute>0?{volumeBeforeMute:musicGain(state.volumeBeforeMute)}:{})};
+  } catch { return {favorites:[],recent:[],volume:DEFAULT_MUSIC_GAIN}; }
 }

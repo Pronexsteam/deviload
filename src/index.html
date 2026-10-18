@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Deviload — Downloads</title><link rel="icon" href="assets/devil-app-icon-32.png"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="rework.css"><link rel="stylesheet" href="shell.css"><link rel="stylesheet" href="workspace.css"><link rel="stylesheet" href="workspace-layout.css"><script src="vendor/qrcode.min.js"></script><script type="module" src="main.js"></script><link rel="stylesheet" href="completion.css"><link rel="stylesheet" href="devil-music.css"><link rel="stylesheet" href="app-release-notes.css"><link rel="stylesheet" href="music-library-enhancements.css"><link rel="stylesheet" href="music-import-ui.css"><link rel="stylesheet" href="music-library-sidebar.css"><link rel="stylesheet" href="music-shelf-navigation.css"><link rel="stylesheet" href="music-layout.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Deviload — Downloads</title><link rel="icon" href="assets/devil-app-icon-32.png"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="rework.css"><link rel="stylesheet" href="shell.css"><link rel="stylesheet" href="workspace.css"><link rel="stylesheet" href="workspace-layout.css"><script src="vendor/qrcode.min.js"></script><script type="module" src="main.js"></script><link rel="stylesheet" href="completion.css"><link rel="stylesheet" href="devil-music.css"><link rel="stylesheet" href="app-release-notes.css"><link rel="stylesheet" href="music-library-enhancements.css"><link rel="stylesheet" href="music-import-ui.css"><link rel="stylesheet" href="music-library-sidebar.css"><link rel="stylesheet" href="music-shelf-navigation.css"><link rel="stylesheet" href="music-layout.css"><link rel="stylesheet" href="download-options.css"></head>
 <body>
 <div id="reaction-overlay" class="reaction-overlay" role="status" aria-live="polite" hidden><div class="reaction-burst" aria-hidden="true"></div><strong id="reaction-title"></strong><span id="reaction-detail"></span></div>
 <div class="window-drag-strip" aria-hidden="true"></div>
@@ -93,7 +93,13 @@
         <label class="switch-line" for="split-chapters"><input id="split-chapters" type="checkbox"><span class="switch-ui" aria-hidden="true"></span><span>Split by chapters</span></label>
       </section>
       <section class="drawer-card" aria-labelledby="drawer-extra"><h3 id="drawer-extra">Extras</h3>
-        <div class="checks"><label><input id="subtitles" type="checkbox"> RU / EN subtitles</label><label><input id="sponsorblock" type="checkbox"> Remove sponsor segments</label><label><input id="archive" type="checkbox" checked> Skip links already downloaded in this format</label><label><input id="auto-retry" type="checkbox"> Retry after a temporary network error</label></div>
+        <div class="checks"><label><input id="subtitles" type="checkbox"> Download subtitles</label><label><input id="sponsorblock" type="checkbox"> Remove sponsor segments</label><label><input id="archive" type="checkbox" checked> Skip links already downloaded in this format</label><label><input id="auto-retry" type="checkbox"> Retry after a temporary network error</label></div>
+        <section class="download-language-options" aria-label="Audio and subtitle languages">
+          <div class="drawer-pair"><label for="audio-language">Audio language<select id="audio-language"></select></label><label for="audio-stream">Audio stream for this link<select id="audio-stream" disabled></select></label></div>
+          <fieldset><legend>Subtitle languages</legend><div id="subtitle-language-list" class="subtitle-language-list"></div></fieldset>
+          <div class="checks"><label><input id="subtitle-auto" type="checkbox" checked> Include automatic captions</label></div>
+          <p id="download-language-hint" class="drawer-note"></p>
+        </section>
         <div class="drawer-pair"><label for="start-at">Start later<input id="start-at" type="datetime-local"></label><label for="rate">Limit, MB/s · 0 = none<input id="rate" type="number" min="0" max="1000" value="0"></label></div>
         <p class="drawer-note">Deviload must be open at the start time.</p>
         <label class="drawer-single" for="record-length">Record a live stream for<select id="record-length"><option value="0">Until stopped</option></select></label><div class="checks drawer-repeat"><label><input id="repeat-daily" type="checkbox"> Repeat every day</label></div>

@@ -1,18 +1,25 @@
 // Two decoders let a prepared track start without reopening its media URL.
-export function createMusicDecks({makeAudio=()=>new Audio(),now=Date.now}={}){
+import {musicGain} from "./music-volume.js";
+export function createMusicDecks({makeAudio=()=>new Audio(),now=Date.now,schedule=setInterval,cancel=clearInterval}={}){
   const nodes=[makeAudio(),makeAudio()];let active=nodes[0],prepared=null,tail=null;
   for(const [index,node]of nodes.entries()){node.id=`music-audio${index?'-next':''}`;node.hidden=true;node.preload="auto";node.crossOrigin="anonymous";}
-  function stopTail(){if(tail){clearInterval(tail.timer);tail.node.pause();tail.node.volume=active.volume;tail=null;}}
+  function stopTail(){if(tail){cancel(tail.timer);tail.node.pause();tail.node.volume=active.volume;tail=null;}}
+  const fraction=()=>tail?Math.max(0,1-(now()-tail.start)/tail.duration):0;
+  function setVolume(value){
+    const gain=musicGain(value);active.volume=gain;
+    for(const node of nodes)if(node!==active)node.volume=tail?.node===node?gain*fraction():gain;
+    if(tail)tail.gain=gain;
+  }
   return {
-    nodes,get current(){return active;},owns:node=>nodes.includes(node),stopTail,
+    nodes,get current(){return active;},owns:node=>nodes.includes(node),stopTail,setVolume,
     ready(id){return prepared?.id===id&&now()-prepared.at<240000&&prepared.node.readyState>=3&&!prepared.node.error;},
     warm(id,url){stopTail();const node=nodes.find(node=>node!==active);node.pause();node.src=url;node.load();prepared={id,node,at:now()};},
     take(id,volume,overlap=0){
       if(!this.ready(id))return null;
-      stopTail();const old=active;active=prepared.node;prepared=null;active.volume=volume;
+      stopTail();const old=active;active=prepared.node;prepared=null;setVolume(volume);
       if(overlap>0&&!old.paused){
-        const start=now(),initial=old.volume;
-        tail={node:old,timer:setInterval(()=>{const fraction=Math.max(0,1-(now()-start)/(overlap*1000));old.volume=initial*fraction;if(!fraction)stopTail();},30)};
+        tail={node:old,start:now(),duration:overlap*1000,gain:active.volume,timer:null};
+        tail.timer=schedule(()=>{const remaining=fraction();old.volume=tail.gain*remaining;if(!remaining)stopTail();},30);
       }else old.pause();
       return active;
     },

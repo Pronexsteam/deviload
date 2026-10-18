@@ -1,6 +1,7 @@
 import {readMusicState} from "./music-state.js";
 import {readTaste} from "./music-taste.js";
 import {playlistCover} from "./music-library-model.js";
+import {musicGain} from "./music-volume.js";
 
 export const PROFILE_LIMIT=2*1024*1024;
 export const PROFILE_KEY="deviload-music-profile-v1";
@@ -66,7 +67,8 @@ function normalize(saved,taste,strict=false){
   const hiddenSongs=[...new Set(taste.hiddenSongs.filter(id=>typeof id==="string"&&idPattern.test(id)))].slice(0,500);
   const blockedArtists=[...new Set(taste.blockedArtists.filter(name=>typeof name==="string").map(name=>text(name,160).toLocaleLowerCase()).filter(Boolean))].slice(0,300);
   if(!["balanced","familiar","discovery"].includes(taste.mode))fail();
-  return {saved:{favorites,recent,playlists:playlists(saved.playlists,strict),collections:collections(saved.collections),showRegional:saved.showRegional!==false,volume:Number.isFinite(saved.volume)?Math.max(0,Math.min(1,saved.volume)):.7},
+  return {saved:{favorites,recent,playlists:playlists(saved.playlists,strict),collections:collections(saved.collections),showRegional:saved.showRegional!==false,volume:musicGain(saved.volume),
+      ...(Number.isFinite(saved.volumeBeforeMute)&&saved.volumeBeforeMute>0?{volumeBeforeMute:musicGain(saved.volumeBeforeMute)}:{})},
     taste:{version:1,entries,hiddenSongs,blockedArtists,mode:taste.mode}};
 }
 export function exportMusicProfile(saved,taste){

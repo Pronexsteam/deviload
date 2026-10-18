@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {cleanProfile,parseProfileExport,serializeProfiles} from '../src/download-profile-data.js';
 import {mediaIdentity,isProcessing} from '../src/view-model.js';
-const profile=()=>({name:'Pool player',options:{quality:'mp3',profile:'music',container:'mp4',folderRule:'author',nameRule:'title',playlist:false,splitChapters:false,subtitles:false,sponsorblock:false,archive:true,autoRetry:true,parallel:2,rateMbps:0}});
+const profile=()=>({name:'Pool player',options:{quality:'mp3',profile:'music',container:'mp4',folderRule:'author',nameRule:'title',playlist:false,splitChapters:false,subtitles:false,sponsorblock:false,archive:true,autoRetry:true,parallel:2,rateMbps:0,audioLanguage:"",subtitleLanguages:["ru","en"],subtitleAuto:true}});
 test('profiles round-trip without credentials or machine-specific paths',()=>{
   const input=profile();Object.assign(input.options,{cookies:'private',cookiesBrowser:'chrome',proxy:'secret',folder:'C:\\private',formatId:'137',clipStart:7});
   const exported=serializeProfiles([input]);assert.deepEqual(parseProfileExport(exported),[profile()]);

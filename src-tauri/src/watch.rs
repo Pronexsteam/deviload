@@ -141,6 +141,8 @@ fn watch_options(mut options: Options) -> Options {
     options.clip_format = "source".into();
     options.format_id.clear();
     options.format_has_audio = false;
+    options.audio_format_id.clear();
+    options.source_size = None;
     options
 }
 

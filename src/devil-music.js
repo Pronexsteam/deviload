@@ -2,7 +2,8 @@ import {createMusicNavigation} from "./music-navigation.js";
 import {createMusicPresence} from "./music-presence.js";
 import {t, language, onLanguageChange, errorText} from "./i18n.js";
 import {tracks, remember,reorderTrack,insertNext,restoreRemoved} from "./music-state.js";
-import {recordListening,tasteSeeds,recommend,listeningClock,hideRecommendation} from "./music-taste.js";
+import {recordListening,tasteSeeds,recommend,listeningClock,hideRecommendation,recommendWithReasons,canonicalArtistKey,tasteArtistKeys} from "./music-taste.js";
+import {mergeRecommendationPools,recommendationLabel} from "./music-recommendation-view.js";
 import {createNowPlaying} from "./music-presentation.js";
 import {readMusicProfile,saveMusicProfile,sanitizeMusicCollection} from "./music-profile.js";
 import {wireMusicProfile} from "./music-profile-ui.js";
@@ -11,10 +12,12 @@ import {createMusicIntent} from "./music-intent.js";
 import {readMusicSession,saveMusicSession,createPlaybackOrder} from "./music-session.js";
 import {createMusicLibrary} from "./music-library.js";
 import {createMusicDecks} from "./music-decks.js";
+import {musicGain,gainFromVolumePosition,volumePositionFromGain,volumePercent} from "./music-volume.js";
+import {createMusicDiagnostics,playbackFailure} from "./music-diagnostics.js";
 import {createMusicSound} from "./music-sound.js";
 import {createMusicLyrics} from "./music-lyrics.js";
 
-import {selectTrackRange,smartPlaylists,recommendationArtist} from "./music-library-model.js";
+import {selectTrackRange,smartPlaylists} from "./music-library-model.js";
 import {createWeeklyStats} from "./music-weekly.js";
 import {openArtistPicker} from "./music-artist-picker.js";
 import {wireMusicImport} from "./music-import-ui.js";
@@ -47,6 +50,7 @@ function playableCover(item,glyph="play"){
 }
 
 export function createMusic({invoke,onDownload}) {
+  const diagnostics=createMusicDiagnostics();
   const decks=createMusicDecks();let audio=decks.current;document.body.append(...decks.nodes);
   const listen=(name,handler)=>decks.listen(name,handler);
   let storage;try{storage=localStorage;}catch{/* storage unavailable */}
@@ -55,7 +59,7 @@ export function createMusic({invoke,onDownload}) {
   saved.collections??=[];
   const weekly=createWeeklyStats(storage);let privateSession=false,statsSession=null,statsSeconds=0,statsCounted=false;
   const restored=readMusicSession(storage),order=createPlaybackOrder();
-  audio.volume=saved.volume;
+  decks.setVolume(saved.volume);
   const clock=listeningClock(),radioCache=new Map();
   let session=0,checkpoint=0,historyAdded=false,recoveryUsed=false,pendingSeek=0,radioPending=false;
   let view="home", request=0, playRequest=0, current=null, queue=restored.queue, index=-1, sections=[], loaded=false, loading=false, repeat=restored.repeat, shuffle=restored.shuffle;
@@ -63,6 +67,8 @@ export function createMusic({invoke,onDownload}) {
   let resolvedTrack=null,autoplay=restored.autoplay;
   let librarySidebar=null;
   let selectedTracks=new Set(),selectionAnchor=null,visibleTrackIds=[],discoveryCandidates=[];
+  let personalization=0,playbackContext=[];
+  const recommendationReasons=new Map();
   let playlistId=null,listFilter="",listSort="original",sessionSavedAt=0,sessionTransition=false;
   let knownDuration=restored.duration,resumeSnapshot=null;
   let nativeState="";
@@ -107,11 +113,11 @@ export function createMusic({invoke,onDownload}) {
   const queueButton=button(t("Play queue"),"queue",()=>{queueOpen=!queueOpen;renderQueue();}); queueButton.setAttribute("aria-expanded","false");
   const downloadButton=button(t("Download MP3"),"download-simple",()=>downloadTrack(current));
   downloadButton.classList.add("music-dock-download");
-  const volume=el("input",""); volume.type="range"; volume.min="0"; volume.max="1"; volume.step=".01"; volume.value=String(audio.volume); volume.setAttribute("aria-label",t("Volume"));
-  let previousVolume=audio.volume||.7,volumeSave=null;
-  function syncVolume(){volume.value=String(audio.volume);volume.title=Math.round(audio.volume*100)+"%";const label=audio.volume===0?t("Unmute"):t("Mute");volumeMark.title=label;volumeMark.setAttribute("aria-label",label);volumeMark.setAttribute("aria-pressed",String(audio.volume===0));}
-  function setVolume(value){decks.stopTail();audio.volume=value;saved.volume=value;if(value>0)previousVolume=value;syncVolume();clearTimeout(volumeSave);volumeSave=setTimeout(persist,200);}
-  volume.addEventListener("input",()=>setVolume(Number(volume.value)));
+  const volume=el("input",""); volume.type="range"; volume.min="0"; volume.max="1"; volume.step=".01"; volume.value=String(volumePositionFromGain(audio.volume)); volume.setAttribute("aria-label",t("Volume"));
+  let previousVolume=musicGain(saved.volumeBeforeMute,audio.volume||.7),volumeSave=null;
+  function syncVolume(){const percent=volumePercent(audio.volume);volume.value=String(volumePositionFromGain(audio.volume));volume.title=t("Volume: {percent}%",{percent});volume.setAttribute("aria-valuetext",`${percent}%`);const label=audio.volume===0?t("Unmute"):t("Mute");volumeMark.title=label;volumeMark.setAttribute("aria-label",label);volumeMark.setAttribute("aria-pressed",String(audio.volume===0));}
+  function setVolume(value){value=musicGain(value);decks.setVolume(value);saved.volume=value;if(value>0)saved.volumeBeforeMute=previousVolume=value;syncVolume();clearTimeout(volumeSave);volumeSave=setTimeout(persist,200);}
+  volume.addEventListener("input",()=>setVolume(gainFromVolumePosition(Number(volume.value))));
   volume.addEventListener("change",()=>{clearTimeout(volumeSave);persist();});
   const volumeMark=button(t("Mute"),"speaker-high",()=>setVolume(audio.volume===0?previousVolume:0),"music-icon-button music-volume-mark");
   syncVolume();onLanguageChange(()=>{volume.setAttribute("aria-label",t("Volume"));syncVolume();});
@@ -140,13 +146,14 @@ export function createMusic({invoke,onDownload}) {
   $("music-regional").addEventListener("change",()=>{saved.showRegional=$("music-regional").checked;persist();load("home","","",true);});
   $("music-discovery").addEventListener("change",()=>{taste.mode=$("music-discovery").value;persist();if(view==="home"&&homeCache)personalize(request,homeCache.sections);});
   $("music-restore-hidden").addEventListener("click",()=>{taste.hiddenSongs=[];taste.blockedArtists=[];persist();if(view==="home"&&homeCache)personalize(request,homeCache.sections);status(t("Hidden recommendations restored."));});
-  wirePlaybackSettings(invoke);
+  wirePlaybackSettings(invoke,{diagnostics});
   wireMusicImport({invoke,button,commit:(batch,options)=>{captureListening();const result=mergeMusicImport(saved,taste,batch,options);saveMusicProfile(storage,result.saved,result.taste);Object.assign(saved,result.saved);Object.assign(taste,result.taste);library.invalidateUndo();clock.reset();session++;checkpoint=0;historyAdded=false;homeCache=null;radioCache.clear();radioAhead=null;showPlaylist(null);return result;}});
   wireMusicProfile({invoke,read:()=>{captureListening();return {saved,taste};},restore:profile=>{
     saveMusicProfile(storage,profile.saved,profile.taste);
     Object.assign(saved,profile.saved);Object.assign(taste,profile.taste);library.invalidateUndo();
     clock.reset();session++;checkpoint=0;historyAdded=false;
-    audio.volume=saved.volume;volume.value=String(saved.volume);$("music-discovery").value=taste.mode;
+    if(profile.saved.volumeBeforeMute===undefined)delete saved.volumeBeforeMute;
+    decks.setVolume(saved.volume);previousVolume=musicGain(saved.volumeBeforeMute,saved.volume||.7);syncVolume();$("music-discovery").value=taste.mode;
     $("music-regional").checked=saved.showRegional!==false;homeCache=null;radioCache.clear();radioAhead=null;
     syncDock();if(view==="library"||view==="playlist")showPlaylist(library.find(playlistId)?playlistId:null);else if(["favorites","recent"].includes(view))showLocal(view);
     else if(view==="home")load("home");
@@ -170,9 +177,11 @@ export function createMusic({invoke,onDownload}) {
   async function playbackSource(id,refresh=false,preload=false){
     if(window.__TAURI__?.core?.convertFileSrc){
       const path=await invoke("music_offline_source",{id});
-      if(path)return {url:window.__TAURI__.core.convertFileSrc(path),offline:true};
+      if(path){diagnostics.record(preload?"preload":"source","offline");return {url:window.__TAURI__.core.convertFileSrc(path),offline:true};}
     }
-    return invoke("music_stream",{id,refresh,preload});
+    diagnostics.record(preload?"preload":"resolve","requested");
+    if(!preload&&streamLoading)artist.textContent=t("Finding a playable source…");
+    const result=await invoke("music_stream",{id,refresh,preload});diagnostics.record(preload?"preload":"resolve","ready");return result;
   }
   async function showOffline(){
     rememberNavigation({type:"offline"});
@@ -196,9 +205,9 @@ export function createMusic({invoke,onDownload}) {
   function feedback(artist,item=current) {
     if(!item)return;
     const hiddenSongs=[...taste.hiddenSongs],blockedArtists=[...taste.blockedArtists];
-    hideRecommendation(taste,item,artist);persist();
+    hideRecommendation(taste,item,artist);persist();radioAhead=null;
     const text=artist?t("This artist will not appear in recommendations."):t("This song will not appear in recommendations.");
-    presentation.notify(text,()=>{taste.hiddenSongs=hiddenSongs;taste.blockedArtists=blockedArtists;persist();if(view==="home"&&homeCache)personalize(request,homeCache.sections);});
+    presentation.notify(text,()=>{taste.hiddenSongs=hiddenSongs;taste.blockedArtists=blockedArtists;persist();radioAhead=null;if(view==="home"&&homeCache)personalize(request,homeCache.sections);});
     if(view==="home"&&homeCache)personalize(request,homeCache.sections);
   }
   function status(text,isError=false) { $("music-status").textContent=text;$("music-status").hidden=!text;$("music-status").classList.toggle("error",isError); }
@@ -338,17 +347,18 @@ export function createMusic({invoke,onDownload}) {
       .finally(()=>{preloadPending=false;});
   }
   async function startAudio(){
+    diagnostics.record("start","requested");
     sound.resume();
     let timer;
-    try{await Promise.race([audio.play(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(t("Audio did not start in time. Press play to retry."))),20000);})]);}
+    try{await Promise.race([audio.play(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error("Audio did not start in time. Press play to retry.")),20000);})]);}
     finally{clearTimeout(timer);}
   }
-  async function playAt(position,{refresh=false,resume=0,recovery=false,overlap=0}={}) {
+  async function playAt(position,{refresh=false,resume=0,recovery=false,overlap=0,skipped=true}={}) {
     if(!queue[position])return;
     if(resumeSnapshot&&current&&resumeSnapshot.item.id===current.id)resumeSnapshot.position=resolvedTrack===current.id?audio.currentTime:retryPosition;
     intent.leave();
-    if(!recovery){captureListening(true);clock.reset();session++;checkpoint=0;historyAdded=false;recoveryUsed=false;}
-    sessionTransition=true;
+    if(!recovery){captureListening(skipped);clock.reset();session++;checkpoint=0;historyAdded=false;recoveryUsed=false;}
+    diagnostics.record(recovery?"recovery":"source","requested");sessionTransition=true;
     const prepared=!refresh?decks.take(queue[position].id,saved.volume,overlap):null;
     if(prepared)audio=prepared;else decks.stopTail();
     if(current?.id!==queue[position].id)knownDuration=0;
@@ -358,6 +368,7 @@ export function createMusic({invoke,onDownload}) {
     title.textContent=current.title;artist.title="";artist.textContent=t("Opening track…");artwork.replaceChildren(cover(current));status("");
     pendingSeek=resume;streamLoading=true;syncDock();renderQueue();
     sessionTransition=false;persistSession();
+    let playbackStage="resolve";
     try {
       const id=current.id;
       // Coalesce clicks in the same turn, but never await a superseded track.
@@ -372,12 +383,14 @@ export function createMusic({invoke,onDownload}) {
       if(!prepared||audio.src!==result.url)audio.src=result.url;
       else{knownDuration=audio.duration;if(resume>0&&Number.isFinite(audio.duration)){audio.currentTime=Math.min(resume,Math.max(0,audio.duration-1));pendingSeek=0;}}
       resolvedTrack=current.id;
+      playbackStage="start";diagnostics.record("start","ready");artist.textContent=t("Starting audio…");
       await startAudio();
       if(token!==playRequest)return;
-      needsRefresh=false;artist.textContent=displaySubtitle(current)||"YouTube Music";status("");
+      diagnostics.record("playing","success");needsRefresh=false;artist.textContent=displaySubtitle(current)||"YouTube Music";status("");
     } catch(error) {
       if(token!==playRequest)return;
-      needsRefresh=true;retryPosition=Math.max(retryPosition,audio.currentTime||0);audio.pause();audio.removeAttribute("src");audio.load();resolvedTrack=null;artist.textContent=t(/Playback restricted:|Playback temporarily limited/.test(String(error))?"Unavailable from source. Try another track.":"Could not play. Press play to retry.");artist.title=errorText(error);status(errorText(error),true);
+      const failure=playbackFailure(error);diagnostics.record(playbackStage,failure.code);
+      needsRefresh=true;retryPosition=Math.max(retryPosition,audio.currentTime||0);audio.pause();audio.removeAttribute("src");audio.load();resolvedTrack=null;artist.textContent=t(["restricted","limited"].includes(failure.code)?"Unavailable from source. Try another track.":"Could not play. Press play to retry.");artist.title=t(failure.message);status(t(failure.message),true);
     } finally {if(token===playRequest){streamLoading=false;syncDock();}}
   }
   function playItems(items,startId) {
@@ -391,13 +404,13 @@ export function createMusic({invoke,onDownload}) {
   async function togglePlay() {
     if(!current){if(queue.length)playAt(0);return;}
     if(radioPending){++playRequest;radioPending=false;audio.pause();status("");syncDock();return;}
-    if(streamLoading){++playRequest;cancelResolution();streamLoading=false;retryPosition=Math.max(retryPosition,audio.currentTime||0);audio.pause();audio.removeAttribute("src");audio.load();resolvedTrack=null;artist.textContent=displaySubtitle(current);syncDock();return;}
+    if(streamLoading){diagnostics.record("cancelled","cancelled");++playRequest;cancelResolution();streamLoading=false;retryPosition=Math.max(retryPosition,audio.currentTime||0);audio.pause();audio.removeAttribute("src");audio.load();resolvedTrack=null;artist.textContent=displaySubtitle(current);syncDock();return;}
     if(!audio.paused){cancelResolution();audio.pause();return;}
     if(resolvedTrack!==current.id){recoveryUsed=false;return playAt(index,{refresh:needsRefresh,resume:retryPosition,recovery:retryPosition>0});}
-    if(audio.ended)return playAt(index);
+    if(audio.ended)return playAt(index,{skipped:false});
     const token=playRequest;streamLoading=true;syncDock();
     try{await startAudio();if(token===playRequest)status("");}
-    catch(error){if(token===playRequest){needsRefresh=true;retryPosition=audio.currentTime||0;audio.pause();resolvedTrack=null;artist.textContent=t("Could not play. Press play to retry.");status(errorText(error),true);}}
+    catch(error){if(token===playRequest){const failure=playbackFailure(error);diagnostics.record("start",failure.code);needsRefresh=true;retryPosition=audio.currentTime||0;audio.pause();resolvedTrack=null;artist.textContent=t("Could not play. Press play to retry.");status(t(failure.message),true);}}
     finally{if(token===playRequest){streamLoading=false;syncDock();}}
   }
   async function radio(seed) {
@@ -411,24 +424,24 @@ export function createMusic({invoke,onDownload}) {
   async function radioCandidates(seed) {
     const seeds=tracks([seed,...tasteSeeds(taste,saved.favorites)]).slice(0,2);
     const results=await Promise.allSettled(seeds.map(item=>radio(item)));
-    const candidates=results.filter(result=>result.status==="fulfilled").flatMap(result=>result.value);
+    const candidates=mergeRecommendationPools(results.filter(result=>result.status==="fulfilled").map(result=>result.value));
     if(!candidates.length&&results.every(result=>result.status==="rejected"))throw results[0].reason;
-    return recommend(candidates,taste,saved.favorites,{exclude:queue.map(item=>item.id),limit:15,followedArtists:(saved.collections||[]).filter(item=>item.kind==="artist").map(item=>item.title)});
+    return recommend(candidates,taste,saved.favorites,{exclude:queue.map(item=>item.id),limit:15,contextItems:tracks([seed,...playbackContext,...(!privateSession?saved.recent:[])]).slice(0,12),followedArtists:(saved.collections||[]).filter(item=>item.kind==="artist").map(item=>item.title)});
   }
   async function advance(skipped=false){
     if(!current||radioPending)return;
     captureListening(skipped);
-    if(!skipped&&repeat==="one"){playAt(index);return;}
+    if(!skipped&&repeat==="one"){playAt(index,{skipped:false});return;}
     const next=plannedNext();
-    if(next>=0){playAt(next);return;}
+    if(next>=0){playAt(next,{skipped});return;}
     if(!autoplay){syncDock();return;}
     const token=playRequest,seed=current;radioPending=true;syncDock();
     status(t("Finding the next songs for you…"));
     try{
       const candidates=await (radioAhead?.token===token?radioAhead.promise:radioCandidates(seed));
-      const items=candidates.filter(item=>!queue.some(queued=>queued.id===item.id)&&!taste.hiddenSongs.includes(item.id)&&!item.artists?.some(artist=>taste.blockedArtists.includes(artist.trim().toLocaleLowerCase())));
+      const items=candidates.filter(item=>!queue.some(queued=>queued.id===item.id)&&!taste.hiddenSongs.includes(item.id)&&!tasteArtistKeys(item).some(artist=>taste.blockedArtists.includes(artist)));
       if(token!==playRequest)return;
-      if(items.length){const position=queue.length;queue=[...queue,...items];if(queue.length>200){const trim=queue.length-200;queue=queue.slice(trim);index-=trim;playAt(position-trim);}else playAt(position);}
+      if(items.length){const position=queue.length;queue=[...queue,...items];if(queue.length>200){const trim=queue.length-200;queue=queue.slice(trim);index-=trim;playAt(position-trim,{skipped});}else playAt(position,{skipped});}
       else status(t("No more songs found. Pick another track."));
     }catch(error){if(token===playRequest){radioAhead=null;status(errorText(error),true);}}
     finally{if(token===playRequest){radioPending=false;syncDock();}}
@@ -442,32 +455,38 @@ export function createMusic({invoke,onDownload}) {
     syncDock();
   });
   document.addEventListener("play",event=>{if(!decks.owns(event.target)){decks.stopTail();audio.pause();}},true);
-  listen("playing",()=>{clearTimeout(bufferingTimer);if(current&&!historyAdded&&!privateSession){saved.recent=remember(saved.recent,current);historyAdded=true;persist();}clock.sample(audio.currentTime,performance.now(),false);artist.textContent=displaySubtitle(current)||"YouTube Music";syncDock();});
-  listen("pause",()=>{decks.stopTail();clearTimeout(bufferingTimer);clock.sample(audio.currentTime,performance.now(),false);captureListening();syncDock();persistSession();});
+  function listeningBoundary(){const at=performance.now();clock.sample(audio.currentTime,at,false);clock.sample(audio.currentTime,at,!audio.paused&&!audio.seeking&&audio.readyState>=3&&audio.volume>0&&!audio.muted);}
+  listen("playing",()=>{diagnostics.record("playing","success");clearTimeout(bufferingTimer);if(current)playbackContext=remember(playbackContext,current,12);if(current&&!historyAdded&&!privateSession){saved.recent=remember(saved.recent,current);historyAdded=true;persist();}listeningBoundary();artist.textContent=displaySubtitle(current)||"YouTube Music";syncDock();});
+  // Reset the clock boundary when muting/unmuting so a later timeupdate cannot
+  // count the preceding muted interval as audible listening.
+  listen("volumechange",listeningBoundary);
+  listen("pause",()=>{diagnostics.record("pause","success");decks.stopTail();clearTimeout(bufferingTimer);clock.sample(audio.currentTime,performance.now(),false);captureListening();syncDock();persistSession();});
   listen("waiting",()=>{
     clock.sample(audio.currentTime,performance.now(),false);clearTimeout(bufferingTimer);syncDock();
     if(!current||audio.paused||streamLoading)return;
+    diagnostics.record("buffering","requested");artist.textContent=t("Buffering audio…");
     const token=playRequest;
     bufferingTimer=setTimeout(()=>{if(token!==playRequest||audio.paused)return;
       if(!recoveryUsed){recoveryUsed=true;playAt(index,{refresh:true,resume:audio.currentTime,recovery:true});}
-      else{needsRefresh=true;retryPosition=audio.currentTime||0;audio.pause();resolvedTrack=null;artist.textContent=t("Could not play. Press play to retry.");status(t("Audio did not start in time. Press play to retry."),true);syncDock();}
+      else{diagnostics.record("buffering","timeout");needsRefresh=true;retryPosition=audio.currentTime||0;audio.pause();resolvedTrack=null;artist.textContent=t("Could not play. Press play to retry.");status(t("Audio did not start in time. Press play to retry."),true);syncDock();}
     },20000);
   });
   listen("loadedmetadata",()=>{if(Number.isFinite(audio.duration))knownDuration=audio.duration;if(pendingSeek>0&&Number.isFinite(audio.duration)){audio.currentTime=Math.min(pendingSeek,Math.max(0,audio.duration-1));pendingSeek=0;}});
   listen("error",()=>{
     if(streamLoading||!current)return;
+    const code={2:"network",3:"decode",4:"unsupported"}[audio.error?.code]||"failed";diagnostics.record("playing",code);
     if(!recoveryUsed&&clock.seconds>0){recoveryUsed=true;playAt(index,{refresh:true,resume:audio.currentTime,recovery:true});return;}
-    needsRefresh=true;retryPosition=audio.currentTime||0;audio.pause();resolvedTrack=null;artist.textContent=t("Could not play. Press play to retry.");syncDock();
+    needsRefresh=true;retryPosition=audio.currentTime||0;audio.pause();resolvedTrack=null;artist.textContent=t("Could not play. Press play to retry.");status(t(playbackFailure(code).message),true);syncDock();
   });
   listen("seeked",()=>discordPresence.sync(true));
   listen("timeupdate",()=>{
     discordPresence.sync();
-    const seconds=clock.sample(audio.currentTime,performance.now(),!audio.paused&&!audio.seeking&&audio.readyState>=3);
+    const seconds=clock.sample(audio.currentTime,performance.now(),!audio.paused&&!audio.seeking&&audio.readyState>=3&&audio.volume>0&&!audio.muted);
     if(seconds>=30&&seconds-checkpoint>=15){checkpoint=seconds;captureListening();}
     elapsed.textContent=time(audio.currentTime);duration.textContent=time(audio.duration);seek.disabled=!Number.isFinite(audio.duration);if(Number.isFinite(audio.duration))seek.value=String(audio.currentTime/audio.duration*1000);
     preloadNext();lyrics.update();
     const upcoming=plannedNext(),remaining=audio.duration-audio.currentTime;
-    if(sound.transition&&repeat!=="one"&&!streamLoading&&!audio.paused&&!audio.seeking&&remaining>0&&remaining<=sound.transition&&upcoming>=0&&decks.ready(queue[upcoming].id)){captureListening();playAt(upcoming,{overlap:remaining});}
+    if(sound.transition&&repeat!=="one"&&!streamLoading&&!audio.paused&&!audio.seeking&&remaining>0&&remaining<=sound.transition&&upcoming>=0&&decks.ready(queue[upcoming].id)){captureListening();playAt(upcoming,{overlap:remaining,skipped:false});}
     if(Date.now()-sessionSavedAt>=5000)persistSession();
   });
   if("mediaSession" in navigator){for(const [name,action]of Object.entries({play:()=>{if(audio.paused&&!streamLoading)togglePlay();},pause:()=>audio.pause(),previoustrack:()=>previous.click(),nexttrack:()=>advance(true)}))try{navigator.mediaSession.setActionHandler(name,action);}catch{/* unsupported control */}}
@@ -492,7 +511,7 @@ export function createMusic({invoke,onDownload}) {
     action.replaceChildren(art,el("strong","music-card-title",item.title),el("span","music-card-subtitle",displaySubtitle(item)));card.append(action);
     if(item.kind==="song") {
       action.querySelector(".music-card-subtitle").prepend(equalizer());
-      if(personal){const artist=recommendationArtist(item,taste,saved.favorites),reason=artist?t("Matches your taste: {artist}",{artist}):taste.entries[item.id]?.lastPlayed?t("From your listening history"):t("A new discovery");card.append(el("span","music-recommendation-reason",reason));}
+      if(personal){const label=recommendationLabel(recommendationReasons.get(item.id),t),reason=el("span","music-recommendation-reason",label);reason.title=label;card.append(reason);}
       const cardMenu=trackMenu(item);cardMenu.menu.classList.add("music-card-feedback");card.append(cardMenu.menu);
       action.addEventListener("mouseenter",()=>intent.enter(item.id));
       action.addEventListener("mouseleave",()=>intent.leave());
@@ -647,19 +666,22 @@ export function createMusic({invoke,onDownload}) {
     finally{if(token===request){loading=false;$("music-refresh").disabled=false;}}
   }
   async function personalize(token,base) {
+    const revision=++personalization;
     captureListening();
     const seeds=tasteSeeds(taste,saved.favorites);
-    const followed=(saved.collections||[]).filter(item=>item.kind==="artist"&&!taste.blockedArtists?.includes(item.title.toLocaleLowerCase()));
-    const selected=[...followed].sort(()=>Math.random()-.5).slice(0,2);
+    const followed=(saved.collections||[]).filter(item=>item.kind==="artist"&&!taste.blockedArtists?.includes(canonicalArtistKey(item.title)));
+    const selected=[...followed].map(item=>({item,weight:Math.random()})).sort((a,b)=>a.weight-b.weight).slice(0,2).map(row=>row.item);
     const artistResults=await Promise.allSettled(selected.map(item=>invoke("music_catalog",{kind:"browse",value:item.id,language:language()})));
-    if(token!==request)return;
+    if(token!==request||revision!==personalization)return;
     const artistItems=artistResults.filter(result=>result.status==="fulfilled").flatMap(result=>result.value.sections.flatMap(section=>section.items));
     if(!seeds.length){for(const item of artistItems.filter(item=>item.kind==="song").slice(0,2))seeds.push(item);}
-    if(!seeds.length){sections=homeSections(base);render();prepareHomeSelection();return;}
+    if(!seeds.length){recommendationReasons.clear();sections=homeSections(base);render();prepareHomeSelection();return;}
     const results=await Promise.allSettled(seeds.map(seed=>radio(seed)));
-    if(token!==request)return;
-    const candidates=[...artistItems.filter(item=>item.kind==="song"),...results.filter(result=>result.status==="fulfilled").flatMap(result=>result.value)];
-    const items=recommend(candidates,taste,saved.favorites,{exclude:current?[current.id]:[],limit:18,followedArtists:followed.map(item=>item.title)});
+    if(token!==request||revision!==personalization)return;
+    const candidates=mergeRecommendationPools([artistItems.filter(item=>item.kind==="song"),...results.filter(result=>result.status==="fulfilled").map(result=>result.value)]);
+    const rows=recommendWithReasons(candidates,taste,saved.favorites,{exclude:current?[current.id]:[],limit:18,contextItems:tracks([current,...playbackContext,...(!privateSession?saved.recent:[])]).slice(0,12),followedArtists:followed.map(item=>item.title)});
+    recommendationReasons.clear();for(const {item,reason}of rows)recommendationReasons.set(item.id,reason);
+    const items=rows.map(row=>row.item);
     discoveryCandidates=items;sections=homeSections(base,items);
     const albums=artistItems.filter(item=>item.kind==="album");
     if(albums.length)sections.splice(items.length?1:0,0,{title:t("Albums from artists you follow"),items:albums.slice(0,12)});render();prepareHomeSelection();

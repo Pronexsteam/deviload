@@ -1,3 +1,4 @@
+import {languagePreferences} from './download-options.js';
 const choices={quality:['best','1080','720','480','mp3','flac','wav'],profile:['custom','music','archive','mobile','maximum'],container:['mp4','mkv','webm'],folderRule:['manual','media','source','server','author','date','playlist'],nameRule:['title','date','channel']};
 const flags=['playlist','splitChapters','subtitles','sponsorblock','archive','autoRetry'];
 export function cleanProfile(value){
@@ -17,6 +18,7 @@ export function cleanProfile(value){
     options[key]=input[key];
   }
   if(![1,2,3,4,6,8].includes(options.parallel))throw Error('Unsupported parallel download count');
+  Object.assign(options,languagePreferences(input));
   // Link-specific values, sign-in data and paths do not belong in portable profiles.
   return {name,options};
 }

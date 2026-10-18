@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {runInNewContext} from "node:vm";
 import {tracks,remember,nextIndex} from "../src/music-state.js";
-import {readTaste,recommend,tasteSeeds} from "../src/music-taste.js";
+import {readTaste,recordListening,recommend,tasteSeeds,listeningClock,tasteArtistKeys} from "../src/music-taste.js";
+import {mergeRecommendationPools} from "../src/music-recommendation-view.js";
 import {createPlaybackOrder} from "../src/music-session.js";
+import {createMusicDiagnostics,playbackFailure} from "../src/music-diagnostics.js";
 
 const source=readFileSync(new URL("../src/devil-music.js",import.meta.url),"utf8");
 const code=source.slice(source.indexOf("  function plannedNext()"),source.indexOf("  function selectView("));
@@ -14,20 +16,20 @@ const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve
 function player(invoke,items=[song(1)]){
   const events={},timers=new Map();let serial=0;
   const field=()=>({textContent:"",disabled:false,value:"",replaceChildren(){}});
-  const audio={currentTime:0,duration:180,paused:true,ended:false,readyState:4,seeking:false,src:"",playError:null,hang:false,
+  const audio={currentTime:0,duration:180,paused:true,ended:false,readyState:4,seeking:false,volume:.7,muted:false,src:"",playError:null,hang:false,
     addEventListener:(name,callback)=>{events[name]=callback;},
     async play(){if(this.playError)throw this.playError;if(this.hang)return new Promise(()=>{});this.paused=false;this.ended=false;events.play?.();events.playing?.();},
     pause(){if(!this.paused){this.paused=true;events.pause?.();}},
     removeAttribute(){this.src="";},load(){this.currentTime=0;this.ended=false;}};
   Object.defineProperty(audio,"src",{get(){return this.address||"";},set(value){this.address=value;if(value)queueMicrotask(()=>events.loadedmetadata?.());}});
   const ctx={audio,queue:items,index:-1,current:null,resolvedTrack:null,autoplay:true,radioPending:false,streamLoading:false,playRequest:0,
-    needsRefresh:false,privateSession:false,resumeSnapshot:null,discordPresence:{sync(){}},
+    needsRefresh:false,privateSession:false,resumeSnapshot:null,discordPresence:{sync(){}},diagnostics:createMusicDiagnostics(),playbackFailure,
     listen:audio.addEventListener,decks:{take:()=>null,stopTail(){},warm(){},ready:()=>false,owns:node=>node===audio},sound:{resume(){},transition:0},lyrics:{update(){}},window:{},
     nextPlan:null,preloadPending:false,preloadAttempts:new Set(),radioAhead:null,time:String,
     order:createPlaybackOrder(),knownDuration:0,sessionTransition:false,sessionSavedAt:Date.now(),intent:{leave(){}},radioCache:new Map(),repeat:"off",shuffle:false,session:0,checkpoint:0,historyAdded:false,recoveryUsed:false,pendingSeek:0,retryPosition:0,bufferingTimer:null,
-    saved:{favorites:[],recent:[]},taste:readTaste(),clock:{seconds:0,reset(){this.seconds=0;},sample() {return this.seconds;}},
+    saved:{favorites:[],recent:[]},playbackContext:[],taste:readTaste(),clock:{seconds:0,reset(){this.seconds=0;},sample() {return this.seconds;}},
     title:field(),artist:field(),artwork:field(),seek:field(),elapsed:field(),duration:field(),previous:{click(){}},
-    invoke:(command,args)=>{if(command==="music_cancel_stream"){ctx.cancellations=(ctx.cancellations||0)+1;return Promise.resolve();}return invoke(command,args);},tracks,remember,nextIndex,recommend,tasteSeeds,cover:()=>null,displaySubtitle:item=>item?.artists?.join(", ")||"Unknown artist",language:()=>"en",t:s=>s,errorText:String,
+    invoke:(command,args)=>{if(command==="music_cancel_stream"){ctx.cancellations=(ctx.cancellations||0)+1;return Promise.resolve();}return invoke(command,args);},tracks,remember,nextIndex,recommend,tasteSeeds,tasteArtistKeys,mergeRecommendationPools,cover:()=>null,displaySubtitle:item=>item?.artists?.join(", ")||"Unknown artist",language:()=>"en",t:s=>s,errorText:String,
     captureListening(){},persist(){},persistSession(){},syncDock(){},renderQueue(){},status(message){ctx.message=message;},
     document:{querySelectorAll:()=>[],addEventListener(){}},navigator:{},performance,DOMException,
     setTimeout(fn){const id=++serial;timers.set(id,fn);return id;},clearTimeout(id){timers.delete(id);}};
@@ -41,6 +43,22 @@ test("source restrictions explain the failure without starting audio or scheduli
   await p.playAt(0);p.expire();await settle();
   assert.equal(calls,1);assert.equal(p.ctx.audio.paused,true);assert.equal(p.ctx.streamLoading,false);
   assert.equal(p.ctx.artist.textContent,"Unavailable from source. Try another track.");assert.equal(p.ctx.message,failure);
+});
+
+test("muted playback never teaches taste and unmuting starts a fresh listening interval",async()=>{
+  const p=player(async()=>({url:"audio"}));await p.playAt(0);
+  let wall=0;p.ctx.performance={now:()=>wall};p.ctx.clock=listeningClock();p.emit("playing");
+  function tick(seconds){wall=seconds*1000;p.ctx.audio.currentTime=seconds;p.emit("timeupdate");}
+  tick(1);assert.equal(p.ctx.clock.seconds,1);
+  p.ctx.audio.volume=0;p.emit("volumechange");
+  for(let at=2;at<=40;at++)tick(at);
+  assert.equal(p.ctx.clock.seconds,1);
+  p.ctx.audio.volume=.25;p.emit("volumechange");tick(41);
+  assert.equal(p.ctx.clock.seconds,2);
+  p.ctx.audio.muted=true;p.emit("volumechange");tick(42);tick(43);
+  assert.equal(p.ctx.clock.seconds,2);
+  p.ctx.audio.muted=false;p.emit("volumechange");tick(44);
+  assert.equal(p.ctx.clock.seconds,3);
 });
 
 test("rapid track changes discard stale resolutions and never start the canceled selection",async()=>{
@@ -92,6 +110,25 @@ test("natural end extends the queue once with related music, while disabled auto
   await p.playAt(0);p.ctx.autoplay=false;await p.advance(false);assert.deepEqual(calls,["music_stream"]);
   p.ctx.autoplay=true;await p.advance(false);await settle();
   assert.equal(p.ctx.queue.length,3);assert.notEqual(p.ctx.current.id,song(1).id);assert.equal(p.ctx.radioPending,false);assert.equal(p.ctx.audio.paused,false);
+});
+test("autoplay passes actual recent playback across batches, even after the queue is replaced",async()=>{
+  const p=player(async(command,args)=>command==="music_stream"?{url:args.id}:{sections:[{items:[song(4)]}]});
+  await p.playAt(0);p.playItems([song(2)],song(2).id);await settle();
+  let context;p.ctx.recommend=(items,profile,favorites,options)=>{context=options.contextItems;return items;};
+  await p.advance();await settle();
+  assert.deepEqual(Array.from(context,item=>item.id),[song(2).id,song(1).id]);
+  assert.equal(p.ctx.current.id,song(4).id);
+});
+test("natural completion after a short audible portion is not learned as an explicit early skip",async()=>{
+  for(const manual of [false,true]){
+    const p=player(async(_,args)=>({url:args.id}),[song(1),song(2)]);await p.playAt(0);
+    p.ctx.captureListening=skipped=>recordListening(p.ctx.taste,p.ctx.current,{seconds:p.ctx.clock.seconds,duration:p.ctx.audio.duration,session:p.ctx.session,skipped},1800000000000);
+    p.ctx.clock.seconds=5;p.ctx.audio.currentTime=180;p.ctx.audio.ended=true;
+    await p.advance(manual);await settle();
+    assert.equal(p.ctx.taste.entries[song(1).id].score,manual?-2.5:0);
+    assert.equal(p.ctx.taste.entries[song(1).id].plays,0);
+    assert.equal(p.ctx.current.id,song(2).id);
+  }
 });
 test("old radio completion cannot clear a newer radio request or replace its queue",async()=>{
   const pending=new Map();const p=player(async(command,args)=>{if(command==="music_stream")return {url:args.id};const d=deferred();pending.set(args.value,d);return d.promise;});

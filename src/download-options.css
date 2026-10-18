@@ -1,0 +1,9 @@
+.download-language-options{margin-top:12px;padding-top:12px;border-top:1px solid var(--border,#34343b)}
+.download-language-options .drawer-pair{align-items:start}
+.download-language-options select{width:100%;min-width:0}
+.download-language-options fieldset{min-width:0;margin:10px 0 0;padding:8px;border:1px solid var(--border,#34343b);border-radius:8px}
+.download-language-options legend{padding:0 5px;font-size:11px}
+.subtitle-language-list{display:grid;gap:7px;max-height:132px;overflow:auto;padding:3px}
+.subtitle-language-list label{display:flex;flex-direction:row;gap:8px;align-items:center;font-size:11px;overflow-wrap:anywhere}
+.subtitle-language-list input{flex:none;width:auto}
+.download-language-options .drawer-note{line-height:1.5}

@@ -16,6 +16,7 @@ import {createEngineUpdater} from "./engine-update.js";
 import {createMusic} from "./devil-music.js";
 import {wireReleaseNotes} from "./app-release-notes.js";
 import {downloadMusic} from "./music-download.js";
+import {wireDownloadDetails,inspectionKey,sourceEstimate} from "./download-options.js";
 
 const $ = id => document.getElementById(id);
 const invoke = window.__TAURI__?.core?.invoke;
@@ -154,12 +155,19 @@ function showDownloads(focus = false) {
   }
 }
 let selectedFormat = null, inspectedAddress = "";
-function clearSelectedFormat() {
+function clearSelectedFormat(clearAudio=true) {
+  if(clearAudio)downloadDetails.clearStream();
   if (!selectedFormat) return;
   selectedFormat = null;
   document.querySelectorAll(".inspect-format").forEach(button => button.classList.remove("selected"));
   $("format-hint").textContent = t("Stream choice cleared. The quality selected above will be used.");
 }
+const downloadDetails=wireDownloadDetails({t,onChange:()=>{
+  const details=downloadDetails.read();
+  if(selectedFormat?.hasAudio&&(details.audioFormatId||details.audioLanguage))clearSelectedFormat(false);
+  $("profile").value="custom";$("preflight-status").hidden=true;
+  if(inspectedInfo&&inspectedAddress)renderInspect(inspectedInfo,inspectedAddress);
+}});
 let notices = [], unreadNotices = 0, knownJobStates = new Map(), noticeReady = false, reactionTimer = 0;
 function renderNotices() {
   const list = $("notice-list");
@@ -1002,12 +1010,13 @@ $("profile").addEventListener("change", () => {
 const downloadProfiles=wireDownloadProfiles({invoke,notify:message,
   read:()=>({quality,profile:$("profile").value,container:$("container-select").value,folderRule:$("folder-rule").value,nameRule:$("name-rule").value,
     playlist:$("playlist").checked,splitChapters:$("split-chapters").checked,subtitles:$("subtitles").checked,sponsorblock:$("sponsorblock").checked,
-    archive:$("archive").checked,autoRetry:$("auto-retry").checked,parallel:Number($("parallel").value),rateMbps:Number($("rate").value)}),
+    archive:$("archive").checked,autoRetry:$("auto-retry").checked,parallel:Number($("parallel").value),rateMbps:Number($("rate").value),...downloadDetails.read()}),
   apply:options=>{
     clearSelectedFormat();
     for(const [key,id] of Object.entries({profile:'profile',container:'container-select',folderRule:'folder-rule',nameRule:'name-rule',parallel:'parallel',rateMbps:'rate'}))$(id).value=String(options[key]);
     for(const [key,id] of Object.entries({playlist:'playlist',splitChapters:'split-chapters',subtitles:'subtitles',sponsorblock:'sponsorblock',archive:'archive',autoRetry:'auto-retry'}))$(id).checked=options[key];
     $("playlist-items").value='';$("clip-enabled").checked=false;
+    downloadDetails.load(options);
     setQuality(options.quality);syncPlaylist();syncClip();syncModeButtons();syncOptionsSummary();
   }
 });
@@ -1015,7 +1024,7 @@ wireSettingsBackup({invoke, notify:message, read:() => ({parallel:Number($("para
   folder:$("folder").value.trim(),quality,profile:$("profile").value,container:$("container-select").value,
   playlist:$("playlist").checked,splitChapters:$("split-chapters").checked,subtitles:$("subtitles").checked,
   sponsorblock:$("sponsorblock").checked,archive:$("archive").checked,rateMbps:Number($("rate").value),
-  folderRule:$("folder-rule").value,nameRule:$("name-rule").value,
+  folderRule:$("folder-rule").value,nameRule:$("name-rule").value,...downloadDetails.read(),
 }})});
 rebuildSettingsNavigation();
 function setDrawer(open) {
@@ -1034,6 +1043,7 @@ $("destination-quick").addEventListener("click", () => $("browse-folder").click(
 $("options-toggle").addEventListener("click", () => setDrawer($("download-drawer").hidden));
 $("download-drawer").addEventListener("change", event => {
   if(event.target.closest('.saved-profiles'))return;
+  if(event.target.id==="playlist"&&$("playlist").checked)downloadDetails.clearStream();
   if (event.target.id === "profile") { clearSelectedFormat(); return; }
   if (["folder", "parallel"].includes(event.target.id)) { syncOptionsSummary(); return; }
   $("profile").value = "custom";
@@ -1363,7 +1373,7 @@ async function loadSearchPage(page) {
     if (request === searchRequest) { $("media-search-button").disabled = false; button.disabled = false; button.hidden = page.offset === null; }
   }
 }
-let inspectTimer = 0, inspectSerial = 0, inspectedInfo = null;
+let inspectTimer = 0, inspectSerial = 0, inspectedInfo = null, inspectedOptionsKey="", inspectedAt=0, inspectPending=Promise.resolve(),pendingInspectAddress="",pendingInspectKey="";
 function linksIn(text) {
   return text.trim().split(/\s+/).filter(item => /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i.test(item));
 }
@@ -1418,21 +1428,23 @@ function renderInspect(info, address) {
     const formats = node("details", "inspect-formats");
     formats.open = false;
     formats.append(node("summary", "", t("Pick an exact stream ({count})", {count:info.formats.length})));
-    formats.append(node("p", "", t("Pick a stream for this link. If the video has no sound, Deviload adds the best audio track.")));
+    formats.append(node("p", "", t("Pick a video stream here. Choose its audio track and subtitles in Download settings.")));
     const list = node("div", "inspect-format-list");
     for (const format of info.formats) {
       const button = node("button", "inspect-format" + (selectedFormat?.id === format.id ? " selected" : ""));
       button.type = "button";
+      const audioChoice=downloadDetails.read();
+      button.disabled=!!(format.hasVideo&&format.hasAudio&&(audioChoice.audioLanguage||audioChoice.audioFormatId));
       const resolution = format.hasVideo ? (format.height ? format.height + "p" : t("Video")) : t("Audio");
       const codecs = [format.videoCodec !== "none" ? format.videoCodec.split(".")[0] : "",
         format.audioCodec !== "none" ? format.audioCodec.split(".")[0] : ""].filter(Boolean).join(" + ");
-      const size = format.bytes ? " · ≈" + sizeText(format.bytes) : "";
+      const size = format.bytes ? " · " + (format.approximate?"≈":"") + sizeText(format.bytes) : "";
       button.textContent = resolution + (format.fps ? " · " + Math.round(format.fps) + " FPS" : "") +
-        " · " + format.extension.toUpperCase() + " · " + codecs + size;
+        " · " + format.extension.toUpperCase() + " · " + codecs + (format.language?" · "+format.language:"") + size;
       button.title = t("Stream {id}", {id:format.id});
       button.addEventListener("click", () => {
         selectedFormat = {url:address,id:format.id,hasAudio:format.hasAudio,hasVideo:format.hasVideo,bytes:format.bytes};
-        if (!format.hasVideo) setQuality("mp3");
+        if (!format.hasVideo) {downloadDetails.selectStream(format);setQuality("mp3");}
         else if (["mp3","flac","wav"].includes(quality)) setQuality("best");
         document.querySelectorAll(".inspect-format").forEach(peer => peer.classList.toggle("selected", peer === button));
         syncFormatHint();
@@ -1446,29 +1458,35 @@ function renderInspect(info, address) {
 }
 async function inspectLink(address) {
   if (!invoke) return;
-  const serial = ++inspectSerial;
-  const card = $("inspect-card");
-  const loading = node("div", "inspect-loading");
-  loading.append(mascotSpot("working", "inspect-mascot"), node("span", "", t("Loading the preview…")));
-  card.replaceChildren(loading);
-  card.dataset.state = "loading";
-  card.hidden = false;
-  try {
-    const info = await invoke("inspect_media", {address, options:buildDownloadRequest().options});
-    if (serial !== inspectSerial) return;
-    inspectedAddress = address;
-    inspectedInfo = info;
-    renderInspect(info, address);
-  } catch (error) {
-    if (serial !== inspectSerial) return;
-    card.dataset.state = "error";
-    card.replaceChildren(node("p", "inspect-error", t("No preview for this link: {error}", {error:errorText(error)})));
-  }
+  let requestedKey;
+  try{requestedKey=inspectionKey(buildDownloadRequest().options);}catch{return;}
+  if(pendingInspectAddress===address&&pendingInspectKey===requestedKey)return inspectPending;
+  const serial = ++inspectSerial;pendingInspectAddress=address;pendingInspectKey=requestedKey;
+  const work=inspectPending.catch(()=>{}).then(async()=>{
+    if(serial!==inspectSerial)return;
+    const card=$("inspect-card"),loading=node("div","inspect-loading");
+    loading.append(mascotSpot("working","inspect-mascot"),node("span","",t("Loading the preview…")));
+    card.replaceChildren(loading);card.dataset.state="loading";card.hidden=false;
+    try{
+      const options=buildDownloadRequest().options,key=inspectionKey(options);
+      const info=await invoke("inspect_media",{address,options});
+      if(serial!==inspectSerial)return;
+      inspectedAddress=address;inspectedInfo=info;inspectedOptionsKey=key;inspectedAt=Date.now();
+      downloadDetails.update(info,address);renderInspect(info,address);
+    }catch(error){
+      if(serial!==inspectSerial)return;
+      inspectedOptionsKey="";inspectedInfo=null;
+      card.dataset.state="error";card.replaceChildren(node("p","inspect-error",t("No preview for this link: {error}",{error:errorText(error)})));
+    }
+  });
+  const nextPending=work.finally(()=>{if(inspectPending===nextPending){pendingInspectAddress="";pendingInspectKey="";}});
+  inspectPending=nextPending;return nextPending;
 }
 linkField.addEventListener("input", () => {
   syncLinkTools();
   clearTimeout(inspectTimer);
   const links = linksIn(linkField.value);
+  if(links.length!==1||links[0]!==inspectedAddress){downloadDetails.clearLink();inspectedOptionsKey="";inspectedInfo=null;inspectedAddress="";pendingInspectAddress="";pendingInspectKey="";}
   if (selectedFormat && (links.length !== 1 || links[0] !== selectedFormat.url)) { selectedFormat = null; syncFormatHint(); }
   const card = $("inspect-card");
   if (!links.length) { inspectSerial++; inspectedAddress = ""; inspectedInfo = null; card.hidden = true; card.replaceChildren(); return; }
@@ -2142,7 +2160,7 @@ function buildDownloadRequest() {
   if (clipEnabled && (!Number.isFinite(clipStart) || !Number.isFinite(clipEnd) || clipEnd - clipStart < .1 || clipStart < 0)) throw new Error(t("Enter valid clip boundaries, for example from 00:30 to 01:15."));
   if (clipEnabled && $("clip-output").value === "gif" && (clipEnd - clipStart > 60 || ["mp3","flac","wav"].includes(quality))) throw new Error(t("GIF: pick video and a clip of up to 60 seconds."));
   const inputUrls = $("urls").value.trim().split(/\s+/).filter(Boolean);
-  if (selectedFormat && (inputUrls.length !== 1 || inputUrls[0] !== selectedFormat.url)) {
+  if ((selectedFormat || downloadDetails.read().audioFormatId) && (inputUrls.length !== 1 || inputUrls[0] !== (selectedFormat?.url || inspectedAddress))) {
     throw new Error(t("The selected stream belongs to one checked link. Check the link again or clear the choice."));
   }
   const options = {folder:$("folder").value.trim(),quality,profile:$("profile").value,playlist:$("playlist").checked,container:$("container-select").value,
@@ -2152,7 +2170,8 @@ function buildDownloadRequest() {
     cookiesBrowser:["chrome","edge","firefox","brave","safari"].includes(mode) ? mode : "",rateMbps:Number($("rate").value),
     clipStart,clipEnd,clipFormat:clipEnabled ? $("clip-output").value : "source",
     folderRule:$("folder-rule").value,nameRule:$("name-rule").value,
-    formatId:selectedFormat?.id || "",formatHasAudio:!!selectedFormat?.hasAudio};
+    formatId:selectedFormat?.id || "",formatHasAudio:!!selectedFormat?.hasAudio,...downloadDetails.read()};
+  options.sourceSize=inputUrls.length===1&&inputUrls[0]===inspectedAddress&&Date.now()-inspectedAt<600000?sourceEstimate(inspectedInfo,options,inspectedAddress,inspectedOptionsKey):null;
   const startValue = $("start-at").value;
   const scheduledAt = startValue ? Math.floor(new Date(startValue).getTime() / 1000) : null;
   if (startValue && (!Number.isFinite(scheduledAt) || scheduledAt <= Date.now() / 1000)) {
@@ -2163,7 +2182,7 @@ function buildDownloadRequest() {
   return {
     text:$("urls").value, options, parallel:Number($("parallel").value),
     scheduledAt, autoRetry:$("auto-retry").checked, liveLimit, repeatDaily,
-    estimatedBytes:selectedFormat?.bytes || null
+    estimatedBytes:null
   };
 }
 function showPreflight(report) {
@@ -2173,9 +2192,23 @@ function showPreflight(report) {
   panel.classList.toggle("blocked", !report.ready);
   const free = report.availableBytes === null ? t("unknown") : t("{size} GB", {size:(report.availableBytes / 1073741824).toFixed(1)});
   panel.append(node("strong", "", report.ready ? t("Ready to download · {free} free", {free}) : t("Needs fixes")));
+  if(report.estimatedBytes)panel.append(node("p","",t("Source download: {size}",{size:(report.approximate?"≈":"")+sizeText(report.estimatedBytes)})));
+  if(report.queueBytes)panel.append(node("p","",t("Existing queue on this disk: {size}",{size:"≈"+sizeText(report.queueBytes)})));
+  if(report.estimatedBytes||report.queueBytes)panel.append(node("p","",t("Working disk budget for known sizes: {size}",{size:"≈"+sizeText(report.requiredBytes)})));
+  if(report.unknownItems)panel.append(node("p","",t("Items or playlists with unknown size: {count}",{count:report.unknownItems})));
   for (const item of [...report.blockers, ...report.warnings]) panel.append(node("p", "", translateMessage(item)));
 }
 async function preflightRequest(request) {
+  const links=linksIn(request.text);
+  if(links.length===1&&!request.options.playlist&&(links[0]!==inspectedAddress||inspectionKey(request.options)!==inspectedOptionsKey||Date.now()-inspectedAt>=600000))await inspectLink(links[0]);
+  if(links.length===1&&links[0]===inspectedAddress&&inspectionKey(request.options)===inspectedOptionsKey&&inspectedInfo&&!inspectedInfo.isList){
+    if(request.options.audioFormatId&&!inspectedInfo.formats.some(format=>format.id===request.options.audioFormatId))
+      throw Error(t('Stream {id} is unavailable in this preview',{id:request.options.audioFormatId}));
+    if(request.options.audioLanguage&&!request.options.audioFormatId&&inspectedInfo.formats.length&&!inspectedInfo.formats.some(format=>format.hasAudio&&
+      (format.language===request.options.audioLanguage||format.language?.startsWith(request.options.audioLanguage+'-'))))
+      throw Error(t('This preview has no audio track in the preferred language. Choose another language before downloading.'));
+  }
+  request.options.sourceSize=links.length===1&&links[0]===inspectedAddress?sourceEstimate(inspectedInfo,request.options,links[0],inspectedOptionsKey):null;
   const report = await invoke("preflight_download", {
     text:request.text, options:request.options, estimatedBytes:request.estimatedBytes
   });
@@ -2421,6 +2454,7 @@ async function init() {
     $("clip-output").value = options.clipFormat || "source";
     syncClip();
     for (const key of ["playlist","subtitles","sponsorblock","archive"]) $(key).checked = options[key];
+    downloadDetails.load(options);
     syncPlaylist(); renderAccount(); syncOptionsSummary();
     try { setDrawer(localStorage.getItem("deviload-drawer") === "open"); } catch { setDrawer(false); }
     folderPaths = Object.fromEntries((await invoke("common_folders")) || []);
@@ -2465,7 +2499,7 @@ for (const option of document.querySelectorAll("[data-lang]")) option.addEventLi
 onLanguageChange(() => {
   syncLanguageButtons(); syncTitle(); syncSystemPreferences(); syncClipboardToggle(); syncAuth(); syncFormatHint();
   clearToasts();
-  renderAccount(); renderEngineInfo(); syncOptionsSummary();
+  renderAccount(); renderEngineInfo(); syncOptionsSummary();downloadDetails.translate();
   if (inspectedInfo && inspectedAddress) renderInspect(inspectedInfo, inspectedAddress);
   else if (linksIn(linkField.value).length > 1) renderLinkCount(linksIn(linkField.value).length);
   renderEngines(); syncTrayLabels();

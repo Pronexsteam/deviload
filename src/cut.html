@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Devil Cut · Deviload</title><link rel="icon" href="assets/devil-app-icon-32.png"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="rework.css"><link rel="stylesheet" href="shell.css"><link rel="stylesheet" href="tool-workspace.css"><script type="module" src="cut-main.js"></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Devil Cut · Deviload</title><link rel="icon" href="assets/devil-app-icon-32.png"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="rework.css"><link rel="stylesheet" href="shell.css"><link rel="stylesheet" href="tool-workspace.css"><link rel="stylesheet" href="quick-cut.css"><script type="module" src="cut-main.js"></script></head>
 <body class="cut-page">
 <div id="edit-dialog" class="cut-dialog cut-window">
   <header class="cut-head">
@@ -18,6 +18,7 @@
 <span class="cut-label">Save to</span><div class="export-folder"><span id="cut-folder" class="export-folder-name">Next to the source file</span><button id="cut-folder-pick" class="outline small" type="button">Choose</button><button id="cut-folder-reset" class="quiet small" type="button" hidden title="Save next to the source file" aria-label="Save next to the source file">×</button></div>
         <p id="cut-export-summary" class="cut-note"></p>
         <button id="cut-export" class="primary" type="button"><span class="icon" data-icon="download-simple" aria-hidden="true"></span>Save the video</button>
+        <div class="cut-quick-entry"><button id="cut-quick-open" class="outline" type="button">Lossless trim</button><p class="cut-note">Copy one clip without re-encoding, using the original framing and codecs.</p></div>
       </div>
     </details>
   </header>
@@ -119,5 +120,14 @@
   </div>
   <footer class="cut-foot"><span id="cut-mascot" class="cut-mascot" data-mascot="front"></span><div id="cut-progress" class="cut-progress" role="progressbar" aria-label="Export progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span></span></div><p id="edit-status" role="status" aria-live="polite">Space plays, J K L run back, stop and forward, Ctrl+B splits, Delete removes, Ctrl+Z undoes. Drag clips to reorder them and their edges to trim.</p></footer>
 </div>
+<dialog id="cut-quick-dialog" class="cut-quick-dialog" aria-labelledby="cut-quick-title" aria-describedby="cut-quick-help">
+  <h2 id="cut-quick-title">Lossless trim</h2>
+  <p id="cut-quick-help">The start moves to the previous keyframe and the end to the next keyframe, so the copy may be longer than your selection. Audio and subtitle boundaries follow their packets.</p>
+  <p>Original resolution, frame rate, video, audio and subtitle tracks, metadata and chapters are retained in the source container. Canvas and export quality settings do not apply.</p>
+  <dl class="cut-quick-times"><dt>Requested range</dt><dd id="cut-quick-requested">—</dd><dt>Keyframe range</dt><dd id="cut-quick-effective">—</dd><dt>Original format</dt><dd id="cut-quick-format">—</dd></dl>
+  <progress id="cut-quick-progress" max="1" value="0" aria-label="Export progress" hidden></progress>
+  <p id="cut-quick-status" class="cut-quick-status" role="status" aria-live="polite"></p>
+  <div class="cut-quick-actions"><button id="cut-quick-close" class="outline" type="button">Cancel</button><button id="cut-quick-save" class="primary" type="button" disabled>Save lossless copy</button></div>
+</dialog>
 <div id="toasts" class="toasts" aria-live="polite"></div>
 </body></html>
