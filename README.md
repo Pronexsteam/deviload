@@ -64,9 +64,9 @@ Follow a channel or playlist to check for new uploads every six hours while Devi
 
 Add a live link to record from that moment, then stop when you have what you need or set a duration limit. A scheduled recording can repeat daily while Deviload is running. The result stays in your local library; its container depends on the selected format and whether final packaging succeeds.
 
-## Next update
+## Latest update
 
-These improvements are being prepared together and are **not yet included in the published installers**. The download buttons above open the latest published release.
+Deviload **2.7.2** brings these improvements together. The download buttons above open the latest published release.
 
 - **Personal interest mixes:** combine existing playlists into a named mix. Each mix uses its own listening context and can learn from time spent actually listening within that mix.
 - **Better recommendations:** balance artists and familiar/new music, explain recommendation reasons, and temporarily reduce repeats, early-skipped automatic suggestions and unavailable sources. Private listening does not train taste; manual queues stay under your control.
@@ -155,7 +155,7 @@ All buttons above open the [latest release](https://github.com/Pronexsteam/devil
 | **Settings backup** | **Download profiles** |
 | ![Export and restore settings without account credentials](docs/screenshots/settings-backup.png) | ![Manage saved download profiles](docs/screenshots/download-profiles.png) |
 
-The lead music screenshot shows 2.7 with the live catalog and a sample local playlist. The older music views show 2.6.7; the other workspace screenshots show 2.6.5 with sample media. They do not show the upcoming personal mixes or recording picker.
+The lead music screenshot shows 2.7 with the live catalog and a sample local playlist. The older music views show 2.6.7; the other workspace screenshots show 2.6.5 with sample media. They do not show the new personal mixes or recording picker.
 
 ## Install on Windows
 
@@ -234,9 +234,9 @@ Deviload has no telemetry. It contacts source sites to inspect and download medi
 
 Devil Music contacts YouTube Music for catalog results, artwork hosts for covers, and YouTube media servers for audio. Opening lyrics sends the track title, artist and duration to LRCLIB. Its listening profile stays in local WebView storage. Likes are never automatically evicted; recent history is bounded to 80 songs and recommendation history to 1,000 learned tracks. Profiles also keep up to 30 playlists with 500 total entries and 200 saved artists, albums or catalog playlists. Export/import files are limited to 2 MB and contain metadata and preferences, not music files or account credentials. If a profile reaches the storage limit, saving reports an error rather than removing older likes. Reinstalling the operating system can erase local preferences; export a backup first.
 
-The [next update](#next-update) adds optional public ListenBrainz and MusicBrainz lookups, enabled by default. Requests contain up to two artist names and two allowlisted genre tags. Those services can see the queries and your connection's IP address, but Deviload does not upload your listening history, create an account, send a user identifier or submit scrobbles. Turn the source off in music settings to stop new requests; it is also disabled during private sessions, while offline and on connections that report data-saving mode. Lyrics and ordinary music playback use their own services as described above.
+The [2.7.2 update](#latest-update) adds optional public ListenBrainz and MusicBrainz lookups, enabled by default. Requests contain up to two artist names and two allowlisted genre tags. Those services can see the queries and your connection's IP address, but Deviload does not upload your listening history, create an account, send a user identifier or submit scrobbles. Turn the source off in music settings to stop new requests; it is also disabled during private sessions, while offline and on connections that report data-saving mode. Lyrics and ordinary music playback use their own services as described above.
 
-Personal mixes and recording choices travel with the music profile in the next update. Mixes are limited to eight, each referencing up to eight playlists and retaining up to 100 learned track references; explicit recording choices are limited to 200. Diagnostic reports are exported only on request, exclude track names, links, paths and account data, and are never uploaded automatically.
+Personal mixes and recording choices travel with the music profile in this update. Mixes are limited to eight, each referencing up to eight playlists and retaining up to 100 learned track references; explicit recording choices are limited to 200. Diagnostic reports are exported only on request, exclude track names, links, paths and account data, and are never uploaded automatically.
 
 Music playback includes saved artists and albums, playback from supported existing full-track audio downloads, timed lyrics, equalizer presets, volume smoothing and optional track overlap. Smoothing is a compressor, not measured album loudness normalization. Regional charts can be hidden; personal discovery uses local listening signals, likes, followed artists and explicit exclusions. This is adaptive ranking, not a trained neural recommendation model. Private sessions do not add listening evidence to it.
 
