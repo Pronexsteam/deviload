@@ -630,6 +630,8 @@ body { font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Ub
 
 /* Windows: the window buttons sit in a slim caption strip like a native title bar. */
 .custom-window .window-drag-strip { left: 264px; z-index: 59; height: 34px; background: #101318; cursor: default; }
+/* The strip is above themed main content; leave Windows caption buttons clickable. */
+.custom-window:not(.mac-window) .window-drag-strip { right: 138px; }
 @media (max-width: 1190px) { .custom-window .window-drag-strip { left: 220px; } }
 @media (max-width: 760px) { .custom-window .window-drag-strip { left: 0; } }
 .custom-window .window-drag-strip:active { cursor: default; }

@@ -1,6 +1,6 @@
 import {t,onLanguageChange} from "./i18n.js";
 
-const RELEASE_ID="deviload-2.7.4";
+const RELEASE_ID="deviload-2.7.5";
 const STORAGE_KEY="deviload-app-release-notes";
 const instances=new WeakMap();
 
@@ -25,9 +25,9 @@ export function wireReleaseNotes(workspace){
   const translate=()=>{
     button.textContent=t("What's new");title.textContent="Deviload · "+t("What's new");
     close.setAttribute("aria-label",t("Dismiss release notes"));
-    items[0].textContent=t("Choose Light Liquid Glass, Matte black or Black Liquid Glass in Settings → Appearance.");
-    items[1].textContent=t("Your theme is saved locally and included in settings backups.");
-    items[2].textContent=t("Calmer visuals with a readable supporter board.");
+    items[0].textContent=t("Window controls work across every theme.");
+    items[1].textContent=t("Switch themes next to What's new, without opening Settings.");
+    items[2].textContent=t("Try Midnight, a calm blue-gray theme.");
   };
   const show=visible=>{card.hidden=!visible;button.setAttribute("aria-expanded",String(visible));};
   let dismissed=false;
