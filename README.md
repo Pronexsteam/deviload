@@ -66,6 +66,12 @@ Add a live link to record from that moment, then stop when you have what you nee
 
 ## Latest update
 
+Deviload **2.7.5** fixes the window buttons in the optional themes: the draggable title strip no longer covers Minimize, Maximize / Restore and Close. Switch appearance from **Themes**, next to **What's new**, or from **Settings → Appearance**.
+
+The new **Midnight** theme adds calm blue-gray surfaces, clear text and soft blue accents. Like the other themes, it follows the app's workspaces, keeps the supporter board readable and saves your choice locally and in settings backups. It uses a static gradient without a WebGL background or decorative animations.
+
+### Interface themes in 2.7.4
+
 Deviload **2.7.4** adds three calmer interface themes. Open **Settings → Appearance** and choose **Light Liquid Glass**, **Matte black** or **Black Liquid Glass**. **Classic** stays the default, so updating keeps the familiar interface until you choose another theme.
 
 - **A quieter workspace:** monochrome branding, a full-width download form above the queue, and no decorative mascot or flame effects in the new themes. Download progress and status remain visible.

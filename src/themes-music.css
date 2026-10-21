@@ -7,6 +7,16 @@
   --music-theme-error: #922b37;
 }
 
+:root[data-theme="midnight"] {
+  --music-theme-error: var(--theme-error);
+}
+
+/* Midnight is an opaque material; music does not need a blurred back layer. */
+:root[data-theme="midnight"] :is(.music-dock, .music-queue-panel, .music-library-dialog, .music-settings-dialog, .music-lyrics-dialog, .music-import-dialog) {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 :root[data-theme]:not([data-theme="classic"]) body:has(main[data-page="music"]) main,
 :root[data-theme]:not([data-theme="classic"]) body:has(main[data-page="music"]) .sidebar {
   background: transparent;
