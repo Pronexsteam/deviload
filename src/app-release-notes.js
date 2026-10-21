@@ -1,6 +1,6 @@
 import {t,onLanguageChange} from "./i18n.js";
 
-const RELEASE_ID="deviload-2.7.1";
+const RELEASE_ID="deviload-2.7.4";
 const STORAGE_KEY="deviload-app-release-notes";
 const instances=new WeakMap();
 
@@ -25,9 +25,9 @@ export function wireReleaseNotes(workspace){
   const translate=()=>{
     button.textContent=t("What's new");title.textContent="Deviload · "+t("What's new");
     close.setAttribute("aria-label",t("Dismiss release notes"));
-    items[0].textContent=t("Import Spotify albums into your music library.");
-    items[1].textContent=t("Save up to 100 songs from a YouTube Mix.");
-    items[2].textContent=t("Fixed Linux AppImage startup permissions.");
+    items[0].textContent=t("Choose Light Liquid Glass, Matte black or Black Liquid Glass in Settings → Appearance.");
+    items[1].textContent=t("Your theme is saved locally and included in settings backups.");
+    items[2].textContent=t("Calmer visuals with a readable supporter board.");
   };
   const show=visible=>{card.hidden=!visible;button.setAttribute("aria-expanded",String(visible));};
   let dismissed=false;

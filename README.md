@@ -66,6 +66,17 @@ Add a live link to record from that moment, then stop when you have what you nee
 
 ## Latest update
 
+Deviload **2.7.4** adds three calmer interface themes. Open **Settings → Appearance** and choose **Light Liquid Glass**, **Matte black** or **Black Liquid Glass**. **Classic** stays the default, so updating keeps the familiar interface until you choose another theme.
+
+- **A quieter workspace:** monochrome branding, a full-width download form above the queue, and no decorative mascot or flame effects in the new themes. Download progress and status remain visible.
+- **One theme across the app:** Downloads, Library, Devil Music, settings, Devil Cut and Devil Convert follow the selected appearance.
+- **Readable thanks:** the supporter board has a contrasting local surface, clear public names and a visible Ko-fi action, including in both glass themes.
+- **Your choice stays with you:** the theme is saved on this device and included in settings backups. Switching themes does not restart the app or interrupt music.
+
+The glass themes use a bundled coastal scene with blur and subtle edge refraction where supported. They do not expose the operating system's desktop through the app or use Apple's native Liquid Glass APIs. The matte theme uses solid surfaces; glass themes also support reduced-transparency settings and a fallback without WebGL.
+
+### Supporters and layout improvements in 2.7.3
+
 Deviload **2.7.3** adds a visible Ko-fi supporter board to the main window, with a grateful version of the current mascot. Public names are maintained manually and included with the app; donation amounts, messages and account details are not included. The empty download queue now lines up with the download controls.
 
 The release publication command also handles both handwritten and generated notes correctly.
