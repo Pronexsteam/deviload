@@ -3,6 +3,9 @@ import {hydrateMascots} from "./mascot-spot.js";
 import {t, errorText, translateDom, setLanguage, onLanguageChange} from "./i18n.js";
 import {mediaPreview, isVideoJob, isLibraryAudio} from "./view-model.js";
 import {createDevilCut} from "./devil-cut.js";
+import {wireAppearance} from "./appearance.js";
+
+wireAppearance();
 
 const invoke = window.__TAURI__?.core?.invoke;
 const convertFileSrc = window.__TAURI__?.core?.convertFileSrc;

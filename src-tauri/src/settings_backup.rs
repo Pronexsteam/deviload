@@ -27,6 +27,7 @@ fn preferences(value: &Value) -> Value {
     let mut output = serde_json::Map::new();
     for (key, allowed) in [
         ("deviload-lang", vec!["en", "ru", "es"]),
+        ("deviload-theme", vec!["classic", "glass-light", "matte-black", "glass-black"]),
         ("deviload-tray", vec!["true", "false"]),
         ("deviload-os-notify", vec!["true", "false"]),
         ("deviload-ytdlp-auto", vec!["true", "false"]),
@@ -201,6 +202,40 @@ mod tests {
     }
 
     #[test]
+    fn theme_preferences_round_trip_without_changing_backup_version_or_requiring_a_theme() {
+        let dir = tempfile::tempdir().unwrap();
+        let original = sample(dir.path());
+        let (legacy, _) = checked(&original).unwrap();
+        assert_eq!(legacy.version, 1);
+        assert!(legacy.preferences.get("deviload-theme").is_none());
+        assert_eq!(legacy.preferences["deviload-lang"], "es");
+        for theme in ["classic", "glass-light", "matte-black", "glass-black"] {
+            let mut value: Value = serde_json::from_str(&original).unwrap();
+            value["preferences"]["deviload-theme"] = json!(theme);
+            let (backup, _) = checked(&value.to_string()).unwrap();
+            let (round_trip, _) = checked(&serde_json::to_string(&backup).unwrap()).unwrap();
+            assert_eq!(round_trip.version, 1);
+            assert_eq!(round_trip.preferences["deviload-theme"], theme);
+            assert_eq!(round_trip.preferences["deviload-lang"], "es");
+            assert!(round_trip.preferences.get("password").is_none());
+        }
+    }
+
+    #[test]
+    fn invalid_theme_preferences_are_dropped_without_rejecting_the_backup() {
+        let dir = tempfile::tempdir().unwrap();
+        for theme in [json!("unknown"), json!("Glass-Light"), json!(" glass-light"),
+            json!("glass-black; background:url(https://example.com)"), json!("<script>alert(1)</script>"),
+            json!(null), json!(true), json!(1), json!(["glass-light"]), json!({"theme":"glass-light"})] {
+            let mut value: Value = serde_json::from_str(&sample(dir.path())).unwrap();
+            value["preferences"]["deviload-theme"] = theme;
+            let (backup, _) = checked(&value.to_string()).unwrap();
+            assert!(backup.preferences.get("deviload-theme").is_none());
+            assert_eq!(backup.preferences["deviload-lang"], "es");
+        }
+    }
+
+    #[test]
     fn backup_strips_credentials_and_rejects_invalid_payloads() {
         let dir = tempfile::tempdir().unwrap();
         let mut value: Value = serde_json::from_str(&sample(dir.path())).unwrap();
@@ -233,8 +268,11 @@ mod tests {
         let mut data = super::super::Snapshot::default(); data.options.cookies_browser = "firefox".into(); data.next_id = 42;
         let engine = Engine {data:std::sync::Arc::new(std::sync::Mutex::new(data)),dir:dir.path().into(),shutdown:std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false))};
         fs::write(dir.path().join("library.json"), br#"{"projects":{"keep":{}},"network":{"proxy":"local-secret"}}"#).unwrap();
-        let prefs = restore(&sample(dir.path()), &engine).unwrap();
+        let mut backup: Value = serde_json::from_str(&sample(dir.path())).unwrap();
+        backup["preferences"]["deviload-theme"] = json!("glass-black");
+        let prefs = restore(&backup.to_string(), &engine).unwrap();
         assert_eq!(prefs["deviload-lang"], "es");
+        assert_eq!(prefs["deviload-theme"], "glass-black");
         let store = super::super::read_store(dir.path());
         assert!(store["projects"].get("keep").is_some()); assert_eq!(store["network"]["proxy"], "local-secret");
         let data = engine.data.lock().unwrap(); assert_eq!(data.next_id, 42); assert_eq!(data.options.cookies_browser,"firefox");

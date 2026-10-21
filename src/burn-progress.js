@@ -73,19 +73,31 @@ export class BurnProgress {
   }
   this.observer=new IntersectionObserver(([entry])=>{this.visible=entry.isIntersecting;this.schedule();});
   this.resize=new ResizeObserver(()=>{this.size();this.paint();});this.resize.observe(this.canvas);
-  document.addEventListener('visibilitychange',()=>{this.last=0;this.lastPaint=performance.now();this.schedule();});this.reduced.addEventListener('change',()=>{this.paint();this.schedule();});
-  this.canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();cancelAnimationFrame(this.raf);this.raf=0;this.canvas.hidden=true;this.gl=null;this.host?.classList.remove('has-combustion');});
+  this.onVisibilityChange=()=>{this.last=0;this.lastPaint=performance.now();this.schedule();};
+  this.onMotionChange=()=>{
+   if(this.destroyed)return;
+   cancelAnimationFrame(this.raf);this.raf=0;this.last=0;this.lastPaint=performance.now();
+   if(this.finishing)this.burning=false;
+   this.finishing=0;this.visual=this.progress;this.velocity=0;
+   this.canvas.hidden=!this.gl||this.calm();this.host?.classList.toggle('has-combustion',!!this.gl&&!this.calm());
+   this.size();this.paint();this.schedule();
+  };
+  this.onContextLost=event=>{event.preventDefault();cancelAnimationFrame(this.raf);this.raf=0;this.canvas.hidden=true;this.gl=null;this.host?.classList.remove('has-combustion');};
+  document.addEventListener('visibilitychange',this.onVisibilityChange);this.reduced.addEventListener('change',this.onMotionChange);
+  document.addEventListener('deviload-motion-change',this.onMotionChange);
+  this.canvas.addEventListener('webglcontextlost',this.onContextLost);
  }
- mount(host,progress,burning){this.observer.disconnect();this.host=host;this.finishing=0;this.visual=progress;this.velocity=0;this.lastPaint=performance.now();this.progress=progress;this.burning=burning;this.last=0;cancelAnimationFrame(this.raf);this.raf=0;if(!host){this.visible=false;return;}host.append(this.canvas);host.classList.toggle('has-combustion',!!this.gl);this.canvas.hidden=!this.gl;host.setAttribute('role','progressbar');host.setAttribute('aria-label','Download progress');host.setAttribute('aria-valuemin','0');host.setAttribute('aria-valuemax','100');this.setProgress(progress);this.observer.observe(host);this.size();this.paint();this.schedule();}
+ calm(){return document.documentElement.dataset.motion==='reduced';}
+ mount(host,progress,burning){if(this.destroyed)return;this.observer.disconnect();this.host=host;this.finishing=0;this.visual=progress;this.velocity=0;this.lastPaint=performance.now();this.progress=progress;this.burning=burning;this.last=0;cancelAnimationFrame(this.raf);this.raf=0;if(!host){this.visible=false;return;}host.append(this.canvas);host.classList.toggle('has-combustion',!!this.gl&&!this.calm());this.canvas.hidden=!this.gl||this.calm();host.setAttribute('role','progressbar');host.setAttribute('aria-label','Download progress');host.setAttribute('aria-valuemin','0');host.setAttribute('aria-valuemax','100');this.setProgress(progress);this.observer.observe(host);this.size();this.paint();this.schedule();}
  setProgress(progress){
   const target=Math.max(0,Math.min(1,Number(progress)||0));
   this.progress=target;
   if(this.host){this.host.setAttribute('aria-valuenow',String(Math.round(target*100)));this.host.style.setProperty('--progress',(target*100)+'%');}
   if(this.reduced.matches||!this.visible)this.paint();this.schedule();
  }
- finish(){this.finishing=performance.now();this.burning=true;this.setProgress(1);this.schedule();}
- size(){if(!this.gl)return;const bounds=this.canvas.getBoundingClientRect();if(!bounds.width||!bounds.height)return;this.width=bounds.width;this.height=bounds.height;const dpr=Math.min(devicePixelRatio,1.25);this.canvas.width=Math.round(bounds.width*dpr);this.canvas.height=Math.round(bounds.height*dpr);this.gl.viewport(0,0,this.canvas.width,this.canvas.height);}
- paint(){if(!this.gl||!this.width||!this.host)return;const now=performance.now(),dt=Math.min(.05,Math.max(0,(now-(this.lastPaint??now))/1000));this.lastPaint=now;
+ finish(){this.finishing=this.calm()?0:performance.now();this.burning=!this.calm();this.setProgress(1);this.schedule();}
+ size(){if(this.destroyed||this.calm()||!this.gl)return;const bounds=this.canvas.getBoundingClientRect();if(!bounds.width||!bounds.height)return;this.width=bounds.width;this.height=bounds.height;const dpr=Math.min(devicePixelRatio,1.25);this.canvas.width=Math.round(bounds.width*dpr);this.canvas.height=Math.round(bounds.height*dpr);this.gl.viewport(0,0,this.canvas.width,this.canvas.height);}
+ paint(){if(this.destroyed||this.calm()||!this.gl||!this.width||!this.host)return;const now=performance.now(),dt=Math.min(.05,Math.max(0,(now-(this.lastPaint??now))/1000));this.lastPaint=now;
   if(this.reduced.matches){this.visual=this.progress;this.velocity=0;}
   else {
    const displacement=(this.visual??this.progress)-this.progress,velocity=this.velocity||0,omega=16,decay=Math.exp(-omega*dt),spring=velocity+omega*displacement;
@@ -94,5 +106,6 @@ export class BurnProgress {
    if(Math.abs(this.visual-this.progress)<.0001&&Math.abs(this.velocity)<.001){this.visual=this.progress;this.velocity=0;}
   }
   const heat=this.finishing?Math.max(0,1-Math.max(0,now-this.finishing-550)/650):1;if((this.finishing&&heat===0)||(!this.finishing&&this.progress===1&&this.visual>.999))this.burning=false;const gl=this.gl;gl.useProgram(this.program);gl.uniform2f(this.uniform.size,this.width,this.height);gl.uniform1f(this.uniform.time,this.reduced.matches?0:this.time);gl.uniform1f(this.uniform.progress,this.visual);gl.uniform1f(this.uniform.burning,this.burning&&!this.reduced.matches?heat:0);gl.uniform1f(this.uniform.release,this.finishing&&!this.reduced.matches?(now-this.finishing)/1000:-1);gl.drawArrays(gl.TRIANGLES,0,6);}
- schedule(){if(!this.gl||!this.host||!this.visible||document.hidden||(!this.burning&&Math.abs(this.progress-(this.visual??this.progress))<.001)||this.reduced.matches){cancelAnimationFrame(this.raf);this.raf=0;this.last=0;return;}if(this.raf)return;this.raf=requestAnimationFrame(now=>{this.raf=0;if(this.last)this.time+=Math.min((now-this.last)/1000,.06);this.last=now;this.paint();this.schedule();});}
+ schedule(){if(this.destroyed||this.calm()||!this.gl||!this.host||!this.visible||document.hidden||(!this.burning&&Math.abs(this.progress-(this.visual??this.progress))<.001)||this.reduced.matches){cancelAnimationFrame(this.raf);this.raf=0;this.last=0;return;}if(this.raf)return;this.raf=requestAnimationFrame(now=>{this.raf=0;if(this.last)this.time+=Math.min((now-this.last)/1000,.06);this.last=now;this.paint();this.schedule();});}
+ destroy(){if(this.destroyed)return;this.destroyed=true;cancelAnimationFrame(this.raf);this.raf=0;this.observer.disconnect();this.resize.disconnect();document.removeEventListener('visibilitychange',this.onVisibilityChange);document.removeEventListener('deviload-motion-change',this.onMotionChange);this.reduced.removeEventListener('change',this.onMotionChange);this.canvas.removeEventListener('webglcontextlost',this.onContextLost);this.canvas.remove();this.host?.classList.remove('has-combustion');this.host=null;}
 }
