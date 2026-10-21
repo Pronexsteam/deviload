@@ -3,6 +3,15 @@
 export const name = "Русский";
 
 export default {
+  "Appearance": "Оформление",
+  "Choose a light, matte or transparent workspace.": "Выбери светлое, матовое или прозрачное оформление.",
+  "Theme": "Тема",
+  "Classic": "Классическая",
+  "Light Liquid Glass": "Светлое стекло",
+  "Matte black": "Чёрная матовая",
+  "Black Liquid Glass": "Чёрное стекло",
+  "Your theme is saved on this device.": "Тема сохраняется на этом устройстве.",
+  "Theme applied for this session. Storage is unavailable.": "Тема применена на время сеанса. Сохранить её сейчас не удалось.",
   "Top supporters": "Больше всех поддержали",
   "Thank you for your support.": "Спасибо за поддержку.",
   "Discover more music with ListenBrainz": "Открывать больше музыки с ListenBrainz",

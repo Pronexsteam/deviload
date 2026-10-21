@@ -128,6 +128,6 @@ export function setLanguage(next) {
   for (const listener of listeners) listener(next);
 }
 
-export function onLanguageChange(listener) { listeners.add(listener); }
+export function onLanguageChange(listener) { listeners.add(listener); return () => listeners.delete(listener); }
 
 document.documentElement.lang = current;

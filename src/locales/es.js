@@ -3,6 +3,15 @@
 export const name = "Español";
 
 export default {
+  "Appearance": "Apariencia",
+  "Choose a light, matte or transparent workspace.": "Elige un espacio de trabajo claro, mate o transparente.",
+  "Theme": "Tema",
+  "Classic": "Clásico",
+  "Light Liquid Glass": "Cristal claro",
+  "Matte black": "Negro mate",
+  "Black Liquid Glass": "Cristal negro",
+  "Your theme is saved on this device.": "Tu tema se guarda en este dispositivo.",
+  "Theme applied for this session. Storage is unavailable.": "Tema aplicado para esta sesión. El almacenamiento no está disponible.",
   "Top supporters": "Principales colaboradores",
   "Thank you for your support.": "Gracias por tu apoyo.",
   "Discover more music with ListenBrainz": "Descubrir más música con ListenBrainz",

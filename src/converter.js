@@ -3,6 +3,9 @@
 import {hydrateMascots, setPose} from "./mascot-spot.js";
 import {t, tn, errorText, translateDom, setLanguage, onLanguageChange} from "./i18n.js";
 import {exportFolder, bindExportFolder} from "./export-folder.js";
+import {wireAppearance} from "./appearance.js";
+
+wireAppearance();
 
 const invoke = window.__TAURI__?.core?.invoke;
 const $ = id => document.getElementById(id);

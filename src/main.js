@@ -16,6 +16,7 @@ import {createEngineUpdater} from "./engine-update.js";
 import {createMusic} from "./devil-music.js";
 import {wireReleaseNotes} from "./app-release-notes.js";
 import {wireSupporters} from "./supporters.js";
+import {wireAppearance} from "./appearance.js";
 import {downloadMusic} from "./music-download.js";
 import {wireDownloadDetails,inspectionKey,sourceEstimate} from "./download-options.js";
 
@@ -193,9 +194,7 @@ $("notice-button").addEventListener("click", () => {
 });
 $("notice-close").addEventListener("click", () => $("notice-dialog").close());
 $("notice-clear").addEventListener("click", () => { notices = []; unreadNotices = 0; $("notice-count").hidden = true; renderNotices(); });
-// Animations are on by default; operating-system reduced-motion remains respected in CSS and mascot rendering.
-document.documentElement.dataset.motion = "full";
-document.dispatchEvent(new Event("deviload-motion-change"));
+wireAppearance();
 function syncSwitch(id, on) { $(id).setAttribute("aria-checked", String(on)); }
 function syncSystemPreferences() {
   syncSwitch("tray-toggle", localStorage.getItem("deviload-tray") === "true");

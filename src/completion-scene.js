@@ -3,9 +3,12 @@ export class CompletionScene {
   constructor(){
     this.canvas=document.createElement('canvas');this.canvas.className='completion-scene';this.canvas.setAttribute('aria-hidden','true');
     this.ctx=this.canvas.getContext('2d');this.reduced=matchMedia('(prefers-reduced-motion: reduce)');this.frame=0;this.animations=[];
-    document.addEventListener('visibilitychange',()=>{if(document.hidden)this.stop();});
-    this.reduced.addEventListener('change',()=>this.stop());addEventListener('resize',()=>this.stop());
-    document.addEventListener('scroll',()=>this.stop(),{capture:true,passive:true});
+    this.onVisibilityChange=()=>{if(document.hidden)this.stop();};
+    this.onStop=()=>this.stop();
+    document.addEventListener('visibilitychange',this.onVisibilityChange);
+    this.reduced.addEventListener('change',this.onStop);addEventListener('resize',this.onStop);
+    document.addEventListener('deviload-motion-change',this.onStop);
+    document.addEventListener('scroll',this.onStop,{capture:true,passive:true});
   }
   stop(){
     cancelAnimationFrame(this.frame);this.frame=0;this.canvas.remove();
@@ -13,7 +16,7 @@ export class CompletionScene {
     this.target?.classList.remove('completion-focus');
   }
   play(target,mascot=document.querySelector('.mascot-portrait')){
-    this.stop();if(!this.ctx||document.hidden||this.reduced.matches)return;
+    this.stop();if(this.destroyed||!this.ctx||document.hidden||this.reduced.matches||document.documentElement.dataset.motion==='reduced')return;
     const bounds=target?.getBoundingClientRect();
     if(!bounds||bounds.bottom<0||bounds.top>innerHeight)return;
     this.target=target;target.classList.add('completion-focus');
@@ -32,7 +35,7 @@ export class CompletionScene {
     this.width=innerWidth;this.height=innerHeight;
     const dpr=Math.min(devicePixelRatio,1.5);this.canvas.width=Math.round(this.width*dpr);this.canvas.height=Math.round(this.height*dpr);
     this.ctx.setTransform(dpr,0,0,dpr,0,0);document.body.append(this.canvas);this.started=performance.now();
-    const tick=now=>{const time=now-this.started;if(time>=1800){this.stop();return;}this.draw(time);this.frame=requestAnimationFrame(tick);};
+    const tick=now=>{const time=now-this.started;if(this.destroyed||document.documentElement.dataset.motion==='reduced'||this.reduced.matches||time>=1800){this.stop();return;}this.draw(time);this.frame=requestAnimationFrame(tick);};
     this.frame=requestAnimationFrame(tick);
   }
   draw(time){
@@ -60,5 +63,13 @@ export class CompletionScene {
       ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(px-Math.sin(i*1.7)*2,py+2+seed*4);ctx.stroke();
     }
     ctx.globalCompositeOperation='source-over';
+  }
+  destroy(){
+    if(this.destroyed)return;
+    this.destroyed=true;this.stop();
+    document.removeEventListener('visibilitychange',this.onVisibilityChange);
+    document.removeEventListener('deviload-motion-change',this.onStop);
+    document.removeEventListener('scroll',this.onStop,true);
+    this.reduced.removeEventListener('change',this.onStop);removeEventListener('resize',this.onStop);
   }
 }

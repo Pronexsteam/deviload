@@ -12,7 +12,7 @@ import {playbackFailure} from "../src/music-diagnostics.js";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const read = path => readFileSync(join(root, path), "utf8");
 const keys = new Set(Object.keys(ru));
-const translatedSources = ["src/main.js", "src/app-release-notes.js", "src/supporters.js", "src/devil-music.js", ...readdirSync(join(root,"src")).filter(name=>/^music-.*\.js$/.test(name)).map(name=>"src/"+name), "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/quick-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js", "src/download-profiles.js", "src/download-options.js", "src/queue-selection.js", "src/settings-backup.js"];
+const translatedSources = ["src/main.js", "src/appearance.js", "src/app-release-notes.js", "src/supporters.js", "src/devil-music.js", ...readdirSync(join(root,"src")).filter(name=>/^music-.*\.js$/.test(name)).map(name=>"src/"+name), "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/quick-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js", "src/download-profiles.js", "src/download-options.js", "src/queue-selection.js", "src/settings-backup.js"];
 // Brand names, formats and codes read the same in both languages.
 const neutral = new Set(["Deviload", "Devil Music", "01 / DM", "Devil", "oad", "Devil Cut", "Devil Cut · Deviload", "Devil Convert", "Devil Convert · Deviload", "DEVIL CINEMA", "YouTube", "YouTube Music", "VK", "TikTok",
   "Instagram", "Twitch", "SoundCloud", "1080p", "720p", "480p", "1440p", "4K", "H.264", "H.265", "MP3", "FLAC", "WAV", "GIF", "GIF · 480px", "Chrome", "Edge",
