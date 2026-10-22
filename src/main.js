@@ -10,13 +10,16 @@ import {wireTour} from "./tour.js";
 import {createCutHome} from "./devil-cut.js";
 import {pop, wireMotion} from "./motion.js";
 import {hydrateMascots, mascotSpot, setPose} from "./mascot-spot.js";
-import {labels, actions, counts, orbState, mediaPreview, visibleJobs, playlistSelection, diagnoseError, signInSite, isVideoJob, isLibraryAudio, inLibrary, mediaIdentity, isProcessing} from "./view-model.js";
+import {labels, actions, counts, orbState, mediaPreview, visibleJobs, playlistSelection, diagnoseError, signInSite, isVideoJob, isLibraryAudio, inLibrary, mediaIdentity, isProcessing, hostCooldown} from "./view-model.js";
 import {t, tn, errorText, translateMessage, translateDom, setLanguage, onLanguageChange, language, locale, languageNames} from "./i18n.js";
 import {createEngineUpdater} from "./engine-update.js";
+import {createAppUpdateScheduler,isAppUpdateDismissed,dismissAppUpdate,clearAppUpdateDismissal,updateDownloadProgress} from "./app-update-prompt.js";
 import {createMusic} from "./devil-music.js";
 import {wireReleaseNotes} from "./app-release-notes.js";
 import {wireSupporters} from "./supporters.js";
 import {wireAppearance} from "./appearance.js";
+import {downloadAuthView} from "./account-status.js";
+import {wireGalleryDownloads} from "./gallery-download.js";
 import {downloadMusic} from "./music-download.js";
 import {wireDownloadDetails,inspectionKey,sourceEstimate} from "./download-options.js";
 
@@ -43,6 +46,7 @@ const devilMusic = createMusic({invoke,onDownload:async item=>{
 }});
 $("music-tab").addEventListener("click", () => navigate("music"));
 let quality = "1080", currentFilter = "all", search = "", mediaFilter = "all", mediaSearch = "", jobs = [], currentAudioId = null;
+let rateLimits = [];
 let cinemaIds = [], currentPlayerId = null;
 let cinemaPositions = {}, libraryMeta = {};
 // Tasks hidden while their Undo is on screen, each with the timer that removes it for real.
@@ -446,16 +450,27 @@ $("legacy-import").addEventListener("click", async () => {
 });
 // A new Deviload: the installed copy updates itself, the portable one opens the releases page.
 let appUpdate = null, appVersion = "";
+let updateStorage = null;
+try { updateStorage = localStorage; } catch { /* Storage can be disabled. */ }
+const appUpdateScheduler = createAppUpdateScheduler({
+  check:() => invoke("check_app_update"),
+  onUpdate:update => { appUpdate = update; showAppUpdate(); },
+  onState:state => {
+    $("check-updates").disabled = state.checking || state.installing;
+    $("check-updates").classList.toggle("is-busy",state.checking);
+    $("app-update-install").disabled = state.checking || state.installing;
+    $("app-update-later").disabled = state.installing;
+  }
+});
 // The Windows installer, the Mac app and the AppImage update themselves; the portable
 // zip and the .deb package show where to download the new version.
 const onMac = navigator.userAgent.includes("Mac");
 const onLinux = navigator.userAgent.includes("Linux");
 function showAppUpdate() {
-  let later = {};
-  try { later = JSON.parse(localStorage.getItem("deviload-update-later") || "{}"); } catch { later = {}; }
-  const snoozed = later.version === appUpdate?.version && later.until > Date.now();
-  $("app-update-notice").hidden = !appUpdate || snoozed;
-  if (!appUpdate) return;
+  const installing = appUpdateScheduler.state.installing;
+  const snoozed = isAppUpdateDismissed(updateStorage,appUpdate?.version);
+  $("app-update-notice").hidden = !appUpdate || (!installing && snoozed);
+  if (!appUpdate || installing) return;
   $("app-update-title").textContent = t("Deviload {version} is out", {version:appUpdate.version});
   $("app-update-text").textContent = appUpdate.installable
     ? t("The update takes a few seconds, then Deviload restarts. Active downloads can be resumed afterwards.")
@@ -466,10 +481,11 @@ function showAppUpdate() {
 }
 async function checkAppUpdate(manual = false) {
   if (!invoke) { if (manual) message(t("Update checks are available in the app."), true); return; }
+  if(appUpdateScheduler.state.installing)return;
   try {
-    appUpdate = await invoke("check_app_update");
+    await appUpdateScheduler.check({manual});
     if (manual) {
-      try { localStorage.removeItem("deviload-update-later"); } catch { /* storage unavailable */ }
+      clearAppUpdateDismissal(updateStorage);
       if (!appUpdate) message(t("You have the latest version: {version}", {version:appVersion}));
       else $("app-settings-dialog").close();
     }
@@ -489,35 +505,40 @@ $("check-updates").addEventListener("click", async () => {
   try { await checkAppUpdate(true); } finally { button.disabled = false; button.classList.remove("is-busy"); }
 });
 $("app-update-later").addEventListener("click", () => {
-  // "Later" hides the notice until the next check six hours on, which then shows it again.
-  try { localStorage.setItem("deviload-update-later", JSON.stringify({version:appUpdate?.version, until:Date.now() + 6 * 3600000 - 5 * 60000})); } catch { /* storage unavailable */ }
+  dismissAppUpdate(updateStorage,appUpdate?.version);
   showAppUpdate();
 });
 $("app-update-install").addEventListener("click", async () => {
   if (!appUpdate) return;
   if (!appUpdate.installable) { invoke("open_releases").catch(error => message(errorText(error), true)); return; }
-  const ask = window.__TAURI__?.dialog?.ask;
-  const active = jobs.some(job => job.status === "running");
-  if (active && ask && !(await ask(t("Downloads in progress will stop. You can resume them after the update. Update now?"), {title:"Deviload", kind:"warning"}))) return;
-  const button = $("app-update-install");
-  button.disabled = true;
-  $("app-update-later").disabled = true;
-  $("app-update-progress").hidden = false;
-  $("app-update-text").textContent = t("Downloading the update…");
-  try { await invoke("install_app_update"); }
-  catch (error) {
-    message(errorText(error), true);
-    $("app-update-progress").hidden = true;
-    button.disabled = false;
-    $("app-update-later").disabled = false;
-    showAppUpdate();
+  if (!(await appUpdateScheduler.holdInstall())) return;
+  let started=false,failed=false;
+  try {
+    if (!appUpdate?.installable) return;
+    const ask=window.__TAURI__?.dialog?.ask;
+    const active=jobs.some(job=>job.status==="running");
+    if(active&&ask&&!(await ask(t("Downloads in progress will stop. You can resume them after the update. Update now?"),{title:"Deviload",kind:"warning"})))return;
+    $("app-update-progress").hidden=false;
+    $("app-update-progress").querySelector("span").style.width="0%";
+    $("app-update-progress").setAttribute("aria-valuenow","0");
+    $("app-update-text").textContent=t("Downloading the update…");
+    started=true;
+    await invoke("install_app_update");
+  } catch(error) { failed=true;message(errorText(error),true); }
+  finally {
+    if(!started||failed){
+      if(failed){appUpdate=null;$("app-update-progress").hidden=true;}
+      appUpdateScheduler.releaseInstall({recheck:failed});
+      if(failed){try{await appUpdateScheduler.check({manual:true});}catch{/* The installation error is already shown. */}}
+      showAppUpdate();
+    }
   }
 });
 window.__TAURI__?.event?.listen?.("app-update-progress", event => {
-  const share = Math.max(0, Math.min(1, Number(event.payload) || 0));
-  $("app-update-progress").querySelector("span").style.width = `${Math.round(share * 100)}%`;
-  $("app-update-progress").setAttribute("aria-valuenow", String(Math.round(share * 100)));
-  if (share >= 1) $("app-update-text").textContent = t("Installing the update…");
+  const {percent,phase}=updateDownloadProgress(event.payload);
+  $("app-update-progress").querySelector("span").style.width=percent+"%";
+  $("app-update-progress").setAttribute("aria-valuenow",String(percent));
+  if(phase==="installing")$("app-update-text").textContent=t("Installing the update…");
 });
 onLanguageChange(showAppUpdate);
 function systemNotice(title, detail) {
@@ -528,11 +549,13 @@ function systemNotice(title, detail) {
 }
 
 document.addEventListener("keydown", event => {
+  if (event.defaultPrevented) return;
   const modifier = event.ctrlKey || event.metaKey;
   if (modifier && event.key.toLowerCase() === "l") {
     event.preventDefault(); showDownloads(true); return;
   }
   if (modifier && event.key.toLowerCase() === "k") {
+    if (document.querySelector("dialog[open]")) return;
     event.preventDefault(); showDownloads(); $("job-search").focus(); return;
   }
   if (modifier && event.key === "Enter" && !$("add").disabled) {
@@ -774,6 +797,21 @@ $("playlist-apply").addEventListener("click", () => {
   $("playlist-dialog").close();
   message(t("Tracks selected: {count}. Range: {range}", {count:indices.length, range:spec}));
 });let signedInPath = null;
+let savedAuthSource = {mode:"account", path:""};
+function syncSavedAuthSource(options) {
+  const next = {
+    mode:options.cookiesAccount || (options.cookies && options.cookies === signedInPath) ? "account"
+      : options.cookiesBrowser || (options.cookies ? "file" : "none"),
+    path:options.cookies || "",
+  };
+  if (next.mode === savedAuthSource.mode && next.path === savedAuthSource.path) return;
+  savedAuthSource = next;
+  renderAccount();
+}
+function accountView() {
+  return downloadAuthView({mode:$("cookies-mode").value, cookiePath:$("cookies").value,
+    savedMode:savedAuthSource.mode, savedPath:savedAuthSource.path, hasEmbeddedSession:Boolean(signedInPath)});
+}
 if (!navigator.userAgent.includes("Mac")) {
   // Chromium browsers on Windows encrypt cookies so yt-dlp cannot read them.
   document.querySelectorAll('#cookies-mode option[data-os="mac"]').forEach(option => option.remove());
@@ -793,10 +831,12 @@ function syncAuth() {
 }
 function renderAccount() {
   const signed = Boolean(signedInPath);
+  const view = accountView();
   const button = $("open-youtube-view");
-  button.classList.toggle("signed-in", signed);
-  $("youtube-label").textContent = signed ? "YouTube" : t("Sign in");
-  button.title = signed ? t("Signed in to YouTube · open YouTube") : t("Sign in to YouTube");
+  button.classList.toggle("signed-in", view.kind === "account" && signed);
+  button.dataset.authAction = view.action;
+  $("youtube-label").textContent = t(view.label);
+  button.title = t(view.title, view.params);
   button.setAttribute("aria-label", button.title);
   // One row per site in the Accounts group, YouTube first.
   $("account-state").textContent = "YouTube";
@@ -828,9 +868,12 @@ async function signIn() {
 }
 $("cookies-mode").addEventListener("change", () => {
   $("cookies-status").textContent = t("Not saved yet. Press Apply cookies to use this source.");
-  syncAuth();
+  renderAccount();
 });
-$("cookies").addEventListener("input", () => { $("cookies-status").textContent = t("Not saved yet. Press Apply cookies to use this source."); });
+$("cookies").addEventListener("input", () => {
+  $("cookies-status").textContent = t("Not saved yet. Press Apply cookies to use this source.");
+  renderAccount();
+});
 $("apply-cookies").addEventListener("click", async () => {
   if (!invoke) return;
   const mode = $("cookies-mode").value, path = $("cookies").value.trim();
@@ -839,11 +882,12 @@ $("apply-cookies").addEventListener("click", async () => {
   $("cookies-status").textContent = t("Checking cookies…");
   try {
     const count = await invoke("apply_download_auth", {mode, path});
+    savedAuthSource = {mode, path:mode === "file" ? path : ""};
     try { localStorage.setItem("deviload-cookies-mode", mode); } catch { /* storage unavailable */ }
     $("cookies-status").textContent = mode === "file"
       ? t("Saved: {count} unexpired cookies. Site access is checked when downloading.", {count})
       : t("Cookies source saved for new downloads.");
-    syncAuth();
+    renderAccount();
   } catch (error) { $("cookies-status").textContent = errorText(error); }
   finally { controls.forEach(control => { control.disabled = false; }); }
 });
@@ -876,7 +920,7 @@ window.__TAURI__?.event?.listen?.("youtube-session", async event => {
   const before = Boolean(signedInPath);
   await refreshAccount();
   if (event.payload && signedInPath && !before) {
-    if ($("cookies-mode").value === "none") { $("cookies-mode").value = "account"; syncAuth(); }
+    if ($("cookies-mode").value === "none") { $("cookies-mode").value = "account"; renderAccount(); }
     message(t("Signed in to YouTube. Downloads now use your account."));
     brandMascot.celebrate();
   }
@@ -930,13 +974,13 @@ window.__TAURI__?.event?.listen?.("site-session", async event => {
   }
   $("cookies-mode").value = "account";
   try { localStorage.setItem("deviload-cookies-mode", "account"); } catch { /* Storage unavailable. */ }
-  syncAuth();
+  renderAccount();
   message(t("Signed in to {site}. Links from it now download with your account.", {site:siteName(event.payload)}));
   brandMascot.celebrate();
 });
 refreshSites();
 onLanguageChange(renderSites);
-renderAccount();$("cookies-mode").addEventListener("change", syncAuth);
+renderAccount();
 syncAuth();
 for (const button of document.querySelectorAll("[data-folder]")) {
   button.addEventListener("click", () => {
@@ -1143,7 +1187,7 @@ $("audio-normalize").addEventListener("click", async () => {
   try {
     const file = await invoke("media_source", {id});
     if (!dialog.open || currentPlayerId !== id) return;
-    const element = /\.(gif)$/i.test(file) ? image : /\.(mp3|flac|wav|m4a|ogg)$/i.test(file) ? audio : video;
+    const element = /\.(gif|jpg|jpeg|png|webp|bmp|avif)$/i.test(file) ? image : /\.(mp3|flac|wav|m4a|ogg|opus|aac|aiff)$/i.test(file) ? audio : video;
     element.hidden = false;
     element.src = convertFileSrc(file);
     if (element !== image) {
@@ -1506,6 +1550,11 @@ $("paste").addEventListener("click", async () => {
   } catch { message(t("Could not read the clipboard. Paste the link with Ctrl+V / ⌘V."), true); }
 });
 $("open-youtube-view").addEventListener("click", async () => {
+  if (accountView().action === "accounts") {
+    showSettingsFor("cookies-mode");
+    $("cookies-mode").focus();
+    return;
+  }
   if (!signedInPath) { signIn(); return; }
   try { await invoke("open_youtube", {signIn:false}); }
   catch (error) { message(errorText(error), true); }
@@ -1632,6 +1681,10 @@ function showReaction(kind, detail, jobId) {
 }
 
 function render(data) {
+  rateLimits = data.rateLimits || [];
+  // Enqueue and restored profiles also persist the source, independently of
+  // Apply cookies. Read the actual saved options rather than a stale UI flag.
+  if (data.options) syncSavedAuthSource(data.options);
   // A task being removed is hidden at once; it is really removed only once its Undo is gone.
   jobs = (data.jobs || []).filter(job => !pendingRemovals.has(job.id));
   if (noticeReady) for (const job of jobs) {
@@ -1717,8 +1770,10 @@ function render(data) {
         time:new Date(job.scheduledAt * 1000).toLocaleString(locale(), {day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})})
       : null;
     const repeatText = nextRun && job.repeatAt ? " · " + t("every day") : "";
-    meta.replaceChildren(node("span", "", job.options.quality.toUpperCase()),
-      node("span", recording && !job.stopRequested ? "recording" : "", nextRun && nextRun + repeatText || recording && recordingText(job) || (job.status === "running" ? (isProcessing(job) ? processingLabel(job) : [Math.round(job.percent) + "%", speedText(job.speed)].filter(Boolean).join(" · ")) : statusLabel(job.status))));
+    const cooldown = hostCooldown(job,rateLimits);
+    const wait = cooldown ? t("Waiting for {site} · retry in {minutes} min",{site:cooldown.host,minutes:cooldown.minutes}) : "";
+    meta.replaceChildren(node("span", "", job.options.downloadEngine === "gallery-dl" ? t("Gallery") : job.options.quality.toUpperCase()),
+      node("span", recording && !job.stopRequested ? "recording" : "", nextRun && nextRun + repeatText || wait || recording && recordingText(job) || (job.status === "running" ? (isProcessing(job) ? processingLabel(job) : [Math.round(job.percent) + "%", speedText(job.speed)].filter(Boolean).join(" · ")) : statusLabel(job.status))));
     const issue = job.status === "error" ? diagnoseError(job.log, signInSite(job.url) ? siteSessions.includes(signInSite(job.url).key) : Boolean(signedInPath), job.url) : null;
     // yt-dlp skips what the download archive lists, even when the file was deleted since.
     const skipped = ["done", "skipped"].includes(job.status) && job.archived > 0 ? job.archived : 0;
@@ -1738,7 +1793,7 @@ function render(data) {
         "sign-in":"YouTube asked to sign in, so the download runs again with your account.",
         format:"The chosen stream is gone, so the download runs again with the usual quality choice.",
         update:"yt-dlp looked outdated. Deviload updates it when the current downloads finish, then tries again.",
-        wait:"YouTube asked to slow down. The download tries again in 10 minutes.",
+        wait:"The site asked to slow down. The download tries again in 10 minutes.",
       }[healing] || "The download runs again.")));
       help.replaceChildren(...(issue ? [mascotSpot("error", "help-mascot"), text] : skipped || healing ? [mascotSpot(healing ? "working" : "look", "help-mascot"), text] : []));
     }
@@ -2441,6 +2496,7 @@ async function init() {
       : options.cookiesBrowser && modes.includes(options.cookiesBrowser) ? options.cookiesBrowser
       : options.cookies && options.cookies !== signedInPath ? "file" : "account";
     $("cookies").value = options.cookies && options.cookies !== signedInPath ? options.cookies : "";
+    syncSavedAuthSource(options);
     if ($("cookies-mode").value === "file" && $("cookies").value) $("cookies-status").textContent = t("Saved cookies file. Press Apply cookies to check it again.");
     $("playlist-items").value = options.playlistItems || "";
     $("split-chapters").checked = !!options.splitChapters;
@@ -2467,8 +2523,7 @@ async function init() {
     checkLegacy();
     refreshWatches();
     // At every start, and every 6 hours for a copy that stays open in the tray.
-    setTimeout(() => checkAppUpdate(), 4000);
-    setInterval(() => checkAppUpdate(), 6 * 3600000);
+    appUpdateScheduler.start();
     setTimeout(autoUpdateYtdlp, 20000);
     window.__TAURI__?.app?.getVersion?.().then(version => { appVersion = version; $("app-version").textContent = "Deviload " + version; }).catch(() => {});
     await invoke("set_close_to_tray", {enabled:localStorage.getItem("deviload-tray") === "true"});
@@ -2684,3 +2739,5 @@ $("share-copy").addEventListener("click", async () => {
     $("share-status").textContent = t("Link copied. It only works in your local network.");
   } catch (error) { $("share-status").textContent = t("Could not copy the link: {error}", {error:errorText(error)}); }
 });
+
+wireGalleryDownloads({button:$("gallery-open"),invoke,getSettings:()=>({folder:$("folder").value.trim(),cookiesMode:$("cookies-mode").value,cookies:$("cookies").value.trim(),signedInPath,rateMbps:Number($("rate").value),parallel:Number($("parallel").value)}),onQueued:()=>refresh().catch(error=>message(errorText(error),true)),onMessage:message});

@@ -69,3 +69,48 @@ test("temporary state is bounded and private-boundary reset removes context and 
   const revision=session.revision;session.reset();assert.ok(session.revision>revision);
   assert.deepEqual(session.contextItems(),[]);assert.equal(session.options(now).itemAdjustments.size,0);assert.equal(session.allowed([song(998),song(999)],now).length,2);
 });
+
+test("qualified listening updates live seeds and fit without rewriting the original context or permanent taste",()=>{
+  const session=createRecommendationSession(),initial=song(1,"Initial jazz"),live=song(2,"Current interest"),profile=readTaste(),before=JSON.stringify(profile);
+  session.setContext([initial]);
+  session.recordListen(live,{seconds:12,duration:180,session:1},now);
+  assert.deepEqual(session.preferenceItems(now),[initial]);
+  session.recordListen(live,{seconds:30,duration:180,session:1},now);
+  const revision=session.revision;
+  for(let checkpoint=45;checkpoint<=180;checkpoint+=15)session.recordListen(live,{seconds:checkpoint,duration:180,session:1},now+checkpoint*1000);
+  assert.equal(session.revision,revision);assert.deepEqual(session.preferenceItems(now+3*minute),[live]);
+  assert.equal(session.seeds(null,[],{now:now+3*minute})[0].id,live.id);
+  assert.deepEqual(session.contextItems(),[initial]);assert.equal(JSON.stringify(profile),before);
+  const related=song(3,"Current interest"),other=song(4,"Unrelated");
+  assert.equal(recommend([other,related],profile,[],{now:now+3*minute,random:()=>.5,sessionItems:session.preferenceItems(now+3*minute)})[0].id,related.id);
+});
+
+test("live listening is bounded, expires after inactivity, and new explicit context or privacy reset clears it",()=>{
+  const session=createRecommendationSession(),initial=song(1);
+  session.setContext([initial]);
+  for(let n=0;n<30;n++)session.recordListen(song(100+n),{seconds:30,duration:180,session:n},now+n*1000);
+  assert.equal(session.preferenceItems(now+minute).length,24);
+  assert.equal(session.preferenceItems(now+minute)[0].id,song(129).id);
+  session.recordListen(song(129),{seconds:16,duration:20,session:30},now+minute);
+  assert.deepEqual(session.preferenceItems(now+91*minute),[initial]);
+  session.recordListen(song(200),{seconds:30,duration:180,session:31},now+92*minute);
+  session.setContext([song(201)]);assert.deepEqual(session.preferenceItems(now+92*minute),[song(201)]);
+  session.recordListen(song(202),{seconds:30,duration:180,session:32},now+93*minute);
+  session.reset();assert.deepEqual(session.preferenceItems(now+93*minute),[]);
+});
+
+test("live seeds keep artist variety and temporary fatigue still permits discoveries and other songs by the same artist",()=>{
+  const session=createRecommendationSession(),initial=[song(1,"Original A"),song(2,"Original B")],profile=readTaste();
+  session.setContext(initial);
+  for(let n=0;n<8;n++)session.recordListen(song(100+n,"Current artist"),{seconds:40,duration:180,session:n},now+n*1000);
+  const seeds=session.seeds(null,[],{limit:3,now:now+minute});
+  assert.equal(seeds.length,3);assert.equal(new Set(seeds.flatMap(item=>item.artists)).size,3);
+  const exhausted=song(107,"Current artist"),sameArtist=song(200,"Current artist"),novel=song(201,"New artist");
+  for(const at of [now+minute,now+11*minute,now+21*minute])session.markShown([sameArtist],at);
+  const options={now:now+21*minute,random:()=>.5,sessionItems:session.preferenceItems(now+21*minute),...session.options(now+21*minute)};
+  assert.equal(recommend([sameArtist,novel],profile,[],options)[0].id,novel.id);
+  session.recordSkip(exhausted,{seconds:5,duration:180,session:20,intent:"next"},now+21*minute);
+  session.recordSkip(exhausted,{seconds:5,duration:180,session:21,intent:"next"},now+22*minute);
+  assert.deepEqual(session.allowed([exhausted,sameArtist,novel],now+22*minute),[sameArtist,novel]);
+  assert.deepEqual(profile,readTaste());
+});

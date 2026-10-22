@@ -2,8 +2,8 @@ import {t, onLanguageChange} from "./i18n.js";
 import {wireGlassMaterial} from "./theme-glass.js";
 
 export const THEME_KEY = "deviload-theme";
-export const THEMES = Object.freeze(["classic", "glass-light", "matte-black", "glass-black", "midnight"]);
-const themeLabels = {classic:"Classic", "glass-light":"Light Liquid Glass", "matte-black":"Matte black", "glass-black":"Black Liquid Glass", midnight:"Midnight"};
+export const THEMES = Object.freeze(["classic", "glass-light", "matte-black", "glass-black", "midnight", "spotify"]);
+const themeLabels = {classic:"Classic", "glass-light":"Light Liquid Glass", "matte-black":"Matte black", "glass-black":"Black Liquid Glass", midnight:"Midnight", spotify:"Studio green"};
 const wired = new WeakMap();
 export function normalizeTheme(value) { return THEMES.includes(value) ? value : "classic"; }
 
@@ -73,7 +73,7 @@ export function wireAppearance({document = globalThis.document, window = globalT
     if (!quickButton || !quickMenu) return;
     const bounds = quickButton.getBoundingClientRect();
     const width = Math.min(288, window.innerWidth - 24);
-    const top = Math.max(12, Math.min(bounds.bottom + 8, window.innerHeight - 280));
+    const top = Math.max(12, Math.min(bounds.bottom + 8, window.innerHeight - Math.min(360, window.innerHeight - 24)));
     quickMenu.style.width = width + "px";
     quickMenu.style.left = Math.max(12, Math.min(bounds.right - width, window.innerWidth - width - 12)) + "px";
     quickMenu.style.top = top + "px";

@@ -1,0 +1,11 @@
+.gallery-dialog{width:min(760px,calc(100vw - 32px));max-height:calc(100dvh - 40px);padding:26px;border:1px solid var(--line);border-radius:20px;background:var(--panel,#17191e);color:inherit;overflow:auto}
+.gallery-dialog::backdrop{background:#0009;backdrop-filter:blur(8px)}
+.gallery-heading,.gallery-source-row,.gallery-engine,.gallery-tools,.gallery-footer{display:flex;align-items:center;gap:12px}
+.gallery-heading{justify-content:space-between;margin-bottom:12px}.gallery-heading h2{margin:0;font-size:24px}.gallery-dialog p{line-height:1.5;color:var(--muted)}
+.gallery-dialog>label{display:block;margin:20px 0 8px;font-weight:600}.gallery-source-row input{width:100%;min-width:0;padding:12px;border-radius:10px;border:1px solid var(--line);background:transparent;color:inherit}.gallery-source-row button{flex:none}
+.gallery-engine{justify-content:space-between;flex-wrap:wrap;margin:16px 0;font-size:12px;color:var(--muted)}.gallery-status{min-height:24px;margin:12px 0}.gallery-status.error{color:#ef857b}
+.gallery-tools{flex-wrap:wrap;margin:16px 0}.gallery-tools span{margin-left:auto;font-size:13px}.gallery-items{display:grid;gap:6px;max-height:360px;overflow:auto;padding:3px}
+.gallery-item{display:flex;align-items:center;gap:14px;border:1px solid var(--line);border-radius:10px;padding:12px;cursor:pointer}.gallery-item input{flex:none;width:18px;height:18px;accent-color:var(--accent)}.gallery-item>span{display:grid;gap:4px;min-width:0}.gallery-item strong{font-size:13px;overflow-wrap:anywhere}.gallery-item small{color:var(--muted)}
+.gallery-folder{font-size:12px;overflow-wrap:anywhere;margin:18px 0}.gallery-footer{justify-content:flex-end}.gallery-dialog button{min-height:40px;padding:8px 13px}
+html[data-theme="glass-light"] .gallery-dialog{background:#f2f5f9;color:#172238;--muted:#526174;--line:#17223826}
+@media(max-width:520px){.gallery-dialog{padding:18px;width:calc(100vw - 20px)}.gallery-source-row{flex-direction:column;align-items:stretch}.gallery-heading h2{font-size:20px}.gallery-tools span{width:100%;margin:0}.gallery-footer button{width:100%}}

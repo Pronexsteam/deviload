@@ -1,4 +1,5 @@
 import {tracks} from "./music-state.js";
+import {adaptiveDiscoveryShare} from "./music-recommendation-blend.js";
 
 const DAY=86400000, HALF_LIFE=30*DAY, REPEAT_WINDOW=10*60000, TRACK_COOLDOWN=30*60000;
 const MAX_ENTRIES=1000, MAX_CANDIDATES=5000, CLOCK_SKEW=5*60000;
@@ -179,7 +180,7 @@ export function familiarArtistKeys(profile,favorites,{now=Date.now(),followedArt
 
 // Context is most-recent-first. It affects recommendations only, never a manually
 // assembled queue. Artist cooldown is soft so a one-artist radio can still continue.
-export function recommendWithReasons(items,profile,favorites,{now=Date.now(),random=Math.random,limit=20,exclude=[],followedArtists=[],contextItems=[],recentArtists=[],sessionItems=[],candidateScores,itemAdjustments,familiarArtists=[],familiarBoostIds}={}) {
+export function recommendWithReasons(items,profile,favorites,{now=Date.now(),random=Math.random,limit=20,exclude=[],followedArtists=[],contextItems=[],recentArtists=[],sessionItems=[],candidateScores,itemAdjustments,familiarArtists=[],familiarBoostIds,sessionFeedback}={}) {
   now=safeNow(now);limit=limitValue(limit,20);if(!limit)return [];
   const evidence=affinities(profile,favorites,now,followedArtists),excluded=new Set(Array.isArray(exclude)?exclude.filter(validId):[]);
   for(const key of names(Array.isArray(familiarArtists)?familiarArtists.slice(0,1000):[]))evidence.knownArtists.add(key);
@@ -207,12 +208,15 @@ export function recommendWithReasons(items,profile,favorites,{now=Date.now(),ran
     }).filter(Boolean);
   const counts=new Map(),artists=new Set(pool.flatMap(row=>row.keys)),cap=Math.max(2,Math.ceil(limit/Math.max(1,artists.size))),flexible=artists.size<3,result=[];
   const frequency=mode==="discovery"?2:mode==="familiar"?6:3;
+  const exploration=adaptiveDiscoveryShare(mode,sessionFeedback,{now});let discoveriesChosen=0;
   while(pool.length&&result.length<limit) {
     let available=pool.filter(row=>row.keys.every(key=>(counts.get(key)||0)<cap));if(!available.length){if(!flexible)break;available=pool;}
     const nonAdjacent=available.filter(row=>!row.keys.some(key=>previous.has(key)));
     if(nonAdjacent.length)available=nonAdjacent;
     else if(flexible){const alternatives=pool.filter(row=>!row.keys.some(key=>previous.has(key)));if(alternatives.length)available=alternatives;}
-    if(result.length%frequency===frequency-1){const discoveries=available.filter(row=>!row.knownArtist);if(discoveries.length)available=discoveries;}
+    const reserveDiscovery=exploration===null?result.length%frequency===frequency-1:
+      discoveriesChosen<Math.floor((result.length+1)*exploration+1e-9);
+    if(reserveDiscovery){const discoveries=available.filter(row=>!row.knownArtist&&(exploration===null||row.keys.length));if(discoveries.length)available=discoveries;}
     let chosen=null,best=-Infinity;
     for(const row of available) {
       const repeats=row.keys.length?Math.max(...row.keys.map(key=>counts.get(key)||0)):0;
@@ -221,6 +225,7 @@ export function recommendWithReasons(items,profile,favorites,{now=Date.now(),ran
       if(score>best||(score===best&&row.index<chosen.index)){chosen=row;best=score;}
     }
     pool.splice(pool.indexOf(chosen),1);result.push({item:chosen.item,reason:reasonFor(chosen.item,evidence,now)});
+    if(!chosen.knownArtist&&chosen.keys.length)discoveriesChosen++;
     previous=new Set(chosen.keys);for(const key of chosen.keys)counts.set(key,(counts.get(key)||0)+1);
   }
   return result;

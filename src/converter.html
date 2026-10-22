@@ -1,39 +1,81 @@
 <!doctype html>
 <html lang="en" data-theme="classic">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Devil Convert · Deviload</title><link rel="icon" href="assets/devil-app-icon-32.png"><script src="theme-init.js"></script><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="rework.css"><link rel="stylesheet" href="shell.css"><link rel="stylesheet" href="tool-workspace.css"><script type="module" src="converter.js"></script><link rel="stylesheet" href="themes.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Devil Convert · Deviload</title><link rel="icon" href="assets/devil-app-icon-32.png"><script src="theme-init.js"></script><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="rework.css"><link rel="stylesheet" href="shell.css"><link rel="stylesheet" href="tool-workspace.css"><script type="module" src="converter.js"></script><link rel="stylesheet" href="themes.css"><link rel="stylesheet" href="converter.css"></head>
 <body class="convert-page">
 <main class="convert-window">
   <header class="convert-head">
     <span id="convert-mascot" class="convert-mascot" data-mascot="look"></span>
-    <div><span class="overline">TOOLS</span><h1>Devil Convert</h1><p>Any video or audio file from this computer. The original stays as it is; the result is saved next to it or in the folder you choose.</p></div>
+    <div><span class="overline">YOUR FILES, MORE POSSIBILITIES</span><h1>Devil Convert</h1><p>Choose a file, pick an action and make a new copy. Your original stays untouched.</p></div>
   </header>
   <section id="convert-drop" class="convert-drop">
     <span class="icon" data-icon="files" aria-hidden="true"></span>
-    <strong>Drop files here</strong>
+    <div><strong>Drop video or audio here</strong><span>One file or a whole batch</span></div>
     <button id="convert-pick" class="outline small" type="button"><span class="icon" data-icon="folder-open" aria-hidden="true"></span>Choose files</button>
   </section>
-  <section class="convert-options" aria-label="What to make">
-    <div class="convert-presets" role="group" aria-label="Output format">
-      <button type="button" data-preset="mp4" class="selected" aria-pressed="true"><strong>MP4</strong><small>Plays everywhere</small></button>
-      <button type="button" data-preset="mp3" aria-pressed="false"><strong>MP3</strong><small>Only the sound</small></button>
-      <button type="button" data-preset="gif" aria-pressed="false"><strong>GIF</strong><small>Up to 60 seconds</small></button>
-      <button type="button" data-preset="size" aria-pressed="false"><strong>Smaller file</strong><small>Fits a size limit</small></button>
-    </div>
-    <div id="convert-size-row" class="convert-sizes" hidden>
-      <div class="cut-chips" role="group" aria-label="Size limit"><button type="button" data-size="10" class="selected">Discord · 10 MB</button><button type="button" data-size="16">WhatsApp · 16 MB</button><button type="button" data-size="25">Mail · 25 MB</button><button type="button" data-size="50">50 MB</button></div>
-      <label class="convert-own-size" for="convert-size">Own size <input id="convert-size" type="number" min="1" max="4000" step="1" value="10"> MB</label>
-    </div>
-    <div class="convert-save"><span class="cut-label">Save to</span><div class="export-folder"><span id="convert-folder" class="export-folder-name">Next to the source file</span><button id="convert-folder-pick" class="outline small" type="button">Choose</button><button id="convert-folder-reset" class="quiet small" type="button" hidden title="Save next to the source file" aria-label="Save next to the source file">×</button></div></div>
-  </section>
-  <section class="convert-list-wrap" aria-label="Files">
+  <div class="convert-workbench">
+    <section class="convert-source" aria-labelledby="convert-source-heading">
+      <div class="convert-step"><span aria-hidden="true">1</span><h2 id="convert-source-heading">Source</h2></div>
+      <div id="convert-preview" class="convert-preview"><span class="icon" data-icon="files" aria-hidden="true"></span></div>
+      <p id="convert-preview-note" class="convert-help">Preview appears when the file format is supported by your system.</p>
+      <h3 id="convert-source-name">Choose a file to begin</h3>
+      <p id="convert-source-facts" class="convert-source-facts"></p>
+      <span class="convert-source-safe"><span class="icon" data-icon="check-circle" aria-hidden="true"></span>Original preserved</span>
+    </section>
+    <section class="convert-actions" aria-labelledby="convert-actions-heading">
+      <div class="convert-step"><span aria-hidden="true">2</span><h2 id="convert-actions-heading">Choose an action</h2></div>
+      <div class="convert-wheel" role="group" aria-label="Actions for the selected file" aria-describedby="convert-wheel-help">
+        <div class="convert-wheel-track" aria-hidden="true"></div>
+        <div class="convert-wheel-core" aria-hidden="true"><span id="convert-wheel-type">MEDIA</span><strong id="convert-wheel-label">MP4</strong><small>New copy</small></div>
+        <div class="convert-presets">
+          <button type="button" data-preset="mp4" class="selected" aria-pressed="true"><span class="icon" data-icon="video" aria-hidden="true"></span><strong>MP4 video</strong><small>Convert</small></button>
+          <button type="button" data-preset="mp3" aria-pressed="false"><span class="icon" data-icon="music-notes" aria-hidden="true"></span><strong>MP3 audio</strong><small>Convert sound</small></button>
+          <button type="button" data-preset="audio" aria-pressed="false"><span class="icon" data-icon="copy" aria-hidden="true"></span><strong>Original audio</strong><small>Copy sound</small></button>
+          <button type="button" data-preset="remux" aria-pressed="false"><span class="icon" data-icon="arrows-left-right" aria-hidden="true"></span><strong>Remux</strong><small>Change container</small></button>
+          <button type="button" data-preset="gif" aria-pressed="false"><span class="icon" data-icon="film-strip" aria-hidden="true"></span><strong>GIF</strong><small>Silent animation</small></button>
+          <button type="button" data-preset="size" aria-pressed="false"><span class="icon" data-icon="arrow-down" aria-hidden="true"></span><strong>Smaller file</strong><small>Set a size limit</small></button>
+        </div>
+      </div>
+      <p id="convert-wheel-help" class="convert-help">Tab through actions, or use arrow keys and Enter. Unavailable actions depend on the selected file.</p>
+    </section>
+    <section class="convert-options" aria-labelledby="convert-settings-heading">
+      <div class="convert-step"><span aria-hidden="true">3</span><h2 id="convert-settings-heading">Make it yours</h2></div>
+      <h3 id="convert-action-title">MP4 video</h3>
+      <p id="convert-action-note" class="convert-help" aria-live="polite"></p>
+      <label id="convert-container-field" class="convert-control" for="convert-container" hidden>Output container<select id="convert-container"><option value="mkv">MKV</option><option value="mp4">MP4</option><option value="mov">MOV</option></select></label>
+      <div id="convert-size-row" class="convert-sizes" hidden>
+        <div class="cut-chips" role="group" aria-label="Size limit"><button type="button" data-size="10" class="selected">10 MB</button><button type="button" data-size="16">16 MB</button><button type="button" data-size="25">25 MB</button><button type="button" data-size="50">50 MB</button></div>
+        <label class="convert-own-size" for="convert-size">Own size <input id="convert-size" type="number" min="1" max="4000" step="1" value="10"> MB</label>
+      </div>
+      <details id="convert-tracks" class="convert-advanced" hidden>
+        <summary>Media tracks</summary>
+        <div id="convert-track-fields" class="convert-track-fields"></div>
+        <p class="convert-help">Track choices belong to this file. Other files keep their own choices.</p>
+      </details>
+      <details id="convert-advanced" class="convert-advanced">
+        <summary>Advanced settings</summary>
+        <div class="convert-fields">
+          <label id="convert-resolution-field" for="convert-resolution">Maximum resolution<select id="convert-resolution"><option value="original">Original resolution</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option></select></label>
+          <label id="convert-quality-field" for="convert-quality">Quality<select id="convert-quality"><option value="balanced">Balanced</option><option value="high">High quality</option><option value="smaller">Smaller file</option></select></label>
+        </div>
+        <p id="convert-resolution-note" class="convert-help">Keeps the aspect ratio and never enlarges the picture. Portrait videos use the same limit upright.</p>
+        <p id="convert-quality-note" class="convert-help">Quality controls compression. The final size depends on the source; use Smaller file for a size limit.</p>
+      </details>
+      <div class="convert-save"><span class="cut-label">Save to</span><div class="export-folder"><span id="convert-folder" class="export-folder-name">Next to the source file</span><button id="convert-folder-pick" class="outline small" type="button">Choose</button><button id="convert-folder-reset" class="quiet small" type="button" hidden title="Save next to the source file" aria-label="Save next to the source file">×</button></div></div>
+      <p id="convert-plan" class="convert-plan" aria-live="polite"></p>
+      <div id="convert-result" class="convert-result" hidden><strong>Result</strong><p id="convert-result-name"></p><div><button id="convert-result-preview" class="outline small" type="button">Preview result</button><button id="convert-result-reveal" class="outline small" type="button">Show in folder</button></div></div>
+    </section>
+  </div>
+  <section class="convert-list-wrap" aria-labelledby="convert-files-heading">
+    <div class="convert-list-head"><h2 id="convert-files-heading">Files</h2><span id="convert-count"></span><button id="convert-retry" class="outline small" type="button" hidden>Retry failed</button></div>
     <div id="convert-list" class="convert-list"></div>
     <p id="convert-empty" class="convert-empty">The list is empty. Drop files into this window or press “Choose files”.</p>
   </section>
   <footer class="convert-foot">
     <p id="convert-status" role="status" aria-live="polite"></p>
+    <label class="convert-batch"><input id="convert-batch" type="checkbox" checked> All waiting files</label>
     <button id="convert-clear" class="quiet small" type="button">Clear the list</button>
     <button id="convert-stop" class="outline small" type="button" hidden>Stop</button>
-    <button id="convert-start" class="primary" type="button"><span class="icon" data-icon="arrows-left-right" aria-hidden="true"></span>Convert</button>
+    <button id="convert-start" class="primary" type="button"><span class="icon" data-icon="arrows-left-right" aria-hidden="true"></span>Run action</button>
   </footer>
 </main>
 <div id="convert-overlay" class="convert-overlay" hidden><span class="icon" data-icon="files" aria-hidden="true"></span><strong>Drop to add the files</strong></div>

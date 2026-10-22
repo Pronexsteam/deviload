@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {rankMusicRecommendations} from "../src/music-recommendation-engine.js";
+import {rankMusicRecommendations,recommendationFamiliarity} from "../src/music-recommendation-engine.js";
 import {readTaste,recommendWithReasons,recordListening} from "../src/music-taste.js";
 import {createRecommendationSession} from "../src/music-recommendation-session.js";
 
@@ -71,4 +71,18 @@ test("alias eligibility is bounded and still checks aliases beyond the first can
   const candidates=Array.from({length:2000},(_,index)=>song(index+1));
   const rows=rankMusicRecommendations(candidates,saved,taste,{...options,eligible:items=>{batches.push(items.length);return session.allowed(items,now);}});
   assert.deepEqual(batches,[2000,1]);assert.ok(!rows.some(row=>row.item.id===a.id));assert.ok(rows.length>0);
+});
+
+test("session familiarity uses existing qualified history, likes and followed artists across explicit source aliases",()=>{
+  const saved=state(),taste=readTaste(),logical=song(1,"Known"),physical=song(2,"Physical"),novel=song(3,"Novel");
+  saved.sourceBindings=[{trackId:logical.id,track:logical,source:physical}];
+  assert.equal(recommendationFamiliarity(physical,saved,taste,{now}),false);
+  recordListening(taste,logical,{seconds:5,duration:180},now);
+  assert.equal(recommendationFamiliarity(physical,saved,taste,{now}),false);
+  saved.favorites=[logical];assert.equal(recommendationFamiliarity(physical,saved,taste,{now}),true);
+  saved.favorites=[];recordListening(taste,logical,{seconds:40,duration:180},now);
+  assert.equal(recommendationFamiliarity(physical,saved,taste,{now}),true);
+  assert.equal(recommendationFamiliarity(novel,saved,taste,{now}),false);
+  saved.collections=[{kind:"artist",title:"Novel"}];assert.equal(recommendationFamiliarity(novel,saved,taste,{now}),true);
+  assert.equal(recommendationFamiliarity({...novel,artists:[]},saved,taste,{now}),null);
 });

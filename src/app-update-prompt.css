@@ -1,0 +1,29 @@
+/* An application update belongs to every main-window section. This card stays
+   below the caption controls and leaves playback/the current task running. */
+body #app-update-notice.app-update-prompt {
+  position:fixed;inset:64px 22px auto auto;z-index:80;
+  display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:12px;
+  width:min(520px,calc(100vw - 44px));max-height:calc(100vh - 100px);overflow:auto;
+  padding:18px;margin:0;border:1px solid var(--theme-line,#465267);border-radius:16px;
+  background:var(--theme-surface-strong,#151d28);color:var(--theme-text,#f1f3f7);
+  box-shadow:0 14px 50px #0005;backdrop-filter:none;-webkit-backdrop-filter:none;
+}
+body #app-update-notice.app-update-prompt[hidden] {display:none!important}
+body #app-update-notice.app-update-prompt>img {display:none!important}
+body #app-update-notice.app-update-prompt>div {grid-column:1/-1;min-width:0}
+body #app-update-notice.app-update-prompt strong {color:var(--theme-text,#f1f3f7);font-size:16px;line-height:1.4;font-weight:700;letter-spacing:-.02em}
+body #app-update-notice.app-update-prompt p {margin:8px 0 0;color:var(--theme-muted,#bac5d5);font-size:12px;line-height:1.65;overflow-wrap:anywhere}
+body #app-update-notice.app-update-prompt #app-update-install {grid-column:2;min-height:38px;white-space:normal;background:var(--theme-accent,#f76b83);color:var(--theme-accent-text,#18151a);border:1px solid transparent;box-shadow:none;transform:none}
+body #app-update-notice.app-update-prompt #app-update-later {grid-column:3;min-height:38px;white-space:normal;background:var(--theme-input,#111822);color:var(--theme-text,#f1f3f7);border:1px solid var(--theme-line,#465267);box-shadow:none;transform:none}
+body #app-update-notice.app-update-prompt button:focus-visible {outline:2px solid var(--theme-accent,#f76b83);outline-offset:3px}
+body #app-update-notice.app-update-prompt #app-update-progress {margin-top:14px;background:var(--theme-line,#334057)}
+body #app-update-notice.app-update-prompt #app-update-progress>span {background:var(--theme-accent,#f76b83)}
+:root[data-theme="glass-light"] body #app-update-notice.app-update-prompt {background:#f9fbfd}
+:root[data-theme="glass-black"] body #app-update-notice.app-update-prompt {background:#19202a}
+@media(max-width:600px) {
+  /* Keep both the collapsed section rail and the music player clickable. */
+  body #app-update-notice.app-update-prompt {inset:auto 12px 110px 88px;width:auto;max-height:calc(100vh - 170px);padding:14px;gap:10px}
+  body.music-focus #app-update-notice.app-update-prompt {left:12px}
+}
+@media(prefers-reduced-motion:reduce) {body #app-update-notice.app-update-prompt * {transition:none}}
+@media(forced-colors:active) {body #app-update-notice.app-update-prompt {border:2px solid CanvasText;box-shadow:none}}

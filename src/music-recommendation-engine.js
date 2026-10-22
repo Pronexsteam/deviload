@@ -1,4 +1,4 @@
-import {recommendWithReasons} from "./music-taste.js";
+import {recommendWithReasons,familiarArtistKeys,tasteArtistKeys} from "./music-taste.js";
 import {rankInterestMix} from "./music-interest-mixes.js";
 import {createRecordingView} from "./music-recording-view.js";
 
@@ -40,7 +40,18 @@ export function rankMusicRecommendations(items,saved,taste,{interestId,queue=[],
   const candidates=recording.items(items),allowed=eligibleFamilies(candidates,recording,eligible);
   const ranking={...options,exclude:recording.ids(options.exclude||[]),
     sessionItems:recording.items(options.sessionItems||[]),contextItems:recording.items(options.contextItems||[]),
+    sessionFeedback:Array.isArray(options.sessionFeedback)?options.sessionFeedback.slice(-32).map(row=>row&&typeof row==="object"?{...row,id:recording.ids([row.id])[0]}:null):undefined,
     candidateScores:mappedScores(options.candidateScores,recording),itemAdjustments:mappedScores(options.itemAdjustments,recording,true)};
   return interestId?rankInterestMix(allowed,recording.saved,recording.taste,interestId,ranking):
     recommendWithReasons(allowed,recording.taste,recording.saved.favorites,ranking);
+}
+
+// Capture before recordListening updates the profile. Confirmed source aliases
+// count as the same recording; unplayed context alone is never familiarity.
+export function recommendationFamiliarity(item,saved,taste,{now=Date.now()}={}){
+  const recording=createRecordingView(saved,taste,{now}),logical=recording.items([item])[0],keys=tasteArtistKeys(logical);
+  if(!keys.length)return null;
+  const followed=(Array.isArray(recording.saved.collections)?recording.saved.collections:[]).filter(row=>row?.kind==="artist").map(row=>row.title);
+  const familiar=new Set(familiarArtistKeys(recording.taste,recording.saved.favorites,{now,followedArtists:followed}));
+  return keys.some(key=>familiar.has(key));
 }

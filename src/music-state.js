@@ -4,6 +4,14 @@ export function tracks(items) {
   return items.filter(item => item?.kind === "song" && typeof item.title === "string" && /^[\w-]{11}$/.test(item.id) && !seen.has(item.id) && seen.add(item.id));
 }
 
+// Keep a bounded playback window, rather than silently replacing a selected song
+// beyond the first 200 library entries with the first song in the collection.
+export function playbackQueue(items,startId) {
+  const all=tracks(items),position=all.findIndex(item=>item.id===startId);
+  const start=position>=200?Math.min(position,Math.max(0,all.length-200)):0;
+  return all.slice(start,start+200);
+}
+
 export function remember(list, item, limit = 80) {
   return tracks([item, ...list]).slice(0, limit);
 }

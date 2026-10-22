@@ -8,14 +8,15 @@ import ru from "../src/locales/ru.js";
 import es from "../src/locales/es.js";
 import {labels, diagnoseError} from "../src/view-model.js";
 import {playbackFailure} from "../src/music-diagnostics.js";
+import {downloadAuthView} from "../src/account-status.js";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const read = path => readFileSync(join(root, path), "utf8");
 const keys = new Set(Object.keys(ru));
-const translatedSources = ["src/main.js", "src/appearance.js", "src/app-release-notes.js", "src/supporters.js", "src/devil-music.js", ...readdirSync(join(root,"src")).filter(name=>/^music-.*\.js$/.test(name)).map(name=>"src/"+name), "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/quick-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js", "src/download-profiles.js", "src/download-options.js", "src/queue-selection.js", "src/settings-backup.js"];
+const translatedSources = ["src/gallery-download.js", "src/main.js", "src/appearance.js", "src/app-release-notes.js", "src/supporters.js", "src/devil-music.js", ...readdirSync(join(root,"src")).filter(name=>/^music-.*\.js$/.test(name)).map(name=>"src/"+name), "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/quick-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js", "src/download-profiles.js", "src/download-options.js", "src/queue-selection.js", "src/settings-backup.js"];
 // Brand names, formats and codes read the same in both languages.
-const neutral = new Set(["Deviload", "Devil Music", "01 / DM", "Devil", "oad", "Devil Cut", "Devil Cut · Deviload", "Devil Convert", "Devil Convert · Deviload", "DEVIL CINEMA", "YouTube", "YouTube Music", "VK", "TikTok",
-  "Instagram", "Twitch", "SoundCloud", "1080p", "720p", "480p", "1440p", "4K", "H.264", "H.265", "MP3", "FLAC", "WAV", "GIF", "GIF · 480px", "Chrome", "Edge",
+const neutral = new Set(["MOV", "MEDIA", "Deviload", "Devil Music", "01 / DM", "Devil", "oad", "Devil Cut", "Devil Cut · Deviload", "Devil Convert", "Devil Convert · Deviload", "DEVIL CINEMA", "YouTube", "YouTube Music", "VK", "TikTok",
+  "Instagram", "Twitch", "SoundCloud", "1080p", "720p", "480p", "1440p", "4K", "H.264", "H.265", "MP3", "FLAC", "WAV", "GIF", "GIF · 480px", "Chrome", "Edge", "Ctrl K",
   "Firefox", "Brave", "Safari", "yt-dlp", "RU", "EN", "I", "O", "MP4", "MKV", "WebM", "16:9", "9:16", "1:1", "4:5", "00:30", "01:15", "https://youtube.com/watch?v=…", "socks5://127.0.0.1:1080", "Plex", "http://192.168.1.10:8096"]);
 
 function missing(strings) {
@@ -53,7 +54,7 @@ function htmlStrings() {
   for (const [, , value] of html.matchAll(/\s(placeholder|aria-label|title|alt|label|data-empty-label)="([^"]*)"/g)) {
     if (value.trim()) strings.add(value.trim());
   }
-  for(const file of ['src/download-profiles.js','src/download-profile-data.js','src/download-options.js','src/quick-cut.js','src/settings-backup.js','src/cut-editing.js',...translatedSources.filter(path=>path.startsWith('src/music-'))]) {
+  for(const file of ['src/download-profiles.js','src/download-profile-data.js','src/download-options.js','src/quick-cut.js','src/settings-backup.js','src/cut-editing.js','src/converter-model.js',...translatedSources.filter(path=>path.startsWith('src/music-'))]) {
     for(const [,message] of read(file).matchAll(/(?:Error|warn)\(["']([^"']+)["']/g))strings.add(message);
     for(const [,message] of read(file).matchAll(/warnings\.push\("([^"]+)"/g))strings.add(message);
   }
@@ -68,15 +69,21 @@ const normalize = text => text.replace(/\{[^}]*\}/g, "{}");
 
 function rustMessages() {
   const found = [];
-  for (const file of ["lib.rs", "music.rs", "music_audio.rs", "music_profile.rs", "music_import.rs", "music_playlist_import.rs", "music_lyrics.rs", "music_offline.rs", "music_engine_diagnostics.rs", "download_details.rs", "quick_cut.rs", "cookies.rs", "engine_update.rs", "model.rs", "share.rs", "settings_backup.rs", "watch.rs", "convert.rs", "power.rs", "media_server.rs"]) {
+  for (const file of ["lib.rs", "gallery.rs", "gallery_install.rs", "download_recovery.rs", "music.rs", "music_audio.rs", "music_profile.rs", "music_import.rs", "music_playlist_import.rs", "music_lyrics.rs", "music_offline.rs", "music_engine_diagnostics.rs", "download_details.rs", "quick_cut.rs", "cookies.rs", "engine_update.rs", "model.rs", "share.rs", "settings_backup.rs", "watch.rs", "convert.rs", "power.rs", "media_server.rs"]) {
     const source = read(join("src-tauri/src", file)).split("#[cfg(test)]")[0];
     // Start inside the body so Rust lifetimes such as &'static are not parsed
     // as single-quoted JavaScript strings by literals().
     if(file === "music.rs")for(const text of literals(block(source,"let error = String::from_utf8_lossy(stderr)", "struct ResolveFailure")))if(text.endsWith("."))found.push({file,text});
     if(file === "music_import.rs" || file === "music_playlist_import.rs" || file === "quick_cut.rs")for(const [,text] of source.matchAll(/const \w+: &str = "([^"]+)";/g))found.push({file,text});
-    if(file === "quick_cut.rs")for(const [,text]of source.matchAll(/Some\("([A-Z][^"]*[.!?])"/g))found.push({file,text});
+    if(file === "quick_cut.rs" || file === "convert.rs")for(const [,text]of source.matchAll(/Some\("([A-Z][^"]*[.!?])"/g))found.push({file,text});
+    // Converter map_err closures can return an error from an if/else branch.
+    if(file === "convert.rs")for(const [,text]of source.matchAll(/"([A-Z][^"\n]+[.!?])"\.into\(\)/g))found.push({file,text});
+    if(file === "convert.rs")for(const [,text]of source.matchAll(/=>\s*"([A-Z][^"\n]+[.!?])"/g))found.push({file,text});
+    // The gallery adapter returns one of four fixed, sanitized failure messages
+    // from branches instead of Err(...). Classifier keywords are not UI copy.
+    if(file === "gallery.rs")for(const [,text]of block(source,"fn failure(","\n}").matchAll(/"([A-Z][^"\n]+[.!?])"/g))found.push({file,text});
     for (const [, text] of source.matchAll(RUST_MESSAGE)) {
-      if (/^(?:[A-Z{]|yt-dlp )/.test(text)) found.push({file, text});
+      if (/^(?:[A-Z{]|yt-dlp )/.test(text) && /[A-Za-z]/.test(text)) found.push({file, text});
     }
   }
   const reportCommand=block(read("src-tauri/src/music_engine.rs"),"pub async fn export_music_diagnostics", "\nfn update()");
@@ -102,10 +109,16 @@ function tableStrings() {
       strings.push(issue.title, issue.message);
     }
   }
-  for (const url of ["https://www.instagram.com/p/x/", "https://example.com/v"]) {
-    for (const signed of [true, false]) for (const line of ["login required", "empty media response", "not available to everyone", "HTTP Error 429", "selected cookies file contains no active Instagram session"]) {
+  for (const url of ["https://www.instagram.com/p/x/", "https://www.facebook.com/reel/1578198251014489", "https://example.com/v"]) {
+    for (const signed of [true, false]) for (const line of ["login required", "Cannot parse data", "empty media response", "not available to everyone", "HTTP Error 429", "selected cookies file contains no active Instagram session"]) {
       const issue = diagnoseError([line], signed, url);
       strings.push(issue.title, issue.message);
+    }
+  }
+  for (const mode of ["account", "file", "none", "firefox", "chrome", "edge", "brave", "safari"]) {
+    for (const saved of [true, false]) for (const hasEmbeddedSession of [true, false]) {
+      const view = downloadAuthView({mode, cookiePath:"cookies.txt", savedMode:saved ? mode : "account", savedPath:saved ? "cookies.txt" : "", hasEmbeddedSession});
+      strings.push(view.label, view.title);
     }
   }
   strings.push(...literals(block(main, "const stages =", "\n")));
@@ -136,6 +149,22 @@ test("messages from the Rust core have a Russian translation", () => {
   const known = new Set([...keys].map(normalize));
   const absent = rustMessages().filter(({text}) => !known.has(normalize(text))).map(({file, text}) => `${file}: ${text}`);
   assert.deepEqual(absent, []);
+});
+
+test("Rust translation coverage includes named message templates and fixed gallery failures, not generated expressions",()=>{
+  const messages=rustMessages();
+  assert.ok(messages.some(({text})=>text==="{stem}: {error}"));
+  assert.ok(!messages.some(({text})=>text==="{}:{}"));
+  const failures=[
+    "Gallery-dl does not support this link.",
+    "This gallery requires sign-in. Choose cookies from the browser or a fresh cookies.txt file.",
+    "This gallery is limiting requests. Wait before retrying.",
+    "Gallery download failed. Check the link, access to the post, and the connection.",
+  ];
+  for(const message of failures){
+    assert.ok(messages.some(({file,text})=>file==="gallery.rs"&&text===message),message);
+    assert.equal(typeof ru[message],"string");assert.equal(typeof es[message],"string");
+  }
 });
 
 test("music engine playback restrictions have translations", () => {

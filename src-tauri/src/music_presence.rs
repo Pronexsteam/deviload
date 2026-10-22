@@ -1,4 +1,4 @@
-use discord_rich_presence::{DiscordIpc, DiscordIpcClient};
+use discord_rich_presence::{activity::StatusDisplayType, DiscordIpc, DiscordIpcClient};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{sync::{Arc, Mutex, OnceLock}, thread, time::{Duration, Instant, SystemTime, UNIX_EPOCH}};
@@ -38,7 +38,9 @@ fn activity(value: &Presence, now: i64) -> Value {
     if !value.enabled || !value.playing || value.private_session || title.is_empty() { return Value::Null; }
     let image = url::Url::parse(&value.image).ok().filter(|url| url.scheme() == "https" && url.username().is_empty() && url.password().is_none() && url.port().is_none()
         && matches!(url.host_str(), Some("i.ytimg.com" | "lh3.googleusercontent.com" | "yt3.googleusercontent.com")) && value.image.len() <= 512);
-    let mut result = json!({"type": 2, "details": title, "state": clean(&value.artist),
+    // Discord uses the application name in compact statuses by default. The
+    // documented Details display type selects the song without renaming the app.
+    let mut result = json!({"type": 2, "status_display_type": StatusDisplayType::Details, "details": title, "state": clean(&value.artist),
         "assets":{"large_image":image.as_ref().map(|url| url.as_str()).unwrap_or("download"),"large_text":"Devil Music","small_image":"download","small_text":"Deviload"}});
     if value.duration.is_finite() && value.position.is_finite() && value.duration > 0.0 && value.position >= 0.0 {
         let duration = value.duration.min(86400.0);
@@ -46,6 +48,10 @@ fn activity(value: &Presence, now: i64) -> Value {
         result["timestamps"] = json!({"start": start, "end": start + (duration * 1000.0) as i64});
     }
     result
+}
+
+fn activity_command(next: &Value, sequence: u64) -> Value {
+    json!({"cmd":"SET_ACTIVITY","args":{"pid":std::process::id(),"activity":next},"nonce":sequence.to_string()})
 }
 
 struct Latest { value: Presence, updated: Instant }
@@ -91,7 +97,7 @@ fn worker(latest: Arc<Mutex<Latest>>) {
         if sent.elapsed() < Duration::from_secs(5) || (same_track && same_time && sent.elapsed() < Duration::from_secs(15)) { continue; }
         sequence += 1;
         let connection = client.as_mut().unwrap();
-        let result = connection.send(json!({"cmd":"SET_ACTIVITY","args":{"pid":std::process::id(),"activity":next},"nonce":sequence.to_string()}), 1)
+        let result = connection.send(activity_command(&next, sequence), 1)
             .and_then(|_| connection.recv());
         if matches!(result, Ok((1, ref reply)) if reply["evt"] != "ERROR") { last = next; sent = Instant::now(); }
         else { client = None; last = Value::Null; retry = Instant::now() + Duration::from_secs(15); }
@@ -134,5 +140,40 @@ mod tests {
         assert!(a["details"].as_str().unwrap().len() <= 120);
         assert_eq!(a["state"], "AB");
         assert_eq!(a["type"], 2);
+    }
+    #[test]
+    fn compact_status_selects_song_details_and_preserves_the_profile_card() {
+        let p = Presence { enabled:true, playing:true, title:"Around the World".into(), artist:"Daft Punk".into(),
+            image:"https://i.ytimg.com/vi/test/default.jpg".into(),position:30.0,duration:180.0,..Default::default() };
+        let a = activity(&p, 1000000);
+        // Discord's Status Display Types: Name=0, State=1, Details=2.
+        assert_eq!(a["status_display_type"], 2);
+        assert_eq!(a["details"], "Around the World");assert_eq!(a["state"], "Daft Punk");assert_eq!(a["type"], 2);
+        assert!(a.get("name").is_none() && a.get("application_id").is_none());
+        assert_eq!(a["assets"],json!({"large_image":"https://i.ytimg.com/vi/test/default.jpg","large_text":"Devil Music","small_image":"download","small_text":"Deviload"}));
+        assert_eq!(a["timestamps"],json!({"start":970000,"end":1150000}));
+    }
+    #[test]
+    fn actual_ipc_frame_keeps_the_compact_status_field_in_set_activity() {
+        // Exercise the pinned crate's real send/serialization path without
+        // connecting to Discord or changing the developer's actual presence.
+        #[derive(Default)]
+        struct CapturedIpc(Vec<u8>);
+        impl DiscordIpc for CapturedIpc {
+            fn get_client_id(&self)->&str {"test"}
+            fn connect_ipc(&mut self)->Result<(),discord_rich_presence::error::Error> {unreachable!()}
+            fn write(&mut self,bytes:&[u8])->Result<(),discord_rich_presence::error::Error> {self.0.extend_from_slice(bytes);Ok(())}
+            fn read(&mut self,_:&mut[u8])->Result<(),discord_rich_presence::error::Error> {unreachable!()}
+            fn close(&mut self)->Result<(),discord_rich_presence::error::Error> {Ok(())}
+        }
+        let p=Presence {enabled:true,playing:true,title:"Track B".into(),artist:"Artist B".into(),..Default::default()};
+        let mut capture=CapturedIpc::default();capture.send(activity_command(&activity(&p,1000000),7),1).unwrap();
+        assert_eq!(u32::from_le_bytes(capture.0[..4].try_into().unwrap()),1);
+        assert_eq!(u32::from_le_bytes(capture.0[4..8].try_into().unwrap()) as usize,capture.0.len()-8);
+        let frame:Value=serde_json::from_slice(&capture.0[8..]).unwrap();
+        assert_eq!(frame["cmd"],"SET_ACTIVITY");assert_eq!(frame["nonce"],"7");assert_eq!(frame["args"]["pid"],std::process::id());
+        assert_eq!(frame["args"]["activity"]["status_display_type"],2);
+        assert_eq!(frame["args"]["activity"]["details"],"Track B");assert_eq!(frame["args"]["activity"]["state"],"Artist B");
+        assert!(frame["args"]["activity"].get("statusDisplayType").is_none());
     }
 }

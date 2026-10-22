@@ -35,6 +35,17 @@ export function isProcessing(job) {
   return job.status==='running'&&!job.live&&(['processing','merging','remuxing','converting','saving'].includes(job.stage)||(!job.stage&&Number(job.percent)>=99.95));
 }
 
+export function hostCooldown(job, limits, now = Date.now()/1000) {
+  if(job.status!=='queued'||Number(job.scheduledAt)>now)return null;
+  let host;try{host=new URL(job.url).hostname.toLowerCase().replace(/\.$/,'');}catch{return null;}
+  const groups=[['youtube.com'],['facebook.com','fb.com'],['x.com','twitter.com'],['instagram.com'],['tiktok.com']];
+  if(host==='youtu.be')host='youtube.com';if(host==='fb.watch')host='facebook.com';
+  const aliases=groups.find(group=>group.some(base=>host===base||host.endsWith('.'+base)));
+  host=aliases?.[0]||host;
+  const deadline=limits.find(item=>item.host===host&&Number.isFinite(item.until)&&item.until>now);
+  return deadline?{host,minutes:Math.max(1,Math.ceil((deadline.until-now)/60))}:null;
+}
+
 export function orbState(jobs) {
   if (jobs.some(j=>j.status==="running")) return "running";
   if (jobs.some(j=>j.status==="cancelling")) return "cancelling";
@@ -125,10 +136,25 @@ function isYouTube(url) {
   catch { return true; }
 }
 
+function isFacebook(url) {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return ["facebook.com", "fb.watch", "fb.com"].some(domain => host === domain || host.endsWith("." + domain));
+  } catch { return false; }
+}
+
 export function diagnoseError(log = [], signedIn = false, url = "") {
   const detail = log.slice(-30).join("\n").toLowerCase();
   if (url && !isYouTube(url) && /http error 429|too many requests|rate.limit reached/.test(detail)) {
     return {title:"Too many requests", message:"The site is limiting requests. Wait before retrying and reduce parallel downloads.", action:""};
+  }
+  if (isFacebook(url)) {
+    if (/login required|log in to|log in first|use --cookies|cookies-from-browser|authentication|login wall/.test(detail)) {
+      return {title:"Facebook needs a session", message:"Open this Reel in your browser. If Facebook requires a login, select cookies from that browser or import a fresh cookies.txt file, then retry.", action:"cookies"};
+    }
+    if (/cannot parse data|unable to extract|failed to parse|no suitable extractor/.test(detail)) {
+      return {title:"Facebook did not return the video", message:"Check the Reel in a browser and update yt-dlp. If the same account can open it, check the selected cookies source and retry.", action:"update"};
+    }
   }
   if (signInSite(url)?.key === "instagram") {
     if (/selected cookies file contains no active instagram session/.test(detail)) {
