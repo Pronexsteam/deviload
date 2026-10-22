@@ -1,6 +1,6 @@
 import {t,onLanguageChange} from "./i18n.js";
 
-const RELEASE_ID="deviload-2.7.5";
+const RELEASE_ID="deviload-2.7.6";
 const STORAGE_KEY="deviload-app-release-notes";
 const instances=new WeakMap();
 
@@ -25,9 +25,9 @@ export function wireReleaseNotes(workspace){
   const translate=()=>{
     button.textContent=t("What's new");title.textContent="Deviload · "+t("What's new");
     close.setAttribute("aria-label",t("Dismiss release notes"));
-    items[0].textContent=t("Window controls work across every theme.");
-    items[1].textContent=t("Switch themes next to What's new, without opening Settings.");
-    items[2].textContent=t("Try Midnight, a calm blue-gray theme.");
+    items[0].textContent=t("Devil Convert adds an action wheel, lossless container changes and original audio extraction.");
+    items[1].textContent=t("Devil Music has a larger search field and discovery that adapts to each listening session.");
+    items[2].textContent=t("Choose photos with optional gallery-dl and see update notices across the app.");
   };
   const show=visible=>{card.hidden=!visible;button.setAttribute("aria-expanded",String(visible));};
   let dismissed=false;

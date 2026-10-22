@@ -1,11 +1,12 @@
 import {createMusicNavigation} from "./music-navigation.js";
+import {wireMusicSearch} from "./music-search.js";
 import {createMusicPresence} from "./music-presence.js";
 import {t, language, onLanguageChange, errorText} from "./i18n.js";
-import {tracks, remember,reorderTrack,insertNext,restoreRemoved} from "./music-state.js";
+import {tracks, remember,reorderTrack,insertNext,restoreRemoved,playbackQueue} from "./music-state.js";
 import {recordListening,tasteSeeds,listeningClock,hideRecommendation,canonicalArtistKey} from "./music-taste.js";
 import {recommendationLabel} from "./music-recommendation-view.js";
 import {createRecommendationSession} from "./music-recommendation-session.js";
-import {rankMusicRecommendations} from "./music-recommendation-engine.js";
+import {rankMusicRecommendations,recommendationFamiliarity} from "./music-recommendation-engine.js";
 import {createRecordingView} from "./music-recording-view.js";
 import {createMusicDiscovery} from "./music-discovery.js";
 import {resolveRecordingSource,setRecordingSource,removeRecordingSource,recordingFamilyIds} from "./music-recordings.js";
@@ -73,7 +74,7 @@ export function createMusic({invoke,onDownload}) {
   let session=0,checkpoint=0,historyAdded=false,recoveryUsed=false,pendingSeek=0,radioPending=false;
   let view="home", request=0, playRequest=0, current=null, queue=restored.queue, index=-1, sections=[], loaded=false, loading=false, repeat=restored.repeat, shuffle=restored.shuffle;
   let lastQuery={kind:"home",value:""}, homeCache=null, activeMood="", queueOpen=false, streamLoading=false;
-  let resolvedTrack=null,autoplay=restored.autoplay;
+  let resolvedTrack=null,resolvedOffline=false,autoplay=restored.autoplay;
   let librarySidebar=null;
   let selectedTracks=new Set(),selectionAnchor=null,visibleTrackIds=[],discoveryCandidates=[];
   let personalization=0,recommendationRevision=0,playbackContext=[],playbackOrigin="manual",contextRevision=0,followedCursor=0,playbackSourceContext={kind:"restored"};
@@ -93,7 +94,7 @@ export function createMusic({invoke,onDownload}) {
   let recordingRoutingRevision=-1,recordingBoundIds=new Set();const recordingFamilies=new Map();
   const interestRotations=new Map();
   let needsRefresh=false,enginePrepared=false;
-  let searchFilter="songs",continuation=null,morePending=false,browseItem=null,offlineItems=[];
+  let searchFilter="songs",continuation=null,morePending=false,browseItem=null,offlineItems=[],musicSearch=null;
   const downloadsPending=new Set();
   const navigation=createMusicNavigation({type:"catalog",kind:"home",value:"",heading:"",filter:"songs",mood:"",item:null});let restoringNavigation=false;
   const backButton=button(t("Back"),null,()=>{const target=navigation.back();if(!target)return;restoringNavigation=true;if(target.type==="local")showLocal(target.view);else if(target.type==="playlist")showPlaylist(target.id);else if(target.type==="interest")showInterestMix(target.id);else if(target.type==="offline")showOffline();else{searchFilter=target.filter;activeMood=target.mood;browseItem=target.item;load(target.kind,target.value,target.heading);}},"music-navigation-back");
@@ -247,7 +248,7 @@ export function createMusic({invoke,onDownload}) {
   function recommendationOptions(seed,limit=15){
     return {exclude:queue.map(item=>item.id),limit,
       contextItems:tracks([seed,...playbackContext,...(!privateSession?saved.recent:[])]).slice(0,12),
-      sessionItems:recommendationSession.contextItems(),
+      sessionItems:recommendationSession.preferenceItems(),
       followedArtists:(saved.collections||[]).filter(item=>item.kind==="artist").map(item=>item.title),
       ...recommendationSession.options()};
   }
@@ -283,12 +284,17 @@ export function createMusic({invoke,onDownload}) {
     try{saveMusicSession(storage,{queue,id:current?.id||null,position:resolvedTrack===current?.id?audio.currentTime:retryPosition,duration:knownDuration,repeat,shuffle,autoplay});sessionSavedAt=Date.now();}
     catch{status(t("Could not save your music preferences."),true);}
   }
-  async function playbackSource(id,refresh=false,preload=false){
+  async function playbackSource(id,refresh=false,preload=false,decodeRecovery=false){
     const sourceId=(saved.sourceBindings||[]).find(binding=>binding.trackId===id)?.source.id||id;
-    if(window.__TAURI__?.core?.convertFileSrc){
-      const path=await invoke("music_offline_source",{id:sourceId});
-      if(path){diagnostics.record(preload?"preload":"source","offline");return {url:window.__TAURI__.core.convertFileSrc(path),offline:true};}
+    // Refresh after a failed local decoder must not reopen the same damaged
+    // file. Without a connection, retain the normal local-only path instead.
+    if(window.__TAURI__?.core?.convertFileSrc&&!(decodeRecovery&&navigator.onLine!==false)){
+      try{
+        const path=await invoke("music_offline_source",{id:sourceId});
+        if(path){diagnostics.record(preload?"preload":"source","offline");return {url:window.__TAURI__.core.convertFileSrc(path),offline:true};}
+      }catch(error){diagnostics.record(preload?"preload":"source","failed");if(navigator.onLine===false)throw error;}
     }
+    if(navigator.onLine===false)throw Error("Music could not connect. Check your connection and proxy settings, then retry.");
     diagnostics.record(preload?"preload":"resolve","requested");
     if(!preload&&streamLoading)artist.textContent=t("Finding a playable source…");
     const result=await invoke("music_stream",{id:sourceId,refresh,preload});diagnostics.record(preload?"preload":"resolve","ready");return result;
@@ -437,10 +443,11 @@ export function createMusic({invoke,onDownload}) {
     if(clock.seconds>0&&!historyAdded){saved.recent=remember(saved.recent,current);historyAdded=true;}
     if(statsSession!==session){statsSession=session;statsSeconds=0;statsCounted=false;}
     const delta=Math.max(0,clock.seconds-statsSeconds),qualified=!statsCounted&&(clock.seconds>=30||(audio.duration>0&&clock.seconds/audio.duration>=.8));
+    const familiar=qualified||transitionIntent==="next"?recommendationFamiliarity(current,saved,taste):undefined;
     if(delta>0||qualified)weekly.record({item:current,seconds:delta,qualified});
     statsSeconds=clock.seconds;statsCounted ||= qualified;
-    recommendationSession.recordListen(current,{seconds:clock.seconds,duration:audio.duration});
-    if(transitionIntent==="next")recommendationSession.recordSkip(current,{seconds:clock.seconds,duration:audio.duration,session,intent:"next"});
+    if(delta>0||qualified)recommendationSession.recordListen(current,{seconds:clock.seconds,duration:audio.duration,session,familiar});
+    if(transitionIntent==="next")recommendationSession.recordSkip(current,{seconds:clock.seconds,duration:audio.duration,session,intent:"next",familiar});
     if(current&&recordListening(taste,current,{seconds:clock.seconds,duration:audio.duration,skipped,session,intent:transitionIntent})){
       ++recommendationRevision;
       const interestId=playbackSourceContext.kind==="interest"?playbackSourceContext.id:null;
@@ -518,7 +525,7 @@ export function createMusic({invoke,onDownload}) {
     try{await Promise.race([audio.play(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error("Audio did not start in time. Press play to retry.")),20000);})]);}
     finally{clearTimeout(timer);}
   }
-  async function playAt(position,{refresh=false,resume=0,recovery=false,overlap=0,skipped=false,transitionIntent="navigation",origin="manual"}={}) {
+  async function playAt(position,{refresh=false,resume=0,recovery=false,decodeRecovery=false,overlap=0,skipped=false,transitionIntent="navigation",origin="manual"}={}) {
     if(!queue[position])return;
     if(resumeSnapshot&&current&&resumeSnapshot.item.id===current.id)resumeSnapshot.position=resolvedTrack===current.id?audio.currentTime:retryPosition;
     intent.leave();
@@ -534,13 +541,13 @@ export function createMusic({invoke,onDownload}) {
     const prepared=!refresh?decks.take(queue[position].id,saved.volume,overlap):null;
     if(prepared)audio=prepared;else decks.stopTail();
     if(current?.id!==queue[position].id)knownDuration=0;
-    const token=++playRequest;index=position;current=queue[index];order.visit(current.id,queue);resolvedTrack=null;radioPending=false;retryPosition=resume;
+    const token=++playRequest;index=position;current=queue[index];order.visit(current.id,queue);resolvedTrack=null;resolvedOffline=false;radioPending=false;retryPosition=resume;
     nextPlan=null;preloadAttempts=new Set();radioAhead=null;
     clearTimeout(bufferingTimer);if(!prepared){audio.pause();audio.removeAttribute("src");audio.load();}seek.disabled=true;seek.value=knownDuration?String(resume/knownDuration*1000):"0";elapsed.textContent=time(resume);duration.textContent=time(knownDuration);
     title.textContent=current.title;artist.title="";artist.textContent=t("Opening track…");artwork.replaceChildren(cover(current));status("");
     pendingSeek=resume;streamLoading=true;syncDock();renderQueue();
     sessionTransition=false;persistSession();
-    let playbackStage="resolve";
+    let playbackStage="resolve",offlineSource=false;
     try {
       const id=current.id;
       // Coalesce clicks in the same turn, but never await a superseded track.
@@ -548,10 +555,11 @@ export function createMusic({invoke,onDownload}) {
         if(token!==playRequest)throw new DOMException("Superseded","AbortError");
         // Activate a prepared source in the engine as well as the decoder.
         // This adopts its initial buffer and starts the full continuation.
-        return playbackSource(id,refresh);
+        return playbackSource(id,refresh,false,decodeRecovery);
       });
       const result=await job;
       if(token!==playRequest)return;
+      offlineSource=result.offline===true;resolvedOffline=offlineSource;
       if(!prepared||audio.src!==result.url)audio.src=result.url;
       else{knownDuration=audio.duration;if(resume>0&&Number.isFinite(audio.duration)){audio.currentTime=Math.min(resume,Math.max(0,audio.duration-1));pendingSeek=0;}}
       resolvedTrack=current.id;
@@ -563,12 +571,16 @@ export function createMusic({invoke,onDownload}) {
     } catch(error) {
       if(token!==playRequest)return;
       const failure=playbackFailure(error);diagnostics.record(playbackStage,failure.code);
+      if(offlineSource&&!recoveryUsed&&navigator.onLine!==false&&["decode","unsupported"].includes(failure.code)){
+        recoveryUsed=true;
+        return await playAt(index,{refresh:true,resume:Math.max(resume,audio.currentTime||0),recovery:true,decodeRecovery:true,origin:playbackOrigin});
+      }
       if(failure.code!=="cancelled"&&error?.name!=="AbortError")recommendationSession.fail(current.id);
       needsRefresh=true;retryPosition=Math.max(retryPosition,audio.currentTime||0);audio.pause();audio.removeAttribute("src");audio.load();resolvedTrack=null;artist.textContent=t(["restricted","limited"].includes(failure.code)?"Unavailable from source. Try another track.":"Could not play. Press play to retry.");artist.title=t(failure.message);status(t(failure.message),true);
     } finally {if(token===playRequest){streamLoading=false;syncDock();}}
   }
   function playItems(items,startId,source=selectionContext(),contextItems=items) {
-    queue=tracks(items).slice(0,200);automaticQueueIds.clear();order.reset();const position=queue.findIndex(item=>item.id===startId);
+    queue=playbackQueue(items,startId);automaticQueueIds.clear();order.reset();const position=queue.findIndex(item=>item.id===startId);
     if(queue.length){const selected=queue[Math.max(0,position)];
       setPlaybackContext(tracks([selected,...tracks(contextItems)]),source);
       playAt(Math.max(0,position),{transitionIntent:"navigation"});
@@ -611,7 +623,7 @@ export function createMusic({invoke,onDownload}) {
     const tags=source.kind==="mood"&&moodTags[source.id]?[moodTags[source.id]]:[];
     let publicItems=[];
     const extra=publicCandidates({seeds:publicSeeds,tags,isCurrent:live}).then(items=>{publicItems=items;return items;});
-    const contextualIds=new Set(recommendationSession.contextItems().map(item=>item.id));
+    const contextualIds=new Set([...recommendationSession.contextItems(),...recommendationSession.preferenceItems()].map(item=>item.id));
     const results=await Promise.allSettled(seeds.map(item=>radio(item)));
     const pools=results.flatMap((result,index)=>result.status==="fulfilled"?[{seed:seeds[index],items:result.value,contextual:contextualIds.has(seeds[index].id),source:contextualIds.has(seeds[index].id)?source:{kind:seeds[index].id===seed?.id?"playing":"taste",id:seeds[index].id}}]:[]);
     const pool={...recommendationSession.mergePools(pools),pools};
@@ -670,7 +682,7 @@ export function createMusic({invoke,onDownload}) {
   listen("error",()=>{
     if(streamLoading||!current)return;
     const code={2:"network",3:"decode",4:"unsupported"}[audio.error?.code]||"failed";diagnostics.record("playing",code);
-    if(!recoveryUsed&&clock.seconds>0){recoveryUsed=true;playAt(index,{refresh:true,resume:audio.currentTime,recovery:true});return;}
+    if(!recoveryUsed&&clock.seconds>0){recoveryUsed=true;playAt(index,{refresh:true,resume:audio.currentTime,recovery:true,decodeRecovery:resolvedOffline&&resolvedTrack===current.id&&["decode","unsupported"].includes(code)});return;}
       recommendationSession.fail(current.id);
     needsRefresh=true;retryPosition=audio.currentTime||0;audio.pause();resolvedTrack=null;artist.textContent=t("Could not play. Press play to retry.");status(t(playbackFailure(code).message),true);syncDock();
   });
@@ -690,7 +702,7 @@ export function createMusic({invoke,onDownload}) {
   function selectView(next) {
     filters.hidden=next!=="search";offlineTab.setAttribute("aria-current",next==="offline"?"page":"false");
     filters.querySelectorAll("button").forEach(node=>node.setAttribute("aria-pressed",String(node.dataset.filter===searchFilter)));
-    view=next;$("music-home-hero").hidden=next!=="home";$("music-moods").hidden=!["home","search"].includes(next);
+    view=next;musicSearch?.sync(next==="search"&&!activeMood?lastQuery.value:"");$("music-home-hero").hidden=next!=="home";$("music-moods").hidden=!["home","search"].includes(next);
     document.querySelectorAll("[data-music-view]").forEach(b=>{const selected=b.dataset.musicView===(["playlist","interest"].includes(next)?"library":next);b.classList.toggle("selected",selected);b.setAttribute("aria-current",selected?"page":"false");});
     document.querySelectorAll("[data-music-mood]").forEach(b=>{b.classList.toggle("selected",b.dataset.musicMood===activeMood);b.setAttribute("aria-pressed",String(b.dataset.musicMood===activeMood));});
     $("devil-music").dataset.view=next;
@@ -870,14 +882,14 @@ export function createMusic({invoke,onDownload}) {
       sections=kind==="home"?homeSections(result.sections):result.sections;status("");render();loaded=true;
       if((kind==="browse"||kind==="search"&&searchFilter==="songs")&&audio.paused){const first=tracks(sections.flatMap(section=>section.items))[0];if(first)intent.enter(first.id);}
       if(kind==="home")personalize(token,result.sections);
-    }catch(error){if(token!==request)return;status(errorText(error),true);$("music-shelves").replaceChildren(button(t("Try again"),null,()=>load(kind,value,heading,true),"music-primary"));}
+    }catch(error){if(token!==request)return;if(kind==="search")musicSearch?.allowRetry();status(errorText(error),true);$("music-shelves").replaceChildren(button(t("Try again"),null,()=>load(kind,value,heading,true),"music-primary"));}
     finally{if(token===request){loading=false;$("music-refresh").disabled=false;}}
   }
   function renderInterestPool(){
     if(view!=="interest"||!interestPool||interestPool.id!==interestViewId)return;
     const rows=rankMusicRecommendations(interestPool.items,saved,taste,{...recommendationOptions(current,40),queue,
       interestId:interestViewId,exclude:current?[current.id]:[],candidateScores:interestPool.scores,
-      sessionItems:interestSources(saved,interestViewId,taste),eligible:items=>recommendationSession.allowed(items),random:()=>.5});
+      sessionItems:recommendationSession.preferenceItems(),eligible:items=>recommendationSession.allowed(items),random:()=>.5});
     sections=[{title:"",items:rows.map(row=>row.item)}];
     render();prepareHomeSelection();
   }
@@ -909,7 +921,7 @@ export function createMusic({invoke,onDownload}) {
     captureListening();
     const recording=createRecordingView(saved,taste,{queue});
     const seeds=recording.items(recommendationSession.seeds(null,tasteSeeds(recording.taste,recording.saved.favorites),{limit:3}));
-    const sessionItems=recommendationSession.contextItems(),contextualIds=new Set(sessionItems.map(item=>item.id));
+    const sessionItems=recommendationSession.preferenceItems(),contextualIds=new Set([...recommendationSession.contextItems(),...sessionItems].map(item=>item.id));
     const contextArtists=new Set(sessionItems.flatMap(item=>(item.artists||[]).map(canonicalArtistKey)));
     const followed=(saved.collections||[]).filter(item=>item.kind==="artist"&&!taste.blockedArtists?.includes(canonicalArtistKey(item.title)));
     const offset=followed.length?followedCursor%followed.length:0,rotated=[...followed.slice(offset),...followed.slice(0,offset)];followedCursor=(followedCursor+1)%Math.max(1,followed.length);
@@ -972,7 +984,10 @@ export function createMusic({invoke,onDownload}) {
   }
   $("music-library-filter").addEventListener("input",()=>{listFilter=$("music-library-filter").value;render();});
   $("music-library-sort").addEventListener("change",()=>{listSort=$("music-library-sort").value;render();});
-  $("music-search").addEventListener("submit",event=>{event.preventDefault();const query=$("music-query").value.trim();activeMood="";if(query)load("search",query);});
+  musicSearch=wireMusicSearch({form:$("music-search"),input:$("music-query"),clear:$("music-search-clear"),shortcut:$("music-search-shortcut"),
+    isActive:()=>document.querySelector("main")?.dataset.page==="music",
+    onSearch:query=>{activeMood="";browseItem=null;load("search",query);},
+    onClear:()=>{if(view==="search"){activeMood="";browseItem=null;searchFilter="songs";load("home");}}});
   document.querySelectorAll("[data-music-view]").forEach(b=>b.addEventListener("click",()=>b.dataset.musicView==="home"?load("home"):b.dataset.musicView==="library"?showPlaylist(null):showLocal(b.dataset.musicView)));
   document.querySelectorAll("[data-music-mood]").forEach(b=>b.addEventListener("click",()=>{activeMood=b.dataset.musicMood;activeMood?load("search",moods[activeMood],b.textContent):load("home");}));
   $("music-refresh").addEventListener("click",()=>view==="interest"?showInterestMix(interestViewId):view==="offline"?showOffline():["library","playlist"].includes(view)?showPlaylist(playlistId):["favorites","recent"].includes(view)?showLocal(view):load(lastQuery.kind,lastQuery.value,lastQuery.heading,true));

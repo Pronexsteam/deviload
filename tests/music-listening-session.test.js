@@ -6,6 +6,7 @@ import {readTaste,recordListening} from '../src/music-taste.js';
 import {remember} from '../src/music-state.js';
 import {createWeeklyStats} from '../src/music-weekly.js';
 import {createRecommendationSession} from '../src/music-recommendation-session.js';
+import {recommendationFamiliarity} from '../src/music-recommendation-engine.js';
 import {rememberInterestTrack} from '../src/music-interest-mixes.js';
 
 const source=readFileSync(new URL('../src/devil-music.js',import.meta.url),'utf8');
@@ -21,7 +22,7 @@ function player(){
   const memory=new Map(),storage={getItem:key=>memory.get(key),setItem:(key,value)=>memory.set(key,value)},handlers={},events={},control={checked:false,addEventListener:(name,fn)=>handlers[name]=fn};
   const ctx={current:song(1),privateSession:false,discordPresence:{sync(){}},statsSession:null,statsSeconds:0,statsCounted:false,session:1,checkpoint:0,historyAdded:false,
     audio:{duration:200,currentTime:0,paused:false,readyState:4,volume:.7,muted:false,seeking:false},clock:{seconds:0,reset(){this.seconds=0;},sample(){}},taste:readTaste(),saved:{favorites:[],recent:[],collections:[],playlists:[],sourceBindings:[],interestMixes:[]},playbackContext:[],playbackOrigin:'manual',playbackSourceContext:{kind:'restored'},diagnostics:{record(){}},
-    weekly:createWeeklyStats(storage,{now:()=>1800000000000}),recommendationSession:createRecommendationSession(),recommendationRevision:0,recordListening,remember,rememberInterestTrack,profileWrites:0,sessionWrites:0,
+    weekly:createWeeklyStats(storage,{now:()=>1800000000000}),recommendationSession:createRecommendationSession(),recommendationRevision:0,recordListening,remember,recommendationFamiliarity,rememberInterestTrack,profileWrites:0,sessionWrites:0,
     persist(){ctx.profileWrites++;},saveMusicProfile(_storage,profile){ctx.profileWrites++;ctx.lastProfile=profile;},saveMusicSession(){ctx.sessionWrites++;},storage,sessionTransition:false,queue:[song(1)],resolvedTrack:song(1).id,retryPosition:0,knownDuration:200,repeat:'off',shuffle:false,autoplay:true,sessionSavedAt:0,
     status(){},view:'favorites',homeCache:null,clearRecommendationContext(){ctx.recommendationSession.reset();ctx.playbackContext=[];ctx.playbackSourceContext={kind:'manual'};ctx.playbackOrigin='manual';},
     t:value=>value,$:()=>control,listen:(name,fn)=>events[name]=fn,clearTimeout(){},bufferingTimer:null,artist:{},syncDock(){},performance:{now:()=>0}};
@@ -37,6 +38,20 @@ test('repeated pause/checkpoint captures record only new seconds and one qualifi
   p.ctx.current=song(2);p.ctx.session++;p.ctx.clock.reset();p.listen(30);
   assert.equal(p.ctx.weekly.summary().totalSeconds,90);
   assert.equal(p.ctx.weekly.summary().totalQualifiedPlays,2);
+});
+
+test('paused home captures neither extend nor recreate live-interest expiry without new audible seconds',()=>{
+  const p=player(),initial=song(9),recommendations=p.ctx.recommendationSession,record=recommendations.recordListen;
+  let wall=1800000000000,captures=0;
+  recommendations.setContext([initial]);
+  recommendations.recordListen=(item,evidence)=>{captures++;record(item,evidence,wall);};
+  p.listen(30);assert.deepEqual(recommendations.preferenceItems(wall),[song(1)]);assert.equal(captures,1);
+  p.ctx.audio.paused=true;
+  for(const minutes of [20,45,89,91]){wall=1800000000000+minutes*60000;p.captureListening();}
+  assert.equal(captures,1);assert.deepEqual(recommendations.preferenceItems(wall),[initial]);
+  p.captureListening();assert.deepEqual(recommendations.preferenceItems(wall),[initial]);assert.equal(captures,1);
+  p.ctx.audio.paused=false;p.listen(45);
+  assert.deepEqual(recommendations.preferenceItems(wall),[song(1)]);assert.equal(captures,2);
 });
 
 test('enabling private listening mid-track saves only the preceding public portion',()=>{
@@ -118,4 +133,15 @@ test('failed optional interest persistence retains normal listening capture with
   const p=player();chooseInterest(p,{origin:'recommendation'});p.ctx.saveMusicProfile=()=>{throw Error('storage full');};p.listen(35);
   assert.equal(p.ctx.saved.interestMixes[0].learnedIds,undefined);assert.equal(p.ctx.taste.entries[song(1).id].plays,1);assert.equal(p.ctx.profileWrites,1);
   assert.equal(p.ctx.weekly.summary().totalSeconds,35);
+});
+
+test('adaptive outcomes capture novelty before teaching taste and private listening leaves no outcome evidence',()=>{
+  const p=player();p.listen(15);assert.deepEqual(p.ctx.recommendationSession.options().sessionFeedback,[]);
+  p.listen(30);const first=p.ctx.recommendationSession.options().sessionFeedback;
+  assert.equal(first.length,1);assert.equal(first[0].familiar,false);
+  p.listen(180);const completed=p.ctx.recommendationSession.options().sessionFeedback;
+  assert.equal(completed.length,1);assert.equal(completed[0].familiar,false);assert.equal(completed[0].completed,true);
+  p.toggle(true);assert.deepEqual(p.ctx.recommendationSession.options().sessionFeedback,[]);
+  p.ctx.current=song(2);p.ctx.session++;p.listen(170);p.captureListening(true,'next');
+  assert.deepEqual(p.ctx.recommendationSession.options().sessionFeedback,[]);
 });

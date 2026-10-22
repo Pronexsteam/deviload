@@ -27,7 +27,7 @@ test("untrusted sound settings cannot enable arbitrary gains or transitions",()=
 test("an existing download takes priority over the network and a missing file falls back",async()=>{
   for(const bound of [false,true]){
     const logical={kind:"song",id:"abcdefghijk",title:"Logical song"},physical={kind:"song",id:"lmnopqrstuv",title:"Chosen recording"},calls=[],stages=[];
-    const ctx={saved:{sourceBindings:bound?[{trackId:logical.id,track:logical,source:physical}]:[]},diagnostics:{record:(stage,code)=>stages.push({stage,code})},streamLoading:false,window:{__TAURI__:{core:{convertFileSrc:path=>`asset:${path}`}}},invoke:async(command,args)=>{calls.push({command,...args});return command==="music_offline_source"?"local.mp3":{url:"remote"};}};
+    const ctx={navigator:{onLine:true},resolvedOffline:false,saved:{sourceBindings:bound?[{trackId:logical.id,track:logical,source:physical}]:[]},diagnostics:{record:(stage,code)=>stages.push({stage,code})},streamLoading:false,window:{__TAURI__:{core:{convertFileSrc:path=>`asset:${path}`}}},invoke:async(command,args)=>{calls.push({command,...args});return command==="music_offline_source"?"local.mp3":{url:"remote"};}};
     const resolve=runInNewContext(`(()=>{${source.slice(source.indexOf('  async function playbackSource('),source.indexOf('  async function showOffline('))};return playbackSource;})()`,ctx),selectedId=bound?physical.id:logical.id;
     assert.equal((await resolve(logical.id)).url,"asset:local.mp3");assert.deepEqual(calls,[{command:"music_offline_source",id:selectedId}]);
     ctx.invoke=async(command,args)=>{calls.push({command,...args});return command==="music_offline_source"?null:{url:"remote"};};assert.equal((await resolve(logical.id)).url,"remote");

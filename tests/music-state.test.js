@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {tracks, remember, nextIndex, readMusicState,reorderTrack,insertNext,restoreRemoved} from "../src/music-state.js";
+import {tracks, remember, nextIndex, readMusicState,reorderTrack,insertNext,restoreRemoved,playbackQueue} from "../src/music-state.js";
 
 const a={kind:"song",id:"abcdefghijk",title:"A"},b={kind:"song",id:"lmnopqrstuv",title:"B"};
 test("music queue excludes albums, invalid IDs and duplicate tracks",()=>{
@@ -38,4 +38,14 @@ test("queue edits preserve track identity, avoid duplicates and undo without dis
 test("saved likes and listening history survive reading a new player session",()=>{
   const state={favorites:[a],recent:[b,a],volume:.35};
   assert.deepEqual(readMusicState({getItem:()=>JSON.stringify(state)}),state);
+});
+
+test("a bounded playback window includes the selected song from a large library without changing its order",()=>{
+  const items=Array.from({length:500},(_,n)=>({kind:"song",id:String(n).padStart(11,"0"),title:`Song ${n}`})),before=structuredClone(items);
+  assert.deepEqual(playbackQueue(items,items[20].id),items.slice(0,200));
+  const middle=playbackQueue([items[0],...items],items[250].id);
+  assert.deepEqual(middle,items.slice(250,450));assert.equal(middle[0].id,items[250].id);
+  const tail=playbackQueue(items,items[499].id);
+  assert.deepEqual(tail,items.slice(300));assert.equal(tail.at(-1).id,items[499].id);
+  assert.deepEqual(playbackQueue(items,"missing"),items.slice(0,200));assert.deepEqual(items,before);
 });

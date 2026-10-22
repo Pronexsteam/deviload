@@ -813,7 +813,7 @@ dependencies = [
 
 [[package]]
 name = "deviload"
-version = "2.7.5"
+version = "2.7.6"
 dependencies = [
  "base64 0.22.1",
  "dirs 6.0.0",
@@ -827,6 +827,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-autostart",

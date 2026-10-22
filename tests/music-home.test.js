@@ -13,7 +13,7 @@ const song=(n,title)=>({kind:"song",id:String(n).padStart(11,"0"),title,artists:
 const local=song(1,"Regional release"),personal=song(2,"Related to liked artist"),recent=song(3,"Last played"),liked=song(4,"Liked song");
 const base=[{title:"New releases",items:[local]}];
 function home(showRegional){
-  const ctx={saved:{favorites:[],recent:[recent],showRegional,sourceBindings:[],interestMixes:[],playlists:[],collections:[]},taste:{},queue:[],request:1,personalization:0,playbackContext:[],playbackSourceContext:{kind:"manual"},followedCursor:0,privateSession:false,recommendationReasons:new Map(),current:null,sections:[],audio:{paused:true},prepared:[],tracks:items=>items,intent:{enter:id=>ctx.prepared.push(id)},captureListening(){},tasteSeeds:()=>[liked],radio:async()=>[personal],createRecordingView,recommendationSession:{seeds:(_,seeds)=>seeds,contextItems:()=>[],mergePools:pools=>({items:pools.flatMap(pool=>pool.items),scores:new Map()}),allowed:items=>items},recommendationOptions:()=>({}),rankMusicRecommendations:items=>items.map(item=>({item,reason:{code:"catalog"}})),t:s=>s,render(){}};
+  const ctx={saved:{favorites:[],recent:[recent],showRegional,sourceBindings:[],interestMixes:[],playlists:[],collections:[]},taste:{},queue:[],request:1,personalization:0,playbackContext:[],playbackSourceContext:{kind:"manual"},followedCursor:0,privateSession:false,recommendationReasons:new Map(),current:null,sections:[],audio:{paused:true},prepared:[],tracks:items=>items,intent:{enter:id=>ctx.prepared.push(id)},captureListening(){},tasteSeeds:()=>[liked],radio:async()=>[personal],createRecordingView,recommendationSession:{seeds:(_,seeds)=>seeds,contextItems:()=>[],preferenceItems:()=>[],mergePools:pools=>({items:pools.flatMap(pool=>pool.items),scores:new Map()}),allowed:items=>items},recommendationOptions:()=>({}),rankMusicRecommendations:items=>items.map(item=>({item,reason:{code:"catalog"}})),t:s=>s,render(){}};
   Object.assign(ctx,{publicDiscovery:{candidates:async()=>[],clear(){}},publicGeneration:0,sourceRevision:0,navigator:{},resolveRecordingSource,language:()=>"en",view:"home",lastQuery:{kind:"home"}});
   return {ctx,...runInNewContext(`(()=>{${code};return {personalize,homeSections};})()`,ctx)};
 }
@@ -39,4 +39,15 @@ test("home represents the chosen music context within three stations and rotates
   for(let i=0;i<4;i++){const before=radios.length;await h.personalize(1,[]);assert.equal(radios.length-before,3);}
   assert.ok(radios.every(id=>context.some(item=>item.id===id)));assert.equal(queries.length,8);
   assert.deepEqual(new Set(queries),new Set(["UC0","UC1","UC2","UC3"]));
+});
+
+test("home retrieval follows a newly qualified current interest while retaining the original source context",async()=>{
+  const h=home(false),initial={...song(10,"Initial"),artists:["Original artist"]},live={...song(11,"New"),artists:["Current artist"]},radios=[];
+  h.ctx.recommendationSession=createRecommendationSession();h.ctx.recommendationSession.setContext([initial]);
+  h.ctx.recommendationSession.recordListen(live,{seconds:40,duration:180,session:1});
+  h.ctx.canonicalArtistKey=canonicalArtistKey;h.ctx.radio=async seed=>{radios.push(seed.id);return [personal];};
+  await h.personalize(1,[]);
+  assert.equal(radios[0],live.id);assert.ok(radios.length<=3);
+  assert.deepEqual(h.ctx.recommendationSession.contextItems(),[initial]);
+  assert.equal(h.ctx.saved.favorites.length,0);assert.deepEqual(h.ctx.queue,[]);
 });

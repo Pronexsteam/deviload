@@ -52,6 +52,13 @@ pub struct Options {
     // WebM is the open format of browsers.
     #[serde(default = "default_container")]
     pub container: String,
+    // Gallery jobs are explicit. Missing fields keep older video/music jobs unchanged.
+    #[serde(default)]
+    pub download_engine: String,
+    #[serde(default)]
+    pub gallery_items: Vec<u32>,
+    #[serde(default)]
+    pub gallery_fingerprint: String,
 }
 
 fn default_container() -> String { "mp4".into() }
@@ -91,12 +98,29 @@ impl Default for Options {
             format_id: String::new(), format_has_audio: false, container: default_container(),
             audio_format_id: String::new(), audio_language: String::new(),
             subtitle_languages: default_subtitle_languages(), subtitle_auto: true, source_size: None,
+            download_engine: String::new(), gallery_items: vec![], gallery_fingerprint: String::new(),
         }
     }
 }
 
 impl Options {
     pub fn validate(&self) -> Result<(), String> {
+        if !["", "yt-dlp", "gallery-dl"].contains(&self.download_engine.as_str()) { return Err("Unknown download engine".into()); }
+        if self.download_engine == "gallery-dl" {
+            if self.gallery_items.is_empty() || self.gallery_items.len() > 200 || self.gallery_items.iter().any(|&index| index == 0 || index > 200) ||
+                self.gallery_items.iter().collect::<HashSet<_>>().len() != self.gallery_items.len() {
+                return Err("Choose from 1 to 200 gallery items".into());
+            }
+            if self.gallery_fingerprint.len() != 64 || !self.gallery_fingerprint.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                return Err("Read the gallery again before downloading".into());
+            }
+            if self.playlist || self.clip_start.is_some() || self.clip_end.is_some() || self.split_chapters || self.subtitles || self.sponsorblock ||
+                !self.format_id.is_empty() || !self.audio_format_id.is_empty() || !self.audio_language.is_empty() {
+                return Err("Video conversion settings do not apply to galleries".into());
+            }
+        } else if !self.gallery_items.is_empty() || !self.gallery_fingerprint.is_empty() {
+            return Err("Gallery choices require the gallery download engine".into());
+        }
         if !["best", "1080", "720", "480", "mp3", "flac", "wav"].contains(&self.quality.as_str()) {
             return Err("Unknown format".into());
         }
@@ -633,6 +657,17 @@ mod tests {
         assert!(o.playlist_items.is_empty());
         assert!(!o.split_chapters);
         assert!(o.cookies_browser.is_empty());
+        assert!(o.download_engine.is_empty() && o.gallery_items.is_empty() && o.gallery_fingerprint.is_empty());
+    }
+    #[test] fn gallery_selections_are_explicit_bounded_and_cannot_inherit_video_operations() {
+        let o=Options{download_engine:"gallery-dl".into(),gallery_items:vec![2,1],gallery_fingerprint:"a".repeat(64),..Default::default()};
+        o.validate().unwrap();
+        for items in [vec![],vec![0],vec![201],vec![1,1]] { assert!(Options{gallery_items:items,..o.clone()}.validate().is_err()); }
+        assert!(Options{gallery_fingerprint:"not-a-preview".into(),..o.clone()}.validate().is_err());
+        assert!(Options{download_engine:String::new(),..o.clone()}.validate().is_err());
+        assert!(Options{playlist:true,..o.clone()}.validate().is_err());
+        assert!(Options{format_id:"137".into(),..o.clone()}.validate().is_err());
+        assert!(Options{download_engine:"arbitrary-program".into(),..o}.validate().is_err());
     }
     #[test] fn mobile_profile_reencodes_video_to_mp4() {
         let mkv = Options { container: "mkv".into(), ..Default::default() }.args("https://example.com/v", std::path::Path::new("/tmp"));

@@ -1,7 +1,7 @@
 // Apply the stored skin before styles paint. A missing or invalid preference
 // keeps the existing appearance for people upgrading from older versions.
 (() => {
-  const themes = ["classic", "glass-light", "matte-black", "glass-black", "midnight"];
+  const themes = ["classic", "glass-light", "matte-black", "glass-black", "midnight", "spotify"];
   let theme = "classic";
   try {
     const saved = localStorage.getItem("deviload-theme");

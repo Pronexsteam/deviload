@@ -27,7 +27,7 @@ fn preferences(value: &Value) -> Value {
     let mut output = serde_json::Map::new();
     for (key, allowed) in [
         ("deviload-lang", vec!["en", "ru", "es"]),
-        ("deviload-theme", vec!["classic", "glass-light", "matte-black", "glass-black", "midnight"]),
+        ("deviload-theme", vec!["classic", "glass-light", "matte-black", "glass-black", "midnight", "spotify"]),
         ("deviload-tray", vec!["true", "false"]),
         ("deviload-os-notify", vec!["true", "false"]),
         ("deviload-ytdlp-auto", vec!["true", "false"]),
@@ -209,7 +209,7 @@ mod tests {
         assert_eq!(legacy.version, 1);
         assert!(legacy.preferences.get("deviload-theme").is_none());
         assert_eq!(legacy.preferences["deviload-lang"], "es");
-        for theme in ["classic", "glass-light", "matte-black", "glass-black", "midnight"] {
+        for theme in ["classic", "glass-light", "matte-black", "glass-black", "midnight", "spotify"] {
             let mut value: Value = serde_json::from_str(&original).unwrap();
             value["preferences"]["deviload-theme"] = json!(theme);
             let (backup, _) = checked(&value.to_string()).unwrap();

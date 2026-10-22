@@ -1,7 +1,7 @@
 // Self-healing downloads: when yt-dlp fails in a way Deviload knows how to fix, the
 // task is changed and queued again instead of ending in an error. Each fix is tried
 // once per task, so a download never loops.
-use crate::model::Job;
+use crate::{download_recovery::{self, FailureKind}, model::Job};
 use std::{
     path::Path, sync::atomic::{AtomicBool, AtomicU64, Ordering},
 };
@@ -11,8 +11,10 @@ use std::{
 static UPDATE_WANTED: AtomicBool = AtomicBool::new(false);
 static UPDATING: AtomicBool = AtomicBool::new(false);
 static UPDATED_AT: AtomicU64 = AtomicU64::new(0);
+static UPDATE_FAILED_AT: AtomicU64 = AtomicU64::new(0);
 static UPDATE_STARTED: AtomicU64 = AtomicU64::new(0);
 const UPDATE_EVERY: u64 = 6 * 3600;
+const UPDATE_FAILURE_BACKOFF: u64 = 5 * 60;
 // An update that hangs (no network, say) must not hold the queue for good.
 const UPDATE_GIVES_UP: u64 = 180;
 const WAIT_AFTER_LIMIT: u64 = 600;
@@ -25,7 +27,7 @@ pub enum Fix {
     AnyFormat,
     // Update yt-dlp, then retry.
     UpdateEngine,
-    // YouTube asked to slow down: retry once, later.
+    // The site asked to slow down: retry once, later.
     Wait,
 }
 
@@ -35,13 +37,15 @@ impl Fix {
     }
 }
 
-fn recent(log: &[String]) -> String {
-    log.iter().rev().take(30).rev().cloned().collect::<Vec<_>>().join(" ").to_ascii_lowercase()
+fn update_allowed(now: u64, last_success: u64, last_failure: u64) -> bool {
+    now.saturating_sub(last_success) >= UPDATE_EVERY &&
+        (last_failure == 0 || now.saturating_sub(last_failure) >= UPDATE_FAILURE_BACKOFF)
 }
 
 // What to try for a failed task, if anything. `signed_in` tells whether a Deviload sign-in exists.
 pub fn plan(job: &Job, signed_in: bool, now: u64) -> Option<Fix> {
-    let log = recent(&job.log);
+    if job.options.download_engine == "gallery-dl" { return None; }
+    let log = download_recovery::attempt_detail(&job.log);
     let tried = |fix: &Fix| job.healed.iter().any(|key| key == fix.key());
     let has = |words: &[&str]| words.iter().any(|word| log.contains(word));
     let own_cookies = !job.options.cookies.is_empty() || !job.options.cookies_browser.is_empty();
@@ -51,14 +55,21 @@ pub fn plan(job: &Job, signed_in: bool, now: u64) -> Option<Fix> {
     let needs_account = has(&["--cookies-from-browser or --cookies", "use --cookies", "empty media response", "login required", "log in to", "authentication"]);
     let youtube = url::Url::parse(&job.url).ok().and_then(|url| url.host_str().map(str::to_ascii_lowercase))
         .is_some_and(|host| host == "youtu.be" || host == "youtube.com" || host.ends_with(".youtube.com"));
+    let failure = download_recovery::classify(&job.log);
+    // Known rate/account/availability errors must never fall through to the
+    // generic "please report this issue" update hint after their one fix failed.
+    if failure == FailureKind::RateLimited { return (!tried(&Fix::Wait)).then_some(Fix::Wait); }
+    if failure == FailureKind::Authentication {
+        return (has(&["sign in to confirm", "confirm your age", "login required", "members-only", "join this channel", "private video"])
+            && youtube && signed_in && !own_cookies && !tried(&Fix::SignIn)).then_some(Fix::SignIn);
+    }
+    if matches!(failure, FailureKind::Unavailable | FailureKind::Unsupported | FailureKind::Permission | FailureKind::Network) { return None; }
     let fixes = [
-        (has(&["sign in to confirm", "confirm your age", "login required", "members-only", "join this channel", "private video"])
-            && youtube && signed_in && !own_cookies, Fix::SignIn),
         (has(&["requested format is not available"]) && !job.options.format_id.is_empty(), Fix::AnyFormat),
-        (has(&["http error 429", "too many requests"]), Fix::Wait),
         (has(&["unable to extract", "signature extraction failed", "n challenge solving failed", "nsig extraction failed",
             "http error 403", "requested format is not available", "please report this issue", "po token"])
-            && !(needs_account && !youtube) && now.saturating_sub(UPDATED_AT.load(Ordering::Relaxed)) >= UPDATE_EVERY, Fix::UpdateEngine),
+            && !(needs_account && !youtube) && update_allowed(now,
+                UPDATED_AT.load(Ordering::Relaxed), UPDATE_FAILED_AT.load(Ordering::Relaxed)), Fix::UpdateEngine),
     ];
     fixes.into_iter().find(|(applies, fix)| *applies && !tried(fix)).map(|(_, fix)| fix)
 }
@@ -70,7 +81,7 @@ pub fn apply(job: &mut Job, fix: &Fix, cookies: &Path, now: u64) {
         Fix::SignIn => { job.options.cookies = cookies.to_string_lossy().into_owned(); "YouTube asked to sign in; trying again with your account" }
         Fix::AnyFormat => { job.options.format_id.clear(); job.options.format_has_audio = false; job.options.source_size = None; "that stream is gone; trying again with the usual quality choice" }
         Fix::UpdateEngine => { UPDATE_WANTED.store(true, Ordering::Relaxed); "yt-dlp looks outdated; updating it and trying again" }
-        Fix::Wait => { job.scheduled_at = Some(now + WAIT_AFTER_LIMIT); "YouTube asked to slow down; trying again in 10 minutes" }
+        Fix::Wait => { job.scheduled_at = Some(now.saturating_add(WAIT_AFTER_LIMIT)); "The site asked to slow down; trying again in 10 minutes" }
     };
     job.status = "queued".into();
     job.percent = 0.0;
@@ -94,8 +105,14 @@ pub fn update_engine_when_idle(update: impl FnOnce() -> Result<(), String> + Sen
     UPDATE_STARTED.store(now, Ordering::Relaxed);
     std::thread::spawn(move || {
         // A failed update still lets the task try once more with the old yt-dlp.
-        let _ = update();
-        UPDATED_AT.store(now, Ordering::Relaxed);
+        if update().is_ok() {
+            UPDATED_AT.store(now, Ordering::Relaxed);
+            UPDATE_FAILED_AT.store(0, Ordering::Relaxed);
+        } else {
+            // A transient network failure is not a successful engine update.
+            // Still back off briefly so separate failed tasks cannot storm it.
+            UPDATE_FAILED_AT.store(now.max(1), Ordering::Relaxed);
+        }
         UPDATE_WANTED.store(false, Ordering::Relaxed);
         UPDATING.store(false, Ordering::Relaxed);
     });
@@ -160,5 +177,43 @@ mod tests {
         assert_eq!(job.scheduled_at, Some(1000 + WAIT_AFTER_LIMIT));
         assert_eq!(plan(&failed(&["ERROR: Unsupported URL: https://example.com"]), true, UPDATE_EVERY), None);
         assert_eq!(plan(&failed(&["ERROR: [youtube] x: Video unavailable"]), true, UPDATE_EVERY), None);
+    }
+
+    #[test]
+    fn a_failed_update_has_a_short_backoff_without_consuming_the_success_window() {
+        let now = 100_000;
+        assert!(update_allowed(now, 0, 0));
+        assert!(!update_allowed(now + 299, 0, now));
+        assert!(update_allowed(now + 300, 0, now));
+        assert!(!update_allowed(now + 300, now, 0));
+        assert!(update_allowed(now + UPDATE_EVERY, now, 0));
+        assert!(!update_allowed(now - 1, 0, now));
+    }
+
+    #[test]
+    fn facebook_rate_limit_does_not_claim_the_site_was_youtube() {
+        let mut job = failed(&["ERROR: HTTP Error 429: Too Many Requests"]);
+        job.url = "https://www.facebook.com/reel/1578198251014489".into();
+        assert_eq!(plan(&job, false, 1000), Some(Fix::Wait));
+        apply(&mut job, &Fix::Wait, Path::new(""), 1000);
+        assert_eq!(job.scheduled_at, Some(1600));
+        assert!(job.log.last().unwrap().contains("The site asked to slow down"));
+        assert!(!job.log.last().unwrap().contains("YouTube"));
+    }
+
+    #[test]
+    fn a_known_failure_never_falls_through_to_an_engine_update_hint() {
+        for line in ["HTTP Error 429: Too Many Requests", "Sign in to confirm your age", "Unsupported URL", "Video unavailable", "No space left on device"] {
+            let mut job = failed(&[&format!("ERROR: {line}; please report this issue")]);
+            job.healed = vec!["wait".into(), "sign-in".into()];
+            assert_eq!(plan(&job, true, UPDATE_EVERY), None, "{line}");
+        }
+    }
+
+    #[test]
+    fn earlier_attempts_do_not_override_the_latest_failure() {
+        let job = failed(&["ERROR: HTTP Error 429: Too Many Requests", download_recovery::ATTEMPT_STARTED,
+            "ERROR: [youtube] nsig extraction failed; please report this issue"]);
+        assert_eq!(plan(&job, false, UPDATE_EVERY), Some(Fix::UpdateEngine));
     }
 }

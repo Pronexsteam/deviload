@@ -34,7 +34,7 @@ function setup(saved, restored = {}) {
 }
 
 test('settings export includes the selected theme and restore applies it before reloading', async() => {
-  for (const theme of ['classic','glass-light','matte-black','glass-black','midnight']) {
+  for (const theme of ['classic','glass-light','matte-black','glass-black','midnight','spotify']) {
     const h = setup({'deviload-theme':theme,'deviload-lang':'en'},{'deviload-theme':theme});
     await h.ids['backup-export'].onclick();
     assert.equal(h.calls[0].args.prefs['deviload-theme'],theme);

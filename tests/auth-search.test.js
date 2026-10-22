@@ -15,7 +15,8 @@ function fixture(start, end, invoke) {
   const $ = id => { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); };
   const t = (text, values = {}) => text.replace(/\{(\w+)\}/g, (_, key) => values[key]);
   runInNewContext(source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start))), {
-    $, invoke, t, node:element, setPose() {}, syncAuth() {}, errorText:String,
+    $, invoke, t, node:element, setPose() {}, syncAuth() {}, renderAccount() {}, errorText:String,
+    savedAuthSource:{mode:"account",path:""},
     localStorage:{setItem:(key, value) => saved.set(key, value)},
   });
   return {$, saved};

@@ -1,7 +1,12 @@
 mod convert;
+mod gallery;
+mod gallery_install;
 mod quick_cut;
 mod download_details;
 mod cookies;
+mod library_index;
+#[cfg(any(target_os = "linux", test))]
+mod window_geometry;
 mod music;
 mod music_discovery;
 mod music_audio;
@@ -25,6 +30,7 @@ pub use music_lyrics::lyrics as preview_music_lyrics;
 #[cfg(debug_assertions)]
 pub use music::{prepare_engine as preview_music_prepare, stream_request as preview_music_stream_request, music_cancel_stream as preview_music_cancel_stream};
 mod engine_update;
+mod download_recovery;
 mod heal;
 mod media_server;
 mod model;
@@ -58,11 +64,14 @@ struct Snapshot {
     // Jellyfin, Emby or Plex to notify after downloads laid out for it.
     #[serde(default)]
     media_server: media_server::MediaServer,
+    // Shared website cooldowns survive restart; absent in older queue files.
+    #[serde(default)]
+    rate_limits: Vec<download_recovery::HostCooldown>,
 }
 impl Default for Snapshot {
     fn default() -> Self {
         Self { jobs: vec![], next_id: 1, options: Options::default(), parallel: 2, warning: String::new(), default_folder: String::new(),
-            media_server: media_server::MediaServer::default() }
+            media_server: media_server::MediaServer::default(), rate_limits: vec![] }
     }
 }
 
@@ -83,37 +92,7 @@ fn allocate_id(data: &mut Snapshot) -> u64 {
 // Keep the original task ID for its final file, so existing editor projects keep working.
 // Additional playlist files have independent records and can be played, shared or removed.
 fn index_library(data: &mut Snapshot) {
-    let parents: Vec<Job> = data.jobs.iter().filter(|j| j.library_parent.is_none() && (j.status == "done" || !j.downloads.is_empty())).cloned().collect();
-    for job in parents {
-        let mut seen = HashSet::new();
-        let files: Vec<String> = job.downloads.iter().map(|entry| entry[1].clone()).filter(|file| !file.is_empty() && seen.insert(file.clone())).collect();
-        for file in files {
-            if (file == job.file && job.status == "done") || data.jobs.iter().any(|j| j.library_parent == Some(job.id) && j.file == file) { continue; }
-            let mut media = job.clone();
-            media.id = allocate_id(data);
-            media.library_parent = Some(job.id);
-            media.file = file;
-            media.status = "done".into();
-            media.percent = 100.0;
-            media.pid = None;
-            media.scheduled_at = None;
-            media.repeat_at = 0;
-            media.forget_recording();
-            media.stage.clear();
-            media.archived = 0;
-            media.downloads.clear();
-            media.log.clear();
-            media.hidden_in_queue = true;
-            media.bytes = 0;
-            media.duration = 0.0;
-            data.jobs.push(media);
-        }
-    }
-    let mut visible = HashSet::new();
-    for media in data.jobs.iter_mut().filter(|j| j.status == "done" && !j.hidden_in_library && !j.file.is_empty()) {
-        let key = if cfg!(windows) { media.file.replace('\\', "/").to_lowercase() } else { media.file.clone() };
-        if !visible.insert(key) { media.hidden_in_library = true; }
-    }
+    library_index::index_library(&mut data.jobs, &mut data.next_id, cfg!(windows));
 }
 
 fn save(dir: &Path, data: &Snapshot) -> Result<(), String> {
@@ -231,6 +210,9 @@ fn quote_arg(arg: &str) -> String {
 #[tauri::command]
 fn job_command(id: u64, engine: tauri::State<Engine>) -> Result<String, String> {
     let job = engine.data.lock().unwrap().jobs.iter().find(|j| j.id == id).cloned().ok_or("Task not found")?;
+    if job.options.download_engine == "gallery-dl" {
+        return Err("Gallery tasks use a temporary selection file. Read the gallery again in Deviload to repeat this download.".into());
+    }
     let exe = binary("yt-dlp")?;
     let command = ytdlp_command(&exe);
     let mut parts = vec![quote_arg(&exe.to_string_lossy())];
@@ -281,7 +263,8 @@ impl Engine {
         let result = self.download(&job).and_then(|_| self.finish_clip_gif(&job)).map(|_| self.finish_media_server(&job));
         self.unarchive_recording(id);
         let mut d = self.data.lock().unwrap();
-        if let Some(j) = d.jobs.iter_mut().find(|j| j.id == id) {
+        let Snapshot { jobs, rate_limits, .. } = &mut *d;
+        if let Some(j) = jobs.iter_mut().find(|j| j.id == id) {
             j.pid = None;
             if j.status == "pausing" { j.status = "paused".into(); }
             else if j.status == "cancelling" || self.shutdown.load(Ordering::Relaxed) { j.status = "cancelled".into(); }
@@ -294,13 +277,8 @@ impl Engine {
                     }
                     Err(e) => {
                         j.consume(&e);
-                        if !schedule_retry(j) {
-                            let cookies = session_file(&self.dir);
-                            match heal::plan(j, cookies.is_file(), now_seconds()) {
-                                Some(fix) => heal::apply(j, &fix, &cookies, now_seconds()),
-                                None => j.status = "error".into(),
-                            }
-                        }
+                        let cookies = session_file(&self.dir);
+                        recover_download(j, rate_limits, &cookies, now_seconds(), download_recovery::clock());
                     }
                 }
             }
@@ -458,6 +436,7 @@ impl Engine {
         }
     }
     fn download(&self, job: &Job) -> Result<(), String> {
+        if job.options.download_engine == "gallery-dl" { return gallery::download(self, job); }
         if job.options.archive && job.options.clip_start.is_none() { self.forget_deleted(job); }
         let exe = binary("yt-dlp")?;
         let args = download_args(job, &self.dir)?;
@@ -558,7 +537,11 @@ impl Engine {
 }
 
 #[tauri::command]
-fn snapshot(engine: tauri::State<Engine>) -> Snapshot { engine.data.lock().unwrap().clone() }
+fn snapshot(engine: tauri::State<Engine>) -> Snapshot {
+    let mut snapshot = engine.data.lock().unwrap().clone();
+    snapshot.rate_limits = download_recovery::public_records(&snapshot.rate_limits, download_recovery::clock(), now_seconds());
+    snapshot
+}
 
 #[tauri::command]
 fn set_media_server(server: media_server::MediaServer, engine: tauri::State<Engine>) -> Result<(), String> {
@@ -788,9 +771,13 @@ async fn site_sign_in(app: tauri::AppHandle, engine: tauri::State<'_, Engine>, s
 }
 
 #[tauri::command]
-fn site_sessions(engine: tauri::State<Engine>) -> Vec<&'static str> {
-    SITES.iter().filter(|site| site.key != "youtube" && fs::read_to_string(site_cookie_file(&engine.dir, site))
-        .is_ok_and(|text| has_cookie_session(&text, site, now_seconds()))).map(|site| site.key).collect()
+async fn site_sessions(engine: tauri::State<'_, Engine>) -> Result<Vec<&'static str>, String> {
+    let dir = engine.dir.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        SITES.iter().filter(|site| site.key != "youtube" && cookies::has_saved_session_file(
+            &site_cookie_file(&dir, site), site.hosts, site.signed_in, now_seconds()))
+            .map(|site| site.key).collect()
+    }).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -845,9 +832,12 @@ async fn open_youtube(app: tauri::AppHandle, engine: tauri::State<'_, Engine>, s
 }
 
 #[tauri::command]
-fn youtube_login_status(engine: tauri::State<Engine>) -> Option<String> {
+async fn youtube_login_status(engine: tauri::State<'_, Engine>) -> Result<Option<String>, String> {
     let path = session_file(&engine.dir);
-    if path.is_file() { Some(path.to_string_lossy().into()) } else { None }
+    tauri::async_runtime::spawn_blocking(move || {
+        cookies::has_saved_session_file(&path, SITES[0].hosts, SITES[0].signed_in, now_seconds())
+            .then(|| path.to_string_lossy().into_owned())
+    }).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -893,8 +883,12 @@ async fn clear_site_cookies(app: &tauri::AppHandle, site: &'static Site) -> Resu
 }
 
 #[tauri::command]
-fn diagnostics() -> Vec<(String, bool)> {
-    ["yt-dlp", "ffmpeg", "ffprobe", "deno"].iter().map(|s| (s.to_string(), binary(s).is_ok())).collect()
+async fn diagnostics() -> Result<Vec<(String, bool)>, String> {
+    // On Linux binary() may prepare a writable executable copy. Never do that
+    // disk work on the native UI dispatcher.
+    tauri::async_runtime::spawn_blocking(|| {
+        ["yt-dlp", "ffmpeg", "ffprobe", "deno"].iter().map(|s| (s.to_string(), binary(s).is_ok())).collect()
+    }).await.map_err(|e| e.to_string())
 }
 
 fn ytdlp_version(exe: &Path) -> Result<String, String> {
@@ -921,9 +915,12 @@ fn read_store(dir: &Path) -> serde_json::Map<String, serde_json::Value> {
 }
 
 #[tauri::command]
-fn ui_store(engine: tauri::State<Engine>) -> serde_json::Value {
-    let _guard = STORE_LOCK.lock().unwrap();
-    serde_json::Value::Object(read_store(&engine.dir))
+async fn ui_store(engine: tauri::State<'_, Engine>) -> Result<serde_json::Value, String> {
+    let dir = engine.dir.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = STORE_LOCK.lock().unwrap();
+        serde_json::Value::Object(read_store(&dir))
+    }).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1071,30 +1068,47 @@ fn now_seconds() -> u64 {
 fn ready_to_run(job: &Job, now: u64) -> bool {
     job.status == "queued" && job.scheduled_at.is_none_or(|when| when <= now)
 }
-fn transient_download_error(log: &[String]) -> bool {
-    let detail = log.iter().rev().take(20).rev().cloned().collect::<Vec<_>>().join(" ").to_ascii_lowercase();
-    if ["login", "sign in", "private video", "copyright", "video unavailable",
-        "unsupported url", "cookies", "permission denied"].iter().any(|word| detail.contains(word)) {
-        return false;
-    }
-    ["timed out", "timeout", "connection reset", "connection refused",
-        "temporary failure", "network is unreachable", "http error 429",
-        "http error 502", "http error 503", "http error 504"].iter()
-        .any(|word| detail.contains(word))
+fn ready_to_download(job: &Job, rate_limits: &[download_recovery::HostCooldown], utc_now: u64, clock_now: u64) -> bool {
+    ready_to_run(job, utc_now) && download_recovery::remaining(rate_limits, &job.url, clock_now) == 0
 }
-fn schedule_retry(job: &mut Job) -> bool {
+fn transient_download_error(log: &[String]) -> bool {
+    download_recovery::classify(log) == download_recovery::FailureKind::Network
+}
+fn schedule_retry_at(job: &mut Job, now: u64) -> bool {
     if !job.auto_retry || job.retry_attempts >= 2 || !transient_download_error(&job.log) {
         return false;
     }
     let wait = if job.retry_attempts == 0 { 30 } else { 120 };
     job.retry_attempts += 1;
-    job.scheduled_at = Some(now_seconds() + wait);
+    job.scheduled_at = Some(now.saturating_add(wait));
     job.status = "queued".into();
     job.percent = 0.0;
     job.speed.clear();
     job.file.clear();
     job.consume(&format!("Auto-retry in {wait} seconds (attempt {}/2)", job.retry_attempts));
     true
+}
+
+fn recover_download(job: &mut Job, rate_limits: &mut Vec<download_recovery::HostCooldown>, cookies: &Path, utc_now: u64, clock_now: u64) {
+    if download_recovery::classify(&job.log) == download_recovery::FailureKind::RateLimited {
+        let shared = download_recovery::defer_host(rate_limits, &job.url, clock_now).is_some();
+        if !job.healed.iter().any(|fix| fix == "wait") {
+            heal::apply(job, &heal::Fix::Wait, cookies, utc_now);
+            // The shared host gate uses monotonic elapsed time. Do not overload
+            // scheduledAt, which belongs to user schedules and real UTC.
+            if shared { job.scheduled_at = None; }
+        } else {
+            job.status = "error".into();
+            job.consume("Deviload: the site is still limiting requests; the automatic retry has stopped. Try again later.");
+        }
+        return;
+    }
+    if !schedule_retry_at(job, utc_now) {
+        match heal::plan(job, cookies.is_file(), clock_now) {
+            Some(fix) => heal::apply(job, &fix, cookies, utc_now),
+            None => job.status = "error".into(),
+        }
+    }
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1118,7 +1132,7 @@ fn check_preflight(text: &str, options: &Options, estimated_bytes: Option<u64>, 
     if (!options.format_id.is_empty() || !options.audio_format_id.is_empty()) && urls.len() != 1 {
         blockers.push("The selected stream fits only a single link.".into());
     }
-    for name in ["yt-dlp", "ffmpeg", "ffprobe", "deno"] {
+    for name in if options.download_engine == "gallery-dl" { &[][..] } else { &["yt-dlp", "ffmpeg", "ffprobe", "deno"][..] } {
         if binary(name).is_err() { blockers.push(format!("{name} was not found next to the app or in PATH.")); }
     }
     let folder = PathBuf::from(&options.folder);
@@ -1169,14 +1183,23 @@ fn check_preflight(text: &str, options: &Options, estimated_bytes: Option<u64>, 
 #[tauri::command]
 fn preflight_download(text: String, options: Options, estimated_bytes: Option<u64>, engine: tauri::State<'_, Engine>) -> Result<Preflight, String> {
     let jobs = engine.data.lock().unwrap().jobs.clone();
+    if options.download_engine == "gallery-dl" { gallery::executable(&engine.dir)?; }
     check_preflight(&text, &options, estimated_bytes.filter(|size| *size <= 1_000_000_000_000), &jobs)
 }
 
 // Links already waiting or downloading are not added twice.
+fn same_download(a: &Options, b: &Options) -> bool {
+    let gallery = |o: &Options| o.download_engine == "gallery-dl";
+    if gallery(a) != gallery(b) { return false; }
+    if !gallery(a) { return true; }
+    let mut left = a.gallery_items.clone();let mut right = b.gallery_items.clone();left.sort_unstable();right.sort_unstable();
+    a.gallery_fingerprint == b.gallery_fingerprint && left == right && a.folder == b.folder
+}
+
 fn queue_urls(d: &mut Snapshot, urls: Vec<String>, options: &Options, scheduled_at: Option<u64>, auto_retry: bool) -> usize {
     let mut count = 0;
     for url in urls {
-        if d.jobs.iter().any(|j| j.url == url && ["queued", "running", "cancelling", "pausing", "paused"].contains(&j.status.as_str())) { continue; }
+        if d.jobs.iter().any(|j| j.url == url && same_download(&j.options,options) && ["queued", "running", "cancelling", "pausing", "paused"].contains(&j.status.as_str())) { continue; }
         let next_id = allocate_id(d);
         d.jobs.push(Job { id: next_id, url, options: options.clone(), status: "queued".into(),
             percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at, auto_retry, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() });
@@ -1203,7 +1226,11 @@ fn enqueue(text: String, options: Options, parallel: usize, scheduled_at: Option
         return Err("Scheduling is limited to one year ahead".into());
     }
     // Fail before accepting tasks when the environment is incomplete.
-    for name in ["yt-dlp", "ffmpeg", "ffprobe", "deno"] { binary(name)?; }
+    if options.download_engine == "gallery-dl" {
+        if urls.len() != 1 || live_limit != 0 || repeat { return Err("Gallery downloads need one link and cannot record live streams.".into()); }
+        gallery::validate_source(&urls[0])?;
+        gallery::executable(&engine.dir)?;
+    } else { for name in ["yt-dlp", "ffmpeg", "ffprobe", "deno"] { binary(name)?; } }
     let mut d = engine.data.lock().unwrap();
     let old = d.clone();
     let first_new = d.jobs.iter().map(|j| j.id).max().unwrap_or(0) + 1;
@@ -1212,9 +1239,23 @@ fn enqueue(text: String, options: Options, parallel: usize, scheduled_at: Option
         job.live_limit = live_limit;
         if repeat { job.repeat_at = scheduled_at.unwrap_or_else(now_seconds); }
     }
-    if !preserve_options.unwrap_or(false) { d.options = options; d.parallel = parallel; }
+    if options.download_engine != "gallery-dl" && !preserve_options.unwrap_or(false) { d.options = options; d.parallel = parallel; }
     if let Err(e) = save(&engine.dir, &d) { *d = old; return Err(e); }
     Ok(count)
+}
+
+#[tauri::command]
+async fn gallery_info(engine: tauri::State<'_, Engine>) -> Result<gallery::GalleryInfo,String> {
+    let dir=engine.dir.clone();tauri::async_runtime::spawn_blocking(move||gallery::info(&dir)).await.map_err(|e|e.to_string())
+}
+#[tauri::command]
+async fn gallery_install(engine: tauri::State<'_, Engine>) -> Result<gallery::GalleryInfo,String> {
+    let dir=engine.dir.clone();tauri::async_runtime::spawn_blocking(move||gallery_install::install(&dir)).await.map_err(|e|e.to_string())?
+}
+#[tauri::command]
+async fn gallery_inspect(source: String, options: Options, engine: tauri::State<'_, Engine>) -> Result<gallery::GalleryPreview,String> {
+    options.validate()?;
+    let dir=engine.dir.clone();tauri::async_runtime::spawn_blocking(move||gallery::inspect(&source,&options,&dir)).await.map_err(|e|e.to_string())?
 }
 
 // Deviload 1.x was a portable PowerShell app that kept its history, settings and
@@ -3023,6 +3064,31 @@ fn tray_icon() -> tauri::Result<tauri::image::Image<'static>> {
     tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))
 }
 
+#[cfg(target_os = "linux")]
+fn fit_linux_main_window(window: &tauri::WebviewWindow) {
+    use window_geometry::{fit_initial_window, LogicalSize, WorkArea};
+    let Some(monitor) = window.current_monitor().ok().flatten()
+        .or_else(|| window.primary_monitor().ok().flatten()) else { return; };
+    let scale = monitor.scale_factor();
+    let area = monitor.work_area();
+    let frame = window.outer_size().ok().zip(window.inner_size().ok())
+        .filter(|_| scale.is_finite() && scale > 0.0)
+        .map(|(outer, inner)| LogicalSize {
+            width: outer.width.saturating_sub(inner.width) as f64 / scale,
+            height: (outer.height.saturating_sub(inner.height) as f64 / scale).max(40.0),
+        }).unwrap_or(LogicalSize { width: 0.0, height: 40.0 });
+    let Some(fit) = fit_initial_window(WorkArea {
+        x: area.position.x, y: area.position.y, width: area.size.width,
+        height: area.size.height, scale_factor: scale,
+    }, LogicalSize { width: 1120.0, height: 780.0 },
+        LogicalSize { width: 760.0, height: 620.0 }, frame) else { return; };
+    // Wayland compositors can decline positioning. Sizing is best effort and
+    // must never prevent startup; lower the old minimum before fitting.
+    let _ = window.set_min_size(Some(tauri::LogicalSize::new(fit.minimum_size.width, fit.minimum_size.height)));
+    let _ = window.set_size(tauri::LogicalSize::new(fit.size.width, fit.size.height));
+    let _ = window.set_position(tauri::PhysicalPosition::new(fit.position.0, fit.position.1));
+}
+
 fn restore_main(app: &tauri::AppHandle) {
     #[cfg(target_os = "macos")]
     if let Err(error) = app.show() { eprintln!("Could not show Deviload: {error}"); }
@@ -3057,6 +3123,8 @@ pub fn run() {
         .manage(power::AfterDownloads::default())
         .manage(PendingUpdate::default())
         .setup(|app| {
+            #[cfg(target_os = "linux")]
+            if let Some(window) = app.get_webview_window("main") { fit_linux_main_window(&window); }
             #[cfg(windows)]
             if let Some(window) = app.get_webview_window("main") {
                 window.set_decorations(false)?;
@@ -3128,6 +3196,7 @@ pub fn run() {
             data.next_id = data.next_id.max(now_seconds() * 1000);
             index_library(&mut data);
             data.parallel = data.parallel.clamp(1, 8);
+            download_recovery::restore(&mut data.rate_limits, now_seconds(), download_recovery::clock());
             // Never restart downloads silently when the app is opened.
             for job in &mut data.jobs {
                 if ["running", "cancelling", "pausing"].contains(&job.status.as_str()) || (job.status == "queued" && job.scheduled_at.is_none()) { job.status = "interrupted".into(); }
@@ -3143,19 +3212,27 @@ pub fn run() {
             thread::spawn(move || loop {
                 if engine.shutdown.load(Ordering::Relaxed) { break; }
                 // While yt-dlp waits to be replaced, no new download starts.
-                let updating = heal::engine_update_pending(now_seconds());
+                let clock_now = download_recovery::clock();
+                let utc_now = now_seconds();
+                let updating = heal::engine_update_pending(clock_now);
                 let (id, busy, active) = {
                     let mut d = engine.data.lock().unwrap();
                     let active = d.jobs.iter().filter(|j| ["running", "cancelling", "pausing"].contains(&j.status.as_str())).count();
-                    let waiting = d.jobs.iter().any(|j| ready_to_run(j, now_seconds()));
+                    // A due task waiting for its website still counts as busy;
+                    // after-download shutdown must not fire during this wait.
+                    let waiting = d.jobs.iter().any(|j| ready_to_run(j, utc_now));
                     let id = if active < d.parallel && !updating {
-                        if let Some(j) = d.jobs.iter_mut().find(|j| ready_to_run(j, now_seconds())) {
-                            j.status = "running".into(); j.scheduled_at = None; j.archived = 0; j.forget_recording(); let id = j.id; engine.persist(&mut d); Some(id)
+                        let next = d.jobs.iter().position(|j| ready_to_download(j, &d.rate_limits, utc_now, clock_now));
+                        if let Some(index) = next {
+                            let j = &mut d.jobs[index];
+                            j.status = "running".into(); j.scheduled_at = None; j.archived = 0; j.forget_recording();
+                            j.consume(download_recovery::ATTEMPT_STARTED);
+                            let id = j.id; engine.persist(&mut d); Some(id)
                         } else { None }
                     } else { None };
                     (id, active > 0 || waiting || updating, active)
                 };
-                if updating && active == 0 { heal::update_engine_when_idle(|| update_engine().map(|_| ()), now_seconds()); }
+                if updating && active == 0 { heal::update_engine_when_idle(|| update_engine().map(|_| ()), clock_now); }
                 power::observe(&handle, busy);
                 if let Some(id) = id {
                     let worker = engine.clone(); thread::spawn(move || worker.run_job(id));
@@ -3174,7 +3251,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![quick_cut::quick_cut_plan, quick_cut::quick_cut_export, quick_cut::quick_cut_stop, settings_backup::settings_backup_data, settings_backup::inspect_settings_backup, settings_backup::restore_settings_backup, settings_backup::export_settings_backup, set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_site_browser, open_releases, open_support, window_action, apply_download_auth, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, export_download_profiles, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, site_sign_in, site_sign_out, site_sessions, music::music_catalog, music_discovery::music_discovery, music::music_prepare, music_engine::music_cache, music_engine::music_engine_update, music_engine::music_diagnostics, music_engine::export_music_diagnostics, music_offline::music_downloaded, music_offline::music_offline_source, music_lyrics::music_lyrics, music::music_stream, music::music_cancel_stream, music_controls::set_music_controls, music_presence::music_presence, music_profile::export_music_profile, music_import::read_music_import, music_playlist_import::music_import_spotify_playlist, open_music_import_help, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, relink_media, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
+        .invoke_handler(tauri::generate_handler![gallery_info, gallery_install, gallery_inspect, quick_cut::quick_cut_plan, quick_cut::quick_cut_export, quick_cut::quick_cut_stop, settings_backup::settings_backup_data, settings_backup::inspect_settings_backup, settings_backup::restore_settings_backup, settings_backup::export_settings_backup, set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_site_browser, open_releases, open_support, window_action, apply_download_auth, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, export_download_profiles, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, site_sign_in, site_sign_out, site_sessions, music::music_catalog, music_discovery::music_discovery, music::music_prepare, music_engine::music_cache, music_engine::music_engine_update, music_engine::music_diagnostics, music_engine::export_music_diagnostics, music_offline::music_downloaded, music_offline::music_offline_source, music_lyrics::music_lyrics, music::music_stream, music::music_cancel_stream, music_controls::set_music_controls, music_presence::music_presence, music_profile::export_music_profile, music_import::read_music_import, music_playlist_import::music_import_spotify_playlist, open_music_import_help, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, relink_media, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
         .build(tauri::generate_context!()).expect("failed to start Deviload")
         .run(|app, event| {
             #[cfg(target_os = "macos")]
@@ -3186,6 +3263,15 @@ pub fn run() {
 #[cfg(test)]
 mod engine_tests {
     use super::*;
+    #[test] fn galleries_deduplicate_by_selection_without_blocking_video_jobs() {
+        let mut data=Snapshot::default();let url="https://example.com/album".to_string();
+        let a=Options{download_engine:"gallery-dl".into(),gallery_items:vec![1,3],gallery_fingerprint:"b".repeat(64),..Options::default()};
+        assert_eq!(queue_urls(&mut data,vec![url.clone()],&a,None,true),1);
+        assert_eq!(queue_urls(&mut data,vec![url.clone()],&Options{gallery_items:vec![3,1],..a.clone()},None,true),0);
+        assert_eq!(queue_urls(&mut data,vec![url.clone()],&Options{gallery_items:vec![2],..a},None,true),1);
+        assert_eq!(queue_urls(&mut data,vec![url.clone()],&Options::default(),None,true),1);
+        assert_eq!(queue_urls(&mut data,vec![url],&Options::default(),None,true),0);
+    }
 
     #[test]
     fn applying_cookies_persists_without_queuing_a_download_and_invalid_files_keep_previous_settings() {
@@ -3873,10 +3959,84 @@ mod engine_tests {
         assert!(transient_download_error(&["ERROR: HTTP Error 503: Service Unavailable".into()]));
         assert!(!transient_download_error(&["ERROR: Sign in to confirm your age".into()]));
         job.status = "error".into(); job.log = vec!["ERROR: HTTP Error 503: Service Unavailable".into()];
-        assert!(schedule_retry(&mut job));
+        assert!(schedule_retry_at(&mut job,now_seconds()));
         assert_eq!(job.status, "queued");
         assert_eq!(job.retry_attempts, 1);
         assert!(job.scheduled_at.unwrap() > now_seconds());
         job.retry_attempts = 2;
-        assert!(!schedule_retry(&mut job));
-    }}
+        assert!(!schedule_retry_at(&mut job,now_seconds()));
+    }
+
+    fn recovery_job(address: &str, auto_retry: bool) -> Job {
+        serde_json::from_value(serde_json::json!({"id":1, "url":address, "options":Options::default(),
+            "status":"running", "percent":40, "speed":"2.0", "file":"", "log":[], "autoRetry":auto_retry})).unwrap()
+    }
+
+    #[test]
+    fn rate_limits_bypass_fast_retries_and_share_the_wait_with_new_jobs() {
+        let mut job = recovery_job("https://youtu.be/a", true);
+        job.log = vec!["ERROR: HTTP Error 429: Too Many Requests; please report this issue".into()];
+        let mut rate_limits = vec![];
+        recover_download(&mut job, &mut rate_limits, Path::new(""), 1000, 1000);
+        assert_eq!(job.status, "queued");
+        assert_eq!(job.retry_attempts, 0);
+        assert_eq!(job.scheduled_at, None);
+        assert_eq!(job.healed, ["wait"]);
+        assert!(!ready_to_download(&job, &rate_limits, 1001, 1001));
+        assert!(ready_to_run(&job, 1001)); // A cooldown must still prevent idle shutdown.
+        let mut next = recovery_job("https://music.youtube.com/watch?v=b", false);
+        next.status = "queued".into();
+        assert!(!ready_to_download(&next, &rate_limits, 1001, 1001));
+        next.url = "https://vimeo.com/c".into();
+        assert!(ready_to_download(&next, &rate_limits, 1001, 1001));
+        assert!(ready_to_download(&job, &rate_limits, 1600, 1600));
+        job.status = "running".into();
+        recover_download(&mut job, &mut rate_limits, Path::new(""), 1601, 1601);
+        assert_eq!(job.status, "error");
+        assert_eq!(job.healed, ["wait"]);
+        assert!(!job.healed.iter().any(|fix| fix == "update"));
+    }
+
+    #[test]
+    fn host_cooldown_respects_user_schedules_pause_cancel_and_manual_retry() {
+        let mut job = recovery_job("https://www.facebook.com/reel/a", false);
+        let mut limits = vec![];
+        download_recovery::defer_host(&mut limits, "https://fb.watch/a", 1000);
+        job.status = "queued".into(); job.scheduled_at = Some(2000);
+        assert!(!ready_to_download(&job, &limits, 1600, 1600));
+        assert_eq!(job.scheduled_at, Some(2000));
+        for status in ["paused", "cancelled", "cancelling", "interrupted"] {
+            job.status = status.into(); job.scheduled_at = None;
+            assert!(!ready_to_download(&job, &limits, 2000, 2000));
+        }
+        job.status = "queued".into(); // The same state produced by explicit retry.
+        assert!(!ready_to_download(&job, &limits, 1001, 1001));
+        assert!(ready_to_download(&job, &limits, 1600, 1600));
+    }
+
+    #[test]
+    fn transient_network_retries_stay_finite_and_use_their_existing_delays() {
+        let mut job = recovery_job("https://example.com/a", true);
+        job.log = vec!["ERROR: HTTP Error 503: Service Unavailable".into()];
+        assert!(schedule_retry_at(&mut job, 1000));
+        assert_eq!((job.retry_attempts, job.scheduled_at), (1, Some(1030)));
+        assert!(schedule_retry_at(&mut job, 1030));
+        assert_eq!((job.retry_attempts, job.scheduled_at), (2, Some(1150)));
+        assert!(!schedule_retry_at(&mut job, 1150));
+        job.retry_attempts = 0; job.log = vec!["ERROR: HTTP Error 429: Too Many Requests".into()];
+        assert!(!schedule_retry_at(&mut job, 1000));
+    }
+
+    #[test]
+    fn old_queue_files_load_without_cooldowns_and_new_cooldowns_survive_serialization() {
+        let old = serde_json::json!({"jobs":[], "options":Options::default(), "parallel":2});
+        let mut data: Snapshot = serde_json::from_value(old).unwrap();
+        assert!(data.rate_limits.is_empty());
+        download_recovery::defer_host(&mut data.rate_limits, "https://example.com/a?token=private", 1000);
+        let encoded = serde_json::to_string(&data).unwrap();
+        assert!(encoded.contains("rateLimits")); assert!(!encoded.contains("private"));
+        let mut loaded: Snapshot = serde_json::from_str(&encoded).unwrap();
+        download_recovery::restore(&mut loaded.rate_limits, 1100, 1100);
+        assert_eq!(download_recovery::remaining(&loaded.rate_limits, "https://example.com/b", 1100), 500);
+    }
+}

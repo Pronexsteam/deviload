@@ -66,6 +66,17 @@ Add a live link to record from that moment, then stop when you have what you nee
 
 ## Latest update
 
+Deviload **2.7.6** brings a redesigned **Devil Convert**, more responsive **Devil Music** recommendations and clearer download recovery.
+
+- **Convert with more control:** preview the source and result, choose media tracks, remux compatible streams or extract original audio without re-encoding, and keep the existing MP4, MP3, GIF and size-limit workflows.
+- **Listen your way:** use the larger search, try the new **Studio green** theme, and let recent listening adjust the balance between familiar music and new discoveries. Discord presence selects the song title for its compact status.
+- **Save posts and albums:** open **Photos and galleries** to choose individual files with optional gallery-dl. Automatic engine installation is available on Windows and Linux x64; macOS can use an existing gallery-dl in PATH.
+- **Recover and stay current:** website rate limits pause that site's queue while other sites continue. Update notices are available across the main workspaces, with hourly checks while the app is visible.
+
+Read the [2.7.6 release notes](https://github.com/Pronexsteam/deviload/releases/tag/v2.7.6) for details and platform notes.
+
+### Window controls and Midnight in 2.7.5
+
 Deviload **2.7.5** fixes the window buttons in the optional themes: the draggable title strip no longer covers Minimize, Maximize / Restore and Close. Switch appearance from **Themes**, next to **What's new**, or from **Settings → Appearance**.
 
 The new **Midnight** theme adds calm blue-gray surfaces, clear text and soft blue accents. Like the other themes, it follows the app's workspaces, keeps the supporter board readable and saves your choice locally and in settings backups. It uses a static gradient without a WebGL background or decorative animations.

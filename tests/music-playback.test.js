@@ -2,11 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {runInNewContext} from "node:vm";
-import {tracks,remember,nextIndex} from "../src/music-state.js";
+import {tracks,remember,nextIndex,playbackQueue} from "../src/music-state.js";
 import {readTaste,recordListening,recommend,tasteSeeds,listeningClock,tasteArtistKeys,canonicalArtistKey} from "../src/music-taste.js";
 import {mergeRecommendationPools} from "../src/music-recommendation-view.js";
 import {createRecommendationSession} from "../src/music-recommendation-session.js";
-import {rankMusicRecommendations} from "../src/music-recommendation-engine.js";
+import {rankMusicRecommendations,recommendationFamiliarity} from "../src/music-recommendation-engine.js";
 import {createRecordingView} from "../src/music-recording-view.js";
 import {resolveRecordingSource,setRecordingSource,removeRecordingSource,recordingFamilyIds} from "../src/music-recordings.js";
 import {rememberInterestTrack,interestProfile,interestSources,interestSeeds} from "../src/music-interest-mixes.js";
@@ -14,6 +14,8 @@ import {sanitizeMusicTrack,saveMusicProfile} from "../src/music-profile.js";
 import {musicGain} from "../src/music-volume.js";
 import {createPlaybackOrder} from "../src/music-session.js";
 import {createMusicDiagnostics,playbackFailure} from "../src/music-diagnostics.js";
+import ru from "../src/locales/ru.js";
+import es from "../src/locales/es.js";
 
 const source=readFileSync(new URL("../src/devil-music.js",import.meta.url),"utf8");
 const code=source.slice(source.indexOf("  function invalidateRecommendations("),source.indexOf("  function visibleRecommendation("))+
@@ -34,7 +36,7 @@ function player(invoke,items=[song(1)]){
     pause(){if(!this.paused){this.paused=true;events.pause?.();}},
     removeAttribute(){this.src="";},load(){this.currentTime=0;this.ended=false;}};
   Object.defineProperty(audio,"src",{get(){return this.address||"";},set(value){this.address=value;if(value)queueMicrotask(()=>events.loadedmetadata?.());}});
-  const ctx={audio,queue:items,index:-1,current:null,resolvedTrack:null,autoplay:true,radioPending:false,streamLoading:false,playRequest:0,
+  const ctx={audio,queue:items,index:-1,current:null,resolvedTrack:null,resolvedOffline:false,autoplay:true,radioPending:false,streamLoading:false,playRequest:0,
     needsRefresh:false,privateSession:false,resumeSnapshot:null,discordPresence:{sync(){}},diagnostics:createMusicDiagnostics(),playbackFailure,
     listen:audio.addEventListener,decks:{take:()=>null,stopTail(){},warm(){},clear(){ctx.deckClears=(ctx.deckClears||0)+1;},setVolume(){},ready:()=>false,owns:node=>node===audio},sound:{resume(){},transition:0},lyrics:{update(){}},window:{},
     nextPlan:null,preloadPending:false,preloadAttempts:new Set(),radioAhead:null,time:String,recordingRoutingRevision:-1,recordingBoundIds:new Set(),recordingFamilies:new Map(),
@@ -43,8 +45,8 @@ function player(invoke,items=[song(1)]){
     view:"home",lastQuery:{kind:"home"},activeMood:"",playlistId:null,browseItem:null,getPlaylist:()=>null,
     taste:readTaste(),clock:{seconds:0,reset(){this.seconds=0;},sample() {return this.seconds;}},
     title:field(),artist:field(),artwork:field(),seek:field(),elapsed:field(),duration:field(),previous:{click(){}},
-    invoke:(command,args)=>{if(command==="music_cancel_stream"){ctx.cancellations=(ctx.cancellations||0)+1;return Promise.resolve();}return invoke(command,args);},tracks,remember,nextIndex,recommend,recordListening,tasteSeeds,tasteArtistKeys,canonicalArtistKey,mergeRecommendationPools,rankMusicRecommendations,createRecordingView,resolveRecordingSource,setRecordingSource,removeRecordingSource,recordingFamilyIds,sanitizeMusicTrack,saveMusicProfile,rememberInterestTrack,interestProfile,interestSources,interestSeeds,cover:()=>null,displaySubtitle:item=>item?.artists?.join(", ")||"Unknown artist",language:()=>"en",t:s=>s,errorText:String,
-    storage:{getItem:key=>memory.get(key),setItem:(key,value)=>memory.set(key,value)},button(){},openRecordingPicker:options=>{ctx.picker=options;},downloadsPending:new Set(),presentation:{notify(){}},onDownload:null,homeCache:null,
+    invoke:(command,args)=>{if(command==="music_cancel_stream"){ctx.cancellations=(ctx.cancellations||0)+1;return Promise.resolve();}return invoke(command,args);},tracks,remember,nextIndex,recommend,recordListening,tasteSeeds,tasteArtistKeys,canonicalArtistKey,mergeRecommendationPools,rankMusicRecommendations,recommendationFamiliarity,createRecordingView,resolveRecordingSource,setRecordingSource,removeRecordingSource,recordingFamilyIds,sanitizeMusicTrack,saveMusicProfile,rememberInterestTrack,interestProfile,interestSources,interestSeeds,cover:()=>null,displaySubtitle:item=>item?.artists?.join(", ")||"Unknown artist",language:()=>"en",t:s=>s,errorText:String,
+    storage:{getItem:key=>memory.get(key),setItem:(key,value)=>memory.set(key,value)},playbackQueue,button(){},openRecordingPicker:options=>{ctx.picker=options;},downloadsPending:new Set(),presentation:{notify(){}},onDownload:null,homeCache:null,
     wireMusicProfile:options=>{ctx.profileActions=options;},library:{invalidateUndo(){},find(){}},musicGain,previousVolume:.7,syncVolume(){},showLocal(){},load(){},
     request:0,loading:false,loaded:false,sections:[],continuation:null,morePending:false,listFilter:"",listSort:"original",rememberNavigation(){},selectView:next=>{ctx.view=next;},skeleton(){},render(){ctx.rendered=ctx.sections;},prepareHomeSelection(){},showPlaylist(){},
     $:id=>{if(!controls.has(id))controls.set(id,field());return controls.get(id);},
@@ -331,6 +333,7 @@ test("manual navigation is neutral while recommendation Next creates only tempor
     await p.advance(true);await settle();
     assert.equal(p.ctx.taste.entries[song(1).id].score,0);assert.equal(p.ctx.taste.entries[song(1).id].plays,0);
     assert.equal(p.ctx.recommendationSession.options().itemAdjustments.has(song(1).id),automatic);
+    assert.equal(p.ctx.recommendationSession.options().sessionFeedback.length,Number(automatic));
   }
 });
 
@@ -345,9 +348,11 @@ test("automatic queue eligibility applies new blocks without changing manually s
 test("private boundary clears temporary context, fatigue and old playback provenance",()=>{
   const p=player(async()=>({url:"audio"}));const item=song(1);
   p.ctx.recommendationSession.setContext([item]);p.ctx.recommendationSession.markShown([item]);
+  p.ctx.recommendationSession.recordListen(item,{seconds:40,duration:180,session:1,familiar:false});
   p.ctx.recommendationSession.fail(song(2).id);p.ctx.playbackContext=[item];p.ctx.playbackOrigin="recommendation";p.ctx.playbackSourceContext={kind:"playlist",id:"private"};
   p.ctx.discoveryCandidates=[item];p.ctx.recommendationReasons.set(item.id,{code:"discovery"});p.ctx.privateSession=false;p.clearRecommendationContext();
   assert.equal(p.ctx.recommendationSession.contextItems().length,0);assert.equal(p.ctx.recommendationSession.options().itemAdjustments.size,0);
+  assert.equal(p.ctx.recommendationSession.options().sessionFeedback.length,0);
   assert.equal(p.ctx.recommendationSession.allowed([song(2)]).length,1);assert.equal(p.ctx.playbackContext.length,0);
   assert.equal(p.ctx.playbackOrigin,"manual");assert.equal(p.ctx.playbackSourceContext.id,undefined);
   assert.equal(p.ctx.discoveryCandidates.length,0);assert.equal(p.ctx.recommendationReasons.size,0);
@@ -384,6 +389,88 @@ test("an offline source choice opens the selected local recording without resolv
   await p.playAt(0);
   assert.deepEqual(calls.map(call=>[call.command,call.id]),[["music_offline_source",physical.id]]);
   assert.equal(p.ctx.audio.src,"asset:D:/Music/selected.mp3");assert.equal(p.ctx.audio.paused,false);assert.equal(p.ctx.current.id,logical.id);
+});
+
+test("refresh and a saved recording choice still prefer a valid downloaded source while connected",async()=>{
+  const logical=song(1),physical=song(101),calls=[],p=player(async(command,args)=>{calls.push({command,...args});if(command==="music_offline_source")return `D:/Music/${args.id}.mp3`;throw Error("a valid local source must not start a stream");});
+  p.ctx.window.__TAURI__={core:{convertFileSrc:path=>`asset:${path}`}};p.ctx.navigator.onLine=true;
+  await p.playAt(0,{refresh:true});
+  assert.equal(p.ctx.audio.src,`asset:D:/Music/${logical.id}.mp3`);
+  p.chooseRecording(logical);assert.equal(p.ctx.picker.save(physical),true);await settle();
+  assert.equal(p.ctx.audio.src,`asset:D:/Music/${physical.id}.mp3`);assert.equal(p.ctx.audio.paused,false);
+  assert.deepEqual(calls.map(call=>[call.command,call.id]),[["music_offline_source",logical.id],["music_offline_source",physical.id]]);
+});
+
+test("only an actual local decoder error bypasses offline lookup during mid-track recovery",async()=>{
+  for(const code of [2,3,4]){
+    const calls=[],p=player(async(command,args)=>{calls.push({command,...args});return command==="music_offline_source"?"D:/Music/local.mp3":{url:"stream:recovered"};});
+    p.ctx.window.__TAURI__={core:{convertFileSrc:path=>`asset:${path}`}};p.ctx.navigator.onLine=true;
+    await p.playAt(0);p.ctx.clock.seconds=40;p.ctx.audio.currentTime=55;p.ctx.audio.error={code};
+    p.emit("error");await settle();
+    assert.deepEqual(calls.map(call=>call.command),code===2?["music_offline_source","music_offline_source"]:["music_offline_source","music_stream"]);
+    assert.equal(p.ctx.audio.currentTime,55);assert.equal(p.ctx.audio.paused,false);
+  }
+});
+
+test("selecting a song after the first 200 library entries plays that exact song",async()=>{
+  const items=Array.from({length:500},(_,n)=>song(n)),p=player(async(_,args)=>({url:args.id})),before=structuredClone(items);
+  p.playItems(items,items[250].id);await settle();
+  assert.equal(p.ctx.current.id,items[250].id);assert.equal(p.ctx.audio.src,items[250].id);
+  assert.equal(p.ctx.queue.length,200);assert.deepEqual(Array.from(p.ctx.queue,item=>item.id),items.slice(250,450).map(item=>item.id));
+  assert.deepEqual(items,before);
+});
+
+test("a failed offline lookup falls back online only when connected and retains the final network failure",async()=>{
+  for(const online of [true,false]){
+    const calls=[],p=player(async command=>{calls.push(command);if(command==="music_offline_source")throw Error("Local lookup failed");throw Error("Network unavailable");});
+    p.ctx.window.__TAURI__={core:{convertFileSrc:path=>`asset:${path}`}};p.ctx.navigator.onLine=online;
+    await p.playAt(0);
+    assert.deepEqual(calls,online?["music_offline_source","music_stream"]:["music_offline_source"]);
+    assert.equal(p.ctx.audio.paused,true);assert.equal(p.ctx.current.id,song(1).id);
+    if(online)assert.equal(p.ctx.message,"Music could not connect. Check your connection and proxy settings, then retry.");
+  }
+});
+
+test("offline failure keeps its network category before Russian or Spanish UI translation",async()=>{
+  const source="Music could not connect. Check your connection and proxy settings, then retry.";
+  for(const translated of [ru[source],es[source]]){
+    let requests=0;const p=player(async()=>{requests++;throw Error("offline must not make a network request");});
+    p.ctx.navigator.onLine=false;p.ctx.t=text=>text===source?translated:text;
+    await p.playAt(0);
+    assert.equal(requests,0);assert.equal(p.ctx.message,translated);assert.equal(p.ctx.artist.title,translated);
+    assert.equal(p.ctx.diagnostics.snapshot().at(-1).code,"network");
+    assert.equal(p.ctx.current.id,song(1).id);assert.equal(p.ctx.audio.paused,true);assert.equal(p.ctx.streamLoading,false);
+  }
+});
+
+test("a damaged local decoder gets one fresh online attempt at the same position",async()=>{
+  const calls=[],p=player(async(command,args)=>{calls.push({command,...args});return command==="music_offline_source"?"D:/Music/damaged.mp3":{url:"stream:working"};});
+  p.ctx.window.__TAURI__={core:{convertFileSrc:path=>`asset:${path}`}};p.ctx.navigator.onLine=true;
+  const original=p.ctx.audio.play;
+  p.ctx.audio.play=async function(){if(this.src.startsWith("asset:"))throw Error("MEDIA_ERR_DECODE");return original.call(this);};
+  await p.playAt(0,{resume:42});
+  assert.deepEqual(calls.map(call=>call.command),["music_offline_source","music_stream"]);
+  assert.equal(calls[1].refresh,true);assert.equal(p.ctx.audio.src,"stream:working");assert.equal(p.ctx.audio.currentTime,42);
+  assert.equal(p.ctx.audio.paused,false);assert.equal(p.ctx.streamLoading,false);assert.equal(p.ctx.message,"");
+});
+
+test("a damaged local file while offline never triggers an online stream and keeps a retryable decoder error",async()=>{
+  const calls=[],p=player(async command=>{calls.push(command);return "D:/Music/damaged.mp3";});
+  p.ctx.window.__TAURI__={core:{convertFileSrc:path=>`asset:${path}`}};p.ctx.navigator.onLine=false;
+  p.ctx.audio.play=async()=>{throw Error("MEDIA_ERR_DECODE");};
+  await p.playAt(0,{resume:42});
+  assert.deepEqual(calls,["music_offline_source"]);assert.equal(p.ctx.retryPosition,42);assert.equal(p.ctx.audio.paused,true);
+  assert.equal(p.ctx.streamLoading,false);assert.equal(p.ctx.message,"This audio could not be decoded. Try another track or download it as MP3.");
+});
+
+test("a failed online fallback stops after one attempt and exposes its actual network error",async()=>{
+  const calls=[],p=player(async command=>{calls.push(command);if(command==="music_offline_source")return "D:/Music/damaged.mp3";throw Error("Network unavailable");});
+  p.ctx.window.__TAURI__={core:{convertFileSrc:path=>`asset:${path}`}};p.ctx.navigator.onLine=true;
+  p.ctx.audio.play=async()=>{throw Error("MEDIA_ERR_DECODE");};
+  await p.playAt(0,{resume:42});await settle();
+  assert.deepEqual(calls,["music_offline_source","music_stream"]);
+  assert.equal(p.ctx.retryPosition,42);assert.equal(p.ctx.audio.paused,true);assert.equal(p.ctx.streamLoading,false);
+  assert.equal(p.ctx.message,"Music could not connect. Check your connection and proxy settings, then retry.");
 });
 
 test("saving a new source discards an older speculative decoder and prepares the new choice without rewriting the manual queue",async()=>{

@@ -27,3 +27,14 @@ Inter typeface (Latin and Cyrillic)       OFL-1.1             https://rsms.me/in
 The Microsoft Edge WebView2 Runtime is part of Windows 10 and 11 and is not
 shipped with Deviload. It can be installed from
 https://developer.microsoft.com/microsoft-edge/webview2/ if it is missing.
+
+Optional gallery engine (installed separately on request)
+--------------------------------------------------------
+
+engines\gallery-dl.exe / engines/gallery-dl  GNU GPL v2
+                      gallery-dl.COPYING.GPLv2.txt
+                      Version: 1.32.17
+                      Official project: https://codeberg.org/mikf/gallery-dl
+                      Release: https://codeberg.org/mikf/gallery-dl/releases/tag/v1.32.17
+                      Corresponding source: https://codeberg.org/mikf/gallery-dl/archive/v1.32.17.tar.gz
+                      This separate executable is optional and is not compiled into Deviload.
