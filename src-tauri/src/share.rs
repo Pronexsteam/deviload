@@ -133,7 +133,7 @@ impl ShareState {
     }
 }
 
-fn lan_address() -> Result<IpAddr, String> {
+pub(super) fn lan_address() -> Result<IpAddr, String> {
     for destination in ["192.0.2.1:80", "8.8.8.8:80"] {
         if let Ok(socket) = UdpSocket::bind("0.0.0.0:0") {
             if socket.connect(destination).is_ok() {

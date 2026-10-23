@@ -1,0 +1,32 @@
+/* Shared by the dock, immersive player and the native mini window. */
+:root{--player-ink:var(--workspace-ink,#efefef);--player-muted:var(--workspace-muted,#aaa);--player-hover:var(--workspace-hover,#222);--player-primary:var(--theme-accent,#efefef);--player-on-primary:var(--theme-accent-text,#111)}
+:root[data-theme="glass-light"]{--player-primary:#405b80;--player-on-primary:#fff}
+body.music-mini-page{--player-ink:var(--ink);--player-muted:var(--muted);--player-hover:var(--panel)}
+:root[data-theme="midnight"] body.music-mini-page{--player-primary:#b9c9ee}
+:root[data-theme="spotify"] body.music-mini-page{--player-primary:#8ed9a7}
+:root[data-theme="glass-black"] body.music-mini-page{--player-primary:#c7d8ed}
+:root[data-theme="classic"] body.music-mini-page{--player-primary:#e3a68c}
+:root body :is(.music-dock,.music-stage) .music-play-button,:root body.music-mini-page #mini-play{background:var(--player-primary);color:var(--player-on-primary);border:0;border-radius:50%;box-shadow:none}
+:root body .music-dock .music-play-button{width:36px;height:36px}
+:root body .music-stage .music-play-button{width:44px;height:44px}
+:root body :is(.music-dock,.music-stage) .music-icon-button{color:var(--player-muted);border:0;border-radius:8px;background:transparent}
+:root body :is(.music-dock,.music-stage) .music-icon-button:hover,:root body.music-mini-page button:hover{background:var(--player-hover);color:var(--player-ink)}
+:root body :is(.music-dock,.music-stage) .music-icon-button[aria-pressed="true"],:root body.music-mini-page button[aria-pressed="true"]{color:var(--player-primary);background:var(--player-hover);box-shadow:none}
+:root body :is(.music-dock,.music-stage) button[data-repeat="one"]{position:relative}
+:root body :is(.music-dock,.music-stage) button[data-repeat="one"]::after{content:"1";position:absolute;right:0;top:0;font-size:9px;font-weight:700;background:var(--player-hover);border-radius:3px;padding:0 2px}
+:root body :is(.music-dock,.music-stage) input[type="range"],:root body.music-mini-page input[type="range"]{appearance:none;-webkit-appearance:none;height:14px;padding:0;margin:0;border:0;border-radius:8px;box-shadow:none;background:transparent;accent-color:var(--player-primary);cursor:pointer;--player-track:color-mix(in srgb,var(--player-muted) 28%,transparent)}
+/* Old theme rules painted the entire input box, not the three-pixel track. */
+:root body :is(.music-dock,.music-stage) input[type="range"]{background:transparent!important}
+:is(.music-dock,.music-stage,.music-mini-page) input[type="range"]::-webkit-slider-runnable-track{height:3px;border:0;border-radius:3px;background:linear-gradient(to right,var(--player-primary) var(--range-progress,0%),var(--player-track) var(--range-progress,0%))}
+:is(.music-dock,.music-stage,.music-mini-page) input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;margin-top:-3.5px;border:0;border-radius:50%;background:var(--player-primary);box-shadow:none}
+:is(.music-dock,.music-stage,.music-mini-page) input[type="range"]::-moz-range-track{height:3px;border:0;border-radius:3px;background:var(--player-track)}
+:is(.music-dock,.music-stage,.music-mini-page) input[type="range"]::-moz-range-progress{height:3px;border-radius:3px;background:var(--player-primary)}
+:is(.music-dock,.music-stage,.music-mini-page) input[type="range"]::-moz-range-thumb{width:10px;height:10px;border:0;border-radius:50%;background:var(--player-primary)}
+:root body :is(.music-dock,.music-stage) input[type="range"]:focus-visible,:root body.music-mini-page input[type="range"]:focus-visible{outline:2px solid var(--player-primary);outline-offset:3px}
+:root body :is(.music-dock,.music-stage) .music-progress{font-size:11px;font-variant-numeric:tabular-nums;color:var(--player-muted);gap:8px}
+.mini-glyph{width:17px;height:17px;display:block;background:currentColor;mask:var(--mini-glyph) center/contain no-repeat;-webkit-mask:var(--mini-glyph) center/contain no-repeat}
+#mini-repeat{position:relative}#mini-repeat[data-repeat="one"]::after{content:"1";position:absolute;top:0;right:0;font-size:9px;background:var(--panel);border-radius:3px;padding:0 2px}#mini-mute[data-muted="true"]::after{content:"";position:absolute;width:17px;height:1px;background:currentColor;transform:rotate(-45deg)}#mini-mute{position:relative}
+.ui-tip{position:fixed;inset:auto;margin:0;max-width:260px;padding:7px 10px;border:1px solid var(--workspace-line,#454545);border-radius:7px;background:var(--theme-surface-strong,var(--panel,#222));color:var(--workspace-ink,var(--ink,#eee));box-shadow:0 6px 18px #0003;font:12px/1.4 system-ui,sans-serif;pointer-events:none;z-index:1000}
+/* The thumb and fill share one value on the same frame; never ease behind a drag. */
+:root body :is(.music-dock,.music-stage,.music-mini-page) input[type="range"]{transition:none!important}
+:is(.music-dock,.music-stage,.music-mini-page) input[type="range"]::-webkit-slider-runnable-track,:is(.music-dock,.music-stage,.music-mini-page) input[type="range"]::-webkit-slider-thumb{transition:none!important}

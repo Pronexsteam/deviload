@@ -7,12 +7,12 @@
   --music-theme-error: #922b37;
 }
 
-:root:is([data-theme="matte-black"], [data-theme="midnight"], [data-theme="spotify"]) {
+:root:is(:is([data-theme="matte-black"],[data-theme="ambient"]), [data-theme="midnight"], [data-theme="spotify"]) {
   --music-theme-error: var(--theme-error);
 }
 
 /* Opaque materials do not need a blurred back layer. */
-:root:is([data-theme="matte-black"], [data-theme="midnight"], [data-theme="spotify"]) :is(.music-dock, .music-queue-panel, .music-track-options, .music-library-dialog, .music-settings-dialog, .music-lyrics-dialog, .music-import-dialog) {
+:root:is(:is([data-theme="matte-black"],[data-theme="ambient"]), [data-theme="midnight"], [data-theme="spotify"]) :is(.music-dock, .music-queue-panel, .music-track-options, .music-library-dialog, .music-settings-dialog, .music-lyrics-dialog, .music-import-dialog) {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
@@ -489,7 +489,7 @@
   border-radius: 14px;
   background: var(--theme-surface);
 }
-:root:is([data-theme="matte-black"], [data-theme="midnight"], [data-theme="spotify"]) :is(.music-library-dialog, .music-settings-dialog, .music-lyrics-dialog, .music-import-dialog)::backdrop {
+:root:is(:is([data-theme="matte-black"],[data-theme="ambient"]), [data-theme="midnight"], [data-theme="spotify"]) :is(.music-library-dialog, .music-settings-dialog, .music-lyrics-dialog, .music-import-dialog)::backdrop {
   background: #050908b8;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;

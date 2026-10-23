@@ -44,7 +44,7 @@ function player(invoke,items=[song(1)]){
     saved:{favorites:[],recent:[],collections:[],playlists:[],sourceBindings:[],interestMixes:[]},playbackContext:[],playbackOrigin:"manual",contextRevision:0,sourceRevision:0,interestPool:null,interestViewId:null,interestRotations:new Map(),personalization:0,recommendationRevision:0,playbackSourceContext:{kind:"restored"},recommendationSession:createRecommendationSession(),automaticQueueIds:new Set(),impressionTimers:new Map(),refreshRecommendationImpressions(){},clearRecommendationObservations(){},discoveryCandidates:[],recommendationReasons:new Map(),
     view:"home",lastQuery:{kind:"home"},activeMood:"",playlistId:null,browseItem:null,getPlaylist:()=>null,
     taste:readTaste(),clock:{seconds:0,reset(){this.seconds=0;},sample() {return this.seconds;}},
-    title:field(),artist:field(),artwork:field(),seek:field(),elapsed:field(),duration:field(),previous:{click(){}},
+    title:field(),artist:field(),artwork:field(),seek:field(),isRangeDragging:()=>false,elapsed:field(),duration:field(),previous:{click(){}},
     invoke:(command,args)=>{if(command==="music_cancel_stream"){ctx.cancellations=(ctx.cancellations||0)+1;return Promise.resolve();}return invoke(command,args);},tracks,remember,nextIndex,recommend,recordListening,tasteSeeds,tasteArtistKeys,canonicalArtistKey,mergeRecommendationPools,rankMusicRecommendations,recommendationFamiliarity,createRecordingView,resolveRecordingSource,setRecordingSource,removeRecordingSource,recordingFamilyIds,sanitizeMusicTrack,saveMusicProfile,rememberInterestTrack,interestProfile,interestSources,interestSeeds,cover:()=>null,displaySubtitle:item=>item?.artists?.join(", ")||"Unknown artist",language:()=>"en",t:s=>s,errorText:String,
     storage:{getItem:key=>memory.get(key),setItem:(key,value)=>memory.set(key,value)},playbackQueue,button(){},openRecordingPicker:options=>{ctx.picker=options;},downloadsPending:new Set(),presentation:{notify(){}},onDownload:null,homeCache:null,
     wireMusicProfile:options=>{ctx.profileActions=options;},library:{invalidateUndo(){},find(){}},musicGain,previousVolume:.7,syncVolume(){},showLocal(){},load(){},
@@ -63,6 +63,13 @@ test("source restrictions explain the failure without starting audio or scheduli
   await p.playAt(0);p.expire();await settle();
   assert.equal(calls,1);assert.equal(p.ctx.audio.paused,true);assert.equal(p.ctx.streamLoading,false);
   assert.equal(p.ctx.artist.textContent,"Unavailable from source. Try another track.");assert.equal(p.ctx.message,failure);
+});
+
+test("playback updates cannot pull the seek thumb away during a drag",async()=>{
+ const p=player(async()=>({url:"audio"}));await p.playAt(0);
+ p.ctx.audio.duration=100;p.ctx.audio.currentTime=20;p.ctx.seek.value='750';p.ctx.isRangeDragging=()=>true;
+ p.emit('timeupdate');assert.equal(p.ctx.seek.value,'750');
+ p.ctx.isRangeDragging=()=>false;p.emit('timeupdate');assert.equal(p.ctx.seek.value,'200');
 });
 
 test("muted playback never teaches taste and unmuting starts a fresh listening interval",async()=>{

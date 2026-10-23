@@ -14,7 +14,7 @@ export function createMusicSound({nodes,storage,button,notify}){
       context=new AudioContext();
       for(const node of nodes){const source=context.createMediaElementSource(node),preamp=context.createGain(),compressor=context.createDynamicsCompressor();
         const filters=frequencies.map(frequency=>{const filter=context.createBiquadFilter();filter.type="peaking";filter.frequency.value=frequency;filter.Q.value=.7;return filter;});
-        source.connect(preamp);let output=preamp;for(const filter of filters){output.connect(filter);output=filter;}output.connect(compressor);compressor.connect(context.destination);graphs.push({filters,preamp,compressor});
+        source.connect(preamp);let output=preamp;for(const filter of filters){output.connect(filter);output=filter;}output.connect(compressor);compressor.connect(context.destination);graphs.push({node,filters,preamp,compressor});
       }
     }apply();await context.resume();
   }
@@ -32,5 +32,23 @@ export function createMusicSound({nodes,storage,button,notify}){
   const actions=document.createElement("div");actions.className="music-sound-actions";actions.append(reset,button(t("Close"),null,()=>dialog.close(),"secondary"));
   const note=document.createElement("p");note.textContent=t("Prepared tracks start immediately. Overlap applies when the next track is ready. Volume smoothing reduces sudden peaks; it does not measure album loudness.");dialog.append(note,actions);document.body.append(dialog);
   document.addEventListener("pointerdown",()=>{if(settings.preset!=="flat"||settings.soft)activate().catch(()=>{});},{once:true});
-  return {open(){dialog.showModal();},get transition(){return settings.transition;},resume(){if(context)context.resume().catch(()=>{});}};
+  return {open(){dialog.showModal();},get transition(){return settings.transition;},resume(){if(context)context.resume().catch(()=>{});},
+    async enableAnalysis(){
+      await activate();
+      for(const graph of graphs)if(!graph.analyser){
+        const analyser=context.createAnalyser();analyser.fftSize=2048;analyser.smoothingTimeConstant=.35;analyser.minDecibels=-85;analyser.maxDecibels=-15;
+        // A side branch, never a second connection to the speakers.
+        graph.compressor.connect(analyser);graph.analyser=analyser;
+        graph.spectrum=new Uint8Array(analyser.frequencyBinCount);graph.wave=new Float32Array(analyser.fftSize);
+      }
+    },
+    analyse(node){
+      const graph=graphs.find(graph=>graph.node===node);if(context?.state!=="running"||!graph?.analyser)return null;
+      const {analyser,spectrum,wave}=graph;analyser.getByteFrequencyData(spectrum);analyser.getFloatTimeDomainData(wave);
+      const hz=context.sampleRate/analyser.fftSize;
+      const band=(low,high)=>{const from=Math.max(1,Math.floor(low/hz)),to=Math.min(spectrum.length-1,Math.ceil(high/hz));let sum=0,peak=0;for(let i=from;i<=to;i++){const value=spectrum[i]/255;sum+=value*value;peak=Math.max(peak,value);}return peak*.6+Math.sqrt(sum/Math.max(1,to-from+1))*.4;};
+      let energy=0;for(const sample of wave)energy+=sample*sample;
+      return {bass:band(35,180),mid:band(180,2200),high:band(2200,9000),rms:Math.sqrt(energy/wave.length)};
+    }
+  };
 }

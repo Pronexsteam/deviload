@@ -2,16 +2,16 @@ import {t, onLanguageChange} from "./i18n.js";
 import {wireGlassMaterial} from "./theme-glass.js";
 
 export const THEME_KEY = "deviload-theme";
-export const THEMES = Object.freeze(["classic", "glass-light", "matte-black", "glass-black", "midnight", "spotify"]);
-const themeLabels = {classic:"Classic", "glass-light":"Light Liquid Glass", "matte-black":"Matte black", "glass-black":"Black Liquid Glass", midnight:"Midnight", spotify:"Studio green"};
+export const THEMES = Object.freeze(["glass-light", "matte-black", "glass-black", "midnight", "spotify", "ambient"]);
+const themeLabels = {"glass-light":"Light Liquid Glass", "matte-black":"Matte black", "glass-black":"Black Liquid Glass", midnight:"Midnight", spotify:"Studio green", ambient:"Ambient"};
 const wired = new WeakMap();
-export function normalizeTheme(value) { return THEMES.includes(value) ? value : "classic"; }
+export function normalizeTheme(value) { return THEMES.includes(value) ? value : "ambient"; }
 
 function browserStorage(window) {
   try { return window.localStorage; } catch { return null; }
 }
 export function readTheme(storage) {
-  try { return normalizeTheme(storage?.getItem(THEME_KEY)); } catch { return "classic"; }
+  try { const saved = storage?.getItem(THEME_KEY);if(saved === "classic") { try { storage.setItem(THEME_KEY,"ambient"); } catch {} }return normalizeTheme(saved); } catch { return "ambient"; }
 }
 
 // Only appearance changes: switching never reloads a window or touches playback.
@@ -23,7 +23,7 @@ export function applyTheme(value, {document = globalThis.document, window = glob
     try { if (storage) { storage.setItem(THEME_KEY, theme); saved = true; } } catch { /* session only */ }
   }
   root.dataset.theme = theme;
-  root.dataset.motion = theme === "classic" ? "full" : "reduced";
+  root.dataset.motion = "reduced";
   root.style.colorScheme = theme === "glass-light" ? "light" : "dark";
   const select = document.getElementById("appearance-theme");
   if (select) select.value = theme;

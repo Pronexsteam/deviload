@@ -1,0 +1,63 @@
+/* Shared surfaces, spacing and action hierarchy across the app and editors. */
+:root{--ui-radius:12px;--ui-control-radius:8px;--ui-panel:var(--theme-surface,#16191e);--ui-popup:var(--theme-surface-strong,#20242a);--ui-ink:var(--theme-text,#eee);--ui-muted:var(--theme-muted,#adb4bf);--ui-line:color-mix(in srgb,var(--theme-line,#333) 65%,transparent);--ui-ease:cubic-bezier(.2,.7,.2,1)}
+:root[data-theme] body :is(.download-composer,.library,.media-library,.discover,.convert-source,.convert-actions,.convert-options){border-radius:var(--ui-radius);border:1px solid var(--ui-line);background:var(--ui-panel);box-shadow:none}
+:root[data-theme] body :is(.convert-window,.cut-window){color:var(--ui-ink);font-family:inherit}
+:root[data-theme] body :is(.convert-head h1,.workspace-heading h1){font-size:26px;font-weight:650;letter-spacing:-.6px;line-height:1.2}
+:root[data-theme] body :is(.section-heading h2,.discover-head h2,.convert-options h2){font-size:20px;font-weight:650;letter-spacing:-.3px;line-height:1.3}
+:root[data-theme] body :is(.convert-step h2,.cut-name,.composer-heading h2){font-size:15px;font-weight:600;line-height:1.4}
+:root[data-theme] body :is(.convert-help,.cut-note,.section-heading p,.composer-heading p){font-size:12px;line-height:1.6;color:var(--ui-muted)}
+:root[data-theme] body :is(.convert-drop,.convert-item,.cut-media,.cut-inspector,.cut-head,.cut-timeline-head,.cut-transport){background:var(--ui-panel);border-color:var(--ui-line);box-shadow:none}
+:root[data-theme] body :is(.convert-window,.cut-window) :is(input,select,textarea){font-size:13px;border-radius:var(--ui-control-radius);background-color:var(--theme-input);border-color:var(--ui-line);color:var(--ui-ink)}
+:root[data-theme] body :is(main,.cut-window) :is(button.outline,button.quiet,.music-preview-open){background:transparent;color:var(--ui-ink);border-color:var(--ui-line);border-radius:var(--ui-control-radius);box-shadow:none;text-shadow:none}
+:root[data-theme] body :is(main,.cut-window) :is(button.outline,button.quiet,.music-preview-open):hover{background:var(--theme-hover);transform:none}
+:root[data-theme] body.convert-page .convert-workbench .convert-wheel .convert-presets button.selected{background:var(--theme-selected);color:var(--ui-ink);border-color:var(--theme-accent);box-shadow:inset 0 0 0 1px var(--theme-accent)}
+:root[data-theme] body .convert-presets button.selected :is(strong,small,.icon){color:inherit}
+:root[data-theme] body .convert-wheel-core{background:var(--ui-panel);border-color:var(--ui-line)}
+:root[data-theme] body :is(.convert-foot,.cut-export-body,dialog,.library-more-actions,.music-track-options,.music-queue-panel,.quick-theme-menu){background-color:var(--ui-popup);border-color:var(--ui-line);color:var(--ui-ink);border-radius:var(--ui-radius)}
+:root[data-theme] body .convert-window .convert-foot{border-radius:0;box-shadow:0 -1px var(--ui-line)}
+:root[data-theme] body :is(.convert-window,.cut-window) button.primary{background:var(--theme-accent);color:var(--theme-accent-text);border-color:transparent;border-radius:var(--ui-control-radius);box-shadow:none}
+:root[data-theme] body :is(.convert-window,.cut-window) button.primary:hover{filter:brightness(1.08)}
+:root[data-theme] body :is(.cut-media-tabs,.cut-canvas,.cut-fit,.cut-chips) button.selected{background:var(--theme-selected);color:var(--ui-ink);border-color:var(--theme-accent)}
+:root[data-theme] body :is(button,input,select,summary):focus-visible{outline:2px solid var(--theme-accent);outline-offset:2px}
+:root[data-theme] body #devil-music .music-preview-open{background:transparent;color:var(--ui-ink);border:1px solid var(--ui-line);border-radius:100px}
+@media(prefers-reduced-motion:no-preference){
+ :root[data-theme] body :is(button.outline,button.quiet,.convert-presets button){transition:background-color .16s var(--ui-ease),border-color .16s var(--ui-ease),color .16s var(--ui-ease)}
+ :root[data-theme] body .music-queue-panel:not([hidden]),:root[data-theme] body #music-now-playing[open] .music-stage-lyrics:not([hidden]){animation:ui-panel-enter .2s var(--ui-ease) both}
+ @keyframes ui-panel-enter{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+}
+@media(max-width:900px){:root[data-theme] body main[data-page="music"] #devil-music .music-toolbar{grid-template-columns:30px minmax(0,1fr) 60px;gap:8px}:root[data-theme] body .workspace-heading h1{font-size:24px}}
+.music-remote-dialog{width:min(400px,calc(100vw - 32px));padding:24px;box-sizing:border-box;color:var(--ui-ink)}
+.music-remote-dialog .dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}.music-remote-dialog h2{font-size:20px;margin:0}.music-remote-dialog p{font-size:13px;line-height:1.6;color:var(--ui-muted)}
+.music-remote-qr{width:250px;max-width:100%;margin:0 auto;padding:10px;border-radius:12px;background:#fff;box-sizing:border-box}.music-remote-qr:empty{display:none}.music-remote-qr img,.music-remote-qr canvas{display:block;max-width:100%;height:auto}
+#music-remote-open .icon{background:currentColor;mask:url('./assets/icons/remote-control.svg') center/contain no-repeat;-webkit-mask:url('./assets/icons/remote-control.svg') center/contain no-repeat}
+.music-preview-top{display:flex;align-items:center;justify-content:space-between;gap:8px}.music-preview-top .music-eyebrow{font-size:10px;letter-spacing:.06em;color:var(--ui-muted)}
+.music-preview-toggle{width:32px;height:32px;display:grid;place-items:center;padding:6px;border-radius:8px;background:transparent;border:1px solid var(--ui-line);color:var(--ui-ink);cursor:pointer}.music-preview-toggle .icon{width:16px;height:16px}.music-preview-toggle[aria-pressed="true"]{background:var(--theme-selected)}
+.music-preview-flip{perspective:1000px;width:100%;flex:none}.music-preview-faces{position:relative;width:100%;aspect-ratio:1;transform-style:preserve-3d;transition:transform .42s cubic-bezier(.2,.7,.2,1)}
+.music-preview-faces.is-flipped{transform:rotateY(180deg)}
+:root body #devil-music .music-preview-faces>.music-preview-art,.music-preview-faces>.music-preview-lyrics{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:10px}
+.music-preview-faces>.music-preview-lyrics{transform:rotateY(180deg);background:var(--ui-panel);overflow:hidden;border:1px solid var(--ui-line)}
+.music-preview-lyrics .music-lyrics-content{height:100%;min-height:0;display:flex;flex-direction:column;padding:10px;box-sizing:border-box;gap:6px}
+.music-preview-lyrics .music-lyrics-content h2{display:none}.music-preview-lyrics .music-lyrics-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:20px 0}
+:root body .music-preview-lyrics .music-lyric-line{font-size:clamp(14px,calc(var(--lyrics-size,28px) * .65),26px);line-height:1.5;padding:8px 2px;text-align:center;min-height:0}
+.music-preview-lyrics .music-lyrics-tools{margin:0;gap:4px;flex-wrap:wrap}.music-preview-lyrics .music-lyrics-tools button{font-size:10px;min-height:24px;padding:4px 6px}.music-preview-lyrics .music-lyrics-credit{font-size:9px;margin:0}.music-preview-lyrics .music-lyrics-plain{font-size:13px;line-height:1.6;white-space:pre-wrap}
+@media(prefers-reduced-motion:reduce){.music-preview-faces{transition:none}}
+/* Navigation must remain legible when both side panels are open. */
+:root body main[data-page="music"] #devil-music .music-tabs{flex-wrap:wrap;overflow:visible;gap:0 20px;padding-inline:2px}
+:root body main[data-page="music"] #devil-music .music-tabs button{max-width:100%;white-space:normal;text-align:left;line-height:1.5}
+/* Give lyrics their own reading space rather than a square album sleeve. */
+:root body main[data-page="music"] #devil-music .music-playing-preview.showing-lyrics{gap:10px}
+.music-playing-preview.showing-lyrics .music-preview-flip{flex:1 0 230px;min-height:230px}
+.music-playing-preview.showing-lyrics .music-preview-faces{height:100%;aspect-ratio:auto}
+:root body #devil-music .showing-lyrics>strong{font-size:17px;line-height:1.35;margin:2px 0 0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+:root body #devil-music .showing-lyrics>span{font-size:12px}
+#devil-music .showing-lyrics :is(.music-playing-facts,.music-playing-reason){display:none}
+:root body #devil-music .showing-lyrics .music-preview-open{margin-top:4px;padding:10px}
+.music-preview-lyrics .music-lyrics-scroll{scrollbar-width:thin;scrollbar-color:var(--ui-line) transparent;padding-block:38px;mask-image:linear-gradient(transparent,#000 18px,#000 calc(100% - 18px),transparent)}
+:root[data-theme] body #devil-music .music-preview-lyrics .music-lyric-line{font-size:clamp(15px,calc(var(--lyrics-size,28px) * .65),26px);line-height:1.6;padding:12px 3px;border:0;border-radius:0;background:none;text-decoration:none;overflow-wrap:anywhere;color:var(--ui-muted);box-shadow:none}
+:root[data-theme] body #devil-music .music-preview-lyrics .music-lyric-line.active{color:var(--ui-ink);text-shadow:0 0 14px color-mix(in srgb,var(--lyric-aura) 22%,transparent)}
+.music-preview-lyrics .music-lyrics-tools{flex:none;align-items:center}
+.music-preview-lyrics .music-lyrics-credit{flex:none}
+:root[data-theme] body .music-remote-dialog .music-remote-stop{display:block;width:100%;height:auto;min-height:40px;margin:20px 0 0;padding:10px 16px;border:1px solid var(--ui-line);border-radius:8px;background:var(--theme-input);color:var(--ui-ink);font-family:inherit;font-size:13px;font-weight:600;line-height:1.5;white-space:normal;text-align:center;cursor:pointer}
+.music-remote-dialog{max-height:calc(100dvh - 32px);overflow:auto}
+.custom-window .music-stage-header{cursor:move;user-select:none;-webkit-user-select:none}
+.custom-window .music-stage-header button{cursor:pointer}

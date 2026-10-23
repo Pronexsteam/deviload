@@ -1,0 +1,37 @@
+/* Audio drives the whole cover wash, with stronger light in the dock. */
+:root[data-theme="ambient"]{--theme-bg:#08090c;--theme-surface:#101115b8;--theme-surface-strong:#191b22eb;--theme-input:#111218c7;--theme-line:#ffffff1a;--theme-muted:#b4b6c0}
+.ambient-scene{display:none}
+:root[data-theme="ambient"] .ambient-scene{display:block;position:fixed;inset:-80px;z-index:-1;pointer-events:none;filter:blur(75px) saturate(1.35);opacity:.22;overflow:hidden}
+.ambient-scene>i{position:absolute;inset:0;background-position:center;background-size:cover}
+:root[data-theme="ambient"] body:not(.cut-page):not(.convert-page) main[data-page]{background:#08090c70}
+:root[data-theme="ambient"] body.music-focus .music-workspace{background:transparent}
+:root[data-theme="ambient"] body #supporters{--supporters-backplate:#10111585;--supporters-line:#ffffff14}
+:root[data-theme="ambient"] body .sidebar,
+:root[data-theme="ambient"] body .topbar::before,
+:root[data-theme="ambient"] #devil-music .music-library-sidebar{background:#0d0e13b5;border-color:#ffffff14;backdrop-filter:blur(24px)}
+:root[data-theme="ambient"] body .sidebar{background:#0d0e1399}
+:root[data-theme="ambient"] body .topbar::before{background:#0d0e1385}
+:root[data-theme="ambient"] body #music-now-playing.has-lyrics .music-stage-background .music-art{opacity:calc(.1 + var(--ambient-energy,0) * .12)}
+:root[data-theme="ambient"] body main[data-page="music"] #devil-music .music-toolbar{background:#0d0e13ba;backdrop-filter:blur(24px);border-radius:12px}
+:root[data-theme="ambient"] body :is(.music-playing-preview,.quick-theme-menu,.music-track-options,.music-queue-panel,.music-search-suggestions){backdrop-filter:blur(24px);border-color:#ffffff1a}
+:root[data-theme="ambient"] body #music-now-playing.has-lyrics{background:linear-gradient(#08090ce0,#08090cf2),var(--ambient-art,none) center/cover}
+.music-ambient-glow{display:none}
+:root[data-theme="ambient"] body .music-dock{isolation:isolate;overflow:hidden;background:#090a0ed9;border-top-color:#ffffff20;box-shadow:0 -12px 36px #0003;backdrop-filter:blur(24px)}
+:root[data-theme="ambient"] .music-dock>.music-ambient-glow{display:block;position:absolute;inset:0;z-index:-1;pointer-events:none;overflow:hidden;mask-image:linear-gradient(transparent,#000 60%);-webkit-mask-image:linear-gradient(transparent,#000 60%)}
+:root[data-theme="ambient"] .music-ambient-glow span{position:absolute;top:-90%;height:280%;width:65%;left:-10%;background:var(--ambient-art) 20% 30%/cover no-repeat;filter:blur(32px) saturate(1.85);opacity:.17;will-change:opacity,transform;transform-origin:center bottom}
+:root[data-theme="ambient"] .music-ambient-glow span:nth-child(2){left:22%;background-position:50% 70%}
+:root[data-theme="ambient"] .music-ambient-glow span:nth-child(3){left:58%;background-position:80% 20%}
+:root[data-theme="ambient"] .music-dock :is(.music-now,.music-transport,.music-dock-extras){position:relative}
+[data-theme-choice="ambient"] .quick-theme-swatch{background:radial-gradient(at 20% 80%,#7a4d97,transparent 65%),radial-gradient(at 80% 90%,#358b91,transparent 60%),#111}
+@media(prefers-reduced-motion:reduce){:root[data-theme="ambient"] .music-ambient-glow span{will-change:auto}}
+/* The existing mark becomes pearlescent; its silhouette stays unchanged. */
+:root[data-theme="ambient"] .sidebar .brand-word{--brand-prism:linear-gradient(110deg,#f3f5ff 0%,#b9e9f4 20%,#e3cafa 38%,#fff0d6 54%,#c1e7ef 70%,#f3f5ff 100%)}
+:root[data-theme="ambient"] .sidebar .brand-symbol{opacity:0}
+:root[data-theme="ambient"] .sidebar .brand-word::after{content:"";position:absolute;left:0;top:2px;width:28px;height:28px;background:var(--brand-prism);background-size:300% 100%;mask:url('./assets/themes/mark-light.svg') center/contain no-repeat;filter:drop-shadow(0 0 5px #b4ccf738);pointer-events:none}
+:root[data-theme="ambient"] .sidebar .brand-name{background:var(--brand-prism);background-size:300% 100%;background-clip:text;-webkit-background-clip:text;color:transparent;filter:drop-shadow(0 0 8px #b4ccf71c)}
+:root[data-theme="ambient"] .sidebar .brand-name .brand-accent{color:inherit}
+@media(prefers-reduced-motion:no-preference){
+ :root[data-theme="ambient"] .sidebar .brand-name,:root[data-theme="ambient"] .sidebar .brand-word::after{animation:brand-prism-drift 16s ease-in-out infinite alternate;animation-duration:16s!important;animation-iteration-count:infinite!important}
+ @keyframes brand-prism-drift{from{background-position:0% 50%}to{background-position:100% 50%}}
+}
+@media(max-width:960px){:root[data-theme="ambient"] .sidebar .brand-word::after{left:2px}}

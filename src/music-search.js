@@ -22,7 +22,7 @@ export function wireMusicSearch({form,input,clear,shortcut,page=globalThis.docum
     if((event.ctrlKey||event.metaKey)&&!event.altKey&&event.key?.toLowerCase()==="k"){
       event.preventDefault();event.stopPropagation();focus();return;
     }
-    if(event.key==="Escape"&&event.target===input){
+    if(event.key==="Escape"&&event.target===input&&input.getAttribute?.("aria-expanded")!=="true"){
       event.preventDefault();event.stopPropagation();
       if(input.value)clearSearch();else input.blur();
     }

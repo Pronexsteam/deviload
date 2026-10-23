@@ -1,25 +1,25 @@
 <div align="center">
 
-<img src="docs/screenshots/mascot-media.png" alt="Deviload infernal mascot holding a media download crystal" width="200">
+<img src="src/assets/themes/mark-midnight.svg" alt="Deviload" width="64">
 
 # Deviload
 
 **Your music, videos and clips in one desktop app.**
 
-Discover and listen with Devil Music. Download with yt-dlp. Edit with Devil Cut.
+Discover and listen with Devil Music. Save with yt-dlp. Create with Devil Cut and Devil Convert.
 <br>
 Built with Rust and Tauri 2 · English, Russian and Spanish
 
-[![Windows download](https://img.shields.io/badge/Windows-Download-b91c1c?style=for-the-badge&labelColor=171717)](https://github.com/Pronexsteam/deviload/releases/latest)
-[![macOS test download](https://img.shields.io/badge/macOS-Test%20build-b91c1c?style=for-the-badge&labelColor=171717&logo=apple&logoColor=white)](https://github.com/Pronexsteam/deviload/releases/latest)
-[![Linux download](https://img.shields.io/badge/Linux-Download-b91c1c?style=for-the-badge&labelColor=171717&logo=linux&logoColor=white)](https://github.com/Pronexsteam/deviload/releases/latest)
+[![Windows download](https://img.shields.io/badge/Windows-Download-607d9d?style=for-the-badge&labelColor=171717)](https://github.com/Pronexsteam/deviload/releases/latest)
+[![macOS test download](https://img.shields.io/badge/macOS-Test%20build-607d9d?style=for-the-badge&labelColor=171717&logo=apple&logoColor=white)](https://github.com/Pronexsteam/deviload/releases/latest)
+[![Linux download](https://img.shields.io/badge/Linux-Download-607d9d?style=for-the-badge&labelColor=171717&logo=linux&logoColor=white)](https://github.com/Pronexsteam/deviload/releases/latest)
 
-[![Latest release](https://img.shields.io/github/v/release/Pronexsteam/deviload?style=for-the-badge&label=version&color=b91c1c&labelColor=171717)](https://github.com/Pronexsteam/deviload/releases/latest)
-[![Total release downloads](https://img.shields.io/github/downloads/Pronexsteam/deviload/total?style=for-the-badge&label=downloads&color=b91c1c&labelColor=171717)](https://github.com/Pronexsteam/deviload/releases)
-[![GitHub stars](https://img.shields.io/github/stars/Pronexsteam/deviload?style=for-the-badge&label=stars&color=b91c1c&labelColor=171717)](https://github.com/Pronexsteam/deviload)
+[![Latest release](https://img.shields.io/github/v/release/Pronexsteam/deviload?style=for-the-badge&label=version&color=607d9d&labelColor=171717)](https://github.com/Pronexsteam/deviload/releases/latest)
+[![Total release downloads](https://img.shields.io/github/downloads/Pronexsteam/deviload/total?style=for-the-badge&label=downloads&color=607d9d&labelColor=171717)](https://github.com/Pronexsteam/deviload/releases)
+[![GitHub stars](https://img.shields.io/github/stars/Pronexsteam/deviload?style=for-the-badge&label=stars&color=607d9d&labelColor=171717)](https://github.com/Pronexsteam/deviload)
 [![CI on main](https://img.shields.io/github/actions/workflow/status/Pronexsteam/deviload/ci.yml?branch=main&style=for-the-badge&label=CI&labelColor=171717)](https://github.com/Pronexsteam/deviload/actions/workflows/ci.yml)
 
-[![Buy me a coffee on Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-dc2626?style=for-the-badge&labelColor=171717&logo=ko-fi&logoColor=white)](https://ko-fi.com/pronexsteam)
+[![Buy me a coffee on Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-607d9d?style=for-the-badge&labelColor=171717&logo=ko-fi&logoColor=white)](https://ko-fi.com/pronexsteam)
 
 Deviload is free. If it saves you time, a coffee helps me keep building it.
 
@@ -27,7 +27,7 @@ Deviload is free. If it saves you time, a coffee helps me keep building it.
 
 </div>
 
-![Devil Music: discover music, bring your playlists and keep listening in one workspace](docs/screenshots/devil-music-workspace-2.7.png)
+![Devil Music in Ambient: your library, discovery and Now Playing in one workspace](docs/screenshots/music-ambient-2.7.8.png)
 
 Deviload is a free, open-source desktop app for discovering music, keeping a local media collection and making clips. Listen in **Devil Music**, save video or audio with [yt-dlp](https://github.com/yt-dlp/yt-dlp), and send downloaded files to **Devil Cut** or **Devil Convert**.
 
@@ -40,7 +40,10 @@ Open the YouTube Music catalog and start listening without a Devil Music account
 - **Find something to play:** search songs, artists, albums and playlists; save favorites and keep a queue.
 - **Bring your collection:** import public Spotify playlists and albums, YouTube playlists, or a snapshot of a YouTube Mix. Review uncertain matches before accepting them.
 - **Make discovery your own:** likes and listening shape local recommendations. Choose familiar music or more discoveries, and hide songs or artists you do not want.
-- **Keep listening:** resume a track, open the full-screen player, follow timed lyrics, or adjust the equalizer. The next track is prepared in advance to reduce waiting.
+- **Stay with the music:** open the full player or flip the Now Playing cover into lyrics while browsing. Timed words receive a moving highlight when the lyrics source provides word timings; other songs use synced lines or plain text.
+- **Make room on your desktop:** switch to a small, rounded mini-player with a vinyl cover, playback controls, repeat, shuffle, seeking and volume. Returning restores the main window.
+- **Control it from your phone:** click the remote icon and scan its QR code on the same Wi-Fi. The phone follows your theme; sound stays on the computer. No account or hosted server is needed.
+- **Set the mood:** Ambient carries the cover colors across the workspace and reacts to the audio. Choose from six themes, adjust the equalizer, or keep motion reduced. The next track is prepared in advance to reduce waiting.
 - **Keep a copy:** queue an MP3 download from a song card or the player without interrupting playback. Supported completed audio downloads can play offline.
 - **Take your preferences with you:** export and restore a local music profile with likes, playlists and taste settings. The backup contains metadata, not music files or account credentials.
 
@@ -66,55 +69,17 @@ Add a live link to record from that moment, then stop when you have what you nee
 
 ## Latest update
 
-Deviload **2.7.7** updates the desktop window runtime, including upstream fixes for native title-bar controls on **Linux Wayland** when a hidden startup window is shown.
+**2.7.8 brings a new Devil Music workspace, Ambient lighting, synced lyrics and a phone remote.** The download buttons always open the latest published build; see [Releases](https://github.com/Pronexsteam/deviload/releases) for availability.
 
-The app keeps the same themes, music and download workflows, profile location and signed updater configuration. This update does not force Linux users onto X11. A separate WebKit rendering freeze may still require the existing per-launch workaround described in the [2.7.7 release notes](https://github.com/Pronexsteam/deviload/releases/tag/v2.7.7).
+- A larger search, resizable side panels, clearer buttons and navigation that stays readable in narrow windows.
+- Ambient is the default for new profiles and replaces the retired Classic theme. Existing choices of the other themes are preserved. Its cover-based glow reaches the sidebar, header and player; the logo has a slow pearlescent shimmer.
+- Lyrics in the full player or directly in the Now Playing sidebar, with word highlights where timings exist.
+- A compact mini-player that replaces the main window, plus smooth seeking and volume controls.
+- A separate QR music remote for your local network. File transfer keeps its own connection.
+- Personal discovery without regional chart shelves. Search still lets you choose music from any region.
+- Automatic use of the reported WebKit rendering workaround on Debian 13 GNOME/Wayland, including normal launches of the Debian package. Confirmation on the affected machine is still pending; see [Linux compatibility](docs/linux-renderer-compatibility.md).
 
-### Media and music improvements in 2.7.6
-
-Deviload **2.7.6** brings a redesigned **Devil Convert**, more responsive **Devil Music** recommendations and clearer download recovery.
-
-- **Convert with more control:** preview the source and result, choose media tracks, remux compatible streams or extract original audio without re-encoding, and keep the existing MP4, MP3, GIF and size-limit workflows.
-- **Listen your way:** use the larger search, try the new **Studio green** theme, and let recent listening adjust the balance between familiar music and new discoveries. Discord presence selects the song title for its compact status.
-- **Save posts and albums:** open **Photos and galleries** to choose individual files with optional gallery-dl. Automatic engine installation is available on Windows and Linux x64; macOS can use an existing gallery-dl in PATH.
-- **Recover and stay current:** website rate limits pause that site's queue while other sites continue. Update notices are available across the main workspaces, with hourly checks while the app is visible.
-
-Read the [2.7.6 release notes](https://github.com/Pronexsteam/deviload/releases/tag/v2.7.6) for details and platform notes.
-
-### Window controls and Midnight in 2.7.5
-
-Deviload **2.7.5** fixes the window buttons in the optional themes: the draggable title strip no longer covers Minimize, Maximize / Restore and Close. Switch appearance from **Themes**, next to **What's new**, or from **Settings → Appearance**.
-
-The new **Midnight** theme adds calm blue-gray surfaces, clear text and soft blue accents. Like the other themes, it follows the app's workspaces, keeps the supporter board readable and saves your choice locally and in settings backups. It uses a static gradient without a WebGL background or decorative animations.
-
-### Interface themes in 2.7.4
-
-Deviload **2.7.4** adds three calmer interface themes. Open **Settings → Appearance** and choose **Light Liquid Glass**, **Matte black** or **Black Liquid Glass**. **Classic** stays the default, so updating keeps the familiar interface until you choose another theme.
-
-- **A quieter workspace:** monochrome branding, a full-width download form above the queue, and no decorative mascot or flame effects in the new themes. Download progress and status remain visible.
-- **One theme across the app:** Downloads, Library, Devil Music, settings, Devil Cut and Devil Convert follow the selected appearance.
-- **Readable thanks:** the supporter board has a contrasting local surface, clear public names and a visible Ko-fi action, including in both glass themes.
-- **Your choice stays with you:** the theme is saved on this device and included in settings backups. Switching themes does not restart the app or interrupt music.
-
-The glass themes use a bundled coastal scene with blur and subtle edge refraction where supported. They do not expose the operating system's desktop through the app or use Apple's native Liquid Glass APIs. The matte theme uses solid surfaces; glass themes also support reduced-transparency settings and a fallback without WebGL.
-
-### Supporters and layout improvements in 2.7.3
-
-Deviload **2.7.3** adds a visible Ko-fi supporter board to the main window, with a grateful version of the current mascot. Public names are maintained manually and included with the app; donation amounts, messages and account details are not included. The empty download queue now lines up with the download controls.
-
-The release publication command also handles both handwritten and generated notes correctly.
-
-### Music and download improvements in 2.7.2
-
-Deviload **2.7.2** brings these improvements together. The download buttons above open the latest published release.
-
-- **Personal interest mixes:** combine existing playlists into a named mix. Each mix uses its own listening context and can learn from time spent actually listening within that mix.
-- **Better recommendations:** balance artists and familiar/new music, explain recommendation reasons, and temporarily reduce repeats, early-skipped automatic suggestions and unavailable sources. Private listening does not train taste; manual queues stay under your control.
-- **Choose the right recording:** compare source tracks and explicitly choose an original, slowed, live or remix version while keeping the song's likes, history and playlist entries. You can restore the original source.
-- **More discoveries without signing up:** optional, default-enabled ListenBrainz and MusicBrainz lookups add candidates in the background. Existing recommendations remain available if a service fails. The setting can be disabled and is off during private sessions; see [privacy details](#data-and-privacy).
-- **More control over playback and downloads:** finer quiet-volume adjustment, an exportable playback diagnostic report, audio/subtitle language choices, queue-aware disk-space estimates, and lossless trimming of a single compatible clip.
-
-Read the [scope and limits of this update](docs/playback-download-polish.md).
+Read the [2.7.8 change list](.github/release-notes/v2.7.8.md). Earlier updates are documented in [release history](https://github.com/Pronexsteam/deviload/releases).
 
 ## Installation
 
@@ -134,13 +99,13 @@ All buttons above open the [latest release](https://github.com/Pronexsteam/devil
 - **Keep a library:** search, favorites, collections, tags and a built-in player.
 - **Listen with Devil Music:** discover music, bring playlists, build a queue, get recommendations that adapt to your taste and download songs as MP3.
 - **Create with Devil Cut:** trim, arrange clips and export video, audio or GIFs.
-- **Stay connected:** watched channels, artist releases, media servers and a local phone link.
+- **Stay connected:** watched channels, artist releases, media servers, local file transfer and a separate music remote.
 - **Make it yours:** three interface languages, proxy settings, settings backups and reduced motion.
 
 <details>
 <summary><strong>Explore all features</strong></summary>
 
-- **Download workspace** with the link field, format controls and queue together, animated flame progress, and a mascot that reacts to completed and failed downloads. Motion respects the system's reduced-motion preference.
+- **Download workspace** with the link field, format controls and queue together, readable progress and six coordinated themes. Motion respects the system's reduced-motion preference.
 - **Batch actions** to pause, resume, retry or cancel selected tasks and send completed files to a phone. Clearing completed tasks keeps the library and its file count intact.
 - **Saved profiles and settings backup**: reuse download options and destination rules, export profiles, and preview settings imports before restoring them. Backups exclude cookies and account credentials.
 - **Downloads** from YouTube, YouTube Music and every other site yt-dlp supports. Best, 1080p, 720p or 480p video as MP4 (plays everywhere, H.264 and AAC when the site has them), MKV (the best streams as they are) or WebM; MP3, FLAC or WAV audio. Profiles for music, archive, phone (MP4) and maximum quality.
@@ -172,9 +137,9 @@ All buttons above open the [latest release](https://github.com/Pronexsteam/devil
 - **Download from Devil Music** with the MP3 button on a song card, queued song or the player. It adds a task to the download queue without stopping playback, using your save folder and download authentication settings. Your unfinished download form stays intact.
 - **Bring your music**: import public Spotify playlists and albums, YouTube playlists, and snapshots of up to 100 songs from YouTube Mix links. Spotify previews can omit tracks; a Mix may differ from your signed-in recommendations and will not update automatically. Matching can be stopped or canceled; uncertain matches remain reviewable.
 - **Your music taste stays local**: likes, listening and early skips shape recommendations. Hide songs or artists, choose familiar music or more discoveries, and export/import a compact profile before reinstalling or changing computers. No Devil Music account or paid server is needed.
-- **Music controls** in the Windows taskbar thumbnail and the tray menu, plus supported system media controls.
+- **Music controls** in the mini-player, phone remote, Windows taskbar thumbnail and tray menu, plus supported system media controls.
 - **Site sessions** for YouTube, Instagram, TikTok and X: supported embedded sign-in windows save a session for that site only. YouTube on Linux uses cookies from your regular browser or a `cookies.txt` file instead of embedded Google sign-in. Firefox cookies or your own `cookies.txt` also work on Windows and macOS (and Chrome, Edge, Brave or Safari on macOS).
-- **Updates**: Deviload checks GitHub at start and every 6 hours and updates itself in one click on Windows, macOS and in the AppImage, all from one release (the portable zip and the .deb package point to the releases page); yt-dlp updates itself to the nightly build once a day when nothing is downloading, which can be turned off in the settings.
+- **Updates**: Deviload checks GitHub at start and hourly while the app is visible and updates itself in one click on Windows, macOS and in the AppImage, all from one release (the portable zip and the .deb package point to the releases page); yt-dlp updates itself to the nightly build once a day when nothing is downloading, which can be turned off in the settings.
 - **Proxy** for downloads, search, link checks and yt-dlp updates (HTTP, HTTPS, SOCKS4 and SOCKS5).
 - **Moving from Deviload 1.x**: the history, settings and the list of downloaded videos of the old portable version move over in one click; cookies are not copied.
 - Tray mode and start with Windows, OS notifications, clipboard link suggestions, links from a text file, a copyable yt-dlp command in every task log, keyboard shortcuts (Ctrl/⌘+L links, Ctrl/⌘+K queue search, Ctrl/⌘+Enter download, Escape closes dialogs) and a short guided tour. Only one copy of Deviload runs at a time; starting it again brings the open window forward.
@@ -183,19 +148,27 @@ All buttons above open the [latest release](https://github.com/Pronexsteam/devil
 
 ## Screenshots
 
-![Deviload: the download queue with a link preview](docs/screenshots/downloads.png)
+The screenshots below show the 2.7.8 interface with sample media, original demo artwork and demo lyrics. They are captured from the app frontend, not design mockups.
 
-| Devil Music · discover | Devil Music · Now Playing |
+### Browse and read lyrics
+
+![Devil Music: the Now Playing cover flips into synced lyrics without leaving your library](docs/screenshots/music-inline-lyrics-2.7.8.png)
+
+![Devil Music: full player with cover artwork, synced lyrics and playback controls](docs/screenshots/music-lyrics-2.7.8.png)
+
+### Keep the controls close
+
+| Compact desktop player | Phone remote |
 |---|---|
-| ![Devil Music: guest catalog, moods and local preferences](docs/screenshots/devil-music.png) | ![Devil Music: Now Playing with MP3 downloads and playback controls](docs/screenshots/devil-music-player.png) |
+| <img src="docs/screenshots/music-mini-2.7.8.png" alt="Compact mini-player with vinyl artwork, playback, seeking and volume" width="380"> | <img src="docs/screenshots/music-remote-2.7.8.png" alt="Phone music remote following the Ambient theme" width="230"> |
 
-| Devil Cut | Library |
-|---|---|
-| ![Devil Cut: timeline and precise trim controls](docs/screenshots/devil-cut.png) | ![Library of finished downloads](docs/screenshots/library.png) |
-| **Settings backup** | **Download profiles** |
-| ![Export and restore settings without account credentials](docs/screenshots/settings-backup.png) | ![Manage saved download profiles](docs/screenshots/download-profiles.png) |
+The phone controls the desktop player over your local network; it does not stream audio to the phone or create a shared listening room.
 
-The lead music screenshot shows 2.7 with the live catalog and a sample local playlist. The older music views show 2.6.7; the other workspace screenshots show 2.6.5 with sample media. They do not show the new personal mixes or recording picker.
+### Download and convert
+
+![Downloads: link entry, format choices and a readable queue](docs/screenshots/downloads-2.7.8.png)
+
+![Devil Convert: source preview, actions and output settings](docs/screenshots/convert-2.7.8.png)
 
 ## Install on Windows
 
@@ -272,15 +245,17 @@ The queue (`queue.json`), per-format download archives and the saved YouTube sig
 
 Deviload has no telemetry. It contacts source sites to inspect and download media, and GitHub for app and engine updates; automatic yt-dlp updates can be turned off in settings. The phone link only listens on the local network address and only while it is on; every file a phone sends needs your confirmation. If you configure a media server, its address and API key are used to request library scans from that server.
 
+The **music remote** is separate from file transfer. Opening its QR starts a local-network listener. The paired browser receives track details, cover URLs and player state, and can send playback commands. Sound stays on the PC. Turning the remote off revokes its link; an unused session expires after 30 minutes. Use it on a trusted local network. See [music remote details](docs/music-remote.md).
+
 The supporter board reads a small list of public Ko-fi display names bundled with the app. It makes no network requests. Names are maintained manually in `src/supporters-data.js`; changing the bundled list requires an app update. Donation amounts, messages and email addresses are not included.
 
-Devil Music contacts YouTube Music for catalog results, artwork hosts for covers, and YouTube media servers for audio. Opening lyrics sends the track title, artist and duration to LRCLIB. Its listening profile stays in local WebView storage. Likes are never automatically evicted; recent history is bounded to 80 songs and recommendation history to 1,000 learned tracks. Profiles also keep up to 30 playlists with 500 total entries and 200 saved artists, albums or catalog playlists. Export/import files are limited to 2 MB and contain metadata and preferences, not music files or account credentials. If a profile reaches the storage limit, saving reports an error rather than removing older likes. Reinstalling the operating system can erase local preferences; export a backup first.
+Devil Music contacts YouTube Music for catalog results, artwork hosts for covers, and YouTube media servers for audio. Opening lyrics sends the track title, artist and duration to LRCLIB. Word-by-word highlighting requires supplied timestamps; missing word timing falls back to lines or plain text. Missing lyrics are not treated as proof that a song is instrumental. See [lyrics behavior](docs/music-lyrics-sync.md). Its listening profile stays in local WebView storage. Likes are never automatically evicted; recent history is bounded to 80 songs and recommendation history to 1,000 learned tracks. Profiles also keep up to 30 playlists with 500 total entries and 200 saved artists, albums or catalog playlists. Export/import files are limited to 2 MB and contain metadata and preferences, not music files or account credentials. If a profile reaches the storage limit, saving reports an error rather than removing older likes. Reinstalling the operating system can erase local preferences; export a backup first.
 
-The [2.7.2 update](#latest-update) adds optional public ListenBrainz and MusicBrainz lookups, enabled by default. Requests contain up to two artist names and two allowlisted genre tags. Those services can see the queries and your connection's IP address, but Deviload does not upload your listening history, create an account, send a user identifier or submit scrobbles. Turn the source off in music settings to stop new requests; it is also disabled during private sessions, while offline and on connections that report data-saving mode. Lyrics and ordinary music playback use their own services as described above.
+Optional public ListenBrainz and MusicBrainz lookups are enabled by default. Requests contain up to two artist names and two allowlisted genre tags. Those services can see the queries and your connection's IP address, but Deviload does not upload your listening history, create an account, send a user identifier or submit scrobbles. Turn the source off in music settings to stop new requests; it is also disabled during private sessions, while offline and on connections that report data-saving mode. Lyrics and ordinary music playback use their own services as described above.
 
 Personal mixes and recording choices travel with the music profile in this update. Mixes are limited to eight, each referencing up to eight playlists and retaining up to 100 learned track references; explicit recording choices are limited to 200. Diagnostic reports are exported only on request, exclude track names, links, paths and account data, and are never uploaded automatically.
 
-Music playback includes saved artists and albums, playback from supported existing full-track audio downloads, timed lyrics, equalizer presets, volume smoothing and optional track overlap. Smoothing is a compressor, not measured album loudness normalization. Regional charts can be hidden; personal discovery uses local listening signals, likes, followed artists and explicit exclusions. This is adaptive ranking, not a trained neural recommendation model. Private sessions do not add listening evidence to it.
+Music playback includes saved artists and albums, playback from supported existing full-track audio downloads, timed lyrics, equalizer presets, volume smoothing and optional track overlap. Smoothing is a compressor, not measured album loudness normalization. Regional chart shelves are not shown; personal discovery uses local listening signals, likes, followed artists and explicit exclusions. This is adaptive ranking, not a trained neural recommendation model. Private sessions do not add listening evidence to it.
 
 Playback prepares the next track and likely selections in advance, with bounded background requests and a second audio decoder. Cached signed links are retained until their expiry safety margin, for at most one hour. Unprepared tracks still depend on upstream extraction and media availability; instant startup is not guaranteed. Rate limits stop requests instead of triggering an endless retry loop.
 

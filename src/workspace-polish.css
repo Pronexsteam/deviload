@@ -1,0 +1,477 @@
+/* A shared, quiet workspace. Existing controls, IDs and window hit regions
+   remain owned by their components. No playback/download behavior changes. */
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) {
+  --theme-bg: #000;--theme-surface: #090909;--theme-surface-strong: #141414;
+  --theme-input: #111;--theme-line: #292929;--theme-muted: #a5a5a5;
+  --theme-text: #efefef;--theme-hover: #1a1a1a;--theme-selected: #202020;
+  --theme-accent: #fff;--theme-accent-text: #090909;
+}
+:root[data-theme="midnight"] {
+  --theme-bg: #111520;--theme-surface: #191f2c;--theme-surface-strong: #222a39;
+  --theme-input: #252e40;--theme-line: #384358;--theme-muted: #abb8ce;
+  --theme-hover: #2b3549;--theme-selected: #303b52;--theme-accent: #b9c9ee;
+}
+:root[data-theme="spotify"] {
+  --theme-bg: #111312;--theme-surface: #1a1d1b;--theme-surface-strong: #232824;
+  --theme-input: #252a26;--theme-line: #373e38;--theme-muted: #b0bab2;
+  --theme-hover: #2c332e;--theme-selected: #303a32;--theme-accent: #8ed9a7;
+}
+:root[data-theme="glass-light"] {
+  --theme-bg: #e8edf1;--theme-surface: rgba(248,250,253,.78);--theme-surface-strong: #f7f9fc;
+  --theme-input: rgba(255,255,255,.86);--theme-line: #b1bfcb;--theme-muted: #516173;
+  --theme-hover: #e3eaf2;--theme-selected: #dce5f0;--theme-accent: #405b80;
+  --theme-wallpaper-filter: brightness(1.12) saturate(.3);--theme-wallpaper-tint: rgba(244,248,252,.45);
+}
+:root[data-theme="glass-black"] {
+  --theme-surface: rgba(23,29,39,.82);--theme-surface-strong: #202936;
+  --theme-input: rgba(43,54,70,.88);--theme-line: #465367;--theme-muted: #b0bfd1;
+  --theme-accent: #c7d8ed;--theme-wallpaper-filter: brightness(.28) saturate(.3);
+}
+:root[data-theme="classic"] {
+  --accent: #c66f78;--red: #c66f78;
+}
+:root[data-theme="classic"] main #add {background: #ad5264;border-color: transparent;box-shadow: none}
+:root[data-theme="classic"] main #add:hover {background: #bf6172;box-shadow: none}
+:root {
+  --workspace-panel: var(--theme-surface, #15191f);
+  --workspace-input: var(--theme-input, #10151b);
+  --workspace-ink: var(--theme-text, #edf0f4);
+  --workspace-muted: var(--theme-muted, #abb0bb);
+  --workspace-line: var(--theme-line, #353941);
+  --workspace-hover: var(--theme-hover, #20262f);
+  --workspace-accent: var(--theme-accent, #e3a68c);
+}
+/* themes.css previously erased this reserved caption space outside Music. */
+:root.custom-window body main {padding-top: 34px}
+/* One continuous reading surface over the glass scene, rather than a frame
+   around every heading. The scene stays visible through the material. */
+:root[data-theme="glass-light"] body:not(.cut-page):not(.convert-page) main[data-page] {background: rgba(246,249,253,.88)}
+:root[data-theme="glass-black"] body:not(.cut-page):not(.convert-page) main[data-page] {background: rgba(17,23,32,.80)}
+:root body main .topbar {min-height: 58px;padding-block: 8px;gap: 12px}
+:root body main .topbar::before {box-shadow: none}
+:root body main .topbar-actions > :is(button,.quick-theme-switcher) {flex-shrink: 0}
+:root body main .topbar-actions > button:not(:hover):not(:focus-visible),
+:root body main .topbar-actions .lang-menu:not([open]) > summary,
+:root body main .quick-theme-toggle:not(:hover):not(:focus-visible) {
+  background: transparent;border-color: transparent;box-shadow: none;
+}
+:root body main .topbar-actions .lang-menu > summary {color: var(--workspace-ink)}
+body :is(.music-track-options,.music-queue-panel,.quick-theme-menu) {background: var(--theme-surface-strong,#20242c);border-color: var(--workspace-line);color: var(--workspace-ink);border-radius: 10px}
+body .music-track-options button.music-menu-action {color: var(--workspace-ink);min-height: 38px;font-size: 13px}
+body .music-track-options button.music-menu-action:hover {background: var(--workspace-hover)}
+body .music-track-options {box-sizing: border-box;overflow-y: auto;overscroll-behavior: contain;scrollbar-width: thin;max-width: calc(100vw - 16px)}
+:root body .sidebar .nav {font-size: 13px;border-color: transparent;box-shadow: none}
+:root body .sidebar .nav.active {border-color: transparent;box-shadow: none}
+
+/* One starting point and one queue, instead of two competing narrow cards. */
+:root main[data-page="downloads"] .workspace-heading {padding-block: 16px 12px}
+:root main[data-page="downloads"] .workspace-heading h1 {font-size: 26px;letter-spacing: -.65px}
+:root main[data-page="downloads"] .downloads-workspace,
+:root main[data-page="downloads"] .downloads-workspace:has(#empty:not([hidden])) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 18px;
+  padding-bottom: 28px;
+}
+:root main[data-page="downloads"] .download-composer {
+  padding: 18px 20px;
+  border-radius: 12px;
+  background: var(--workspace-panel);
+  border: 0;box-shadow: none;
+}
+:root main[data-page="downloads"] .composer-heading {display: flex;align-items: baseline;flex-wrap: wrap;gap: 6px 16px}
+:root main[data-page="downloads"] .composer-heading h2 {font-size: 17px;line-height: 1.4;margin: 0;letter-spacing: -.3px}
+:root main[data-page="downloads"] .composer-heading p {font-size: 12px;color: var(--workspace-muted);line-height: 1.5}
+:root main[data-page="downloads"] .composer-link-row {flex-wrap: nowrap;gap: 10px;margin: 14px 0}
+:root main[data-page="downloads"] .composer-link-row .quick-link {
+  flex: 1 1 auto;height: 50px;border-radius: 9px;
+  background: var(--workspace-input);border-color: var(--workspace-line);padding-left: 16px;gap: 8px;
+}
+:root main[data-page="downloads"] .composer-link-row .quick-link input {font-size: 14px}
+:root main[data-page="downloads"] .composer-link-row .quick-link .link-tool {width: 32px;height: 36px;flex: none}
+:root main[data-page="downloads"] .composer-link-row #add {width: auto;min-width: 120px;min-height: 50px;border-radius: 9px;font-size: 13px;padding-inline: 18px}
+:root main[data-page="downloads"] .quick-link:focus-within {outline: 2px solid var(--workspace-accent);outline-offset: 3px}
+:root main[data-page="downloads"] .download-composer .download-options {padding-top: 0;border: 0}
+:root main[data-page="downloads"] .download-options-row {gap: 12px}
+:root main[data-page="downloads"] .download-composer .media-mode {min-height: 36px;font-size: 12px;padding: 8px 12px}
+:root main[data-page="downloads"] .download-composer .download-extras .media-mode {font-size: 12px;padding: 8px 10px}
+:root main[data-page="downloads"] .download-composer .download-picks {
+  display: grid;grid-template-columns: minmax(110px, .7fr) minmax(110px, .7fr) minmax(150px, 1.15fr) minmax(180px, 1.35fr);
+  align-items: end;gap: 10px 14px;margin-top: 2px;order: 3;width: 100%;
+}
+:root main[data-page="downloads"] .download-composer .quality-select {order: 0;gap: 5px;font-size: 11px;color: var(--workspace-muted)}
+:root main[data-page="downloads"] .download-composer .quality-select select {min-height: 42px;font-size: 13px;border-radius: 9px}
+:root main[data-page="downloads"] .download-composer .destination-quick {
+  grid-column: auto;order: 1;min-height: 42px;padding: 10px 12px;border-radius: 9px;width: 100%;max-width: none;min-width: 0;
+}
+:root main[data-page="downloads"] .download-composer .options-toggle {
+  grid-column: auto;order: 2;min-height: 42px;padding: 8px 12px;margin: 0;width: 100%;max-width: none;min-width: 0;
+  border: 1px solid var(--workspace-line);border-radius: 9px;
+}
+:root main[data-page="downloads"] .download-composer .options-toggle-text>span {font-size: 12px}
+:root main[data-page="downloads"] .download-composer #options-summary {font-size: 11px;color: var(--workspace-muted);line-height: 1.35}
+:root main[data-page="downloads"] .download-composer .download-format-hint {grid-column: 1 / -1;order: 3;font-size: 11px;color: var(--workspace-muted)}
+:root main[data-page="downloads"] .download-composer .drawer-grid {grid-template-columns: repeat(2,minmax(0,1fr));gap: 16px}
+:root main[data-page="downloads"] .download-composer .drawer-foot {flex-direction: row;align-items: center;flex-wrap: wrap}
+:root main[data-page="downloads"] .queue-column {display: flex;position: static;gap: 12px;min-width: 0}
+:root main[data-page="downloads"] #live-download {border: 0;border-radius: 9px;box-shadow: none}
+:root main[data-page="downloads"] #live-download:has(.live-controls[hidden]) {padding: 10px 14px}
+:root main[data-page="downloads"] #live-download:has(.live-controls[hidden]) .live-download-line {flex-wrap: nowrap;align-items: center;gap: 14px}
+:root main[data-page="downloads"] #live-download:has(.live-controls[hidden]) #live-name {flex: 1 1 auto;font-size: 12px}
+:root main[data-page="downloads"] #live-download:has(.live-controls[hidden]) #live-more {flex: 0 1 auto;order: 0;width: auto;font-size: 11px;color: var(--workspace-muted)}
+:root main[data-page="downloads"] #live-download:has(.live-controls[hidden]) #live-percent {order: 1;font-size: 13px}
+:root main[data-page="downloads"] .queue-column .library {padding: 8px 0 16px;min-height: 270px;border: 0;border-radius: 0;background: transparent;box-shadow: none}
+:root main[data-page="downloads"] .queue-column .library-heading {flex-direction: row;align-items: center;gap: 18px;margin-bottom: 12px}
+:root main[data-page="downloads"] .queue-column .library-heading h2 {font-size: 19px;letter-spacing: -.3px}
+:root main[data-page="downloads"] .queue-column #counts {font-size: 12px;color: var(--workspace-muted);line-height: 1.5}
+:root main[data-page="downloads"] .queue-column .library-tools {width: min(48%,380px);max-width: 48%;gap: 8px}
+:root main[data-page="downloads"] .queue-column .search-label input {max-width: none;font-size: 12px}
+:root main[data-page="downloads"] .queue-column .queue-filters {gap: 8px;padding-bottom: 14px;border-color: var(--workspace-line)}
+:root main[data-page="downloads"] .queue-column .queue-filters button {font-size: 12px;min-height: 32px;padding: 6px 10px;border-radius: 6px}
+:root main[data-page="downloads"] .queue-column .queue-filters button:not(.selected):not(:hover) {border-color: transparent;background: transparent;color: var(--workspace-muted)}
+:root main[data-page="downloads"] .queue-column .queue-filters button.selected {background: var(--workspace-hover);color: var(--workspace-ink);border-color: transparent}
+:root main[data-page="downloads"] .queue-column .job {grid-template-columns: 60px minmax(0,1fr);padding: 18px 0;gap: 14px;border-bottom-color: var(--workspace-line)}
+:root main[data-page="downloads"] .queue-column .job.is-selectable {grid-template-columns: 20px 60px minmax(0,1fr)}
+:root main[data-page="downloads"] .queue-column .media-cover {width: 60px;height: 60px;border-radius: 8px}
+:root main[data-page="downloads"] .queue-column .job-content {flex-direction: row;align-items: center;gap: 20px;min-width: 0}
+:root main[data-page="downloads"] .queue-column .job-body {flex: 1;min-width: 0}
+:root main[data-page="downloads"] .queue-column .job-title {font-size: 13px;line-height: 1.5;margin-bottom: 6px}
+:root main[data-page="downloads"] .queue-column .job-meta {font-size: 12px;line-height: 1.5;gap: 8px;color: var(--workspace-muted);font-variant-numeric: tabular-nums}
+:root main[data-page="downloads"] .queue-column .job-controls {flex: 0 1 auto;max-width: 43%;justify-content: flex-end;gap: 6px}
+:root main[data-page="downloads"] .queue-column .job-controls>button,
+:root main[data-page="downloads"] .queue-column .job-controls .job-more summary {font-size: 11px;min-height: 32px;padding: 7px 10px;border-radius: 8px}
+:root main[data-page="downloads"] .queue-column .job-help span {font-size: 12px;line-height: 1.6}
+:root main[data-page="downloads"] .queue-column .empty {min-height: 150px;display: flex;flex-direction: column;align-items: center;justify-content: center;padding: 28px 12px}
+:root main[data-page="downloads"] .queue-column .empty[hidden] {display: none}
+:root main[data-page="downloads"] .queue-column .empty h3 {font-size: 15px;font-weight: 600}
+:root main[data-page="downloads"] .queue-column .empty p {font-size: 12px;color: var(--workspace-muted)}
+:root main[data-page="downloads"] .downloads-workspace .queue-column>.hero-slim {position: static;order: 2;padding: 2px 4px}
+:root main[data-page="downloads"] .queue-column .hero-status {font-size: 11px;color: var(--workspace-muted)}
+
+/* Search is the first action; browsing remains directly underneath it. No
+   extra sticky surface crosses the native/custom titlebar hit regions. */
+#devil-music .music-toolbar,
+body.music-focus #devil-music .music-toolbar {
+  display: grid;grid-template-columns: auto minmax(0,1fr) auto;align-items: center;position: static;
+  gap: 10px 12px;margin: 0 0 16px;padding: 0;
+  border: 0;border-radius: 0;background: transparent;box-shadow: none;
+}
+#devil-music .music-search {order: -1;flex: none;width: 100%;box-sizing: border-box;min-width: 0;min-height: 52px;border-radius: 10px;background: var(--workspace-input);border-color: transparent;padding: 4px 5px 4px 14px}
+#devil-music .music-search:focus-within {outline: 2px solid var(--workspace-accent);outline-offset: 3px}
+#devil-music .music-search input[type="search"] {background: transparent;box-shadow: none;color: var(--workspace-ink)}
+#devil-music .music-toolbar>.music-search {grid-column: 2;grid-row: 1}
+#devil-music .music-toolbar>.music-library-panel-toggle {grid-column: 1;grid-row: 1;margin-left: 0;justify-self: start;width: 36px;min-height: 40px;padding: 8px;background: transparent;border-color: transparent}
+#devil-music .music-library-panel-toggle>span:last-child {display: none}
+#devil-music .music-toolbar>.music-navigation {grid-column: 3;grid-row: 1;justify-self: end;gap: 2px}
+#devil-music .music-navigation button {font-size: 0;width: 34px;height: 36px;min-width: 0;padding: 0;border: 0;background: transparent;color: var(--workspace-ink)}
+#devil-music .music-navigation button::before {font-size: 20px;line-height: 1}
+#devil-music .music-navigation-back::before {content: "←"}
+#devil-music .music-navigation-home::before {content: "⌂"}
+#devil-music .music-navigation button:disabled {opacity: .35}
+#devil-music .music-toolbar>.music-tabs {grid-column: 1 / -1;grid-row: 2;border-bottom: 1px solid var(--workspace-line)}
+#devil-music .music-search input[type="search"] {font-size: 16px}
+#devil-music .music-tabs {flex-wrap: wrap;gap: 4px 20px;align-items: center}
+#devil-music .music-tabs button {font-size: 13px;font-weight: 550;padding: 10px 0;line-height: 1.4;background: transparent;border-radius: 0;color: var(--workspace-muted);border: 0;border-bottom: 2px solid transparent}
+#devil-music .music-tabs button.selected {color: var(--workspace-ink);border-bottom-color: var(--workspace-accent)}
+#devil-music .music-library-panel-toggle {margin-left: auto;font-size: 12px;min-height: 36px}
+body.music-focus #devil-music .music-hero {height: auto;min-height: 88px;border-radius: 10px;padding: 14px 18px;border: 0;background: var(--workspace-panel);box-shadow: none;gap: 14px}
+body.music-focus #devil-music .music-character {width: 74px;min-width: 74px;height: 72px;padding: 0;align-self: center}
+body.music-focus #devil-music .music-hero-copy {display: grid;grid-template-columns: minmax(0,1fr) auto;gap: 4px 12px;width: 100%;padding: 0;align-items: center}
+#devil-music .music-hero-copy>.music-eyebrow {display: none}
+body.music-focus #devil-music .music-hero h2 {grid-column: 1;grid-row: 1;font-size: 27px;line-height: 1.2;letter-spacing: -.8px;margin: 0}
+body.music-focus #devil-music .music-hero-copy>p {grid-column: 1;grid-row: 2;font-size: 12px;line-height: 1.5;margin: 0;color: var(--workspace-muted)}
+#devil-music .music-hero-actions {grid-column: 2;grid-row: 1 / 3;gap: 6px;flex-direction: column;align-items: flex-start}
+#devil-music .music-hero-actions .music-primary {min-height: 36px;padding: 9px 13px;font-size: 12px;border-radius: 8px}
+#devil-music .music-hero-number {display: none}
+#devil-music .music-guest {font-size: 11px}
+body.music-focus #devil-music .music-moods {padding: 12px 0 16px;gap: 6px}
+#devil-music .music-moods button {font-size: 12px;min-height: 32px;padding: 7px 12px;border-color: transparent;background: transparent;color: var(--workspace-muted)}
+#devil-music .music-moods button.selected {background: var(--workspace-hover);color: var(--workspace-ink);border-color: transparent}
+body.music-focus #devil-music .music-content-heading {margin: 0 0 16px;align-items: center;gap: 16px;padding: 0;border: 0;background: transparent;box-shadow: none;backdrop-filter: none}
+#devil-music .music-content-heading .music-eyebrow {display: none}
+#devil-music .music-content-heading h3 {font-size: 23px;line-height: 1.3;letter-spacing: -.5px}
+#devil-music .music-heading-actions {display: flex;align-items: center;gap: 8px;flex-wrap: wrap}
+#devil-music .music-shelf {margin-bottom: 26px;padding: 0;border: 0;background: transparent;box-shadow: none;backdrop-filter: none}
+#devil-music .music-heading-actions>.outline {border-color: transparent;background: transparent;padding-inline: 8px;color: var(--workspace-muted)}
+#devil-music .music-shelf h4 {font-size: 17px;font-weight: 650;line-height: 1.4;letter-spacing: -.2px;margin-bottom: 16px}
+#devil-music .music-card {padding: 8px;border: 1px solid transparent;border-radius: 12px;background: transparent;transition: background .15s,border-color .15s}
+#devil-music .music-card:hover,
+#devil-music .music-card:focus-within {background: var(--workspace-hover);border-color: var(--workspace-line)}
+#devil-music .music-card .music-art {border-radius: 9px}
+#devil-music .music-card-artist .music-art {border-radius: 50%}
+#devil-music .music-card-title {font-size: 14px;line-height: 1.45;margin-top: 12px}
+#devil-music .music-card-subtitle {font-size: 12px;line-height: 1.6}
+#devil-music .music-card-add {right: 6px;bottom: 26px;width: 30px;height: 30px}
+#devil-music .music-card-song {padding-bottom: 46px}
+#devil-music .music-card-song :is(.music-card-add,.music-card-next,.music-card-download,.music-card-save-playlist) {
+  bottom: 8px;width: 30px;height: 30px;
+}
+#devil-music .music-card-song .music-card-add {right: 8px}
+#devil-music .music-card-song .music-card-next {right: 42px}
+#devil-music .music-card-song .music-card-download {right: 76px}
+#devil-music .music-card-song .music-card-save-playlist {left: 8px}
+#devil-music .music-recommendation-reason {padding-right: 30px;min-height: 30px;font-size: 12px;line-height: 1.5}
+#devil-music .music-track-row {min-height: 66px;border-radius: 9px}
+body.music-focus #devil-music .music-track-copy strong {font-size: 14px;line-height: 1.4}
+body.music-focus #devil-music .music-track-copy>span {font-size: 12px;line-height: 1.5}
+#devil-music .music-library-sidebar {padding: 14px 12px;border-radius: 10px;background: var(--workspace-panel);border: 0;box-shadow: none}
+#devil-music .music-library-sidebar-head h3 {font-size: 15px}
+#devil-music .music-library-nav-item {gap: 12px;padding: 10px 8px}
+#devil-music .music-library-nav-copy {gap: 4px}
+#devil-music .music-library-sidebar-search input[type="search"] {font-size: 12px}
+#devil-music .music-library-sidebar-search {border-color: transparent;background: var(--workspace-input)}
+#devil-music .music-library-nav-item:not(:hover) {border-color: transparent}
+#devil-music .music-library-nav-item.selected {background: var(--workspace-hover)}
+body .music-dock .music-now-info strong {font-size: 13px;line-height: 1.4}
+body .music-dock .music-now-info>span {font-size: 11px;line-height: 1.4}
+body .music-dock .music-now-art {width: 52px}
+body .music-dock .music-progress {font-size: 11px;font-variant-numeric: tabular-nums}
+body .music-queue-panel {border-radius: 16px;padding: 18px;max-height: min(60vh,560px)}
+body .music-queue-panel .music-queue-track {padding: 8px 4px;min-height: 52px}
+body .music-queue-panel .music-queue-select>span:last-child {font-size: 12px;line-height: 1.5}
+
+/* A visible thank-you line rather than a second hero. Its own opaque
+   backplate keeps names legible over glass and with several supporters. */
+body #supporters {min-height: 52px;margin: 8px 0 14px;padding: 8px 14px;column-gap: 16px;border: 0;border-radius: 9px;box-shadow: none;grid-template-columns: minmax(200px,1fr) minmax(0,1fr) auto}
+body #supporters .supporters-heading {gap: 10px}
+body #supporters .supporters-heading::before {width: 20px;height: 20px}
+body #supporters .supporters-heading h2 {font-size: 13px;font-weight: 600;margin-bottom: 2px}
+body #supporters .supporters-heading p {font-size: 11px}
+body #supporters .supporters-mascot {width: 42px;height: 42px;margin: -3px 0}
+body #supporters .supporter-name {font-size: 15px;line-height: 1.4}
+body #supporters .supporter-rank {width: 24px;height: 24px;border: 0;background: transparent}
+body #supporters .supporters-support {min-height: 32px;padding: 6px 10px;font-size: 12px;border-color: transparent;background: transparent}
+body.music-focus #devil-music {padding-top: 8px}
+#devil-music :is(.music-icon-button,.music-navigation button,.music-library-panel-toggle):hover {background: var(--workspace-hover);color: var(--workspace-ink)}
+#devil-music :is(button,a,input):focus-visible {outline-color: var(--workspace-accent)}
+
+/* The black material uses actual black rather than blue/green charcoal.
+   Elevated surfaces are reserved for controls and transient menus. */
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) body:not(.cut-page):not(.convert-page) main[data-page],
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) body.music-focus .music-workspace {background: #000}
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) body .sidebar,
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) #devil-music .music-library-sidebar {background: #060606;border-color: #202020}
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) body .topbar::before {background: #060606;border-color: #202020}
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) body #supporters {--supporters-backplate: #080808;--supporters-ink: #efefef;--supporters-muted: #aaa;--supporters-line: #272727;--supporters-chip: #141414}
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) body .music-dock {background: #050505;border-top-color: #222;box-shadow: none;backdrop-filter: none}
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) #devil-music .music-hero {background: transparent;border-bottom: 1px solid #202020;border-radius: 0;padding-inline: 0}
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) #devil-music .music-library-sidebar-list>.music-library-nav-item:first-child {background: transparent}
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) #devil-music .music-library-nav-item:hover,
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) #devil-music .music-library-nav-item.selected {background: #161616}
+
+/* Album and playlist covers are the focal point. Keep the same controls and
+   artwork sources; no decorative substitute image is added to the app. */
+#devil-music :is(.music-collection-banner,.music-playlist-feature) {
+  display: flex;align-items: center;gap: clamp(20px,3vw,36px);
+  padding: 26px 0 30px;margin: 0 0 24px;border: 0;border-radius: 0;
+  background: transparent;box-shadow: none;
+}
+#devil-music .music-collection-banner>.music-art,
+#devil-music .music-playlist-feature>.music-playlist-art {
+  flex: 0 0 clamp(160px,20vw,250px);width: clamp(160px,20vw,250px);height: auto;aspect-ratio: 1;
+  border-radius: 6px;overflow: hidden;box-shadow: 0 12px 36px #0003;
+}
+#devil-music .music-collection-copy,
+#devil-music .music-playlist-feature-copy {flex: 1;min-width: 0}
+#devil-music .music-collection-copy h2,
+#devil-music .music-playlist-feature-copy h2 {
+  font-size: clamp(28px,3.6vw,52px);font-weight: 750;line-height: 1.1;
+  letter-spacing: -1.2px;margin: 12px 0 16px;color: var(--workspace-ink);overflow-wrap: anywhere;
+}
+#devil-music .music-collection-copy>p,
+#devil-music .music-playlist-feature-copy>p {font-size: 14px;line-height: 1.6;color: var(--workspace-muted)}
+#devil-music .music-collection-actions,
+#devil-music .music-playlist-feature-actions {display: flex;align-items: center;flex-wrap: wrap;gap: 10px;margin-top: 22px}
+#devil-music :is(.music-collection-actions,.music-playlist-feature-actions) .music-primary {
+  display: inline-flex;gap: 9px;min-width: 106px;min-height: 38px;padding: 9px 20px;
+  border-radius: 100px;font-size: 14px;line-height: 1.3;box-shadow: none;
+}
+#devil-music :is(.music-collection-actions,.music-playlist-feature-actions) .music-primary .icon {width: 17px;height: 17px}
+#devil-music .music-collection-actions .music-filter-chip {min-height: 38px;padding: 9px 16px;border-radius: 100px;font-size: 13px}
+#devil-music:has(.music-collection-banner) .music-content-heading>div:first-child {display: none}
+#devil-music:has(.music-collection-banner) .music-content-heading {justify-content: flex-end;margin-bottom: 0}
+/* Place the collection before its filter without detaching the existing search
+   inputs or changing their event handlers when a view re-renders. */
+#devil-music:has(.music-collection-banner,.music-playlist-feature) .music-main-content {display: flex;flex-direction: column}
+#devil-music:has(.music-collection-banner,.music-playlist-feature) #music-shelves {display: contents}
+#devil-music:has(.music-collection-banner,.music-playlist-feature) .music-toolbar {order: 0}
+#devil-music:has(.music-collection-banner,.music-playlist-feature) :is(.music-collection-banner,.music-playlist-feature) {order: 1}
+#devil-music:has(.music-collection-banner,.music-playlist-feature) .music-content-heading {order: 2}
+#devil-music:has(.music-collection-banner,.music-playlist-feature) :is(.music-library-tools,.music-status) {order: 3}
+#devil-music:has(.music-collection-banner,.music-playlist-feature) #music-shelves>:not(.music-collection-banner):not(.music-playlist-feature) {order: 4}
+#devil-music:has(.music-collection-banner,.music-playlist-feature) .music-attribution {order: 5}
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) #devil-music :is(.music-collection-actions,.music-playlist-feature-actions) .music-primary {background: #fff;color: #080808}
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) #devil-music :is(.music-collection-actions,.music-playlist-feature-actions) .music-primary:hover {background: #dedede}
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) #devil-music .music-track-row {min-height: 54px;border-radius: 4px;background: transparent}
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) #devil-music .music-track-row:is(:hover,:focus-within,.active,.selected) {background: #121212}
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) #devil-music .music-cover-action {background: #fff;border: 0;color: #000;box-shadow: 0 4px 20px #0006}
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) #devil-music .music-cover-action>.icon {background: #000}
+
+/* Focused listening: one existing player, with its lyric view moved alongside
+   the cover. No duplicate audio element or second lyric request pipeline. */
+.music-lyrics-content {min-width: 0;min-height: 0}
+.music-lyrics-scroll {max-height: 58vh;overflow: auto;overscroll-behavior: contain;scrollbar-width: thin;scroll-padding-block: 28px}
+.music-lyrics-credit {font-size: 11px;letter-spacing: .04em;color: var(--workspace-muted);margin: 14px 0 0}
+#music-now-playing.has-lyrics {padding: 22px clamp(24px,4vw,72px);background: var(--theme-bg,#101013);color: var(--workspace-ink)}
+#music-now-playing.has-lyrics .music-stage-header {max-width: 1440px;margin-bottom: 20px}
+#music-now-playing.has-lyrics .music-stage-layout {
+  max-width: 1440px;height: calc(100dvh - 104px);min-height: 0;
+  display: grid;grid-template-columns: minmax(230px,.85fr) minmax(0,1.15fr);
+  grid-template-rows: minmax(0,1fr) auto;gap: 20px clamp(32px,6vw,100px);align-items: center;
+}
+#music-now-playing.has-lyrics .music-stage-art {grid-column: 1;grid-row: 1;height: 100%;min-height: 0;align-items: center}
+#music-now-playing.has-lyrics .music-stage-art .music-now-art {width: auto;max-width: min(100%,460px);height: min(100%,46vh);aspect-ratio: 1}
+#music-now-playing.has-lyrics .music-stage-art .music-art {border-radius: 8px;box-shadow: 0 16px 45px #0005}
+#music-now-playing.has-lyrics .music-stage-details {grid-column: 1;grid-row: 2;gap: 14px;padding-bottom: 10px}
+#music-now-playing.has-lyrics .music-stage-details>.music-eyebrow {display: none}
+#music-now-playing.has-lyrics .music-now-info {gap: 8px;text-align: left}
+#music-now-playing.has-lyrics .music-now-info strong {font-size: clamp(22px,2.5vw,34px);line-height: 1.2;letter-spacing: -.7px}
+#music-now-playing.has-lyrics .music-now-info>span {font-size: 14px;color: var(--workspace-muted)}
+#music-now-playing.has-lyrics .music-stage-controls {margin: 0}
+#music-now-playing.has-lyrics .music-progress {margin-top: 14px;color: var(--workspace-muted)}
+#music-now-playing.has-lyrics .music-transport-buttons {gap: 20px}
+#music-now-playing.has-lyrics .music-play-button {width: 44px;height: 44px;background: var(--theme-accent,#eedbd0);color: var(--theme-accent-text,#151515)}
+#music-now-playing.has-lyrics .music-play-button .icon {width: 20px;height: 20px}
+#music-now-playing.has-lyrics .music-stage-actions {gap: 12px}
+#music-now-playing.has-lyrics .music-stage-actions>.music-icon-button {width: 32px;height: 32px}
+#music-now-playing.has-lyrics .music-dock-extras {gap: 10px;flex-wrap: wrap}
+#music-now-playing.has-lyrics .music-stage-lyrics {display: flex;grid-column: 2;grid-row: 1 / 3;align-self: stretch;min-height: 0;padding: 10px 0 18px}
+#music-now-playing .music-stage-lyrics[hidden] {display: none}
+#music-now-playing.has-lyrics .music-lyrics-content {display: flex;flex-direction: column;flex: 1}
+#music-now-playing.has-lyrics .music-lyrics-content h2 {font-size: 13px;font-weight: 550;color: var(--workspace-muted);margin: 0 0 18px;letter-spacing: .04em}
+#music-now-playing.has-lyrics .music-lyrics-scroll {
+  flex: 1;min-height: 0;max-height: none;padding: 32px 12px 32px 0;
+  mask-image: linear-gradient(transparent,#000 7%,#000 92%,transparent);
+  -webkit-mask-image: linear-gradient(transparent,#000 7%,#000 92%,transparent);
+}
+#music-now-playing.has-lyrics .music-lyric-line {
+  position: relative;font-size: clamp(21px,2.1vw,32px);font-weight: 550;line-height: 1.45;
+  padding: 16px 0 16px 22px;margin: 0;border: 0;border-left: 2px solid transparent;border-radius: 0;
+  background: transparent;color: var(--workspace-muted);transition: color .18s;
+}
+#music-now-playing.has-lyrics .music-lyric-line.active {color: var(--workspace-ink);border-left-color: var(--workspace-accent);text-decoration: none}
+#music-now-playing.has-lyrics .music-lyric-line:hover {color: var(--workspace-ink)}
+#music-now-playing.has-lyrics .music-lyric-line:focus-visible {outline: 2px solid var(--workspace-accent);outline-offset: -2px}
+#music-now-playing.has-lyrics .music-lyrics-plain {font-size: clamp(18px,1.7vw,25px);line-height: 1.9;color: var(--workspace-ink);margin: 0}
+#music-now-playing.has-lyrics .music-stage-background .music-art {opacity: .12;filter: blur(50px)}
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) #music-now-playing.has-lyrics {background: #000}
+:root:is([data-theme="matte-black"],[data-theme="ambient"]) #music-now-playing.has-lyrics .music-stage-background .music-art {opacity: .06}
+
+@media (max-width: 1100px) {
+  :root main[data-page="downloads"] .download-composer .download-picks {grid-template-columns: repeat(2,minmax(0,1fr))}
+  :root main[data-page="downloads"] .download-composer .options-toggle {order: 2}
+  :root main[data-page="downloads"] .download-composer .destination-quick {order: 1}
+}
+@media (max-width: 850px) {
+  :root main[data-page="downloads"] .download-composer {padding: 16px}
+  :root main[data-page="downloads"] .composer-heading {align-items: flex-start;flex-direction: column;gap: 4px}
+  :root main[data-page="downloads"] .composer-link-row {gap: 8px}
+  :root main[data-page="downloads"] .composer-link-row #add {min-width: 104px;padding-inline: 12px}
+  :root main[data-page="downloads"] .composer-link-row .quick-link {gap: 4px;padding-left: 10px}
+  :root main[data-page="downloads"] .composer-link-row .quick-link input {font-size: 13px}
+  :root main[data-page="downloads"] .queue-column .job-content {flex-direction: column;align-items: stretch;gap: 10px}
+  :root main[data-page="downloads"] .queue-column .job-controls {max-width: none;justify-content: flex-start}
+  :root main[data-page="downloads"] .queue-column .job-meta {flex-wrap: wrap}
+  #devil-music .music-tabs {gap: 4px 16px}
+  #devil-music .music-tabs button {font-size: 12px}
+  #devil-music .music-content-heading {flex-wrap: wrap}
+  #devil-music .music-content-heading h3 {font-size: 21px}
+}
+@media (max-width: 760px) {
+  #music-now-playing.has-lyrics {padding: 18px 22px}
+  #music-now-playing.has-lyrics .music-stage-layout {grid-template-columns: minmax(210px,.85fr) minmax(0,1.15fr);gap: 16px 24px}
+  #music-now-playing.has-lyrics .music-now-info strong {font-size: 22px}
+  #music-now-playing.has-lyrics .music-lyric-line {font-size: 21px;padding-left: 14px}
+  #devil-music :is(.music-collection-banner,.music-playlist-feature) {gap: 20px;padding-block: 18px 24px}
+  #devil-music .music-collection-banner>.music-art,
+  #devil-music .music-playlist-feature>.music-playlist-art {flex-basis: 144px;width: 144px}
+  #devil-music .music-collection-copy h2,
+  #devil-music .music-playlist-feature-copy h2 {font-size: 30px;letter-spacing: -.7px}
+  :root main[data-page="downloads"] .download-composer .drawer-grid {grid-template-columns: minmax(0,1fr)}
+  :root main[data-page="downloads"] .download-composer .media-mode {font-size: 11px;padding-inline: 9px}
+  :root main[data-page="downloads"] .download-composer .download-extras {margin-left: 0}
+  :root main[data-page="downloads"] .queue-column .library-heading {gap: 14px;flex-wrap: wrap}
+  :root main[data-page="downloads"] .queue-column .library-tools {width: 100%;max-width: none}
+  :root main[data-page="downloads"] .queue-column .queue-filters {gap: 6px}
+  :root main[data-page="downloads"] .queue-column .queue-filters button {font-size: 11px;padding-inline: 8px}
+  body.music-focus #devil-music .music-hero {height: auto;min-height: 88px;padding: 12px 14px}
+  body.music-focus #devil-music .music-hero h2 {font-size: 25px}
+  #devil-music .music-search kbd {display: none}
+  #devil-music .music-search {padding-left: 12px;gap: 8px}
+  #devil-music .music-library-panel-toggle {margin-left: 0}
+  body .music-dock .music-now-art {width: 44px}
+  body .music-dock .music-now-info strong {font-size: 12px}
+  body .music-queue-panel {max-height: calc(100dvh - 200px)}
+}
+@media (max-width: 600px) {
+  #music-now-playing.has-lyrics .music-stage-layout {height: auto;display: flex;flex-direction: column;gap: 24px}
+  #music-now-playing.has-lyrics .music-stage-art .music-now-art {width: 190px}
+  #music-now-playing.has-lyrics .music-stage-details {width: 100%;max-width: 400px}
+  #music-now-playing.has-lyrics .music-stage-lyrics {width: 100%;height: 65vh;min-height: 260px}
+  #devil-music :is(.music-collection-banner,.music-playlist-feature) {align-items: flex-start;flex-direction: column}
+  #devil-music .music-collection-banner>.music-art,
+  #devil-music .music-playlist-feature>.music-playlist-art {flex-basis: auto;width: 168px}
+  body #supporters {grid-template-columns: minmax(0,1fr) auto;grid-template-areas: "heading support" "names names";row-gap: 8px}
+  #devil-music .music-toolbar {gap: 8px}
+  #devil-music .music-toolbar>.music-navigation {grid-column: 3;gap: 0}
+  #devil-music .music-navigation button {width: 28px}
+  #devil-music .music-tabs {gap: 4px 14px}
+  #devil-music .music-tabs button {font-size: 12px}
+  body.music-focus #devil-music .music-character {display: none}
+  body.music-focus #devil-music .music-hero-copy {grid-template-columns: minmax(0,1fr)}
+  #devil-music .music-hero-actions {grid-column: 1;grid-row: 3;flex-direction: row;align-items: center;margin-top: 8px}
+}
+@media (prefers-reduced-motion: reduce) {
+  #devil-music .music-card {transition: none}
+  #music-now-playing.has-lyrics .music-lyric-line {transition: none}
+}
+
+/* Music is a desktop workspace: chrome never travels through the content.
+   Each library/content pane owns its scrolling; all other sections keep theirs. */
+body:has(main[data-page="music"]) {height:100dvh;min-height:0;overflow:hidden}
+:root body main[data-page="music"] {height:100dvh;min-height:0;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;padding-bottom:108px}
+:root.custom-window body main[data-page="music"] {padding-top:34px}
+:root body main[data-page="music"]>.topbar {position:relative;top:auto;flex:none;min-height:58px}
+:root body main[data-page="music"]>#supporters {flex:none;margin-block:4px 10px;min-height:44px}
+:root body main[data-page="music"] #devil-music {flex:1;min-height:0;overflow:hidden;padding:0;align-items:stretch;grid-template-rows:minmax(0,1fr)}
+:root body main[data-page="music"] #devil-music>.music-main-content {grid-row:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:0 12px 24px 0;scroll-padding-top:130px}
+:root body main[data-page="music"] #devil-music>.music-library-sidebar {position:relative;top:auto;grid-row:1;height:100%;max-height:none;min-height:0;margin:0;overflow:auto}
+:root body main[data-page="music"] #devil-music .music-toolbar {position:sticky;top:0;z-index:15;background:var(--theme-bg,#101318);padding:0 0 8px;margin-bottom:16px}
+:root body #devil-music #music-search:focus-within {outline:1px solid var(--workspace-accent);outline-offset:0;box-shadow:none}
+:root body #devil-music #music-query:is(:focus,:focus-visible) {outline:none;border-color:transparent;box-shadow:none;background:transparent}
+:root body #devil-music #music-search-clear {border:0;background:transparent;color:var(--workspace-muted);width:28px;height:28px;padding:5px;flex:none}
+:root body #devil-music #music-search-clear:hover {color:var(--workspace-ink);background:var(--workspace-hover)}
+:root body #devil-music .music-search :is(input,kbd) {min-width:0}
+:root body #devil-music .music-search kbd {flex:none}
+body .music-now-art[role="button"] {cursor:pointer;position:relative;flex-shrink:0}
+body .music-dock .music-now-art[role="button"]::after {content:"↗";position:absolute;right:2px;bottom:2px;display:grid;place-items:center;width:20px;height:20px;border-radius:4px;background:#000b;color:#fff;font-size:15px;pointer-events:none}
+body .music-now-art[role="button"]:focus-visible {outline:2px solid var(--workspace-accent);outline-offset:3px}
+#devil-music>.music-playing-preview {display:none}
+@media(min-width:1100px){
+  :root body main[data-page="music"] #devil-music.has-playing-preview {grid-template-columns:minmax(0,1fr) clamp(220px,21vw,310px);column-gap:20px}
+  :root body main[data-page="music"] #devil-music.has-playing-preview.library-panel-open {grid-template-columns:clamp(190px,18vw,250px) minmax(0,1fr) clamp(220px,21vw,310px);column-gap:18px}
+  #devil-music.has-playing-preview>.music-playing-preview {display:flex;grid-column:-2;grid-row:1;flex-direction:column;gap:14px;min-height:0;overflow:auto;scrollbar-width:thin;padding:20px 16px;background:var(--workspace-panel);border-radius:12px;align-self:stretch}
+  #devil-music .music-preview-art {display:block;width:100%;padding:0;margin:0;border:0;border-radius:8px;background:transparent;overflow:hidden;flex:none}
+  #devil-music .music-preview-art>.music-art {display:block;width:100%;height:auto;aspect-ratio:1;border-radius:8px}
+  #devil-music .music-playing-preview>strong {font-size:22px;line-height:1.25;overflow-wrap:anywhere;margin-top:6px;color:var(--workspace-ink)}
+  #devil-music .music-playing-preview>span:not(.music-eyebrow) {font-size:13px;line-height:1.5;color:var(--workspace-muted)}
+  #devil-music .music-preview-open {display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 10px;border-radius:100px;margin-top:12px;background:var(--workspace-ink);color:var(--theme-bg,#101318);border:0;font-size:12px;line-height:1.4;flex:none}
+  #devil-music .music-preview-open>.icon {width:16px;height:16px}
+  #devil-music.has-playing-preview .music-card-grid {grid-auto-columns:calc((100% - 20px)/2)}
+  #devil-music.has-playing-preview .music-results .music-card-grid {grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-columns:auto}
+  #devil-music.has-playing-preview .music-collection-banner {flex-wrap:wrap}
+}
+@media(max-width:959px){
+  :root body main[data-page="music"] #devil-music.library-panel-open {grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);row-gap:12px}
+  :root body main[data-page="music"] #devil-music.library-panel-open>.music-library-sidebar {height:auto;max-height:180px;grid-row:1}
+  :root body main[data-page="music"] #devil-music.library-panel-open>.music-main-content {grid-row:2}
+}
+@media(max-width:760px){:root body main[data-page="music"] {padding-bottom:142px}}
+@media(min-width:1100px) and (max-width:1280px){
+  #devil-music.has-playing-preview .music-library-sidebar-head {padding-inline:0;gap:4px}
+  #devil-music.has-playing-preview .music-library-sidebar-head h3 {font-size:13px;white-space:nowrap}
+  #devil-music.has-playing-preview .music-library-sidebar-actions .music-icon-button {width:28px}
+  #devil-music.has-playing-preview:not(:has(.music-collection-banner)) .music-content-heading {align-items:flex-start;flex-direction:column;gap:12px}
+  #devil-music.has-playing-preview:not(:has(.music-collection-banner)) .music-heading-actions {justify-content:flex-start}
+}
