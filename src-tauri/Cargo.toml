@@ -1,6 +1,6 @@
 [package]
 name = "deviload"
-version = "2.7.6"
+version = "2.7.7"
 description = "Deviload: desktop front-end for yt-dlp and FFmpeg"
 authors = ["Samvel Avetisyan"]
 edition = "2021"
@@ -11,10 +11,11 @@ name = "deviload_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2.7.4", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["protocol-asset", "image-png", "tray-icon"] }
+# Tauri 2.12 includes Tao's native Wayland titlebar fix (tauri-apps/tao#1218).
+tauri = { version = "2.12.5", features = ["protocol-asset", "image-png", "tray-icon"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-clipboard-manager = "2"
