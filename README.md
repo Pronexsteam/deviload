@@ -66,6 +66,12 @@ Add a live link to record from that moment, then stop when you have what you nee
 
 ## Latest update
 
+Deviload **2.7.7** updates the desktop window runtime, including upstream fixes for native title-bar controls on **Linux Wayland** when a hidden startup window is shown.
+
+The app keeps the same themes, music and download workflows, profile location and signed updater configuration. This update does not force Linux users onto X11. A separate WebKit rendering freeze may still require the existing per-launch workaround described in the [2.7.7 release notes](https://github.com/Pronexsteam/deviload/releases/tag/v2.7.7).
+
+### Media and music improvements in 2.7.6
+
 Deviload **2.7.6** brings a redesigned **Devil Convert**, more responsive **Devil Music** recommendations and clearer download recovery.
 
 - **Convert with more control:** preview the source and result, choose media tracks, remux compatible streams or extract original audio without re-encoding, and keep the existing MP4, MP3, GIF and size-limit workflows.
