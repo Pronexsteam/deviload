@@ -1,0 +1,10 @@
+/* Shared control rhythm, used by the main workspace and the two editors. */
+:root body :is(.app-settings-dialog,.convert-window,.cut-window,.music-library-dialog) :is(button,select,input,textarea){font-family:inherit}
+:root body :is(.convert-window,.cut-window) button:not(.window-close):not(.window-caption-button){border-radius:8px}
+:root body :is(.convert-window,.cut-window) :is(input,select,textarea){border-radius:8px}
+:root body :is(.convert-window,.cut-window,.music-library-dialog) button:focus-visible{outline:2px solid var(--theme-accent,#d6b8a2);outline-offset:2px}
+:root body :is(.convert-window,.cut-window) :is(.dialog-head,.setting-row){gap:12px}
+:root body :is(.convert-window,.cut-window) details>summary{min-height:32px;align-content:center}
+.music-playlist-art:has(>.music-typographic-cover){display:block}
+.music-typographic-cover{display:flex;align-items:flex-end;justify-content:flex-start;aspect-ratio:1;width:100%;height:100%;padding:12%;box-sizing:border-box;background:linear-gradient(145deg,#252c3a,#151a24);color:#eee;font-size:clamp(18px,3vw,40px);font-weight:750;letter-spacing:-.06em;overflow:hidden;line-height:1.1;overflow-wrap:anywhere}
+@media(prefers-reduced-motion:reduce){:root body :is(.convert-window,.cut-window) button{transition:none}}

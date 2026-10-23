@@ -13,26 +13,58 @@ export function createNowPlaying({dock,identity,artwork,info,like,transport,extr
   const dislike=button(t("Do not recommend this song"),"eye-slash",onHideSong),block=button(t("Do not recommend this artist"),"user-minus",onHideArtist);
   const notice=make("div","music-stage-notice");notice.hidden=true;notice.setAttribute("role","status");
   actions.append(download,dislike,block);details.append(caption,controls,actions,notice);layout.append(art,details);
+  const lyricsPanel=make("aside","music-stage-lyrics");lyricsPanel.hidden=true;lyricsPanel.setAttribute("aria-label",t("Lyrics"));layout.append(lyricsPanel);
   stage.append(background,header,layout);document.body.append(stage);
   const expand=button(t("Now playing"),"arrows-out",()=>open());expand.id="music-expand";extras.append(expand);
-  let current=null,returnFocus=null;
+  const preview=make("aside","music-playing-preview"),previewArt=button(t("Now playing"),null,()=>open(),"music-preview-art"),previewTitle=make("strong",""),previewArtist=make("span",""),previewOpen=button(t("Lyrics"),"arrows-out",()=>open(),"music-preview-open");
+  const previewHeading=make("span","music-eyebrow"),previewLabel=make("span","");previewOpen.append(previewLabel);preview.hidden=true;
+  const ambient=make("div","music-preview-ambient"),facts=make("p","music-playing-facts"),reason=make("p","music-playing-reason");ambient.setAttribute("aria-hidden","true");
+  const flip=make('div','music-preview-flip'),faces=make('div','music-preview-faces'),inlineLyrics=make('section','music-preview-lyrics');inlineLyrics.hidden=true;inlineLyrics.setAttribute('aria-label',t('Lyrics'));
+  const flipButton=button(t('Show lyrics'),'music-notes',()=>setPreviewLyrics(!previewLyricsOn),'music-preview-toggle');
+  const previewTop=make('div','music-preview-top');previewTop.append(previewHeading,flipButton);faces.append(previewArt,inlineLyrics);flip.append(faces);
+  preview.append(ambient,previewTop,flip,previewTitle,previewArtist,facts,reason,previewOpen);
+  artwork.setAttribute("role","button");artwork.tabIndex=0;artwork.setAttribute("aria-haspopup","dialog");
+  artwork.addEventListener("click",()=>{if(!stage.open)open();});
+  artwork.addEventListener("keydown",event=>{if(!stage.open&&(event.key==="Enter"||event.key===" ")){event.preventDefault();open();}});
+  let current=null,returnFocus=null,lyrics=null,lyricsTrigger=null,previewLyricsOn=false;
+  function setPreviewLyrics(value){
+    previewLyricsOn=value;preview.classList.toggle('showing-lyrics',value);faces.classList.toggle('is-flipped',value);inlineLyrics.hidden=!value;previewArt.inert=value;
+    flipButton.setAttribute('aria-pressed',String(value));flipButton.title=flipButton.ariaLabel=value?t('Show cover'):t('Show lyrics');
+    if(lyrics&&!stage.open){if(value)lyrics.mount(inlineLyrics);else lyrics.unmount();}
+  }
+  let idleTimer=null,playing=false;
+  function wake(){stage.classList.remove("music-stage-idle");clearTimeout(idleTimer);if(stage.open&&playing)idleTimer=setTimeout(()=>{if(!stage.contains(document.activeElement)||document.activeElement===close)stage.classList.add("music-stage-idle");},3500);}
+  stage.addEventListener("pointermove",wake);stage.addEventListener("pointerdown",wake);stage.addEventListener("keydown",wake);
+  function showLyrics(value){
+    if(!lyrics)return;lyricsPanel.hidden=!value;stage.classList.toggle("has-lyrics",value);
+    lyricsTrigger?.setAttribute("aria-pressed",String(value));
+    if(value)lyrics.mount(lyricsPanel);else if(previewLyricsOn&&!stage.open)lyrics.mount(inlineLyrics);else lyrics.unmount();
+  }
   function open(){
-    if(!current)return;
+    if(!current||stage.open)return;
     returnFocus=document.activeElement;
     art.append(artwork);details.insertBefore(info,controls);controls.append(transport);actions.prepend(like);details.append(extras);
-    stage.append(queuePanel);document.body.classList.add("music-stage-open");stage.showModal();close.focus();
+    stage.append(queuePanel);document.body.classList.add("music-stage-open");stage.showModal();showLyrics(true);close.focus();wake();
   }
   stage.addEventListener("close",()=>{
+    clearTimeout(idleTimer);stage.classList.remove("music-stage-idle");
+    showLyrics(false);lyricsTrigger?.removeAttribute("aria-pressed");
     identity.append(artwork,info,like);dock.append(identity,transport,extras);document.body.append(queuePanel);
     document.body.classList.remove("music-stage-open");returnFocus?.focus();
   });
   function labels(){
-    stage.setAttribute("aria-label",t("Now playing"));heading.textContent=t("NOW PLAYING");caption.textContent=t("YOUR OWN FREQUENCY");
+    stage.setAttribute("aria-label",t("Now playing"));heading.textContent=t("NOW PLAYING");caption.textContent=t("YOUR OWN FREQUENCY");lyricsPanel.setAttribute("aria-label",t("Lyrics"));
     for(const [node,label]of [[expand,t("Now playing")],[close,t("Back to browsing")],[download,t("Download MP3")],[dislike,t("Do not recommend this song")],[block,t("Do not recommend this artist")]])node.title=node.ariaLabel=label;
+    previewHeading.textContent=t("NOW PLAYING");previewLabel.textContent=t("Open player and lyrics");previewOpen.title=previewOpen.ariaLabel=t("Open player and lyrics");previewArt.title=previewArt.ariaLabel=artwork.title=artwork.ariaLabel=t("Open player and lyrics");
+    flipButton.title=flipButton.ariaLabel=previewLyricsOn?t('Show cover'):t('Show lyrics');flipButton.setAttribute('aria-pressed',String(previewLyricsOn));
   }
   labels();onLanguageChange(labels);
-  return {update(item,downloading=false){
-    if(current?.id!==item?.id){background.replaceChildren(cover(item));notice.hidden=true;}
+  return {open,attachPreview(workspace){workspace.append(preview);},attachLyrics(controller,trigger){lyrics=controller;lyricsTrigger=trigger;},toggleLyrics(){if(!stage.open)return false;showLyrics(lyricsPanel.hidden);wake();return true;},update(item,downloading=false,meta={}){
+    if(current?.id!==item?.id){background.replaceChildren(cover(item));previewArt.replaceChildren(cover(item));ambient.replaceChildren(cover(item));notice.hidden=true;for(const node of [previewArt,info]){node.classList.remove("music-track-arriving");requestAnimationFrame(()=>node.classList.add("music-track-arriving"));}}
+    if(playing!==meta.playing){playing=!!meta.playing;wake();}
+    const duration=Number(meta.duration)||0;facts.textContent=[duration?`${Math.floor(duration/60)}:${String(Math.floor(duration%60)).padStart(2,"0")}`:"",meta.offline?t("Downloaded music"):""].filter(Boolean).join(" · ");facts.hidden=!facts.textContent;
+    reason.textContent=meta.reason||"";reason.hidden=!meta.reason;
+    preview.hidden=!item;preview.parentElement?.classList.toggle("has-playing-preview",!!item);previewTitle.textContent=item?.title||"";previewArtist.textContent=item?.artists?.join(", ")||"";artwork.setAttribute("aria-disabled",String(!item));
     current=item;expand.disabled=!item;download.disabled=!item||downloading;dislike.disabled=!item;block.disabled=!item?.artists?.length;
     if(!item&&stage.open)stage.close();
   },notify(text,undo){const message=make("span","");message.textContent=text;notice.replaceChildren(message);if(undo)notice.append(button(t("Undo"),"arrow-clockwise",()=>{undo();notice.hidden=true;}));notice.hidden=false;},close(){if(stage.open)stage.close();}};

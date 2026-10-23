@@ -6,6 +6,14 @@ import {transferPlaylistTracks} from "../src/music-library-model.js";
 const song=n=>({kind:"song",id:String(n).padStart(11,"0"),title:`Track ${n}`,subtitle:"Artist",artists:["Artist"],image:"https://i.ytimg.com/vi/00000000001/hqdefault.jpg"});
 const saved=()=>({favorites:[song(1)],recent:[song(2)],volume:.4});
 const taste=()=>readTaste();
+
+test("legacy regional preference is retired without changing saved music",()=>{
+ const original={...saved(),showRegional:true};
+ const restored=importMusicProfile(exportMusicProfile(original,taste()));
+ assert.equal(restored.saved.showRegional,false);
+ assert.deepEqual(restored.saved.favorites,original.favorites);
+ assert.deepEqual(restored.saved.recent,original.recent);
+});
 test("profile round trip preserves preferences and ranking, strips session state and unrelated data",()=>{
   const state=saved(),profile=taste(),now=Date.now()-1000;
   recordListening(profile,song(2),{seconds:90,duration:100,session:42},now);

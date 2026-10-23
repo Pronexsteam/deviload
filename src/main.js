@@ -2181,7 +2181,7 @@ if (invoke && (navigator.userAgent.includes("Windows") || macWindow)) {
     if (!dialog) return;
     const box = dialog.getBoundingClientRect();
     const outside = event.target === dialog && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom);
-    const header = event.target.closest(".dialog-head") && !event.target.closest("button, input, select, textarea, a, summary, label");
+    const header = event.target.closest(".dialog-head, .music-stage-header") && !event.target.closest("button, input, select, textarea, a, summary, label");
     if (outside || header) dragWindow(event);
   });
 }

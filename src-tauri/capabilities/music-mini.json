@@ -1,0 +1,1 @@
+{"identifier":"music-mini","description":"Local music remote window; playback stays in the main window","windows":["music-mini"],"permissions":["core:event:default"]}

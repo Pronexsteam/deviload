@@ -1,14 +1,14 @@
-// Apply the stored skin before styles paint. A missing or invalid preference
-// keeps the existing appearance for people upgrading from older versions.
+// Apply before first paint; retire Classic without touching other preferences.
 (() => {
-  const themes = ["classic", "glass-light", "matte-black", "glass-black", "midnight", "spotify"];
-  let theme = "classic";
+  const themes = ["glass-light", "matte-black", "glass-black", "midnight", "spotify", "ambient"];
+  let theme = "ambient";
   try {
     const saved = localStorage.getItem("deviload-theme");
     if (themes.includes(saved)) theme = saved;
+    if (saved === "classic") localStorage.setItem("deviload-theme",theme);
   } catch { /* The theme can still be changed for this session. */ }
   const root = document.documentElement;
   root.dataset.theme = theme;
-  root.dataset.motion = theme === "classic" ? "full" : "reduced";
+  root.dataset.motion = "reduced";
   root.style.colorScheme = theme === "glass-light" ? "light" : "dark";
 })();

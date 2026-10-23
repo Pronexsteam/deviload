@@ -6,6 +6,8 @@ mod download_details;
 mod cookies;
 mod library_index;
 #[cfg(any(target_os = "linux", test))]
+mod linux_compat;
+#[cfg(any(target_os = "linux", test))]
 mod window_geometry;
 mod music;
 mod music_discovery;
@@ -14,6 +16,8 @@ mod music_engine;
 #[cfg(debug_assertions)]
 pub use music_engine::{music_cache as preview_music_cache, music_engine_update as preview_music_engine_update};
 mod music_controls;
+mod music_mini;
+mod music_remote;
 mod music_presence;
 mod music_profile;
 mod music_import;
@@ -3101,7 +3105,10 @@ fn restore_main(app: &tauri::AppHandle) {
 
 pub fn run() {
     #[cfg(target_os = "linux")]
-    configure_appimage();
+    {
+        linux_compat::configure_renderer();
+        configure_appimage();
+    }
     let mut builder = tauri::Builder::default();
     // A second launch only brings the running window forward; two copies would share one queue.
     // A copy with its own test data shares nothing, so it may run beside the installed app.
@@ -3242,6 +3249,10 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                if window.label() == "music-mini" { let _ = window.emit_to("main", "music-mini-closed", ());restore_main(window.app_handle()); }
+                if window.label() == "main" { if let Some(mini) = window.app_handle().get_webview_window("music-mini") { let _ = mini.close(); } }
+            }
             if window.label() == "main" {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     if window.state::<CloseToTray>().0.load(Ordering::Relaxed) {
@@ -3251,7 +3262,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![gallery_info, gallery_install, gallery_inspect, quick_cut::quick_cut_plan, quick_cut::quick_cut_export, quick_cut::quick_cut_stop, settings_backup::settings_backup_data, settings_backup::inspect_settings_backup, settings_backup::restore_settings_backup, settings_backup::export_settings_backup, set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_site_browser, open_releases, open_support, window_action, apply_download_auth, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, export_download_profiles, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, site_sign_in, site_sign_out, site_sessions, music::music_catalog, music_discovery::music_discovery, music::music_prepare, music_engine::music_cache, music_engine::music_engine_update, music_engine::music_diagnostics, music_engine::export_music_diagnostics, music_offline::music_downloaded, music_offline::music_offline_source, music_lyrics::music_lyrics, music::music_stream, music::music_cancel_stream, music_controls::set_music_controls, music_presence::music_presence, music_profile::export_music_profile, music_import::read_music_import, music_playlist_import::music_import_spotify_playlist, open_music_import_help, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, relink_media, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
+        .invoke_handler(tauri::generate_handler![gallery_info, gallery_install, gallery_inspect, quick_cut::quick_cut_plan, quick_cut::quick_cut_export, quick_cut::quick_cut_stop, settings_backup::settings_backup_data, settings_backup::inspect_settings_backup, settings_backup::restore_settings_backup, settings_backup::export_settings_backup, set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_site_browser, open_releases, open_support, window_action, apply_download_auth, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, export_download_profiles, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, site_sign_in, site_sign_out, site_sessions, music::music_catalog, music_discovery::music_discovery, music::music_prepare, music_engine::music_cache, music_engine::music_engine_update, music_engine::music_diagnostics, music_engine::export_music_diagnostics, music_offline::music_downloaded, music_offline::music_offline_source, music_lyrics::music_lyrics, music::music_stream, music::music_cancel_stream, music_controls::set_music_controls, music_remote::music_remote_start, music_remote::music_remote_update, music_remote::music_remote_stop, music_mini::music_mini_open, music_mini::music_mini_update, music_mini::music_mini_state, music_mini::music_mini_action, music_presence::music_presence, music_profile::export_music_profile, music_import::read_music_import, music_playlist_import::music_import_spotify_playlist, open_music_import_help, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, relink_media, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
         .build(tauri::generate_context!()).expect("failed to start Deviload")
         .run(|app, event| {
             #[cfg(target_os = "macos")]

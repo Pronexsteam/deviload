@@ -1,6 +1,6 @@
 [package]
 name = "deviload"
-version = "2.7.7"
+version = "2.7.8"
 description = "Deviload: desktop front-end for yt-dlp and FFmpeg"
 authors = ["Samvel Avetisyan"]
 edition = "2021"
@@ -21,6 +21,7 @@ tauri-plugin-notification = "2"
 tauri-plugin-clipboard-manager = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serde_yaml_ng = "0.10"
 sha2 = "=0.10.9"
 url = "2"
 dirs = "6"
@@ -43,4 +44,4 @@ discord-rich-presence = "1.1"
 libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_UI_Controls", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_UI_Shell", "Win32_UI_Controls", "Win32_UI_WindowsAndMessaging"] }

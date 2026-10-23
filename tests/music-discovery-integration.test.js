@@ -140,7 +140,7 @@ test("public queries respect an explicitly chosen physical recording while prese
 });
 
 test("the actual public-discovery control commits its opt-out atomically and restores the checkbox on storage failure",()=>{
-  const handler=between('  $("music-public-discovery").addEventListener(', '  $("music-regional").addEventListener(');
+  const handler=between('  $("music-public-discovery").addEventListener(', '  $("music-discovery").addEventListener(');
   for(const fail of [false,true]){
     const m=music(),memory=new Map(),control={checked:false,addEventListener(_event,fn){this.change=fn;}};
     Object.assign(m.ctx,{view:"library",homeCache:null,radioAhead:{prepared:true},saveMusicProfile,errorText:String,resetPublicDiscovery:m.resetPublicDiscovery,

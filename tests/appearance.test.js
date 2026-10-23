@@ -9,7 +9,7 @@ const {t} = await import("../src/i18n.js");
 const bootstrap = readFileSync(new URL("../src/theme-init.js", import.meta.url), "utf8");
 
 class Events extends EventTarget {}
-function setup(saved = "classic", blocked = false, {quick = false, native = true} = {}) {
+function setup(saved = "matte-black", blocked = false, {quick = false, native = true} = {}) {
   let stored = saved, writes = 0, glassStops = 0, languageStops = 0;
   const storage = {getItem(){ if (blocked) throw Error("blocked"); return stored; },
     setItem(key,value){ if(blocked) throw Error("blocked"); assert.equal(key,THEME_KEY); writes++; stored=value; }};
@@ -47,18 +47,20 @@ function setup(saved = "classic", blocked = false, {quick = false, native = true
     writes:()=>writes,stops:()=>({glass:glassStops,language:languageStops}),language:()=>languageListener()};
 }
 
-test("first-paint bootstrap and runtime agree for every supported theme; untrusted preferences stay Classic", () => {
-  for (const value of [...THEMES,null,"glass-light ","GLASS-LIGHT","__proto__","<script>"]) {
+test("first-paint bootstrap and runtime default to Ambient and preserve every explicit supported theme", () => {
+  for (const value of [...THEMES,null,"classic","glass-light ","GLASS-LIGHT","__proto__","<script>"]) {
     const root = {dataset:{},style:{}};
     runInNewContext(bootstrap, {document:{documentElement:root},localStorage:{getItem:()=>value}});
     assert.equal(root.dataset.theme,normalizeTheme(value));
-    assert.equal(root.dataset.motion,value&&THEMES.includes(value)&&value!=="classic"?"reduced":"full");
+    assert.equal(root.dataset.motion,"reduced");
     assert.equal(root.style.colorScheme,value==="glass-light"?"light":"dark");
   }
   const root = {dataset:{},style:{}};
   runInNewContext(bootstrap,{document:{documentElement:root},get localStorage(){throw Error("blocked");}});
-  assert.equal(root.dataset.theme,"classic");
-  assert.equal(readTheme({getItem(){throw Error("blocked");}}),"classic");
+  assert.equal(root.dataset.theme,"ambient");
+  assert.equal(readTheme({getItem(){throw Error("blocked");}}),"ambient");
+  assert.equal(readTheme({getItem:()=>null}),"ambient");
+  for(const theme of THEMES)assert.equal(readTheme({getItem:()=>theme}),theme);
 });
 
 test("the quick radio menu and Settings share theme selection, storage updates and persistence", () => {
@@ -114,9 +116,9 @@ test("changing themes persists appearance and motion without touching playback o
   assert.equal(f.storage.getItem(THEME_KEY),"matte-black");
   assert.equal(f.document.documentElement.dataset.motion,"reduced");
   f.select.value="classic"; f.select.dispatchEvent(new Event("change"));
-  assert.equal(f.document.documentElement.dataset.motion,"full");
+  assert.equal(f.document.documentElement.dataset.motion,"reduced");
   assert.equal(f.document.documentElement.style.colorScheme,"dark");
-  assert.deepEqual(notifications,["glass-light","matte-black","classic"]);
+  assert.deepEqual(notifications,["glass-light","matte-black","ambient"]);
   assert.equal(f.writes(),2);
   assert.equal(wireAppearance(f.options),stop);
   f.language(); assert.equal(f.status.textContent,t("Your theme is saved on this device."));
@@ -129,11 +131,11 @@ test("open tool windows follow storage updates, clearing and invalid preferences
   const notify=(key,area=f.storage)=>{
     const event=new Event("storage");Object.assign(event,{key,storageArea:area});f.window.dispatchEvent(event);
   };
-  f.setStored("glass-black");notify("other");assert.equal(f.select.value,"classic");
-  notify(THEME_KEY,{});assert.equal(f.select.value,"classic");
+  f.setStored("glass-black");notify("other");assert.equal(f.select.value,"matte-black");
+  notify(THEME_KEY,{});assert.equal(f.select.value,"matte-black");
   notify(THEME_KEY);assert.equal(f.select.value,"glass-black");
-  f.setStored("unsupported");notify(THEME_KEY);assert.equal(f.select.value,"classic");
-  f.setStored(null);notify(null);assert.equal(f.select.value,"classic");
+  f.setStored("unsupported");notify(THEME_KEY);assert.equal(f.select.value,"ambient");
+  f.setStored(null);notify(null);assert.equal(f.select.value,"ambient");
   assert.equal(f.writes(),0);
 });
 
@@ -148,3 +150,5 @@ test("blocked storage still applies the selected theme for this session with an 
   assert.deepEqual(f.stops(),{glass:0,language:0});
   f.window.dispatchEvent(new Event("pagehide"));assert.deepEqual(f.stops(),{glass:1,language:1});stop();
 });
+
+test("retiring Classic migrates only the appearance preference",()=>{const f=setup("classic");assert.equal(readTheme(f.storage),"ambient");assert.equal(f.storage.getItem(THEME_KEY),"ambient");assert.equal(f.writes(),1);assert.equal(THEMES.length,6);assert.ok(!THEMES.includes("classic"));});

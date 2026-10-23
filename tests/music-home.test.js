@@ -12,14 +12,28 @@ const code=source.slice(source.indexOf("  function resetPublicDiscovery("),sourc
 const song=(n,title)=>({kind:"song",id:String(n).padStart(11,"0"),title,artists:["Artist"]});
 const local=song(1,"Regional release"),personal=song(2,"Related to liked artist"),recent=song(3,"Last played"),liked=song(4,"Liked song");
 const base=[{title:"New releases",items:[local]}];
+
+test("home never fetches regional shelves, while explicit search remains available",async()=>{
+ const calls=[],node={querySelector:()=>null},ctx={window:{scrollTo(){}},$:()=>node,
+  rememberNavigation(){},searchFilter:'songs',activeMood:'all',browseItem:null,request:0,
+  selectView(){},t:s=>s,status(){},skeleton(){},render(){},homeSections:()=>[],personalize(){},
+  language:()=> 'ru',audio:{paused:false},invoke:async(command,args)=>{calls.push({command,...args});return {sections:base};},
+  homeCache:{sections:base},saved:{showRegional:true},listFilter:'',listSort:'',lastQuery:null,
+  continuation:null,morePending:false,loading:false,sections:[],loaded:false};
+ const load=runInNewContext(`(()=>{${source.slice(source.indexOf('  async function load('),source.indexOf('  function renderInterestPool('))};return load;})()`,ctx);
+ await load('home');await load('home','','',true);assert.equal(calls.length,0);
+ await load('search','Any artist');assert.equal(calls.length,1);
+ assert.equal(calls[0].kind,'search');assert.equal(calls[0].value,'Any artist');
+ assert.equal(ctx.sections,base);
+});
 function home(showRegional){
   const ctx={saved:{favorites:[],recent:[recent],showRegional,sourceBindings:[],interestMixes:[],playlists:[],collections:[]},taste:{},queue:[],request:1,personalization:0,playbackContext:[],playbackSourceContext:{kind:"manual"},followedCursor:0,privateSession:false,recommendationReasons:new Map(),current:null,sections:[],audio:{paused:true},prepared:[],tracks:items=>items,intent:{enter:id=>ctx.prepared.push(id)},captureListening(){},tasteSeeds:()=>[liked],radio:async()=>[personal],createRecordingView,recommendationSession:{seeds:(_,seeds)=>seeds,contextItems:()=>[],preferenceItems:()=>[],mergePools:pools=>({items:pools.flatMap(pool=>pool.items),scores:new Map()}),allowed:items=>items},recommendationOptions:()=>({}),rankMusicRecommendations:items=>items.map(item=>({item,reason:{code:"catalog"}})),t:s=>s,render(){}};
   Object.assign(ctx,{publicDiscovery:{candidates:async()=>[],clear(){}},publicGeneration:0,sourceRevision:0,navigator:{},resolveRecordingSource,language:()=>"en",view:"home",lastQuery:{kind:"home"}});
   return {ctx,...runInNewContext(`(()=>{${code};return {personalize,homeSections};})()`,ctx)};
 }
-test("regional catalog is never presented as learned personal recommendations",async()=>{
+test("legacy regional preferences cannot reintroduce regional catalog sections",async()=>{
   const h=home(true);await h.personalize(1,base);
-  assert.equal(h.ctx.sections[0].title,"For you");assert.equal(h.ctx.sections[0].items.length,1);assert.equal(h.ctx.sections[0].items[0].id,personal.id);assert.equal(h.ctx.sections[2],base[0]);
+  assert.equal(h.ctx.sections[0].title,"For you");assert.equal(h.ctx.sections[0].items.length,1);assert.equal(h.ctx.sections[0].items[0].id,personal.id);assert.equal(h.ctx.sections.length,2);assert.ok(!h.ctx.sections.flatMap(s=>s.items).some(item=>item.id===local.id));
   assert.deepEqual(h.ctx.prepared,[personal.id]);
 });
 test("hiding regional releases retains recent listening and personal discovery",async()=>{
