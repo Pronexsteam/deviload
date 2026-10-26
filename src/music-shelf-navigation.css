@@ -1,7 +1,9 @@
 .music-shelf-navigation{position:relative;min-width:0}
 .music-shelf-scroll{scrollbar-width:none;-ms-overflow-style:none}
 .music-shelf-scroll::-webkit-scrollbar{display:none;width:0;height:0}
-.music-shelf-arrow{position:absolute;z-index:4;top:var(--music-shelf-control-y,50%);display:grid;place-items:center;width:42px;height:42px;padding:0;border:1px solid #ffffff52;border-radius:50%;background:#141416ed;color:#fff;box-shadow:0 3px 15px #0009,0 0 0 1px #0005;transform:translateY(-50%);opacity:0;pointer-events:none;cursor:pointer;transition:opacity .15s,background .15s,box-shadow .15s}
+/* Position the hit target without transform: theme hover resets must never
+   move the button out from under the pointer. */
+.music-shelf-arrow{position:absolute;z-index:4;top:calc(var(--music-shelf-control-y,50%) - 21px);display:grid;place-items:center;width:42px;height:42px;padding:0;border:1px solid #ffffff52;border-radius:50%;background:#141416ed;color:#fff;box-shadow:0 3px 15px #0009,0 0 0 1px #0005;transform:none;opacity:0;pointer-events:none;cursor:pointer;transition:opacity .15s,background .15s,box-shadow .15s}
 .music-shelf-arrow-previous{left:8px}
 .music-shelf-arrow-next{right:8px}
 .music-shelf-arrow[hidden]{display:none}

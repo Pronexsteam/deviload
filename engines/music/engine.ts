@@ -5,6 +5,8 @@ import { safe } from './runtime.ts';
 import { restricted, playbackError } from './errors.ts';
 import { fileURLToPath } from 'node:url';
 import { AudioCache, TRACK_LIMIT, byteRange, readBytes, writeBytes, same, validId } from './storage.ts';
+import { pendingOpening } from './opening.ts';
+import { idleRelease } from './idle.ts';
 
 const emit = (message: unknown) => console.log(JSON.stringify(message));
 const cache = new AudioCache('./audio');
@@ -39,8 +41,10 @@ function fullSession(){
   return fullClient;
 }
 let po: Worker | undefined, poAt = 0, poPromise: Promise<void> | undefined;
+const guestIdle=idleRelease(()=>{if(tokens.size){guestIdle.arm();return;}po?.terminate();po=undefined;poPromise=undefined;poAt=0;});
 function guest() {
-  if (poPromise && Date.now()-poAt<20*60000) return poPromise;
+  guestIdle.hold();
+  if (poPromise && Date.now()-poAt<20*60000) {guestIdle.arm();return poPromise;}
   po?.terminate(); for(const p of tokens.values()){clearTimeout(p.timer);p.reject(Error('Guest session refreshed'));}tokens.clear();
   poAt=Date.now();
   po = new Worker(new URL('./po-worker.ts',import.meta.url),{type:'module',deno:{permissions:{read:[fileURLToPath(new URL('.',import.meta.url))],write:false,env:true,net:['www.youtube.com','www.google.com','jnn-pa.googleapis.com'],run:false,ffi:false}}} as any);
@@ -48,9 +52,9 @@ function guest() {
     const timer=setTimeout(()=>reject(Error('Guest session timeout')),15000);
     po!.onmessage=e=>{if(e.data.ready){clearTimeout(timer);resolve();return;}const p=tokens.get(e.data.key);if(p){tokens.delete(e.data.key);clearTimeout(p.timer);e.data.error?p.reject(Error('Guest token unavailable')):p.resolve(e.data.token);}};
     po!.onerror=e=>{e.preventDefault();clearTimeout(timer);reject(Error('Guest session failed'));};
-  });const attempt=poPromise;attempt.catch(()=>{if(poPromise===attempt)poPromise=undefined;});return attempt;
+  });const attempt=poPromise;attempt.then(()=>guestIdle.arm(),()=>{if(poPromise===attempt){po?.terminate();po=undefined;poPromise=undefined;}});return attempt;
 }
-async function mint(id:string) {await guest();return new Promise<string>((resolve,reject)=>{const key=++serial,timer=setTimeout(()=>{tokens.delete(key);reject(Error('Guest token timeout'));},5000);tokens.set(key,{resolve,reject,timer});po!.postMessage({key,id});});}
+async function mint(id:string) {try{await guest();guestIdle.hold();return await new Promise<string>((resolve,reject)=>{const key=++serial,timer=setTimeout(()=>{tokens.delete(key);reject(Error('Guest token timeout'));},5000);tokens.set(key,{resolve,reject,timer});po!.postMessage({key,id});});}finally{guestIdle.arm();}}
 function fallback(id:string) {return new Promise<any>((resolve,reject)=>{const key=++serial,timer=setTimeout(()=>{pending.delete(key);reject(Error('Reserve timeout'));},35000);pending.set(key,{resolve,reject,timer});emit({event:'fallback',key,id});});}
 function protectedFiles() {return new Set([...sessions.values()].filter(t=>t.id===selected||t.id===prepared||t.readers>0).map(t=>t.file));}
 class Track {
@@ -66,7 +70,7 @@ class Track {
     }
     return readBytes(cache.path(this.file),offset,Math.min(length,this.size-offset));
   }
-  cancel(){if(!this.complete){this.control.abort();this.error='Cancelled';} }
+  cancel(){if(!this.complete){this.control.abort();this.error='Cancelled';if(!this.readers)this.prefix=new Uint8Array();} }
   async append(stream:ReadableStream<Uint8Array>) {
     const file=await Deno.open(cache.path(this.file),{read:true,write:true,create:true});let offset=0;
     const reader=stream.getReader();
@@ -93,6 +97,8 @@ class Track {
     let sabr:SabrStream|undefined;
     try{
       try{
+        // Only uncached foreground audio needs the heavier guest session.
+        void guest();
         const client=await fullSession();
         const info=await client.getBasicInfo(this.id,{client:'WEB'});
         if(info.playability_status?.status!=='OK')throw Error(info.playability_status?.status||'Unplayable');
@@ -124,6 +130,9 @@ async function getTrack(id:string,preload:boolean,refresh:boolean,generation:num
   let track=sessions.get(id);
   if(track?.complete&&!await Deno.stat(cache.path(track.file)).then(s=>s.size===track!.size).catch(()=>false)){sessions.delete(id);track=undefined;}
   if(track&&!track.error&&!track.control.signal.aborted&&!refresh){if(!preload)track.start();return track;}
+  const pending=await pendingOpening(id,inflight,resolving);if(pending)return pending;
+  if(generation!==selection&&selected!==id)throw Error('Cancelled');
+  // Another waiter may have started a replacement while cancellation settled.
   if(inflight.has(id))return inflight.get(id)!;
   const control=new AbortController();resolving.set(id,control);
   // A stalled opening must release the foreground to the reserve promptly.
@@ -187,7 +196,7 @@ const server=Deno.serve({hostname:'127.0.0.1',port:0,onListen:()=>{}},request=>{
 emit({event:'ready',port:server.addr.port,version:'1.0.0'});
 async function command(cmd:any){
   try{
-    if(cmd.action==='prepare'){void fullSession();void guest();return;}
+    if(cmd.action==='prepare'){return;}
     if(cmd.action==='reserve'){const p=pending.get(cmd.key);if(p){pending.delete(cmd.key);clearTimeout(p.timer);cmd.error?p.reject(Error(cmd.error)):p.resolve(cmd);}return;}
     if(cmd.action==='cancel'){
       if(Number(cmd.generation)<foregroundGeneration)return;
@@ -205,7 +214,6 @@ async function command(cmd:any){
       emit({key:cmd.key,data:{bytes:cache.entries.reduce((n,e)=>n+e.size,0),limit:cache.limit}});return;
     }
     if(cmd.action!=='play'||!validId(cmd.id))throw Error('Invalid music request');
-    void fullSession();void guest();
     if(Number(cmd.generation)<foregroundGeneration)throw Error('Cancelled');
     if(!cmd.preload)foregroundGeneration=Number(cmd.generation)||foregroundGeneration;
     if(!cmd.preload)select(cmd.id);else{if(prepared&&prepared!==cmd.id)throw Error('Preload busy');prepared=cmd.id;}
@@ -220,4 +228,4 @@ for await(const chunk of Deno.stdin.readable.pipeThrough(new TextDecoderStream()
   buffer+=chunk;if(buffer.length>65536)break;
   let index;while((index=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,index);buffer=buffer.slice(index+1);try{void command(JSON.parse(line));}catch{}}
 }
-stopped=true;for(const track of sessions.values())track.cancel();po?.terminate();await server.shutdown();
+stopped=true;guestIdle.hold();for(const track of sessions.values())track.cancel();po?.terminate();await server.shutdown();

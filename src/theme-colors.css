@@ -1,0 +1,65 @@
+/* Ambient family: common layout and audio envelope, three distinct materials.
+   No additional canvas, timer, network request or playback graph is needed. */
+:root[data-theme="aurora"]{
+ color-scheme:dark;--theme-bg:#090d18;--theme-text:#eff1ff;--theme-muted:#b8bfd9;
+ --theme-surface:#12182bc7;--theme-surface-strong:#1b2238f5;--theme-input:#0e1425d9;
+ --theme-line:#a9b6ed30;--theme-accent:#cad4ff;--theme-accent-text:#141a32;
+ --theme-hover:#293351d9;--theme-selected:#323e60c7;
+ --theme-success:#b0e4d4;--theme-error:#ffc0d3;--theme-warning:#eed3a8;
+ --theme-shadow:inset 0 1px 0 #d5dfff0b,0 12px 32px #02051130;
+ --atmosphere-panel:#10172bb8;--atmosphere-dock:#0b1022d9;
+ --atmosphere-base:radial-gradient(ellipse at 12% 25%,#3c45944a,transparent 62%),radial-gradient(ellipse at 92% 80%,#24516d55,transparent 65%),linear-gradient(130deg,#0c1020,#15132b 58%,#08151d);
+ --ambient-light-art:radial-gradient(ellipse at 20% 60%,#a692ed,transparent 67%),radial-gradient(ellipse at 85% 30%,#65c6da,transparent 70%),linear-gradient(125deg,#383d88,#19435b);
+ --bg:#0e1425;--panel:#2b3552;--ink:#eff1ff;--muted:#b8bfd9;
+ --brand-prism:linear-gradient(110deg,#e8edff,#adbcff 24%,#dbc4ff 48%,#abe0ec 74%,#e8edff)
+}
+:root[data-theme="prism"]{
+ color-scheme:dark;--theme-bg:#0d1016;--theme-text:#f1f4fa;--theme-muted:#bac2d1;
+ --theme-surface:#161c29c9;--theme-surface-strong:#222936f5;--theme-input:#111723db;
+ --theme-line:#b8cce630;--theme-accent:#d7e9f2;--theme-accent-text:#18202d;
+ --theme-hover:#2c3b49d9;--theme-selected:#384555c7;
+ --theme-success:#b5dfd2;--theme-error:#ffc2da;--theme-warning:#e6d5ae;
+ --theme-shadow:inset 0 1px 0 #e0f3ff12,0 12px 32px #03071030;
+ --atmosphere-panel:#151d29b0;--atmosphere-dock:#101823c9;
+ --atmosphere-base:conic-gradient(from 215deg at 45% 55%,#10141d,#27334a,#143b3d,#352a4a,#10141d);
+ --ambient-light-art:conic-gradient(from 55deg at 55% 60%,#466c87,#b9b3df,#7ccbc4,#56608b,#466c87);
+ --bg:#141c28;--panel:#324354;--ink:#f1f4fa;--muted:#bac2d1;
+ --brand-prism:linear-gradient(110deg,#edf9ff,#a2d9df 24%,#d1bfe8 48%,#c5e6ed 74%,#edf9ff)
+}
+:root:is([data-theme="aurora"],[data-theme="prism"]) body::before{
+ content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:var(--atmosphere-base)
+}
+:root:is([data-theme="aurora"],[data-theme="prism"]) body:not(.cut-page):not(.convert-page):not(.remote-page) main[data-page]{background:color-mix(in srgb,var(--theme-bg) 44%,transparent)}
+:root:is([data-theme="aurora"],[data-theme="prism"]) body .sidebar,
+:root:is([data-theme="aurora"],[data-theme="prism"]) body .topbar::before,
+:root:is([data-theme="aurora"],[data-theme="prism"]) #devil-music .music-library-sidebar,
+:root:is([data-theme="aurora"],[data-theme="prism"]) body main[data-page="music"] #devil-music .music-toolbar{background:var(--atmosphere-panel);border-color:var(--theme-line)}
+:root:is([data-theme="aurora"],[data-theme="prism"]) body .music-dock{background:var(--atmosphere-dock);border-color:var(--theme-line)}
+:root:is([data-theme="aurora"],[data-theme="prism"]) body #supporters{--supporters-backplate:var(--atmosphere-panel);--supporters-line:var(--theme-line)}
+:root:is([data-theme="aurora"],[data-theme="prism"]) body #music-now-playing.has-lyrics{background:linear-gradient(color-mix(in srgb,var(--theme-bg) 82%,transparent),color-mix(in srgb,var(--theme-bg) 94%,transparent)),var(--ambient-art,none) center/cover}
+:root:is([data-theme="aurora"],[data-theme="prism"]) .sidebar .brand-word{--brand-prism:inherit}
+:root:is([data-theme="aurora"],[data-theme="prism"]) .music-workspace .music-track-row.active :is(.music-track-copy strong,.music-track-number),
+:root:is([data-theme="aurora"],[data-theme="prism"]) .music-dock button[aria-pressed="true"]{color:var(--theme-accent)}
+:root:is([data-theme="aurora"],[data-theme="prism"]) .music-workspace .music-track-row.active{background:var(--theme-selected);border-color:var(--theme-line)}
+/* Mini-player has its own small stylesheet; use the same palette without
+   importing the desktop grid or changing native transparent corners. */
+:root:is([data-theme="aurora"],[data-theme="prism"]) body:has(#mini-drag){background:var(--atmosphere-panel);color:var(--ink);border-color:var(--theme-line)}
+:root:is([data-theme="aurora"],[data-theme="prism"]) body:has(#mini-drag)::before{position:absolute;border-radius:inherit}
+:root:is([data-theme="aurora"],[data-theme="prism"]) body.remote-page{background:transparent}
+:root:is([data-theme="aurora"],[data-theme="prism"]) body.remote-page::before{background:var(--atmosphere-base);filter:none;opacity:1}
+[data-theme-choice="aurora"] .quick-theme-swatch{background:radial-gradient(at 12% 15%,#a899dc,transparent 70%),linear-gradient(135deg,#322b63,#377e93)}
+[data-theme-choice="prism"] .quick-theme-swatch{background:conic-gradient(from 55deg,#607c9e,#c0b5dd,#79bbb7,#607c9e)}
+@media(prefers-reduced-transparency:reduce){
+ :root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body :is(.sidebar,.music-library-sidebar,.music-toolbar,.music-dock){background:var(--theme-bg)!important;backdrop-filter:none!important}
+}
+
+/* Only decorative layers move; shared controls keep their hit targets. */
+@media(prefers-reduced-motion:no-preference){
+ :root[data-theme="aurora"] body::before{inset:-4%;animation:aurora-flow 18s ease-in-out infinite alternate!important}
+ :root[data-theme="prism"] body::before{inset:-4%;animation:prism-flow 24s ease-in-out infinite alternate!important}
+ :root:is([data-theme="aurora"],[data-theme="prism"]) body:has(#mini-drag)::before{inset:0}
+ :root[data-atmosphere-paused="true"] body::before{animation-play-state:paused!important}
+ @keyframes aurora-flow{from{transform:translate(-1.5%,-1%) scale(1.03);opacity:.6}to{transform:translate(1.5%,1%) scale(1.07);opacity:.9}}
+ @keyframes prism-flow{0%{transform:scale(1.03) rotate(-3deg);opacity:.6}50%{opacity:.85}100%{transform:scale(1.09) rotate(3deg);opacity:.7}}
+}
+@media(prefers-reduced-motion:reduce){:root:is([data-theme="aurora"],[data-theme="prism"]) body::before{animation:none!important}}

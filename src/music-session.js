@@ -15,33 +15,62 @@ export function readMusicSession(storage){
   }catch{return empty;}
 }
 export function saveMusicSession(storage,value){
-  storage?.setItem(KEY,JSON.stringify({...value,queue:tracks(value.queue).slice(0,200).map(sanitizeMusicTrack)}));
+  const all=tracks(value.queue),position=all.findIndex(item=>item.id===value.id);
+  const start=Math.max(0,Math.min(position,all.length-200));
+  storage?.setItem(KEY,JSON.stringify({...value,queue:all.slice(start,start+200).map(sanitizeMusicTrack)}));
 }
 
 // Peeking does not consume a song: preloading and Next use the same choice.
-export function createPlaybackOrder(random=Math.random){
-  let seen=new Set(),history=[],cursor=-1;
+export function createPlaybackOrder(random=Math.random,sourceKey=item=>item.id){
+  let seen=new Set(),history=[],cursor=-1,choice=null,planned=[];
+  const key=item=>sourceKey(item)||item.id;
   return {
-    reset(id){seen=new Set();history=[];cursor=-1;if(id){seen.add(id);history.push(id);cursor=0;}},
+    reset(id){seen=new Set();history=[];cursor=-1;choice=null;planned=[];if(id){history.push(id);cursor=0;}},
+    plan(ids){planned=[...new Set(ids)];choice=null;},
+    preview(queue,index,repeat,shuffle,limit=32){
+      const next=this.next(queue,index,repeat,shuffle);if(next<0)return [];
+      if(!shuffle){const items=queue.slice(next,next+limit);return items;}
+      const first=queue[next],currentKey=queue[index]?key(queue[index]):null;
+      const candidates=[...new Map(queue.map(item=>[key(item),item])).values()].filter(item=>key(item)!==currentKey&&(choice?.cycle||!seen.has(key(item))));
+      const byId=new Map(candidates.map(item=>[item.id,item])),used=new Set([key(first)]),result=[first];
+      for(const id of planned){const item=byId.get(id);if(item&&!used.has(key(item))&&result.length<limit){result.push(item);used.add(key(item));}}
+      const rest=candidates.filter(item=>!used.has(key(item)));
+      while(rest.length&&result.length<limit){const draw=Number(random()),offset=Number.isFinite(draw)?Math.max(0,Math.min(rest.length-1,Math.floor(draw*rest.length))):0;result.push(rest.splice(offset,1)[0]);}
+      planned=result.map(item=>item.id);return result;
+    },
     visit(id,queue){
+      const item=queue.find(item=>item.id===id),previous=queue.find(item=>item.id===history[cursor]);
+      if(choice?.cycle&&choice.id===id){seen.clear();if(previous)seen.add(key(previous));}
+      choice=null;
+      planned=planned.filter(value=>value!==id);
+      if(item)seen.add(key(item));
       if(history[cursor]===id)return;
       if(history[cursor+1]===id){cursor++;return;}
-      if(queue.length&&queue.every(item=>seen.has(item.id)))seen.clear();
-      seen.add(id);history=history.slice(0,cursor+1);history.push(id);
+      history=history.slice(0,cursor+1);history.push(id);
       if(history.length>200)history.shift();cursor=history.length-1;
     },
     previous(queue){
+      choice=null;
       while(cursor>0){const id=history[--cursor];if(queue.some(item=>item.id===id))return id;}
       return null;
     },
     next(queue,index,repeat,shuffle){
-      const forward=history.slice(cursor+1).find(id=>queue.some(item=>item.id===id));
+      const current=queue[index],currentKey=current?key(current):null;
+      if(current)seen.add(currentKey);
+      const forward=history.slice(cursor+1).find(id=>id!==current?.id&&queue.some(item=>item.id===id&&(!shuffle||key(item)!==currentKey)));
       if(forward)return queue.findIndex(item=>item.id===forward);
       if(!shuffle)return index+1<queue.length?index+1:repeat&&queue.length?0:-1;
-      let candidates=queue.filter(item=>!seen.has(item.id)&&item.id!==queue[index]?.id);
-      if(!candidates.length&&repeat)candidates=queue.filter(item=>item.id!==queue[index]?.id);
+      const unique=[...new Map(queue.map(item=>[key(item),item])).values()];
+      let candidates=unique.filter(item=>!seen.has(key(item))&&key(item)!==currentKey),cycle=false;
+      if(!candidates.length&&repeat){candidates=unique.filter(item=>key(item)!==currentKey);cycle=true;}
       if(!candidates.length)return repeat&&queue.length===1?0:-1;
-      const id=candidates[Math.min(candidates.length-1,Math.floor(random()*candidates.length))].id;
+      const signature=JSON.stringify([currentKey,repeat,candidates.map(item=>[item.id,key(item)])]);
+      if(choice?.signature!==signature){
+        const draw=Number(random()),offset=Number.isFinite(draw)?Math.max(0,Math.min(candidates.length-1,Math.floor(draw*candidates.length))):0;
+        const reserved=planned.find(id=>candidates.some(item=>item.id===id));
+        choice={signature,id:reserved||candidates[offset].id,cycle};
+      }
+      const id=choice.id;
       return queue.findIndex(item=>item.id===id);
     }
   };

@@ -62,13 +62,13 @@ test('an imported playlist has a stable identity and never merges into a user li
   assert.equal(second.saved.playlists.length,2);assert.equal(second.saved.playlists[1].name,'Renamed');assert.equal(second.saved.playlists[1].items.length,2);
 });
 
-test('library capacity errors reject the entire proposed import instead of truncating it',()=>{
-  const saved=state(),taste=readTaste();saved.playlists=[{id:'full',name:'Full',items:Array.from({length:500},(_,n)=>song(n))}];
+test('imports cross former playlist limits without mutating the existing library',()=>{
+  const saved=state(),taste=readTaste();saved.playlists=[{id:'full',name:'Full',items:Array.from({length:5000},(_,n)=>song(n))}];
   const before=structuredClone({saved,taste});
-  assert.throws(()=>mergeMusicImport(saved,taste,{rows:[row(999,{liked:true}),row(1000)]}),/500 playlist entries/);
+  const imported=mergeMusicImport(saved,taste,{rows:[row(9999,{liked:true}),row(10000)]});assert.equal(imported.saved.playlists.reduce((n,p)=>n+p.items.length,0),5001);assert.equal(imported.saved.favorites.length,1);
   assert.deepEqual(saved,before.saved);assert.equal(JSON.stringify(taste),JSON.stringify(before.taste));
   saved.playlists=Array.from({length:30},(_,n)=>({id:String(n),name:String(n),items:[]}));
-  assert.throws(()=>mergeMusicImport(saved,taste,{rows:[row(1000)]}),/30 playlists/);
+  assert.equal(mergeMusicImport(saved,taste,{rows:[row(1000)]}).saved.playlists.length,31);
 });
 
 test('taste learning can be disabled and imported evidence remains bounded without inventing playback dates',()=>{

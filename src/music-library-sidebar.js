@@ -47,7 +47,7 @@ export function createMusicLibrarySidebar({workspace,saved,onPlaylist,onFavorite
       const art=el("span","music-library-nav-art");
       if(typeof playlist.cover==="string"&&playlist.cover.length<=110000&&/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(playlist.cover)){
         const image=el("img","");image.src=playlist.cover;image.alt="";image.loading="lazy";image.decoding="async";art.append(image);
-      }else if(cover)art.append(cover(playlist.items?.[0]));else art.append(glyph("playlist"));
+      }else if(cover)art.append(cover(playlist.items?.[0],"",96));else art.append(glyph("playlist"));
       list.append(row(playlist.name,playlist.items?.length||0,art,()=>onPlaylist(playlist.id),playlist.id,playlist.pinned));
     }
     empty.textContent=query?t("No matching playlists."):t("Create a playlist to keep your favorites close.");

@@ -2,8 +2,8 @@
 export function paintAmbient(lights,levels){
   lights.forEach((light,i)=>{
     const value=Number(levels?.[i]),level=Number.isFinite(value)?Math.max(0,Math.min(1,value)):0;
-    light.style.opacity=String(.17+level*.66);
-    light.style.transform=`translateY(${-level*5}%) scale(${1+level*.24})`;
+    light.style.opacity=String(.17+level*.76);
+    light.style.transform=`translateY(${-level*6}%) scale(${1+level*.28})`;
   });
 }
 export function ambientArtwork(source){

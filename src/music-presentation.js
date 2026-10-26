@@ -1,7 +1,7 @@
 import {t,onLanguageChange} from "./i18n.js";
 
 // Move the existing controls into a modal, so both views share one audio player.
-export function createNowPlaying({dock,identity,artwork,info,like,transport,extras,queuePanel,button,cover,onDownload,onHideSong,onHideArtist}) {
+export function createNowPlaying({dock,identity,artwork,info,like,transport,extras,queuePanel,button,cover,renderDockArtwork,onDownload,onHideSong,onHideArtist,onArtist}) {
   const make=(tag,cls)=>{const node=document.createElement(tag);node.className=cls;return node;};
   const stage=make("dialog","music-stage"),background=make("div","music-stage-background"),header=make("header","music-stage-header");
   stage.id="music-now-playing";background.setAttribute("aria-hidden","true");
@@ -18,6 +18,9 @@ export function createNowPlaying({dock,identity,artwork,info,like,transport,extr
   const expand=button(t("Now playing"),"arrows-out",()=>open());expand.id="music-expand";extras.append(expand);
   const preview=make("aside","music-playing-preview"),previewArt=button(t("Now playing"),null,()=>open(),"music-preview-art"),previewTitle=make("strong",""),previewArtist=make("span",""),previewOpen=button(t("Lyrics"),"arrows-out",()=>open(),"music-preview-open");
   const previewHeading=make("span","music-eyebrow"),previewLabel=make("span","");previewOpen.append(previewLabel);preview.hidden=true;
+  previewArtist.setAttribute('role','button');previewArtist.tabIndex=0;previewArtist.className='music-artist-link';
+  previewArtist.addEventListener('click',()=>onArtist?.(current));
+  previewArtist.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onArtist?.(current);}});
   const ambient=make("div","music-preview-ambient"),facts=make("p","music-playing-facts"),reason=make("p","music-playing-reason");ambient.setAttribute("aria-hidden","true");
   const flip=make('div','music-preview-flip'),faces=make('div','music-preview-faces'),inlineLyrics=make('section','music-preview-lyrics');inlineLyrics.hidden=true;inlineLyrics.setAttribute('aria-label',t('Lyrics'));
   const flipButton=button(t('Show lyrics'),'music-notes',()=>setPreviewLyrics(!previewLyricsOn),'music-preview-toggle');
@@ -26,11 +29,17 @@ export function createNowPlaying({dock,identity,artwork,info,like,transport,extr
   artwork.setAttribute("role","button");artwork.tabIndex=0;artwork.setAttribute("aria-haspopup","dialog");
   artwork.addEventListener("click",()=>{if(!stage.open)open();});
   artwork.addEventListener("keydown",event=>{if(!stage.open&&(event.key==="Enter"||event.key===" ")){event.preventDefault();open();}});
-  let current=null,returnFocus=null,lyrics=null,lyricsTrigger=null,previewLyricsOn=false;
+  let current=null,returnFocus=null,lyrics=null,lyricsTrigger=null,previewLyricsOn=false,flipCleanup=0;
   function setPreviewLyrics(value){
-    previewLyricsOn=value;preview.classList.toggle('showing-lyrics',value);faces.classList.toggle('is-flipped',value);inlineLyrics.hidden=!value;previewArt.inert=value;
+    clearTimeout(flipCleanup);previewLyricsOn=value;preview.classList.toggle('showing-lyrics',value);faces.classList.toggle('is-flipped',value);previewArt.inert=value;inlineLyrics.inert=!value;
     flipButton.setAttribute('aria-pressed',String(value));flipButton.title=flipButton.ariaLabel=value?t('Show cover'):t('Show lyrics');
-    if(lyrics&&!stage.open){if(value)lyrics.mount(inlineLyrics);else lyrics.unmount();}
+    if(value){inlineLyrics.hidden=false;if(lyrics&&!stage.open)lyrics.mount(inlineLyrics);}
+    else {
+      // Keep the back face painted until the return turn finishes. Hiding or
+      // unmounting it immediately makes the card disappear halfway through.
+      const finish=()=>{if(previewLyricsOn)return;inlineLyrics.hidden=true;if(lyrics&&!stage.open)lyrics.unmount();};
+      if(matchMedia('(prefers-reduced-motion: reduce)').matches)finish();else flipCleanup=setTimeout(finish,450);
+    }
   }
   let idleTimer=null,playing=false;
   function wake(){stage.classList.remove("music-stage-idle");clearTimeout(idleTimer);if(stage.open&&playing)idleTimer=setTimeout(()=>{if(!stage.contains(document.activeElement)||document.activeElement===close)stage.classList.add("music-stage-idle");},3500);}
@@ -43,6 +52,7 @@ export function createNowPlaying({dock,identity,artwork,info,like,transport,extr
   function open(){
     if(!current||stage.open)return;
     returnFocus=document.activeElement;
+    artwork.replaceChildren(cover(current,"",1024));
     art.append(artwork);details.insertBefore(info,controls);controls.append(transport);actions.prepend(like);details.append(extras);
     stage.append(queuePanel);document.body.classList.add("music-stage-open");stage.showModal();showLyrics(true);close.focus();wake();
   }
@@ -50,6 +60,7 @@ export function createNowPlaying({dock,identity,artwork,info,like,transport,extr
     clearTimeout(idleTimer);stage.classList.remove("music-stage-idle");
     showLyrics(false);lyricsTrigger?.removeAttribute("aria-pressed");
     identity.append(artwork,info,like);dock.append(identity,transport,extras);document.body.append(queuePanel);
+    if(renderDockArtwork)renderDockArtwork(current);else artwork.replaceChildren(cover(current,"",128));
     document.body.classList.remove("music-stage-open");returnFocus?.focus();
   });
   function labels(){
@@ -60,7 +71,8 @@ export function createNowPlaying({dock,identity,artwork,info,like,transport,extr
   }
   labels();onLanguageChange(labels);
   return {open,attachPreview(workspace){workspace.append(preview);},attachLyrics(controller,trigger){lyrics=controller;lyricsTrigger=trigger;},toggleLyrics(){if(!stage.open)return false;showLyrics(lyricsPanel.hidden);wake();return true;},update(item,downloading=false,meta={}){
-    if(current?.id!==item?.id){background.replaceChildren(cover(item));previewArt.replaceChildren(cover(item));ambient.replaceChildren(cover(item));notice.hidden=true;for(const node of [previewArt,info]){node.classList.remove("music-track-arriving");requestAnimationFrame(()=>node.classList.add("music-track-arriving"));}}
+    if(current?.id!==item?.id){background.replaceChildren(cover(item));previewArt.replaceChildren(cover(item,"",640));ambient.replaceChildren(cover(item));notice.hidden=true;for(const node of [previewArt,info]){node.classList.remove("music-track-arriving");requestAnimationFrame(()=>node.classList.add("music-track-arriving"));}}
+    if(stage.open&&current?.id!==item?.id)artwork.replaceChildren(cover(item,"",1024));
     if(playing!==meta.playing){playing=!!meta.playing;wake();}
     const duration=Number(meta.duration)||0;facts.textContent=[duration?`${Math.floor(duration/60)}:${String(Math.floor(duration%60)).padStart(2,"0")}`:"",meta.offline?t("Downloaded music"):""].filter(Boolean).join(" · ");facts.hidden=!facts.textContent;
     reason.textContent=meta.reason||"";reason.hidden=!meta.reason;

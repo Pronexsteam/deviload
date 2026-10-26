@@ -330,8 +330,8 @@ dialog{background:#1b2026;border-color:#58606a}
 .media-library-filters button{padding:7px 12px;border-radius:7px;border:1px solid #45505b;background:#20262d;color:#bfc9d0;font-size:11px;cursor:pointer}
 .media-library-filters button.selected{border-color:#ec7354;background:#5b2c27;color:#fff}
 .media-library-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:11px}
-.media-library-item{min-width:0;overflow:hidden;border:1px solid #39424a;border-radius:9px;background:#14191e;transition:transform .2s,border-color .2s}
-.media-library-item:hover{transform:translateY(-3px);border-color:#e57052}
+.media-library-item{min-width:0;overflow:hidden;border:1px solid #39424a;border-radius:9px;background:#14191e;transition:border-color .16s,box-shadow .16s}
+.media-library-item:hover{border-color:var(--theme-accent,#e57052);box-shadow:0 0 0 1px color-mix(in srgb,var(--theme-accent,#e57052) 20%,transparent)}
 .media-library-art{position:relative;height:112px;background:radial-gradient(circle at 60% 42%,#653026,#222730 60%,#171b20);overflow:hidden}
 .media-library-art img{display:block;width:100%;height:100%;object-fit:cover;opacity:.84}
 .media-library-type{position:absolute;right:8px;top:8px;padding:4px 6px;border-radius:4px;background:#111b22d9;color:#f3f5f6;font-size:9px;font-weight:800;letter-spacing:.08em}
@@ -517,7 +517,7 @@ html[data-motion="reduced"] .live-fire-trail{animation:none;transition:none}html
 /* Destination pages stay distinct; queue states live inside Downloads. */
 main[data-page="downloads"] .page-content:not(.page-downloads),
 main[data-page="library"] .page-content:not(.page-library),
-main[data-page="search"] .page-content:not(.page-search),
+main[data-page="cinema"] .page-content:not(.page-cinema),
 main[data-page="editor"] .page-content:not(.page-editor){display:none!important}
 main[data-page="library"] .media-library,main[data-page="search"] .discover,main[data-page="editor"] .editor-card{margin-top:8px}
 .queue-filters{display:flex;flex-wrap:wrap;gap:7px;margin:1px 0 13px}

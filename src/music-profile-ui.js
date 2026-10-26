@@ -1,5 +1,5 @@
 import {t,onLanguageChange,errorText} from "./i18n.js";
-import {PROFILE_LIMIT,exportMusicProfile,importMusicProfile} from "./music-profile.js";
+import {exportMusicProfile,importMusicProfile} from "./music-profile.js";
 
 export function wireMusicProfile({invoke,read,restore}){
   const root=document.getElementById("music-profile"),file=root.querySelector("input"),summary=root.querySelector("[data-summary]"),preview=root.querySelector("[data-preview]"),status=root.querySelector("[role=status]");
@@ -24,11 +24,10 @@ export function wireMusicProfile({invoke,read,restore}){
   importing.addEventListener("click",()=>file.click());
   file.addEventListener("change",()=>run(async()=>{
     const selected=file.files[0];file.value="";candidate=null;preview.hidden=true;if(!selected)return;
-    if(selected.size>PROFILE_LIMIT)throw Error(t("Music profile is too large (maximum 2 MB)."));
     candidate=importMusicProfile(await selected.text());describe();preview.hidden=false;
   }));
   cancel.addEventListener("click",()=>{candidate=null;preview.hidden=true;});
   apply.addEventListener("click",()=>run(async()=>{
-    if(!candidate)return;restore(candidate);candidate=null;preview.hidden=true;status.textContent=t("Music profile restored. Recommendations will use these preferences.");
+    if(!candidate)return;await restore(candidate);candidate=null;preview.hidden=true;status.textContent=t("Music profile restored. Recommendations will use these preferences.");
   }));
 }

@@ -1,4 +1,4 @@
-const $=id=>document.getElementById('remote-'+id),themes=['ambient','matte-black','glass-light','glass-black','midnight','spotify'];
+const $=id=>document.getElementById('remote-'+id),themes=['ambient','glass-light','aurora','prism'];
 // The bearer stays in this tab's fragment, never in server request URLs or storage.
 const token=location.hash.slice(1);let state=null,labels={},connected=false,dragging=new Set(),received=0,busy=false,sequence=0,queued=new Map(),sending=false,lastError=false;
 const client=Array.from(crypto.getRandomValues(new Uint32Array(2))).join('-');

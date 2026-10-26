@@ -41,11 +41,6 @@
 @media(max-width:1100px){#music-mini-open.music-mini-launch {padding:5px;gap:4px;font-size:10px}#music-mini-open .icon{width:14px}}
 :root body #devil-music #music-home-hero.music-listening-hero {display:flex;align-items:center;gap:24px;min-height:184px;height:auto;padding:24px 0;margin:0 0 8px;border:0;border-bottom:1px solid var(--workspace-line);background:transparent;box-shadow:none;overflow:hidden;border-radius:0}
 #devil-music .music-hero-cover {position:relative;flex:0 0 clamp(128px,23cqw,170px);width:clamp(128px,23cqw,170px);aspect-ratio:1;padding:0;border:1px solid #ffffff55;border-radius:50%;overflow:visible;background:#191919;box-shadow:0 0 0 7px #ffffff04,0 0 36px #c1ced323,0 12px 28px #0008}
-.music-hero-record {display:block;width:100%;height:100%;border-radius:50%;animation:music-vinyl-turn 8s linear infinite;animation-play-state:paused;filter:brightness(1.22)}
-.music-record-label {position:absolute;inset:27%;border-radius:50%;overflow:hidden;box-shadow:0 0 0 2px #ddd9,0 2px 8px #0008;animation:music-vinyl-turn 8s linear infinite;animation-play-state:paused}
-.music-record-label>.music-art {width:100%;height:100%;border-radius:50%;display:block}
-.music-record-label::after {content:"";position:absolute;inset:44%;border-radius:50%;background:#111;border:1px solid #fff8}
-.music-listening-hero.is-playing :is(.music-hero-record,.music-record-label) {animation-play-state:running}
 :root[data-theme="glass-light"] #devil-music .music-hero-cover {border-color:#555;box-shadow:0 8px 24px #17202c30,0 0 0 7px #00000004}
 #devil-music .music-hero-story {min-width:0;flex:1}
 :root body #devil-music .music-hero-story h2 {font-size:clamp(24px,4.8cqw,42px);line-height:1.15;letter-spacing:-.8px;margin:10px 0;overflow-wrap:anywhere;color:var(--workspace-ink)}
@@ -65,13 +60,8 @@
 #devil-music .music-preview-open {display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 10px;border-radius:100px;margin-top:12px;background:var(--workspace-ink);color:var(--theme-bg,#101318);border:0;font-size:12px;line-height:1.4;flex:none}
 #devil-music .music-preview-open>.icon {width:16px;height:16px}
 #music-now-playing.has-lyrics .music-stage-background .music-art {opacity:.14;filter:blur(65px)}
-:root:is([data-theme="matte-black"],[data-theme="ambient"]) #music-now-playing.has-lyrics .music-stage-background .music-art {opacity:.1}
+:root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) #music-now-playing.has-lyrics .music-stage-background .music-art {opacity:.1}
 /* A record turns only while sound is playing. Pauses retain its angle. */
-body .music-equalizer.music-vinyl {display:none;width:20px;height:20px;min-width:20px;flex:none;position:relative;border-radius:50%;background:#222 url('./assets/music-vinyl.png') center/cover no-repeat;border:1px solid #bbb9;box-shadow:0 0 6px #ffffff20;margin-right:6px;vertical-align:-5px;animation:music-vinyl-turn 6s linear infinite;animation-play-state:paused}
-.music-vinyl::before,.music-vinyl::after {display:none}
-body .active .music-vinyl,body .music-now-info .music-vinyl {display:inline-block}
-body .is-playing .music-vinyl {animation-play-state:running}
-@keyframes music-vinyl-turn{to{transform:rotate(360deg)}}
 /* Stable artwork and understated, keyboard-accessible actions. */
 .music-art {position:relative;contain:paint;isolation:isolate;background:var(--workspace-panel,#171717)}
 .music-art>img {aspect-ratio:1;object-fit:cover}
@@ -90,8 +80,8 @@ body .is-playing .music-vinyl {animation-play-state:running}
 #devil-music .music-best-result p {font-size:13px;color:var(--workspace-muted);margin:0 0 18px}
 #devil-music .music-best-result .music-primary {border-radius:100px;padding:9px 22px}
 .music-search-suggestions {position:absolute;left:0;right:0;top:calc(100% + 8px);z-index:40;padding:6px;border:1px solid var(--workspace-line);background:var(--theme-surface-strong,#1b2028);box-shadow:0 14px 35px #0007;border-radius:12px;max-height:300px;overflow:auto}
-:root body #devil-music #music-search .music-search-suggestions button {display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:left;border:0;background:none;color:var(--workspace-ink);padding:12px;font-size:13px;border-radius:7px}
-:root body #devil-music #music-search .music-search-suggestions button:is(:hover,[aria-selected="true"]) {background:var(--workspace-hover)}
+:root body :is(#devil-music,.topbar) #music-search .music-search-suggestions button {display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:left;border:0;background:none;color:var(--workspace-ink);padding:12px;font-size:13px;border-radius:7px}
+:root body :is(#devil-music,.topbar) #music-search .music-search-suggestions button:is(:hover,[aria-selected="true"]) {background:var(--workspace-hover)}
 .music-search-suggestions small {color:var(--workspace-muted);font-size:11px;white-space:nowrap}
 body .music-queue-panel {width:min(440px,calc(100vw - 32px));max-height:calc(100dvh - 210px);padding:20px}
 .music-queue-section {margin:18px 0 7px;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--workspace-muted)}
@@ -112,8 +102,23 @@ body .music-queue-panel {width:min(440px,calc(100vw - 32px));max-height:calc(100
 .music-stage.music-stage-idle .music-stage-header:not(:focus-within):not(:hover),.music-stage.music-stage-idle .music-stage-controls:not(:focus-within):not(:hover),.music-stage.music-stage-idle .music-stage-actions:not(:focus-within):not(:hover),.music-stage.music-stage-idle .music-stage-details>.music-dock-extras:not(:focus-within):not(:hover) {opacity:.15}
 /* Themes suppress decorative effects. Playback remains animated unless the OS
    explicitly requests reduced motion. Keep play-state controlled by playback. */
-@media(prefers-reduced-motion:no-preference){html[data-motion="reduced"] body :is(.music-equalizer.music-vinyl,.music-hero-record,.music-record-label){animation-duration:8s!important;animation-iteration-count:infinite!important}}
 .icon[data-icon="arrows-in"]{--glyph:url("assets/icons/mini-player.svg")}
 @media(prefers-reduced-motion:no-preference){.music-track-arriving{animation:music-track-arrival .2s ease-out}@keyframes music-track-arrival{from{opacity:.4}to{opacity:1}}}
 @media(prefers-reduced-motion:reduce){body :is(.music-equalizer.music-vinyl,.music-hero-record,.music-record-label){animation:none}.music-stage-header,.music-stage-controls,.music-stage-actions,.music-stage-details>.music-dock-extras{transition:none}}
 @media(max-width:760px){.music-feedback-toast{bottom:160px}#devil-music .music-track-actions>.music-icon-button{display:none}#devil-music .music-track-duration{font-size:11px}#devil-music .music-best-result{gap:16px}.music-lyrics-tools button:last-child{max-width:180px;white-space:normal;line-height:1.1;height:auto!important}}
+
+#devil-music .music-track-list.music-virtual-list{display:block;gap:0;padding-top:0;overflow-anchor:none}
+#devil-music .music-virtual-list>.music-track-row{height:72px;min-height:72px;max-height:72px;box-sizing:border-box;margin:0;contain:style}
+.music-list-spacer{width:1px;min-height:0;pointer-events:none;flex:none;transition:none!important;animation:none!important}
+.music-search-suggestions{max-height:min(520px,65vh);background:linear-gradient(var(--theme-surface-strong,#1b2028),var(--theme-surface-strong,#1b2028)),var(--theme-bg,#101115)}
+:root body :is(#devil-music,.topbar) #music-search .music-suggestion-tabs{display:flex;gap:4px;overflow-x:auto;padding:3px 3px 8px;border-bottom:1px solid var(--workspace-line)}
+:root body :is(#devil-music,.topbar) #music-search .music-suggestion-tabs button{width:auto;flex:none;padding:6px 10px;font-size:12px;white-space:nowrap}
+:root body :is(#devil-music,.topbar) #music-search .music-suggestion-tabs button[aria-pressed="true"]{background:var(--workspace-hover);color:var(--workspace-ink)}
+:root body :is(#devil-music,.topbar) #music-search .music-suggestion-result{justify-content:flex-start;padding:7px;min-height:58px}
+.music-suggestion-art{width:42px;height:42px;flex:0 0 42px;overflow:hidden;border-radius:7px;background:var(--workspace-hover);display:grid;place-items:center}
+.music-suggestion-art[data-kind="artist"]{border-radius:50%}
+.music-suggestion-art img{width:100%;height:100%;object-fit:cover}
+.music-suggestion-copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.music-suggestion-copy :is(strong,small){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.music-shelf-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:12px}
+.music-shelf-heading h4{margin:0}

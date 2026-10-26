@@ -1,4 +1,4 @@
-const MAX_BYTES=50*1024*1024,MAX_ROWS=20000,MAX_ENTRIES=5000;
+const MAX_BYTES=50*1024*1024;
 const clean=(value,max=300)=>typeof value==="string"?value.replace(/[\u0000-\u001f\u007f]/g," ").replace(/\s+/g," ").trim().slice(0,max):"";
 const norm=value=>value.normalize("NFKC").toLowerCase();
 const videoId=value=>typeof value==="string"&&/^[\w-]{11}$/.test(value.trim())?value.trim():null;
@@ -15,11 +15,11 @@ function timestamp(value){
   if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/.test(text))return undefined;
   const result=Date.parse(text);return Number.isFinite(result)&&result>=946684800000&&result<4133980800000?result:undefined;
 }
-// RFC 4180 quoting; records beyond the processing limit are validated but not retained.
+// RFC 4180 quoting; the file-byte budget bounds input without truncating songs.
 function csv(text,warn){
-  const rows=[];let row=[],field="",quoted=false,closed=false,atStart=true,count=0;
+  const rows=[];let row=[],field="",quoted=false,closed=false,atStart=true;
   const endField=()=>{row.push(field);field="";closed=false;atStart=true;if(row.length>128)throw Error("Invalid music CSV.");};
-  const endRow=()=>{endField();if(row.some(value=>value.trim())){count++;if(count<=MAX_ROWS+1)rows.push(row);else warn("Only the first 20000 rows were imported.");}row=[];};
+  const endRow=()=>{endField();if(row.some(value=>value.trim())){rows.push(row);}row=[];};
   for(let i=0;i<text.length;i++){
     const char=text[i];
     if(quoted){if(char==='"'){if(text[i+1]==='"'){if(field.length<20000)field+='"';i++;}else{quoted=false;closed=true;}}else if(field.length<20000)field+=char;continue;}
@@ -33,7 +33,7 @@ function csv(text,warn){
   if(field||row.length||closed)endRow();return rows;
 }
 
-// Official exports only: no account credentials or unrelated export properties survive.
+// Only musical fields survive, including in custom exports and Spotify API responses.
 export function parseMusicImport(text,filename=""){
   if(typeof text!=="string"||!text.trim())throw Error("The music import file is empty.");
   if(text.length>MAX_BYTES||new TextEncoder().encode(text).length>MAX_BYTES)throw Error("Choose a music export up to 50 MB.");
@@ -41,15 +41,14 @@ export function parseMusicImport(text,filename=""){
   const basename=clean(String(filename).split(/[\\/]/).pop(),150).replace(/\.(json|csv)$/i,"");
   const result={source:null,name:basename||"Imported music",entries:[],playlists:[],warnings:[]},entries=new Map();
   const warn=message=>{if(!result.warnings.includes(message))result.warnings.push(message);};
-  let consumed=0;
-  const consume=()=>{if(++consumed>MAX_ROWS){warn("Only the first 20000 rows were imported.");return false;}return true;};
   function add({title,artists=[],id,liked=false,plays=0,lastPlayed}){
     title=clean(title);artists=[...new Map(artists.map(value=>clean(value,150)).filter(Boolean).slice(0,10).map(value=>[norm(value),value])).values()];
     const validVideo=videoId(id);
     if(!validVideo&&(!title||!artists.length)){warn("Some incomplete or unsupported tracks were skipped.");return null;}
     const key=validVideo?"youtube:"+validVideo:result.source+":"+JSON.stringify([norm(title),artists.map(norm)]);
     let entry=entries.get(key);
-    if(!entry){if(entries.size>=MAX_ENTRIES){warn("Only the first 5000 unique tracks were imported.");return null;}
+    if(entry)warn("Repeated songs were combined.");
+    if(!entry){
       entry={key,title,artists,liked:false,plays:0};if(validVideo)entry.videoId=validVideo;entries.set(key,entry);
     }
     if(!entry.title&&title)entry.title=title;if(!entry.artists.length&&artists.length)entry.artists=artists;
@@ -61,35 +60,47 @@ export function parseMusicImport(text,filename=""){
   if(/^[\s]*[\[{]/.test(text)){
     let raw;try{raw=JSON.parse(text);}catch{throw Error("Invalid music JSON.");}
     result.source="spotify";
-    if(Array.isArray(raw)){
-      if(!raw.some(row=>own(row,"msPlayed")&&own(row,"trackName")||own(row,"ms_played")&&own(row,"master_metadata_track_name")))throw Error("Unsupported music export format.");
-      for(const row of raw){if(!consume())break;if(!row||typeof row!=="object")continue;
+    const history=Array.isArray(raw)&&raw.some(row=>own(row,"msPlayed")&&own(row,"trackName")||own(row,"ms_played")&&own(row,"master_metadata_track_name"));
+    const customRows=Array.isArray(raw)?raw:Array.isArray(raw?.tracks)?raw.tracks:Array.isArray(raw?.items)?raw.items:raw?.tracks?.items;
+    const trackData=row=>row?.track&&typeof row.track==='object'?row.track:row;
+    const recognizable=row=>{const item=trackData(row);return item&&typeof (item.title??item.name)==='string'&&Array.isArray(item.artists);};
+    if(history){
+      for(const row of raw){if(!row||typeof row!=="object")continue;
         const ms=row.msPlayed??row.ms_played;if(typeof ms!=="number"||!Number.isFinite(ms)||ms<30000||ms>86400000)continue;
         const title=row.trackName??row.master_metadata_track_name,artist=row.artistName??row.master_metadata_album_artist_name;
         if(!title||!artist)continue; // Podcast and audiobook records are not songs.
         add({title,artists:[artist],plays:1,lastPlayed:timestamp(row.endTime??row.ts)});
       }
+    }else if(Array.isArray(customRows)&&customRows.some(recognizable)){
+      const savedSongs=/(?:liked[ _-]*songs|saved[ _-]*tracks|your[ _-]*library)/i.test(basename)||(!Array.isArray(raw)&&Array.isArray(raw.items)&&raw.items.some(row=>own(row,'added_at')));
+      for(const row of customRows){const item=trackData(row);
+        if(!recognizable(row)||item.type&&item.type!=='track'){warn("Some incomplete or unsupported tracks were skipped.");continue;}
+        add({title:item.title??item.name,artists:item.artists.map(artist=>typeof artist==='string'?artist:artist?.name),liked:savedSongs||row.liked===true||item.liked===true});
+      }
+      if(Array.isArray(raw?.unidentified)&&raw.unidentified.length)warn("The export also contains unidentified songs without enough metadata to match.");
     }else if(Array.isArray(raw?.tracks)&&(raw.tracks.length===0||raw.tracks.some(row=>own(row,"track")&&own(row,"artist")))){
-      for(const row of raw.tracks){if(!consume())break;add({title:row?.track,artists:[row?.artist],liked:true});}
+      for(const row of raw.tracks){add({title:row?.track,artists:[row?.artist],liked:true});}
     }else if(Array.isArray(raw?.playlists)){
-      for(const list of raw.playlists){if(consumed>=MAX_ROWS){warn("Only the first 20000 rows were imported.");break;}
+      for(const list of raw.playlists){
         if(!Array.isArray(list?.items)){warn("Some incomplete or unsupported tracks were skipped.");continue;}
-        const keys=[];for(const row of list.items){if(!consume())break;if(!row?.track)continue;keys.push(add({title:row.track.trackName,artists:[row.track.artistName]}));}
+        const keys=[];for(const row of list.items){if(!row?.track)continue;keys.push(add({title:row.track.trackName,artists:[row.track.artistName]}));}
         playlist(list.name,keys);
-        if(result.playlists.length>=1000){warn("Only the first 1000 playlists were imported.");break;}
       }
     }else throw Error("Unsupported music export format.");
   }else{
     result.source="youtube";const rows=csv(text,warn);if(!rows.length)throw Error("The music import file is empty.");
     const header=rows.shift().map(value=>clean(value).toLowerCase()),index=(...names)=>header.findIndex(value=>names.includes(value));
-    const titleAt=index("song title"),artistAt=index("artist name","artist names","artist name(s)"),idAt=index("video id"),urlAt=index("song url");
+    const titleAt=index("song title","track name","track title"),artistAt=index("artist name","artist names","artist name(s)","artist(s)"),idAt=index("video id"),urlAt=index("song url");
+    const spotifyCsv=index('track uri','spotify uri')>=0||header.includes('track name');
+    if(spotifyCsv)result.source='spotify';
     if(new Set(header).size!==header.length||!(titleAt>=0&&artistAt>=0||idAt>=0||urlAt>=0))throw Error("Unsupported music export format.");
     const keys=[];
-    for(const row of rows){if(!consume())break;if(row.length!==header.length)throw Error("Invalid music CSV.");
+    for(const row of rows){if(row.length!==header.length)throw Error("Invalid music CSV.");
       const id=videoId(row[idAt])||fromUrl(row[urlAt]);
       if(titleAt<0&&!id){warn("Some incomplete or unsupported tracks were skipped.");continue;}
       // A saved library song or a playlist membership is not necessarily a like.
-      keys.push(add({title:row[titleAt],artists:artistAt>=0?[row[artistAt]]:[],id}));
+      const artists=artistAt>=0?(spotifyCsv?row[artistAt].split(';'):[row[artistAt]]):[];
+      keys.push(add({title:row[titleAt],artists,id,liked:spotifyCsv&&/(?:liked[ _-]*songs|saved[ _-]*tracks)/i.test(basename)}));
     }
     playlist(basename||(titleAt>=0?"YouTube Music library":"YouTube playlist"),keys);
   }

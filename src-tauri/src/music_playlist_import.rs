@@ -36,7 +36,7 @@ fn parse_page(html: &str, kind: &str, id: &str) -> Result<Value, String> {
     let tracks = entity["trackList"].as_array().ok_or(UNAVAILABLE)?;
     let mut entries = Vec::new();
     let mut seen = HashSet::new();
-    for track in tracks.iter().take(500) {
+    for track in tracks {
         let uri = track["uri"].as_str().unwrap_or("");
         let Some(track_id) = uri.strip_prefix("spotify:track:") else { continue; };
         if track_id.len() != 22 || !track_id.bytes().all(|c| c.is_ascii_alphanumeric()) { continue; }
@@ -48,7 +48,7 @@ fn parse_page(html: &str, kind: &str, id: &str) -> Result<Value, String> {
     if entries.is_empty() { return Err(UNAVAILABLE.into()); }
     let keys: Vec<_> = entries.iter().map(|row| row["key"].clone()).collect();
     let name = if name.is_empty() { if kind == "album" { "Imported Spotify album" } else { "Imported Spotify playlist" } } else { &name };
-    Ok(json!({"source":"spotify","name":name,"entries":entries,"playlists":[{"name":name,"keys":keys}],"warnings":[PARTIAL]}))
+    Ok(json!({"source":"spotify","name":name,"entries":entries,"playlists":[{"name":name,"keys":keys}],"warnings":[PARTIAL],"completeness":"unknown","origin":"link"}))
 }
 
 pub fn read_public_playlist(link: &str) -> Result<Value, String> {
@@ -95,6 +95,14 @@ mod tests {
         let result = read_public_playlist("https://open.spotify.com/album/7sFZGbkCitoqQz7Rt3LoKg").unwrap();
         assert_eq!(result["name"], "MUSIC - SORRY 4 DA WAIT");
         assert!(!result["entries"].as_array().unwrap().is_empty());
+    }
+    #[test]
+    fn public_metadata_keeps_more_than_500_tracks() {
+        let tracks: Vec<Value> = (0..601).map(|n| json!({"uri":format!("spotify:track:{n:022}"),"title":format!("Song {n}"),"subtitle":"Artist"})).collect();
+        let entity = json!({"type":"playlist","id":ID,"name":"Large","trackList":tracks});
+        let data = json!({"props":{"pageProps":{"state":{"data":{"entity":entity}}}}});
+        let html = format!("<script id=\"__NEXT_DATA__\">{data}</script>");
+        assert_eq!(parse_page(&html,"playlist",ID).unwrap()["entries"].as_array().unwrap().len(),601);
     }
     #[test]
     fn validates_links_before_network() {

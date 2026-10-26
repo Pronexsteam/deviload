@@ -1,0 +1,83 @@
+/* One persistent search in the app header; music tabs remain with the library. */
+:root body main[data-page="music"] #devil-music .music-toolbar>.music-heading-actions{grid-column:1/-1;grid-row:2;display:flex;justify-content:flex-start;align-items:center;flex-wrap:wrap;gap:8px;padding:5px 0 10px}
+:root body #devil-music .music-toolbar .music-heading-actions>button{min-height:34px;border:1px solid var(--theme-line);border-radius:10px;padding:7px 11px;color:var(--workspace-ink);background:var(--theme-input);font-size:12px;white-space:normal}
+:root body #devil-music .music-toolbar .music-heading-actions>.music-import-open{background:color-mix(in srgb,var(--theme-accent) 15%,var(--theme-input));border-color:color-mix(in srgb,var(--theme-accent) 35%,var(--theme-line));font-weight:600}
+:root body #devil-music .music-toolbar .music-heading-actions>#music-refresh{margin-left:auto;padding:7px;width:34px;flex:none}
+:root body #devil-music .music-toolbar .music-heading-actions>.music-connection-shortcut{display:inline-flex;align-items:center;gap:7px;flex:none;max-width:100%;font-weight:600;background:color-mix(in srgb,var(--theme-accent) 10%,var(--theme-input));transform:none}
+:root body #devil-music .music-connection-shortcut .icon{width:17px;height:17px;flex:none}
+:root body #devil-music .music-connection-shortcut[aria-pressed="true"]{border-color:var(--theme-accent)}
+:root body #devil-music .music-connection-shortcut:focus-visible{outline:2px solid var(--theme-accent);outline-offset:3px}
+/* Keep two grid tracks while collapsing; display:none cannot interpolate. */
+:root body.music-navigation-layout{--app-nav-width:208px;grid-template-columns:var(--app-nav-width) minmax(0,1fr)}
+:root body.music-navigation-layout.music-focus{grid-template-columns:0px minmax(0,1fr)}
+:root body.music-navigation-layout>.sidebar{display:flex!important;width:var(--app-nav-width);min-width:0;overflow:hidden;transform:translateX(0);opacity:1;visibility:visible}
+:root body.music-navigation-layout.music-focus>.sidebar{transform:translateX(-100%);opacity:0;visibility:hidden;pointer-events:none}
+:root body.music-navigation-layout>main{grid-column:2}
+@media(max-width:960px){:root body.music-navigation-layout{--app-nav-width:76px}}
+@media(prefers-reduced-motion:no-preference){
+ :root body.music-navigation-layout{transition:grid-template-columns .24s cubic-bezier(.2,.8,.2,1)!important}
+ :root body.music-navigation-layout>.sidebar{transition:transform .24s cubic-bezier(.2,.8,.2,1),opacity .18s,visibility 0s!important}
+ :root body.music-navigation-layout.music-focus>.sidebar{transition:transform .24s cubic-bezier(.2,.8,.2,1),opacity .18s,visibility 0s .24s!important}
+ :root body.music-navigation-layout :is(.music-dock,.window-drag-strip){transition:left .24s cubic-bezier(.2,.8,.2,1)!important}
+}
+@media(prefers-reduced-motion:reduce){
+ :root body.music-navigation-layout,:root body.music-navigation-layout>.sidebar,:root body.music-navigation-layout :is(.music-dock,.window-drag-strip){transition:none!important}
+}
+.music-queue-list{overflow-anchor:none}
+.music-queue-handle{border:0;background:transparent;color:var(--workspace-muted);padding:4px;width:26px;font-size:20px;line-height:1;cursor:grab;flex:none}
+.music-queue-handle:active{cursor:grabbing}
+.music-queue-track.drop-target{box-shadow:inset 0 2px var(--workspace-accent);background:var(--workspace-hover)}
+.music-queue-list>.music-queue-track{height:72px;min-height:72px;max-height:72px;box-sizing:border-box}
+body .music-artist-link{display:block;min-width:0;max-width:100%;width:fit-content;padding:0;margin:0;border:0;border-radius:3px;background:transparent;box-shadow:none;color:var(--workspace-muted);font:inherit;line-height:1.5;text-align:left;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;cursor:pointer}
+body .music-artist-link:hover{color:var(--workspace-ink);text-decoration:underline;text-underline-offset:3px}
+body .music-artist-link:focus-visible{outline:2px solid var(--workspace-accent);outline-offset:2px}
+body .music-now-info .music-artist-link{font-size:12px}
+#devil-music .music-card>.music-artist-link{margin-top:4px}
+#devil-music .music-track-entry{display:grid;min-width:0;flex:1}
+#devil-music .music-track-entry>.music-track-select{grid-area:1/1;width:100%;height:46px}
+#devil-music .music-track-entry .music-track-copy{padding-bottom:19px}
+#devil-music .music-track-entry .music-track-copy strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#devil-music .music-track-entry>.music-artist-link{grid-area:1/1;align-self:end;margin-left:97px;max-width:calc(100% - 97px);font-size:11px;z-index:1}
+.music-artist-page-choice{display:flex;align-items:center;gap:12px;width:100%;padding:10px;border:0;border-radius:8px;background:var(--workspace-panel);color:var(--workspace-ink);text-align:left;margin-block:6px}
+.music-artist-page-choice .music-art{width:48px;height:48px;flex:none;border-radius:50%}
+main:not([data-page="music"])>.topbar>#music-search{display:none}
+:root body main[data-page="music"]>.topbar{z-index:40;gap:12px;overflow:visible}
+main[data-page="music"]>.topbar>.workspace-breadcrumb{flex:none;gap:0}
+main[data-page="music"] .workspace-breadcrumb>span{display:none}
+:root body main[data-page="music"] .music-navigation-toggle{display:grid;place-items:center;width:38px;height:40px;min-height:40px;padding:0;border-color:transparent;background:transparent;color:var(--workspace-ink);flex:none}
+:root body main[data-page="music"] .music-navigation-toggle:hover{background:var(--workspace-hover)}
+:root body main[data-page="music"]>.topbar>#music-search{position:relative;display:flex;flex:1 1 0;order:0;width:auto;min-width:0;max-width:none;min-height:46px;gap:10px;margin:0;padding:4px 5px 4px 14px;border:1px solid var(--workspace-line);border-radius:12px;background:var(--theme-input);color:var(--workspace-ink);box-sizing:border-box}
+:root body main[data-page="music"]>.topbar>#music-search:focus-within{outline:1px solid var(--workspace-accent);outline-offset:0;box-shadow:none}
+:root body .topbar #music-query{min-width:60px;width:0;flex:1;border:0;background:transparent;color:var(--workspace-ink);box-shadow:none;padding:7px 0;font-size:15px}
+:root body .topbar #music-query:is(:focus,:focus-visible){outline:none;box-shadow:none;border-color:transparent;background:transparent}
+.topbar #music-search>.icon,.topbar #music-search kbd{color:var(--workspace-muted)}
+.topbar #music-search .music-search-submit{min-height:36px;height:36px;border-radius:8px;background:var(--workspace-accent);color:var(--workspace-accent-ink,var(--theme-accent-text));padding-inline:12px}
+.topbar #music-search-clear{width:28px;min-width:28px;height:28px;padding:4px;color:var(--workspace-muted)}
+:root body main[data-page="music"] #devil-music .music-toolbar{grid-template-columns:34px minmax(0,1fr) 66px;padding:0 6px;gap:6px;margin-bottom:12px;border-bottom:1px solid var(--workspace-line)}
+:root body main[data-page="music"] #devil-music .music-toolbar>.music-tabs{grid-column:2;grid-row:1;border:0;flex-wrap:wrap;gap:0 18px;padding:0}
+:root body main[data-page="music"] #devil-music .music-toolbar>.music-navigation{grid-column:3;grid-row:1}
+:root body main[data-page="music"] #devil-music .music-toolbar>.music-library-panel-toggle{grid-column:1;grid-row:1}
+:root body main[data-page="music"] #devil-music>.music-main-content{scroll-padding-top:80px}
+/* All panes reveal the SAME scene and audio envelope. No extra image decoders,
+   canvas or animation loop per pane. Menus retain a solid readable backplate. */
+:root[data-theme="ambient"]{--music-pane:#10111666;--music-field:#13151c66}
+:root[data-theme="aurora"]{--music-pane:#10172b70;--music-field:#16203b70}
+:root[data-theme="prism"]{--music-pane:#151d2970;--music-field:#202b3870}
+:root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body main[data-page="music"] #devil-music :is(.music-library-sidebar,.music-playing-preview,.music-toolbar){background:var(--music-pane);border-color:var(--theme-line);backdrop-filter:blur(18px)}
+:root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body main[data-page="music"]>.topbar::before{background:var(--music-pane);backdrop-filter:blur(18px)}
+:root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body main[data-page="music"]>.topbar>#music-search,
+:root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body #devil-music .music-library-sidebar-search{background:var(--music-field);border-color:var(--theme-line)}
+:root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body .sidebar{background:var(--music-pane)}
+@media(max-width:1200px){.topbar #music-search kbd,.topbar #music-search .music-search-submit>span:not(.icon){display:none}.topbar #music-search .music-search-submit{width:36px;min-width:36px;padding:0}}
+@media(max-width:900px){:root body main[data-page="music"]>.topbar{gap:7px}.topbar #music-search>.icon{width:18px;height:18px}.topbar #music-search{gap:6px}.topbar #music-query{font-size:14px}}
+/* The scene behind these panels is already blurred. A second live backdrop
+   filter per pane rerasterizes the whole window as the audio light changes. */
+:root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body main[data-page="music"] #devil-music :is(.music-library-sidebar,.music-playing-preview,.music-toolbar),
+:root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body main[data-page="music"]>.topbar::before,
+:root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body :is(.sidebar,.music-dock){backdrop-filter:none}
+:root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body main[data-page="music"] #devil-music .music-toolbar{background:color-mix(in srgb,var(--theme-bg) 94%,transparent)}
+@media(prefers-reduced-transparency:reduce){
+ :root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body main[data-page="music"] #devil-music :is(.music-library-sidebar,.music-playing-preview,.music-toolbar),
+ :root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body main[data-page="music"]>.topbar::before,
+ :root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body main[data-page="music"]>.topbar>#music-search{background:var(--theme-bg);backdrop-filter:none}
+}

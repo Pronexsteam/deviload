@@ -1,3 +1,5 @@
+mod cinema;
+mod cinema_embed;
 mod convert;
 mod gallery;
 mod gallery_install;
@@ -18,6 +20,7 @@ pub use music_engine::{music_cache as preview_music_cache, music_engine_update a
 mod music_controls;
 mod music_mini;
 mod music_remote;
+mod music_room;
 mod music_presence;
 mod music_profile;
 mod music_import;
@@ -277,6 +280,7 @@ impl Engine {
                     Ok(()) => {
                         j.status = if j.file.is_empty() && j.archived > 0 { "skipped" } else if j.file.is_empty() { "error" } else { "done" }.into();
                         if j.status == "error" { j.consume("No output file was produced. Open the task log for details."); }
+                        j.completed_at = if j.status == "done" { completion_time() } else { 0 };
                         j.percent = 100.0; j.scheduled_at = None;
                     }
                     Err(e) => {
@@ -363,6 +367,7 @@ impl Engine {
                         j.consume(&format!("Deviload: the recording stopped when Deviload closed and was saved as {}", file.display()));
                         j.file = file.to_string_lossy().into_owned();
                         j.status = "done".into();
+                        j.completed_at = completion_time();
                         j.percent = 100.0;
                         j.stop_requested = false;
                     }
@@ -1063,6 +1068,10 @@ fn update_engine() -> Result<EngineUpdate, String> {
     Ok(EngineUpdate { before, after: ytdlp_version(&exe)? })
 }
 
+fn completion_time() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64
+}
+
 #[tauri::command]
 fn now_seconds() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
@@ -1206,7 +1215,7 @@ fn queue_urls(d: &mut Snapshot, urls: Vec<String>, options: &Options, scheduled_
         if d.jobs.iter().any(|j| j.url == url && same_download(&j.options,options) && ["queued", "running", "cancelling", "pausing", "paused"].contains(&j.status.as_str())) { continue; }
         let next_id = allocate_id(d);
         d.jobs.push(Job { id: next_id, url, options: options.clone(), status: "queued".into(),
-            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at, auto_retry, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() });
+            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at, auto_retry, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, stage: String::new() });
         count += 1;
     }
     count
@@ -1318,7 +1327,7 @@ fn import_legacy_into(legacy: &Path, data: &mut Snapshot, archive_dir: &Path) ->
             let options = Options { quality: legacy_quality(file).into(), archive: false, ..data.options.clone() };
             let next_id = allocate_id(data);
             let mut job = Job { id: next_id, url, options, status: "done".into(), percent: 100.0, speed: String::new(),
-                file: file.into(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
+                file: file.into(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, stage: String::new() };
             job.log.push("Moved from Deviload 1.x".into());
             data.jobs.push(job);
 
@@ -1399,6 +1408,7 @@ fn change_job(id: u64, action: String, auth: Option<Options>, engine: tauri::Sta
         let previous = d.jobs.iter().find(|j| j.id == id).ok_or("Task not found")?.clone();
         if previous.status == "done" && previous.archived > 0 && !previous.file.is_empty() {
             let mut next = previous.clone();
+            next.completed_at = 0;
             next.id = allocate_id(&mut d); next.status = "queued".into(); next.percent = 0.0;
             next.file.clear(); next.downloads.clear(); next.log.clear(); next.stage.clear(); next.speed.clear();
             next.options.archive = false; next.archived = 0; next.healed.clear(); next.scheduled_at = None;
@@ -1418,7 +1428,7 @@ fn change_job(id: u64, action: String, auth: Option<Options>, engine: tauri::Sta
         "pause" if j.status == "running" && !j.live => j.status = "pausing".into(),
         // A live recording stops and keeps what was recorded.
         "stop" if j.status == "running" && j.live => j.stop_requested = true,
-        "resume" if j.status == "paused" => { j.status = "queued".into(); j.percent = 0.0; j.speed.clear(); },
+        "resume" if j.status == "paused" => { j.completed_at = 0; j.status = "queued".into(); j.percent = 0.0; j.speed.clear(); },
         "cancel" if j.status == "paused" => j.status = "cancelled".into(),
         "cancel" if j.status == "queued" => j.status = "cancelled".into(),
         "cancel" if j.status == "running" => j.status = "cancelling".into(),
@@ -1431,12 +1441,12 @@ fn change_job(id: u64, action: String, auth: Option<Options>, engine: tauri::Sta
                 options.validate()?;
                 j.options = options;
             }
-            j.status = "queued".into(); j.percent = 0.0; j.log.clear(); j.speed.clear(); j.file.clear(); j.scheduled_at = None; j.retry_attempts = 0;
+            j.completed_at = 0; j.status = "queued".into(); j.percent = 0.0; j.log.clear(); j.speed.clear(); j.file.clear(); j.scheduled_at = None; j.retry_attempts = 0;
             j.healed.clear(); j.archived = 0;
         }
         // Without the archive yt-dlp fetches what it skipped; files still on the disk are not downloaded twice.
         "again" if ["done", "skipped"].contains(&j.status.as_str()) && j.archived > 0 => {
-            j.status = "queued".into(); j.percent = 0.0; j.log.clear(); j.speed.clear(); j.file.clear(); j.scheduled_at = None;
+            j.completed_at = 0; j.status = "queued".into(); j.percent = 0.0; j.log.clear(); j.speed.clear(); j.file.clear(); j.scheduled_at = None;
             j.retry_attempts = 0; j.archived = 0; j.options.archive = false; j.healed.clear();
         }
         _ => return Err("This action is not available in the current state".into()),
@@ -1720,7 +1730,7 @@ fn next_recording(job: &Job, id: u64, now: u64) -> Job {
     Job { id, url: job.url.clone(), options: job.options.clone(), status: "queued".into(), percent: 0.0, speed: String::new(),
         file: String::new(), log: vec![], scheduled_at: Some(at), auto_retry: job.auto_retry, retry_attempts: 0, archived: 0, healed: vec![],
         downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: job.live_limit,
-        recording: String::new(), stop_requested: false, repeat_at: at, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() }
+        recording: String::new(), stop_requested: false, repeat_at: at, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, stage: String::new() }
 }
 
 // Once a second while a live stream records: when it began, how much is on the disk
@@ -2464,8 +2474,16 @@ fn media_has_audio(file: &Path) -> Result<bool, String> {
 }
 
 #[cfg(windows)]
+fn shell_file_name(file: &Path) -> Vec<u16> {
+    use std::os::windows::ffi::OsStrExt;
+    // Filesystem APIs accept forward slashes, but SHParseDisplayName does not.
+    // Normalize only separators; retain the exact Unicode final-file name.
+    file.as_os_str().encode_wide().map(|c| if c == b'/' as u16 { b'\\' as u16 } else { c }).chain(Some(0)).collect()
+}
+
+#[cfg(windows)]
 fn reveal_file_windows(file: &Path) -> Result<(), String> {
-    use std::{ffi::c_void, os::windows::ffi::OsStrExt, ptr};
+    use std::{ffi::c_void, ptr};
     #[link(name = "ole32")]
     extern "system" {
         fn CoInitializeEx(reserved: *mut c_void, mode: u32) -> i32;
@@ -2477,7 +2495,7 @@ fn reveal_file_windows(file: &Path) -> Result<(), String> {
         fn SHParseDisplayName(name: *const u16, context: *mut c_void, pidl: *mut *mut c_void, attributes: u32, result: *mut u32) -> i32;
         fn SHOpenFolderAndSelectItems(pidl: *const c_void, count: u32, items: *const *const c_void, flags: u32) -> i32;
     }
-    let name: Vec<u16> = file.as_os_str().encode_wide().chain(Some(0)).collect();
+    let name = shell_file_name(file);
     unsafe {
         let initialized = CoInitializeEx(ptr::null_mut(), 2);
         if initialized < 0 { return Err(format!("Could not prepare File Explorer: {:#010X}", initialized as u32)); }
@@ -3103,6 +3121,11 @@ fn restore_main(app: &tauri::AppHandle) {
     }
 }
 
+fn isolated_test_dir(debug: bool, value: Option<std::ffi::OsString>) -> Option<PathBuf> {
+    if !debug {return None;}
+    value.map(PathBuf::from).filter(|path|path.is_absolute())
+}
+
 pub fn run() {
     #[cfg(target_os = "linux")]
     {
@@ -3112,7 +3135,7 @@ pub fn run() {
     let mut builder = tauri::Builder::default();
     // A second launch only brings the running window forward; two copies would share one queue.
     // A copy with its own test data shares nothing, so it may run beside the installed app.
-    if std::env::var_os("DEVILOAD_TEST_DATA_DIR").is_none() {
+    if isolated_test_dir(cfg!(debug_assertions),std::env::var_os("DEVILOAD_TEST_DATA_DIR")).is_none() {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             restore_main(app);
         }));
@@ -3175,10 +3198,8 @@ pub fn run() {
                 })
                 .build(app)?;
             // Debug builds can use disposable state for native UI checks.
-            let dir = if cfg!(debug_assertions) {
-                std::env::var_os("DEVILOAD_TEST_DATA_DIR").map(PathBuf::from)
-                    .filter(|p| p.is_absolute()).unwrap_or(app.path().app_data_dir()?)
-            } else { app.path().app_data_dir()? };
+            let dir = isolated_test_dir(cfg!(debug_assertions),std::env::var_os("DEVILOAD_TEST_DATA_DIR"))
+                .unwrap_or(app.path().app_data_dir()?);
             fs::create_dir_all(&dir)?;
             *PROXY.lock().unwrap() = stored_proxy(&dir);
             if let Ok(profile) = youtube_profile(app.handle()) {
@@ -3232,7 +3253,7 @@ pub fn run() {
                         let next = d.jobs.iter().position(|j| ready_to_download(j, &d.rate_limits, utc_now, clock_now));
                         if let Some(index) = next {
                             let j = &mut d.jobs[index];
-                            j.status = "running".into(); j.scheduled_at = None; j.archived = 0; j.forget_recording();
+                            j.completed_at = 0; j.status = "running".into(); j.scheduled_at = None; j.archived = 0; j.forget_recording();
                             j.consume(download_recovery::ATTEMPT_STARTED);
                             let id = j.id; engine.persist(&mut d); Some(id)
                         } else { None }
@@ -3262,17 +3283,24 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![gallery_info, gallery_install, gallery_inspect, quick_cut::quick_cut_plan, quick_cut::quick_cut_export, quick_cut::quick_cut_stop, settings_backup::settings_backup_data, settings_backup::inspect_settings_backup, settings_backup::restore_settings_backup, settings_backup::export_settings_backup, set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_site_browser, open_releases, open_support, window_action, apply_download_auth, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, export_download_profiles, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, site_sign_in, site_sign_out, site_sessions, music::music_catalog, music_discovery::music_discovery, music::music_prepare, music_engine::music_cache, music_engine::music_engine_update, music_engine::music_diagnostics, music_engine::export_music_diagnostics, music_offline::music_downloaded, music_offline::music_offline_source, music_lyrics::music_lyrics, music::music_stream, music::music_cancel_stream, music_controls::set_music_controls, music_remote::music_remote_start, music_remote::music_remote_update, music_remote::music_remote_stop, music_mini::music_mini_open, music_mini::music_mini_update, music_mini::music_mini_state, music_mini::music_mini_action, music_presence::music_presence, music_profile::export_music_profile, music_import::read_music_import, music_playlist_import::music_import_spotify_playlist, open_music_import_help, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, relink_media, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
+        .invoke_handler(tauri::generate_handler![cinema_embed::cinema_embed, cinema_embed::cinema_open_youtube, cinema::cinema_search, cinema::cinema_cancel_search, cinema::cinema_entries, cinema::cinema_stream, cinema::cinema_cancel, gallery_info, gallery_install, gallery_inspect, quick_cut::quick_cut_plan, quick_cut::quick_cut_export, quick_cut::quick_cut_stop, settings_backup::settings_backup_data, settings_backup::inspect_settings_backup, settings_backup::restore_settings_backup, settings_backup::export_settings_backup, set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_site_browser, open_releases, open_support, window_action, apply_download_auth, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, export_download_profiles, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, site_sign_in, site_sign_out, site_sessions, music::music_catalog, music_discovery::music_discovery, music::music_prepare, music_engine::music_cache, music_engine::music_engine_update, music_engine::music_diagnostics, music_engine::export_music_diagnostics, music_offline::music_downloaded, music_offline::music_offline_source, music_lyrics::music_lyrics, music::music_stream, music::music_cancel_stream, music_controls::set_music_controls, music_remote::music_remote_start, music_remote::music_remote_update, music_remote::music_remote_stop, music_room::music_room_create, music_room::music_room_update, music_room::music_room_poll, music_room::music_room_stop, music_mini::music_mini_open, music_mini::music_mini_update, music_mini::music_mini_state, music_mini::music_mini_action, music_mini::music_mini_queue, music_presence::music_presence, music_profile::export_music_profile, music_import::read_music_import, music_playlist_import::music_import_spotify_playlist, open_music_import_help, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, relink_media, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
         .build(tauri::generate_context!()).expect("failed to start Deviload")
         .run(|app, event| {
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = event { restore_main(app); }
-            if let tauri::RunEvent::ExitRequested { .. } = event { app.state::<Engine>().stop(); }
+            if let tauri::RunEvent::ExitRequested { .. } = event { music_room::stop(); app.state::<Engine>().stop(); }
         });
 }
 
 #[cfg(test)]
 mod engine_tests {
+    #[test]
+    fn test_profile_isolation_cannot_disable_release_single_instance() {
+        let absolute=std::env::temp_dir().join("deviload-cinema-review").into_os_string();
+        assert!(super::isolated_test_dir(false,Some(absolute.clone())).is_none());
+        assert!(super::isolated_test_dir(true,Some("relative-profile".into())).is_none());
+        assert!(super::isolated_test_dir(true,Some(absolute)).is_some());
+    }
     use super::*;
     #[test] fn galleries_deduplicate_by_selection_without_blocking_video_jobs() {
         let mut data=Snapshot::default();let url="https://example.com/album".to_string();
@@ -3366,7 +3394,7 @@ mod engine_tests {
         let dir = tempfile::tempdir().unwrap();
         let job = |id: u64, status: &str| Job { id, url: String::new(), options: Options::default(), status: status.into(),
             percent: 0.0, speed: String::new(), file: format!("file{id}.mp4"), log: vec![], scheduled_at: None, auto_retry: false,
-            retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
+            retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, stage: String::new() };
         let engine = Engine { dir: dir.path().into(), data: Arc::new(Mutex::new(Snapshot {
             jobs: vec![job(1, "done"), job(2, "done"), job(3, "error"), job(4, "running")], ..Snapshot::default() })),
             shutdown: Arc::new(AtomicBool::new(false)) };
@@ -3404,6 +3432,32 @@ mod engine_tests {
         let mut loaded: Snapshot = serde_json::from_slice(&fs::read(dir.path().join("queue.json")).unwrap()).unwrap();
         queue_urls(&mut loaded, vec!["https://example.com/second".into()], &Options::default(), None, false);
         assert!(loaded.jobs[0].id > old_id);
+    }
+
+    #[test]
+    fn completion_stamp_survives_reload_and_playlist_index_without_retimestamping() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut data = Snapshot::default();
+        data.jobs.push(Job { id: 1, status: "done".into(), file: "/last.mp4".into(), completed_at: 2000,
+            downloads: vec![["a".into(), "/first.mp4".into()], ["b".into(), "/last.mp4".into()]], ..Job::default() });
+        data.jobs.push(Job { id: 2, status: "done".into(), completed_at: 1000, ..Job::default() });
+        index_library(&mut data);
+        save(dir.path(), &data).unwrap();
+        let mut loaded: Snapshot = serde_json::from_slice(&fs::read(dir.path().join("queue.json")).unwrap()).unwrap();
+        index_library(&mut loaded);
+        assert_eq!(loaded.jobs.iter().map(|j| j.completed_at).collect::<Vec<_>>(), [2000, 1000, 2000]);
+        let mut legacy = serde_json::to_value(&data.jobs[0]).unwrap();
+        legacy.as_object_mut().unwrap().remove("completedAt");
+        assert_eq!(serde_json::from_value::<Job>(legacy).unwrap().completed_at, 0);
+        assert_eq!(next_recording(&data.jobs[0], 10, 3000).completed_at, 0);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn explorer_accepts_portable_final_paths_without_changing_unicode_names() {
+        assert_eq!(shell_file_name(Path::new("C:/Media/Final song.mp4")), shell_file_name(Path::new(r"C:\Media\Final song.mp4")));
+        assert_eq!(shell_file_name(Path::new("//server/share/été.mp4")), shell_file_name(Path::new(r"\\server\share\été.mp4")));
+        assert_eq!(*shell_file_name(Path::new("C:/Media/final.mp4")).last().unwrap(), 0);
     }
 
     #[test]
@@ -3533,7 +3587,7 @@ mod engine_tests {
         assert_eq!(pick("https://example.com/v"), None);
         // A download in the account mode never hands the YouTube session to Instagram.
         let job = Job { id: 1, url: "https://www.tiktok.com/@a/video/1".into(), options: Options { cookies_account: true, cookies: session_file(dir.path()).to_string_lossy().into(), ..Options::default() },
-            status: "queued".into(), percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
+            status: "queued".into(), percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, stage: String::new() };
         if let Ok(args) = download_args(&job, dir.path()) { assert!(!args.contains(&"--cookies".to_string()), "{args:?}"); }
     }
     #[test]
@@ -3554,7 +3608,7 @@ mod engine_tests {
         assert!(!huge.ready);
         let duplicate = Job { id: 1, url: "https://example.com/video".into(), options: options.clone(),
             status: "done".into(), percent: 100.0, speed: String::new(), file: String::new(),
-            log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
+            log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, stage: String::new() };
         let report = check_preflight("https://example.com/video", &options, None, &[duplicate]).unwrap();
         assert!(report.warnings.iter().any(|warning| warning.contains("history")));
     }
@@ -3594,7 +3648,7 @@ mod engine_tests {
     fn a_daily_recording_comes_back_at_the_same_time() {
         let mut job = Job { id: 3, url: "https://u.peg.tv/s/x".into(), options: Options::default(), status: "done".into(), percent: 100.0, speed: String::new(),
             file: "/v/rec.mp4".into(), log: vec!["x".into()], scheduled_at: None, auto_retry: true, retry_attempts: 1, archived: 0, healed: vec![], downloads: vec![], bytes: 9, duration: 9.0, channel: "AOC".into(), live: true, live_since: 5, live_limit: 3600, recording: "/v/rec.mp4".into(), stop_requested: true, repeat_at: 0, pid: None,
-            hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
+            hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, stage: String::new() };
         job.repeat_at = 1000;
         let next = next_recording(&job, 9, 500);
         assert_eq!((next.id, next.scheduled_at, next.repeat_at, next.status.as_str()), (9, Some(87_400), 87_400, "queued"));
@@ -3607,7 +3661,7 @@ mod engine_tests {
     fn a_daily_recording_repeats_unless_it_was_cancelled() {
         let mut job = Job { id: 3, url: "https://u.peg.tv/s/x".into(), options: Options::default(), status: "done".into(), percent: 0.0, speed: String::new(),
             file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: true, live_since: 5, live_limit: 0, recording: "/v/rec.mp4".into(), stop_requested: false, repeat_at: 1000, pid: None,
-            hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
+            hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, stage: String::new() };
         assert!(queues_next_recording(&job));
         job.status = "error".into();
         assert!(queues_next_recording(&job));
@@ -3628,7 +3682,7 @@ mod engine_tests {
         let path = |file: &Path| file.to_string_lossy().into_owned();
         let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "done".into(), percent: 100.0, speed: String::new(),
             file: path(&two), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None,
-            hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
+            hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, stage: String::new() };
         job.downloads = vec![["youtube a".into(), path(&one)], ["youtube b".into(), path(&two)], ["youtube c".into(), path(&dir.path().join("gone.mp3"))]];
         assert_eq!(task_files(&job), vec![one, two]);
     }
@@ -3639,7 +3693,7 @@ mod engine_tests {
         fs::write(recording_part(&target), [0x47u8; 188 * 4]).unwrap();
         let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(), percent: 0.0, speed: String::new(),
             file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: true, live_since: 0, live_limit: 60, recording: target.to_string_lossy().into_owned(), stop_requested: false, repeat_at: 0, pid: None,
-            hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
+            hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, stage: String::new() };
         track_recording(&mut job, 1000);
         assert_eq!((job.live_since, job.bytes, job.stop_requested), (1000, 752, false));
         track_recording(&mut job, 1059);
@@ -3756,7 +3810,7 @@ mod engine_tests {
         });
         let job = Job { id: 1, url: format!("http://127.0.0.1:{port}/fixture.mp4"),
             options: Options { folder: dir.path().join("downloads").to_string_lossy().into(), quality: "wav".into(), archive: false, ..Options::default() },
-            status: "running".into(), percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
+            status: "running".into(), percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, stage: String::new() };
         let engine = Engine { dir: dir.path().into(), data: Arc::new(Mutex::new(Snapshot { jobs: vec![job.clone()], ..Snapshot::default() })), shutdown: Arc::new(AtomicBool::new(false)) };
         engine.run_job(1);
         let mut music_job = job.clone();
@@ -3957,7 +4011,7 @@ mod engine_tests {
     fn scheduled_jobs_wait_and_transient_errors_retry() {
         let mut job = Job { id: 1, url: "https://example.com".into(), options: Options::default(),
             status: "queued".into(), percent: 0.0, speed: String::new(), file: String::new(),
-            log: vec![], scheduled_at: Some(200), auto_retry: true, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, stage: String::new() };
+            log: vec![], scheduled_at: Some(200), auto_retry: true, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, stage: String::new() };
         assert!(!ready_to_run(&job, 199));
         assert!(ready_to_run(&job, 200));
         job.status = "paused".into();

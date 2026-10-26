@@ -8,7 +8,7 @@ const steps = [
   {page:"downloads", target:"#options-toggle", title:"Where to save", text:"“Download settings” hold the save folder, parallel downloads, clips, playlists and a delayed start."},
   {page:"downloads", target:"#queue-title", title:"Manage tasks", text:"The queue shows progress and errors. A finished file can be opened, shown in its folder, sent to a phone with a QR code or opened in Devil Cut."},
   {page:"library", target:"#cinema-open", title:"Library and Devil Cinema", text:"All finished files live here. Watch them in the player, resume from the saved position, send them to a phone and organize collections."},
-  {page:"search", target:"#media-search-form", title:"Media search", text:"Find a video or a track on YouTube and YouTube Music, then send its link to the downloads."},
+  {page:"cinema", target:"#cinema-home-form", title:"Devil Cinema", text:"Paste a YouTube video or playlist. Watch online, or play your downloaded files."},
   {page:"editor", target:"#editor-home", title:"Devil Cut", text:"Pick a video or a saved project. Devil Cut opens in its own window with a timeline, clip settings and export to MP4, GIF or MP3."},
   {page:"downloads", target:"#open-youtube-view", title:"YouTube sign-in", text:"Needed for age-restricted, private and members-only videos. Sign in to Google once and Deviload keeps the session."},
   {page:"downloads", target:"#settings-open", title:"Settings", text:"Clipboard suggestions, notifications, tray behavior, the cookie source, yt-dlp updates and this tour live here. The bell next to it shows app events."}

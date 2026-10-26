@@ -4,6 +4,27 @@ import {parseMusicImport} from "../src/music-import-format.js";
 const parse=value=>parseMusicImport(JSON.stringify(value),"export.json");
 const id="dQw4w9WgXcQ";
 
+test("custom liked-song JSON preserves collaborations, deduplicates and excludes private metadata",()=>{
+  const result=parseMusicImport(JSON.stringify({playlist:'https://open.spotify.com/playlist/private',spotifyCount:4,tracks:[
+    {position:1,title:'First',artists:['One','Two'],album:'Album',cookie:'secret'},
+    {position:2,title:'Second',artists:['Three']},{position:3,title:'First',artists:['One','Two']}
+  ],unidentified:[{position:4,title:'',artists:['Various Artists'],reason:'Missing title'}]}),'spotify-liked-songs.json');
+  assert.deepEqual(result.entries.map(e=>[e.title,e.artists,e.liked,e.plays]),[['First',['One','Two'],true,0],['Second',['Three'],true,0]]);
+  assert.equal(result.warnings.length,2);assert.ok(!/private|secret|cookie|position|album/.test(JSON.stringify(result.entries)));
+});
+
+test("Spotify API saved tracks, raw track arrays and playlist pages keep their like semantics",()=>{
+  const track={name:'Song',artists:[{name:'A'},{name:'B'}],type:'track',id:'spotify-id'};
+  for(const value of [{items:[{added_at:'2026-10-01',track}]}, {tracks:[{...track,liked:true}]}])assert.equal(parse(value).entries[0].liked,true);
+  for(const value of [[track],{tracks:{items:[{added_at:'2026-10-01',track}]}},{tracks:[{title:'Song',artists:['A']}] }])assert.equal(parse(value).entries[0].liked,false);
+  assert.deepEqual(parse({items:[{track},null,{track:null},{name:'Podcast',artists:['Host'],type:'episode'}]}).entries.map(e=>e.title),['Song']);
+});
+
+test("Spotify CSV accepts Exportify columns and quoted artist names without inventing YouTube IDs",()=>{
+  const result=parseMusicImport('Track URI,Track Name,Artist Name(s)\nspotify:track:abc,"Song, One","A;B"\n','liked-songs.csv');
+  assert.equal(result.source,'spotify');assert.deepEqual(result.entries[0].artists,['A','B']);assert.equal(result.entries[0].liked,true);assert.equal(result.entries[0].videoId,undefined);
+});
+
 test("Spotify saved songs import likes but no unrelated private data",()=>{
   const result=parse({tracks:[{artist:"Artist",track:"Song",album:"Album",uri:"spotify:track:secret"}],profile:{email:"private@email"},cookies:"secret"});
   assert.equal(result.source,"spotify");assert.equal(result.entries[0].liked,true);assert.equal(result.entries[0].plays,0);
@@ -36,8 +57,8 @@ test("unknown and corrupted files fail clearly without accepting partial malform
   for(const text of ['{"a":1}',"[{broken]","Not music\nhello",'Video ID\n"unfinished','Video ID\n"'+id+'"junk','Video ID\n'+id+',extra'])assert.throws(()=>parseMusicImport(text,"input"),/Invalid music|Unsupported music/);
   assert.throws(()=>parseMusicImport(""),/empty/);assert.throws(()=>parseMusicImport("x".repeat(50*1024*1024+1)),/50 MB/);
 });
-test("row and unique-track limits are explicit and do not silently inflate counts",()=>{
+test("large imports retain every unique song beyond former row and track limits",()=>{
   const rows=Array.from({length:20002},(_,i)=>({artistName:"Artist",trackName:"Song "+i,msPlayed:30000}));
-  const result=parse(rows);assert.equal(result.entries.length,5000);assert.ok(result.warnings.includes("Only the first 20000 rows were imported."));assert.ok(result.warnings.includes("Only the first 5000 unique tracks were imported."));
-  const csv=parseMusicImport("Video ID\n"+Array.from({length:20002},()=>id).join("\n"));assert.equal(csv.entries.length,1);assert.ok(csv.warnings.includes("Only the first 20000 rows were imported."));
+  const result=parse(rows);assert.equal(result.entries.length,20002);assert.ok(!result.warnings.some(w=>/Only the first/.test(w)));
+  const csv=parseMusicImport("Video ID\n"+Array.from({length:20002},()=>id).join("\n"));assert.equal(csv.entries.length,1);assert.ok(!csv.warnings.some(w=>/Only the first/.test(w)));
 });

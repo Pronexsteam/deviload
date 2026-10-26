@@ -2,7 +2,6 @@ use std::io::Write;
 use tauri_plugin_dialog::DialogExt;
 
 fn validate(text: &str) -> Result<(), String> {
-    if text.len() > 2 * 1024 * 1024 { return Err("Music profile is too large (maximum 2 MB).".into()); }
     let value: serde_json::Value = serde_json::from_str(text).map_err(|_| "Invalid music profile.")?;
     if value["format"] != "devil-music-profile" || !value["saved"].is_object() || !value["taste"].is_object() {
         return Err("Invalid music profile.".into());
@@ -32,12 +31,14 @@ pub async fn export_music_profile(app: tauri::AppHandle, window: tauri::WebviewW
 mod tests {
     use super::*;
     #[test]
-    fn rejects_other_documents_and_oversized_exports() {
+    fn validates_profiles_without_a_two_mb_export_limit() {
         assert!(validate(r#"{"format":"devil-music-profile","version":1,"saved":{},"taste":{}}"#).is_ok());
         assert!(validate(r#"{"format":"devil-music-profile","version":2,"saved":{},"taste":{}}"#).is_ok());
         for text in ["{}", "not JSON", r#"{"format":"devil-music-profile","version":3,"saved":{},"taste":{}}"#] {
             assert!(validate(text).is_err());
         }
+        let large = serde_json::json!({"format":"devil-music-profile","version":2,"saved":{"data":"x".repeat(3 * 1024 * 1024)},"taste":{}}).to_string();
+        assert!(validate(&large).is_ok());
         assert!(validate(&"x".repeat(2 * 1024 * 1024 + 1)).is_err());
     }
 }

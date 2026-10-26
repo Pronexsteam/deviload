@@ -2,10 +2,6 @@
 :root{--player-ink:var(--workspace-ink,#efefef);--player-muted:var(--workspace-muted,#aaa);--player-hover:var(--workspace-hover,#222);--player-primary:var(--theme-accent,#efefef);--player-on-primary:var(--theme-accent-text,#111)}
 :root[data-theme="glass-light"]{--player-primary:#405b80;--player-on-primary:#fff}
 body.music-mini-page{--player-ink:var(--ink);--player-muted:var(--muted);--player-hover:var(--panel)}
-:root[data-theme="midnight"] body.music-mini-page{--player-primary:#b9c9ee}
-:root[data-theme="spotify"] body.music-mini-page{--player-primary:#8ed9a7}
-:root[data-theme="glass-black"] body.music-mini-page{--player-primary:#c7d8ed}
-:root[data-theme="classic"] body.music-mini-page{--player-primary:#e3a68c}
 :root body :is(.music-dock,.music-stage) .music-play-button,:root body.music-mini-page #mini-play{background:var(--player-primary);color:var(--player-on-primary);border:0;border-radius:50%;box-shadow:none}
 :root body .music-dock .music-play-button{width:36px;height:36px}
 :root body .music-stage .music-play-button{width:44px;height:44px}

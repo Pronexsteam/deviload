@@ -40,12 +40,12 @@ test("saved likes and listening history survive reading a new player session",()
   assert.deepEqual(readMusicState({getItem:()=>JSON.stringify(state)}),state);
 });
 
-test("a bounded playback window includes the selected song from a large library without changing its order",()=>{
+test("playback keeps the complete large collection without changing its order",()=>{
   const items=Array.from({length:500},(_,n)=>({kind:"song",id:String(n).padStart(11,"0"),title:`Song ${n}`})),before=structuredClone(items);
-  assert.deepEqual(playbackQueue(items,items[20].id),items.slice(0,200));
+  assert.deepEqual(playbackQueue(items,items[20].id),items);
   const middle=playbackQueue([items[0],...items],items[250].id);
-  assert.deepEqual(middle,items.slice(250,450));assert.equal(middle[0].id,items[250].id);
+  assert.deepEqual(middle,items);assert.equal(middle[250].id,items[250].id);
   const tail=playbackQueue(items,items[499].id);
-  assert.deepEqual(tail,items.slice(300));assert.equal(tail.at(-1).id,items[499].id);
-  assert.deepEqual(playbackQueue(items,"missing"),items.slice(0,200));assert.deepEqual(items,before);
+  assert.deepEqual(tail,items);assert.equal(tail.at(-1).id,items[499].id);
+  assert.deepEqual(playbackQueue(items,"missing"),items);assert.deepEqual(items,before);
 });

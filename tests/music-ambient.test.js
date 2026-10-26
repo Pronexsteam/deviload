@@ -7,7 +7,7 @@ test('mini and main light rendering rejects invalid levels and unsafe artwork',(
  const lights=Array.from({length:3},()=>({style:{}}));
  paintAmbient(lights,[Infinity,-2,9]);
  assert.deepEqual(lights.slice(0,2).map(n=>Number(n.style.opacity)),[.17,.17]);
- assert.ok(Math.abs(Number(lights[2].style.opacity)-.83)<1e-10);
+ assert.ok(Math.abs(Number(lights[2].style.opacity)-.93)<1e-10);
  assert.equal(ambientArtwork('https://i.ytimg.com@evil.test/cover.jpg'),'none');
  assert.equal(ambientArtwork('file:///C:/private.jpg'),'none');
  assert.equal(ambientArtwork('https://i.ytimg.com/cover.jpg'),'url("https://i.ytimg.com/cover.jpg")');

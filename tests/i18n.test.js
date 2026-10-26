@@ -13,9 +13,9 @@ import {downloadAuthView} from "../src/account-status.js";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const read = path => readFileSync(join(root, path), "utf8");
 const keys = new Set(Object.keys(ru));
-const translatedSources = ["src/gallery-download.js", "src/main.js", "src/appearance.js", "src/app-release-notes.js", "src/supporters.js", "src/devil-music.js", ...readdirSync(join(root,"src")).filter(name=>/^music-.*\.js$/.test(name)).map(name=>"src/"+name), "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/quick-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js", "src/download-profiles.js", "src/download-options.js", "src/queue-selection.js", "src/settings-backup.js"];
+const translatedSources = ["src/cinema-youtube-player.js","src/cinema-home.js","src/cinema-player.js", "src/gallery-download.js", "src/main.js", "src/appearance.js", "src/app-release-notes.js", "src/supporters.js", "src/devil-music.js", ...readdirSync(join(root,"src")).filter(name=>/^music-.*\.js$/.test(name)).map(name=>"src/"+name), "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/quick-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js", "src/download-profiles.js", "src/download-options.js", "src/queue-selection.js", "src/settings-backup.js"];
 // Brand names, formats and codes read the same in both languages.
-const neutral = new Set(["MOV", "MEDIA", "Deviload", "Devil Music", "01 / DM", "Devil", "oad", "Devil Cut", "Devil Cut · Deviload", "Devil Convert", "Devil Convert · Deviload", "DEVIL CINEMA", "YouTube", "YouTube Music", "VK", "TikTok",
+const neutral = new Set(["Devil Library", "MOV", "MEDIA", "Deviload", "Devil Music", "01 / DM", "Devil", "oad", "Devil Cut", "Devil Cut · Deviload", "Devil Convert", "Devil Convert · Deviload", "DEVIL CINEMA", "YouTube", "YouTube Music", "VK", "TikTok",
   "Instagram", "Twitch", "SoundCloud", "1080p", "720p", "480p", "1440p", "4K", "H.264", "H.265", "MP3", "FLAC", "WAV", "GIF", "GIF · 480px", "Chrome", "Edge", "Ctrl K",
   "Firefox", "Brave", "Safari", "yt-dlp", "RU", "EN", "I", "O", "MP4", "MKV", "WebM", "16:9", "9:16", "1:1", "4:5", "00:30", "01:15", "https://youtube.com/watch?v=…", "socks5://127.0.0.1:1080", "Plex", "http://192.168.1.10:8096"]);
 
@@ -69,12 +69,16 @@ const normalize = text => text.replace(/\{[^}]*\}/g, "{}");
 
 function rustMessages() {
   const found = [];
-  for (const file of ["lib.rs", "gallery.rs", "gallery_install.rs", "download_recovery.rs", "music.rs", "music_audio.rs", "music_profile.rs", "music_import.rs", "music_playlist_import.rs", "music_lyrics.rs", "music_offline.rs", "music_engine_diagnostics.rs", "download_details.rs", "quick_cut.rs", "cookies.rs", "engine_update.rs", "model.rs", "share.rs", "settings_backup.rs", "watch.rs", "convert.rs", "power.rs", "media_server.rs"]) {
+  for (const file of ["cinema_embed.rs", "cinema.rs", "lib.rs", "gallery.rs", "gallery_install.rs", "download_recovery.rs", "music.rs", "music_audio.rs", "music_profile.rs", "music_import.rs", "music_room.rs", "music_playlist_import.rs", "music_lyrics.rs", "music_offline.rs", "music_engine_diagnostics.rs", "download_details.rs", "quick_cut.rs", "cookies.rs", "engine_update.rs", "model.rs", "share.rs", "settings_backup.rs", "watch.rs", "convert.rs", "power.rs", "media_server.rs"]) {
     const source = read(join("src-tauri/src", file)).split("#[cfg(test)]")[0];
+    if(file === 'cinema.rs')for(const text of literals(block(source,'pub(crate) fn source_failure','// Never log')))found.push({file,text});
     // Start inside the body so Rust lifetimes such as &'static are not parsed
     // as single-quoted JavaScript strings by literals().
     if(file === "music.rs")for(const text of literals(block(source,"let error = String::from_utf8_lossy(stderr)", "struct ResolveFailure")))if(text.endsWith("."))found.push({file,text});
-    if(file === "music_import.rs" || file === "music_playlist_import.rs" || file === "quick_cut.rs")for(const [,text] of source.matchAll(/const \w+: &str = "([^"]+)";/g))found.push({file,text});
+    if(file === "cinema.rs" || file === "music_import.rs" || file === "music_room.rs" || file === "music_playlist_import.rs" || file === "quick_cut.rs")for(const [,name,text] of source.matchAll(/const (\w+): &str = "([^"]+)";/g)){
+      if(file==='cinema.rs'&&['STREAM_TEMPLATE','FORMAT_TEMPLATE'].includes(name))continue; // yt-dlp field projections, never UI copy.
+      found.push({file,text});
+    }
     if(file === "quick_cut.rs" || file === "convert.rs")for(const [,text]of source.matchAll(/Some\("([A-Z][^"]*[.!?])"/g))found.push({file,text});
     // Converter map_err closures can return an error from an if/else branch.
     if(file === "convert.rs")for(const [,text]of source.matchAll(/"([A-Z][^"\n]+[.!?])"\.into\(\)/g))found.push({file,text});
@@ -92,6 +96,7 @@ function rustMessages() {
 }
 
 function tableStrings() {
+  const cinemaLabels=[...read('src/cinema-controls.js').matchAll(/(?:button|label)\((?:\w+,)?'([^']+)'/g)].map(match=>match[1]);
   const main = read("src/main.js");
   const tables = [
     block(main, "const stateNames =", "\n"), block(main, "const filters =", "\n"), block(main, "const pageTitles =", "\n"),
@@ -100,6 +105,7 @@ function tableStrings() {
     ...[...read("src/tour.js").matchAll(/(?:title|text):"[^"]*"/g)].map(match => match[0]),
   ];
   const strings = tables.flatMap(literals).filter(text => !/^[a-z0-9-]+$/.test(text) && !text.endsWith("-tab"));
+  strings.push(...cinemaLabels,...translatedLiterals(read('src/cinema-controls.js')));
   strings.push(...Object.values(labels));
   for (const line of ["No space left", "n challenge solving failed", "Sign in to confirm you're not a bot", "Sign in to confirm your age",
     "Private video", "members-only", "not available in your country", "Video unavailable", "HTTP Error 429", "ffmpeg not found",

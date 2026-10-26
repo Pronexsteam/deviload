@@ -1,5 +1,21 @@
+import {mountPictureDisc,setPictureDiscArtwork} from "./music-picture-disc.js";
 import {t,onLanguageChange} from './i18n.js';
-import {panelLayout,searchSuggestions,rememberSearch} from './music-ui-model.js';
+import {panelLayout} from './music-ui-model.js';
+export {wireMusicSuggestions} from './music-search-dropdown.js';
+
+export function wireMusicConnectionShortcuts(button){
+ const tools=document.querySelector('.music-heading-actions');if(!tools)return;
+ for(const [id,label,glyph]of [['music-remote-open','Connect remote','remote-control'],['music-room-open','Listen together','users']]){
+  const target=document.getElementById(id);if(!target)continue;
+  const shortcut=button(t(label),glyph,()=>target.click(),'music-connection-shortcut');
+  shortcut.id=id.replace('-open','-shortcut');shortcut.setAttribute('aria-haspopup','dialog');
+  const text=document.createElement('span');shortcut.append(text);
+  const labels=()=>{text.textContent=t(label);shortcut.title=shortcut.ariaLabel=t(label);};labels();onLanguageChange(labels);
+  const state=()=>shortcut.setAttribute('aria-pressed',target.getAttribute('aria-pressed')||'false');
+  state();new MutationObserver(state).observe(target,{attributes:true,attributeFilter:['aria-pressed']});
+  tools.insertBefore(shortcut,document.getElementById('music-refresh'));
+ }
+}
 
 export function wireMusicPanels(workspace){
  let sizes={library:240,playing:280};try{Object.assign(sizes,JSON.parse(localStorage.getItem('deviload-music-panel-sizes')||'{}'));}catch{}
@@ -20,30 +36,14 @@ export function wireMusicPanels(workspace){
  const observer=new ResizeObserver(layout);observer.observe(workspace);new MutationObserver(layout).observe(workspace,{attributes:true,attributeFilter:['class']});layout();
 }
 
-export function wireMusicSuggestions({input,form,getItems,isPrivate=()=>false}){
- let history=[];try{const raw=JSON.parse(localStorage.getItem('deviload-music-searches')||'[]');if(Array.isArray(raw))history=raw.filter(x=>typeof x==='string').slice(0,8);}catch{}
- const list=document.createElement('div');list.id='music-search-suggestions';list.className='music-search-suggestions';list.hidden=true;list.setAttribute('role','listbox');form.append(list);
- input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-controls',list.id);input.setAttribute('aria-expanded','false');let rows=[],active=-1;
- const hide=()=>{list.hidden=true;active=-1;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');};
- function pick(row){hide();input.value=row.text;input.dispatchEvent(new Event('input',{bubbles:true}));hide();form.requestSubmit();}
- function render(){rows=searchSuggestions(input.value,isPrivate()?[]:history,getItems());list.replaceChildren();active=-1;
-  rows.forEach((row,index)=>{const node=document.createElement('button');node.type='button';node.id='music-suggestion-'+index;node.setAttribute('role','option');node.setAttribute('aria-selected','false');const label=document.createElement('span'),kind=document.createElement('small');label.textContent=row.text;kind.textContent=row.kind==='recent'?t('Recent search'):t('Artist');node.append(label,kind);node.addEventListener('mousedown',e=>e.preventDefault());node.addEventListener('click',()=>pick(row));list.append(node);});
-  list.hidden=!rows.length;input.setAttribute('aria-expanded',String(!!rows.length));input.removeAttribute('aria-activedescendant');
- }
- input.addEventListener('focus',render);input.addEventListener('input',render);input.addEventListener('blur',()=>setTimeout(()=>{if(!list.contains(document.activeElement))hide();},100));
- input.addEventListener('keydown',e=>{if(e.isComposing)return;if(e.key==='Escape'&&!list.hidden){e.preventDefault();e.stopImmediatePropagation();hide();return;}if(['ArrowDown','ArrowUp'].includes(e.key)){if(list.hidden)render();if(!rows.length)return;e.preventDefault();active=(active+(e.key==='ArrowDown'?1:-1)+rows.length)%rows.length;[...list.children].forEach((node,i)=>node.setAttribute('aria-selected',String(i===active)));input.setAttribute('aria-activedescendant',list.children[active].id);}else if(e.key==='Enter'&&active>=0&&!list.hidden){e.preventDefault();e.stopImmediatePropagation();pick(rows[active]);}},true);
- form.addEventListener('submit',()=>{if(!isPrivate()){history=rememberSearch(history,input.value);try{localStorage.setItem('deviload-music-searches',JSON.stringify(history));}catch{}}hide();},true);
- document.addEventListener('pointerdown',e=>{if(!form.contains(e.target))hide();});
-}
-
 export function createMusicHero({root,cover,onPlay,onDiscover}){
  const original=root.querySelector('#music-start');
  const art=document.createElement('button'),copy=document.createElement('div'),eyebrow=document.createElement('span'),title=document.createElement('h2'),subtitle=document.createElement('p'),action=document.createElement('button');
- const record=document.createElement('img'),label=document.createElement('span');record.src='./assets/music-vinyl.png';record.alt='';record.className='music-hero-record';label.className='music-record-label';label.setAttribute('aria-hidden','true');art.append(record,label);
+ const label=mountPictureDisc();art.append(label);
  const ambient=document.createElement('span');ambient.className='music-hero-ambient';ambient.setAttribute('aria-hidden','true');
  art.type=action.type='button';art.className='music-hero-cover';copy.className='music-hero-story';eyebrow.className='music-eyebrow';action.className='music-primary music-text-button';root.classList.add('music-listening-hero');root.replaceChildren(ambient,art,copy);copy.append(eyebrow,title,subtitle,action);let current=null,key='',state={resume:false,playing:false};
  if(original){original.hidden=true;root.append(original);}
  const play=()=>current?onPlay(current):onDiscover();art.addEventListener('click',play);action.addEventListener('click',play);
- function update(item,resume=false,playing=false){current=item||null;state={resume,playing};const next=item?.id||'';if(next!==key||!label.childElementCount){label.replaceChildren(cover(item));ambient.replaceChildren(cover(item));key=next;}label.hidden=ambient.hidden=!item;root.classList.toggle('has-track',!!item);root.classList.toggle('is-playing',playing);eyebrow.textContent=playing?t('NOW PLAYING'):resume?t('CONTINUE LISTENING'):t('Your next listen');title.textContent=item?.title||t('Start with music you love');subtitle.textContent=item?.artists?.join(', ')||t('Search for an artist or start a mix.');action.textContent=playing?t('Open player and lyrics'):resume?t('Resume listening'):item?t('Play'):t('Find my rhythm');art.ariaLabel=action.textContent;}
+ function update(item,resume=false,playing=false){current=item||null;state={resume,playing};const next=(item?.id||'')+'|'+(item?.image||'');if(next!==key||!label.childElementCount){setPictureDiscArtwork(label,item?.image,480);ambient.replaceChildren(cover(item));key=next;}ambient.hidden=!item;root.classList.toggle('has-track',!!item);root.classList.toggle('is-playing',playing);eyebrow.textContent=playing?t('NOW PLAYING'):resume?t('CONTINUE LISTENING'):t('Your next listen');title.textContent=item?.title||t('Start with music you love');subtitle.textContent=item?.artists?.join(', ')||t('Search for an artist or start a mix.');action.textContent=playing?t('Open player and lyrics'):resume?t('Resume listening'):item?t('Play'):t('Find my rhythm');art.ariaLabel=action.textContent;}
  onLanguageChange(()=>update(current,state.resume,state.playing));update(null);return {update};
 }

@@ -1,6 +1,6 @@
 // Static wallpaper optics for the two glass skins. The normal CSS material is
 // always underneath this optional layer, including on devices without WebGL.
-const GLASS_THEMES = new Set(["glass-light", "glass-black"]);
+const GLASS_THEMES = new Set(["glass-light"]);
 const SURFACES = ".sidebar, .topbar, .supporters-board, .download-composer, .library, .media-library, .discover, .editor-card, .music-library-sidebar, .music-hero, .music-dock, .convert-drop, .convert-options, .convert-list-wrap, .cut-head, .cut-media, .cut-inspector";
 const MAX_SURFACES = 6;
 const wired = new WeakMap();
@@ -199,8 +199,8 @@ export function wireGlassMaterial({document = globalThis.document, window = glob
     gl.uniform4fv(uniforms.rects, rectangles);
     gl.uniform1fv(uniforms.radii, radii);
     gl.uniform1i(uniforms.count, count);
-    gl.uniform1f(uniforms.brightness, current.theme === "glass-light" ? 1 : .30);
-    gl.uniform1f(uniforms.saturation, current.theme === "glass-light" ? .55 : .45);
+    gl.uniform1f(uniforms.brightness, 1);
+    gl.uniform1f(uniforms.saturation, .55);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     if (gl.isContextLost()) throw new Error("Glass context lost");
     current.layout = layout;
