@@ -3,8 +3,8 @@ import {readTaste} from "./music-taste.js";
 import {playlistCover} from "./music-library-model.js";
 import {musicGain} from "./music-volume.js";
 import {sanitizeInterestMixes} from "./music-interest-mixes.js";
+import {safeArtworkUrl} from "./music-artwork.js";
 
-export const PROFILE_LIMIT=2*1024*1024;
 export const PROFILE_KEY="deviload-music-profile-v1";
 const encoder=new TextEncoder(),idPattern=/^[\w-]{11}$/;
 const object=value=>value!==null&&typeof value==="object"&&!Array.isArray(value);
@@ -20,7 +20,7 @@ function text(value,limit){
 }
 function item(value){
   if(!object(value)||value.kind!=="song"||typeof value.id!=="string"||!idPattern.test(value.id)||typeof value.title!=="string"||!value.title.trim())fail();
-  const image=typeof value.image==="string"&&/^https:\/\/(i\.ytimg\.com|lh3\.googleusercontent\.com|yt3\.googleusercontent\.com)\//.test(value.image)&&bytes(value.image)<=256?value.image:"";
+  const image=safeArtworkUrl(value.image);
   return {id:value.id,kind:"song",title:text(value.title,240),subtitle:text(value.subtitle,180),
     artists:[...new Set((Array.isArray(value.artists)?value.artists:[]).filter(name=>typeof name==="string").map(name=>text(name,80)).filter(Boolean))].slice(0,4),image,
     ...(Number.isFinite(value.duration)&&value.duration>0&&value.duration<=86400?{duration:value.duration}:{})};
@@ -36,11 +36,11 @@ function collections(values=[]){
   const seen=new Set();return values.map(sanitizeMusicCollection).filter(value=>!seen.has(value.id)&&seen.add(value.id));
 }
 function playlists(values=[],strict=false){
-  if(!Array.isArray(values)||values.length>30)fail();
-  let count=0;const ids=new Set();
+  if(!Array.isArray(values))fail();
+  const ids=new Set();
   return values.map(value=>{
     if(!object(value)||typeof value.id!=="string"||!/^[-\w]{1,64}$/.test(value.id)||ids.has(value.id)||typeof value.name!=="string"||!value.name.trim())fail();
-    ids.add(value.id);const items=list(value.items,500,strict);count+=items.length;if(count>500)fail();
+    ids.add(value.id);const items=list(value.items,Number.MAX_SAFE_INTEGER,strict);
     return {id:value.id,name:text(value.name,160),items,
       ...(value.description?{description:text(value.description,600)}:{}),
       ...(value.pinned===true?{pinned:true}:{}),
@@ -64,7 +64,7 @@ function sourceBindings(values=[],strict=false){
 function normalize(saved,taste,strict=false){
   if(!object(saved)||!object(taste)||!object(taste.entries))fail();
   // Likes are an explicit collection, never an automatically evicted history.
-  // The serialized profile limit bounds storage without dropping older likes.
+  // Collection size is governed by available storage, never by evicting older likes.
   const favorites=list(saved.favorites,Number.MAX_SAFE_INTEGER,strict),recent=list(saved.recent,80,strict);
   const entries=Object.create(null),source=Object.values(taste.entries);
   if(strict&&source.length>1000)fail();
@@ -88,11 +88,10 @@ function normalize(saved,taste,strict=false){
 export function exportMusicProfile(saved,taste){
   const profile=normalize(saved,taste);
   const result=JSON.stringify({format:"devil-music-profile",version:2,...profile});
-  if(bytes(result)>PROFILE_LIMIT)throw Error("Music profile is too large (maximum 2 MB).");
   return result;
 }
 export function importMusicProfile(source){
-  if(typeof source!=="string"||bytes(source)>PROFILE_LIMIT)throw Error("Music profile is too large (maximum 2 MB).");
+  if(typeof source!=="string")fail();
   let raw;try{raw=JSON.parse(source);}catch{fail();}
   if(!object(raw)||raw.format!=="devil-music-profile")fail();
   if(![1,2].includes(raw.version))throw Error("This music profile version is not supported.");
@@ -101,7 +100,7 @@ export function importMusicProfile(source){
 export function saveMusicProfile(storage,saved,taste){
   if(!storage)throw Error("Could not save your music preferences.");
   // One write keeps an interrupted import from replacing only half the profile.
-  storage.setItem(PROFILE_KEY,exportMusicProfile(saved,taste));
+  return storage.setItem(PROFILE_KEY,exportMusicProfile(saved,taste));
 }
 export function readMusicProfile(storage){
   try{const raw=storage?.getItem(PROFILE_KEY);if(raw)return importMusicProfile(raw);}catch{/* recover the previous local format */}

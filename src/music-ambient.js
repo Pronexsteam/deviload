@@ -1,16 +1,20 @@
 import {createAmbientEnvelope} from './music-ambient-model.js';
 import {paintAmbient,ambientArtwork} from './music-ambient-light.js';
 import {createArtworkWash} from './artwork-wash.js';
+import {artworkCandidates} from './music-artwork.js';
 
 export function createMusicAmbient({dock,sound,getAudio,getTrack,nodes,hasMini=()=>false,onLevels=()=>{}}){
   const scene=document.createElement('div');scene.className='ambient-scene';scene.setAttribute('aria-hidden','true');document.body.prepend(scene);const wash=createArtworkWash(scene);
   const layer=document.createElement('div');layer.className='music-ambient-glow';layer.setAttribute('aria-hidden','true');
   const lights=Array.from({length:3},()=>{const node=document.createElement('span');layer.append(node);return node;});dock.prepend(layer);
   const reduced=matchMedia('(prefers-reduced-motion: reduce)'),envelope=createAmbientEnvelope();
+  const stage=document.getElementById('music-now-playing'),stageBackground=stage?.querySelector('.music-stage-background');
   let frame=0,last=0,ready=false,pending=null,image='',trackId=null,disposed=false;
-  const enabled=()=>document.documentElement.dataset.theme==='ambient';
+  const enabled=()=>['ambient','aurora','prism'].includes(document.documentElement.dataset.theme);
   const visible=()=>enabled()&&(hasMini()||!document.hidden);
-  const paint=levels=>{paintAmbient(lights,levels);const energy=Math.max(...levels);scene.style.opacity=String(.22+energy*.18);document.documentElement.style.setProperty('--ambient-energy',String(energy));onLevels(levels);};
+  // An inherited root variable invalidates every descendant on each audio frame.
+  // Keep the envelope on compositor layers, independent of library/lyrics size.
+  const paint=levels=>{paintAmbient(lights,levels);const energy=Math.max(...levels);scene.style.opacity=(.22+energy*.28).toFixed(3);if(stageBackground&&stage.open)stageBackground.style.opacity=(.72+energy*.28).toFixed(3);onLevels(levels);};
   function stop(){clearTimeout(frame);frame=0;last=0;envelope.reset();paint([0,0,0]);}
   async function prepare(){
     if(ready||pending)return pending;
@@ -32,10 +36,10 @@ export function createMusicAmbient({dock,sound,getAudio,getTrack,nodes,hasMini=(
     if(disposed)return;
     layer.hidden=!enabled();
     const track=getTrack();if(trackId!==track?.id){trackId=track?.id;envelope.reset();}
-    const source=track?.image||'';
+    const source=artworkCandidates(track?.image,256)[0]||'';
     if(image!==source){image=source;
-      // Blur the actual cover. Canvas pixel access/CORS and extra artwork
-      // downloads are unnecessary; the browser reuses the existing image.
+      // A blurred background needs only a bounded thumbnail, not the full
+      // artwork used by the expanded player. No pixel sampling is needed.
       layer.style.setProperty('--ambient-art',ambientArtwork(source));
       document.documentElement.style.setProperty('--ambient-art',ambientArtwork(source));
       wash.update(ambientArtwork(source));

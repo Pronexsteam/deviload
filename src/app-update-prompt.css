@@ -19,7 +19,6 @@ body #app-update-notice.app-update-prompt button:focus-visible {outline:2px soli
 body #app-update-notice.app-update-prompt #app-update-progress {margin-top:14px;background:var(--theme-line,#334057)}
 body #app-update-notice.app-update-prompt #app-update-progress>span {background:var(--theme-accent,#f76b83)}
 :root[data-theme="glass-light"] body #app-update-notice.app-update-prompt {background:#f9fbfd}
-:root[data-theme="glass-black"] body #app-update-notice.app-update-prompt {background:#19202a}
 @media(max-width:600px) {
   /* Keep both the collapsed section rail and the music player clickable. */
   body #app-update-notice.app-update-prompt {inset:auto 12px 110px 88px;width:auto;max-height:calc(100vh - 170px);padding:14px;gap:10px}
@@ -27,3 +26,4 @@ body #app-update-notice.app-update-prompt #app-update-progress>span {background:
 }
 @media(prefers-reduced-motion:reduce) {body #app-update-notice.app-update-prompt * {transition:none}}
 @media(forced-colors:active) {body #app-update-notice.app-update-prompt {border:2px solid CanvasText;box-shadow:none}}
+.app-release-cinema-notice{display:block;margin:16px 0 0;padding:14px 16px;border:1px solid var(--theme-line);border-radius:12px;background:var(--theme-surface);color:var(--theme-text);font-weight:700;line-height:1.55}.app-release-cinema-notice[hidden]{display:none}

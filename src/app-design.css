@@ -29,7 +29,7 @@
 .music-remote-dialog{width:min(400px,calc(100vw - 32px));padding:24px;box-sizing:border-box;color:var(--ui-ink)}
 .music-remote-dialog .dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}.music-remote-dialog h2{font-size:20px;margin:0}.music-remote-dialog p{font-size:13px;line-height:1.6;color:var(--ui-muted)}
 .music-remote-qr{width:250px;max-width:100%;margin:0 auto;padding:10px;border-radius:12px;background:#fff;box-sizing:border-box}.music-remote-qr:empty{display:none}.music-remote-qr img,.music-remote-qr canvas{display:block;max-width:100%;height:auto}
-#music-remote-open .icon{background:currentColor;mask:url('./assets/icons/remote-control.svg') center/contain no-repeat;-webkit-mask:url('./assets/icons/remote-control.svg') center/contain no-repeat}
+#music-remote-open .icon,#music-remote-shortcut .icon{background:currentColor;mask:url('./assets/icons/remote-control.svg') center/contain no-repeat;-webkit-mask:url('./assets/icons/remote-control.svg') center/contain no-repeat}
 .music-preview-top{display:flex;align-items:center;justify-content:space-between;gap:8px}.music-preview-top .music-eyebrow{font-size:10px;letter-spacing:.06em;color:var(--ui-muted)}
 .music-preview-toggle{width:32px;height:32px;display:grid;place-items:center;padding:6px;border-radius:8px;background:transparent;border:1px solid var(--ui-line);color:var(--ui-ink);cursor:pointer}.music-preview-toggle .icon{width:16px;height:16px}.music-preview-toggle[aria-pressed="true"]{background:var(--theme-selected)}
 .music-preview-flip{perspective:1000px;width:100%;flex:none}.music-preview-faces{position:relative;width:100%;aspect-ratio:1;transform-style:preserve-3d;transition:transform .42s cubic-bezier(.2,.7,.2,1)}
@@ -41,6 +41,9 @@
 :root body .music-preview-lyrics .music-lyric-line{font-size:clamp(14px,calc(var(--lyrics-size,28px) * .65),26px);line-height:1.5;padding:8px 2px;text-align:center;min-height:0}
 .music-preview-lyrics .music-lyrics-tools{margin:0;gap:4px;flex-wrap:wrap}.music-preview-lyrics .music-lyrics-tools button{font-size:10px;min-height:24px;padding:4px 6px}.music-preview-lyrics .music-lyrics-credit{font-size:9px;margin:0}.music-preview-lyrics .music-lyrics-plain{font-size:13px;line-height:1.6;white-space:pre-wrap}
 @media(prefers-reduced-motion:reduce){.music-preview-faces{transition:none}}
+/* The calm app preset suppresses decorative motion, but this turn explains
+   which side of the same card is visible. Respect the OS reduced-motion flag. */
+@media(prefers-reduced-motion:no-preference){:root body #devil-music .music-preview-faces{transition:transform .42s cubic-bezier(.2,.7,.2,1);transition-duration:.42s!important}}
 /* Navigation must remain legible when both side panels are open. */
 :root body main[data-page="music"] #devil-music .music-tabs{flex-wrap:wrap;overflow:visible;gap:0 20px;padding-inline:2px}
 :root body main[data-page="music"] #devil-music .music-tabs button{max-width:100%;white-space:normal;text-align:left;line-height:1.5}

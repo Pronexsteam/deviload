@@ -20,7 +20,7 @@ const song=n=>({id:String(n).padStart(11,'0'),title:`Track ${n}`,subtitle:'Artis
 
 function player(){
   const memory=new Map(),storage={getItem:key=>memory.get(key),setItem:(key,value)=>memory.set(key,value)},handlers={},events={},control={checked:false,addEventListener:(name,fn)=>handlers[name]=fn};
-  const ctx={current:song(1),privateSession:false,discordPresence:{sync(){}},statsSession:null,statsSeconds:0,statsCounted:false,session:1,checkpoint:0,historyAdded:false,
+  const ctx={musicRoom:null,current:song(1),privateSession:false,discordPresence:{sync(){}},statsSession:null,statsSeconds:0,statsCounted:false,session:1,checkpoint:0,historyAdded:false,
     audio:{duration:200,currentTime:0,paused:false,readyState:4,volume:.7,muted:false,seeking:false},clock:{seconds:0,reset(){this.seconds=0;},sample(){}},taste:readTaste(),saved:{favorites:[],recent:[],collections:[],playlists:[],sourceBindings:[],interestMixes:[]},playbackContext:[],playbackOrigin:'manual',playbackSourceContext:{kind:'restored'},diagnostics:{record(){}},
     weekly:createWeeklyStats(storage,{now:()=>1800000000000}),recommendationSession:createRecommendationSession(),recommendationRevision:0,recordListening,remember,recommendationFamiliarity,rememberInterestTrack,profileWrites:0,sessionWrites:0,
     persist(){ctx.profileWrites++;},saveMusicProfile(_storage,profile){ctx.profileWrites++;ctx.lastProfile=profile;},saveMusicSession(){ctx.sessionWrites++;},storage,sessionTransition:false,queue:[song(1)],resolvedTrack:song(1).id,retryPosition:0,knownDuration:200,repeat:'off',shuffle:false,autoplay:true,sessionSavedAt:0,
@@ -30,6 +30,10 @@ function player(){
   return {ctx,...actions,toggle(value){control.checked=value;handlers.change();},playing(){events.playing();},listen(seconds){ctx.clock.seconds=seconds;actions.captureListening();}};
 }
 
+test('guest room listening does not write taste, recent history, statistics or the saved queue',()=>{
+ const p=player();p.ctx.musicRoom={isGuest:()=>true};p.listen(180);p.captureListening(true);p.persistSession();
+ assert.equal(Object.keys(p.ctx.taste.entries).length,0);assert.equal(p.ctx.saved.recent.length,0);assert.equal(p.ctx.profileWrites,0);assert.equal(p.ctx.sessionWrites,0);assert.equal(p.ctx.weekly.summary().totalSeconds,0);
+});
 test('repeated pause/checkpoint captures record only new seconds and one qualified play',()=>{
   const p=player();p.listen(30);p.listen(30);p.listen(45);p.listen(60);p.captureListening();
   assert.equal(p.ctx.weekly.summary().totalSeconds,60);

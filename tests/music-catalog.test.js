@@ -2,8 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {runInNewContext} from "node:vm";
-const lyricCode=readFileSync(new URL("../src/music-lyrics.js",import.meta.url),"utf8");
-const parseLyrics=runInNewContext(`(()=>{${lyricCode.slice(lyricCode.indexOf('export function parseLyrics'),lyricCode.indexOf('export function createMusicLyrics')).replace('export ','')};return parseLyrics;})()`);
+import {parseLyrics} from '../src/music-lyrics-timing.js';
 const soundCode=readFileSync(new URL("../src/music-sound.js",import.meta.url),"utf8");
 const soundSettings=runInNewContext(`(()=>{${soundCode.slice(soundCode.indexOf('const frequencies'),soundCode.indexOf('export function createMusicSound')).replace('export ','')};return soundSettings;})()`);
 const source=readFileSync(new URL("../src/devil-music.js",import.meta.url),"utf8");
@@ -18,7 +17,7 @@ test("a late search page cannot overwrite another view",async()=>{
   resolve({sections:[{items:[{id:"old"}]}],continuation:null});await job;assert.equal(p.ctx.sections.length,0);
 });
 test("timed lyrics preserve repeated lines, sort timestamps and reject invalid metadata",()=>{
-  assert.deepEqual(JSON.parse(JSON.stringify(parseLyrics('[ar:artist]\n[00:02.50][00:20.00]Repeat\n[00:01.00]First'))),[{at:1,text:"First"},{at:2.5,text:"Repeat"},{at:20,text:"Repeat"}]);
+  assert.deepEqual(parseLyrics('[ar:artist]\n[00:02.50][00:20.00]Repeat\n[00:01.00]First').map(({at,text})=>({at,text})),[{at:1,text:"First"},{at:2.5,text:"Repeat"},{at:20,text:"Repeat"}]);
   assert.equal(parseLyrics(null).length,0);assert.equal(parseLyrics('[999999:01]bad').length,0);
 });
 test("untrusted sound settings cannot enable arbitrary gains or transitions",()=>{

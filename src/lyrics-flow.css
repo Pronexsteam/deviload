@@ -1,0 +1,18 @@
+/* Original lyric presentation: light follows real word timing; line-only LRC
+   gets a quiet focus transition, never an invented karaoke clock. */
+.music-lyrics-content{--lyric-aura:#bfcdf8;--lyric-shine:#fff;--lyric-focus:color-mix(in srgb,var(--lyric-aura) 24%,transparent)}
+:root[data-theme="aurora"] .music-lyrics-content{--lyric-aura:#b8b1ff}
+:root[data-theme="prism"] .music-lyrics-content{--lyric-aura:#a9e5df}
+:root[data-theme="glass-light"] .music-lyrics-content{--lyric-aura:#425d98;--lyric-shine:#172d4b;--lyric-focus:#425d9818}
+:root[data-theme] body :is(#devil-music,#music-now-playing,.music-lyrics-dialog) .music-lyrics-scroll{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--lyric-ink) 18%,transparent) transparent;scroll-padding-block:40%;mask-image:linear-gradient(transparent,#000 8%,#000 90%,transparent)}
+:root[data-theme] body :is(#devil-music,#music-now-playing,.music-lyrics-dialog) .music-lyrics-scroll .music-lyric-line{position:relative;border:0;border-radius:12px;text-decoration:none!important;line-height:1.5;font-weight:650;letter-spacing:-.015em;padding:15px 14px;margin:4px 0;opacity:.38;color:var(--lyric-ink);background:transparent;transform-origin:left center;transition:opacity .35s,transform .4s,text-shadow .35s,background-color .35s;box-shadow:none}
+:root[data-theme] body :is(#devil-music,#music-now-playing,.music-lyrics-dialog) .music-lyrics-scroll .music-lyric-line.lyric-near{opacity:.66}
+:root[data-theme] body :is(#devil-music,#music-now-playing,.music-lyrics-dialog) .music-lyrics-scroll .music-lyric-line.active{opacity:1;transform:translateX(3px);background:transparent;color:var(--lyric-ink);text-shadow:0 0 16px var(--lyric-focus)}
+:root[data-theme] body :is(#devil-music,#music-now-playing,.music-lyrics-dialog) .music-lyrics-scroll .music-lyric-line:hover{opacity:1;background-color:color-mix(in srgb,var(--lyric-ink) 5%,transparent)}
+:root body .music-lyric-word{display:inline-block;white-space:pre-wrap;transform:translateY(0) scale(1);transform-origin:center bottom;transition:transform .3s cubic-bezier(.2,.8,.2,1),color .25s;filter:none!important}
+:root body .music-lyric-line.active .music-lyric-word[data-state="current"]{transform:translateY(-2px) scale(1.035);text-shadow:0 0 13px var(--lyric-focus);filter:none}
+:root body .music-preview-lyrics .music-lyric-line{padding:10px 8px;line-height:1.5;border-radius:9px}
+:root body .music-preview-lyrics .music-lyric-line.active{transform:translateX(1px)}
+/* Only the bounded current line moves; no per-letter DOM or continuous blur. */
+@media(prefers-reduced-motion:no-preference){:root[data-theme] body :is(#devil-music,#music-now-playing,.music-lyrics-dialog) .music-lyrics-scroll .music-lyric-line{transition-duration:.35s!important}:root body .music-lyric-word{transition-duration:.3s!important}}
+@media(prefers-reduced-motion:reduce){:root[data-theme] body :is(#devil-music,#music-now-playing,.music-lyrics-dialog) .music-lyrics-scroll .music-lyric-line,:root body .music-lyric-word{transition:none!important;transform:none!important;text-shadow:none}.music-lyric-line.active.has-word-sync .music-lyric-word[data-state="current"]{background:none;color:var(--lyric-ink)}}

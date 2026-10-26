@@ -1,11 +1,23 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {exportMusicProfile,importMusicProfile,readMusicProfile,saveMusicProfile,PROFILE_KEY,PROFILE_LIMIT} from "../src/music-profile.js";
+import {exportMusicProfile,importMusicProfile,readMusicProfile,saveMusicProfile,PROFILE_KEY} from "../src/music-profile.js";
 import {readTaste,recordListening,recommend} from "../src/music-taste.js";
 import {transferPlaylistTracks} from "../src/music-library-model.js";
+import {sanitizeMusicTrack,sanitizeMusicCollection} from "../src/music-profile.js";
 const song=n=>({kind:"song",id:String(n).padStart(11,"0"),title:`Track ${n}`,subtitle:"Artist",artists:["Artist"],image:"https://i.ytimg.com/vi/00000000001/hqdefault.jpg"});
 const saved=()=>({favorites:[song(1)],recent:[song(2)],volume:.4});
 const taste=()=>readTaste();
+
+test("long trusted artwork survives collections and profile roundtrip; unsafe URLs are rejected",()=>{
+ const image='https://lh3.googleusercontent.com/'+ 'a'.repeat(300)+'=w600-h600';
+ const album={kind:'album',id:'MPREtest',title:'Album',artists:['Artist'],image};
+ const artist={...album,kind:'artist',id:'UCtest'};
+ assert.equal(sanitizeMusicCollection(album).image,image);assert.equal(sanitizeMusicCollection(artist).image,image);
+ const state={...saved(),favorites:[{...song(1),image}],collections:[album,artist]};
+ const restored=importMusicProfile(exportMusicProfile(state,taste()));
+ assert.equal(restored.saved.favorites[0].image,image);assert.deepEqual(restored.saved.collections.map(x=>x.image),[image,image]);
+ for(const image of ['https://evil.test/image','https://user@lh3.googleusercontent.com/a','https://lh3.googleusercontent.com:8080/a','https://lh3.googleusercontent.com/'+ 'a'.repeat(2048),'not a URL'])assert.equal(sanitizeMusicTrack({...song(1),image}).image,'');
+});
 
 test("legacy regional preference is retired without changing saved music",()=>{
  const original={...saved(),showRegional:true};
@@ -38,15 +50,15 @@ test("profile stays bounded after years of listening and excessively long metada
   const file=exportMusicProfile(state,profile),restored=importMusicProfile(file);
   assert.equal(Object.keys(restored.taste.entries).length,1000);
   assert.equal(restored.saved.favorites.length,600);assert.equal(restored.saved.recent.length,80);
-  assert.ok(Buffer.byteLength(file)<PROFILE_LIMIT);
+  assert.ok(restored.saved.favorites.every(track=>Buffer.byteLength(track.title)<=240));
   assert.ok(!restored.taste.entries[song(1).id]);
 });
-test("invalid, unrelated, unsupported and oversized imports do not become profiles",()=>{
+test("invalid, unrelated and unsupported imports do not become profiles",()=>{
   const good=JSON.parse(exportMusicProfile(saved(),taste()));
   for(const value of [null,{},[],{...good,format:"deviload-settings"},{...good,version:99},{...good,saved:{favorites:[{}],recent:[]}},
     {...good,taste:{...good.taste,entries:{broken:{item:song(1),score:"9"}}}},
     {...good,saved:{...good.saved,recent:Array(81).fill(song(1))}}])assert.throws(()=>importMusicProfile(JSON.stringify(value)));
-  assert.throws(()=>importMusicProfile("{bad"));assert.throws(()=>importMusicProfile("x".repeat(PROFILE_LIMIT+1)));
+  assert.throws(()=>importMusicProfile("{bad"));assert.throws(()=>importMusicProfile("x".repeat(3*1024*1024)));
 });
 test("single-write import remains intact when storage is full and persists across reload",()=>{
   const memory=new Map(),storage={getItem:key=>memory.get(key),setItem:(key,value)=>memory.set(key,value)};
@@ -72,27 +84,37 @@ test("playlists retain names and song order in bounded backups and old profiles 
   assert.equal(importMusicProfile(JSON.stringify(profile)).saved.showRegional,false);
   profile.version=1;delete profile.saved.playlists;assert.deepEqual(importMusicProfile(JSON.stringify(profile)).saved.playlists,[]);
 });
-test("playlist imports reject duplicate identities and excess entries without truncating a collection",()=>{
+test("playlist imports reject invalid identities and retain large collections",()=>{
   const profile=JSON.parse(exportMusicProfile(saved(),taste()));
   const list={id:"a",name:"A",items:[song(1)]};
-  for(const playlists of [[list,list],[{...list,name:" "}],Array.from({length:31},(_,n)=>({...list,id:String(n)})),[{...list,items:Array.from({length:501},(_,n)=>song(n))}]]){
+  for(const playlists of [[list,list],[{...list,name:" "}]]){
     assert.throws(()=>importMusicProfile(JSON.stringify({...profile,saved:{...profile.saved,playlists}})));
   }
 });
+test("playlist profile round-trip has no track-count cutoff",()=>{
+ const state=saved();state.playlists=[{id:"large",name:"Large",items:Array.from({length:6001},(_,n)=>song(n))}];
+ assert.equal(importMusicProfile(exportMusicProfile(state,taste())).saved.playlists[0].items.length,6001);
+});
+
 test("saved artists and albums migrate with the profile without paths or expiring audio URLs",()=>{
   const state=saved();state.collections=[{id:"UCabcdefghijk",kind:"artist",title:"Artist",image:"https://i.ytimg.com/a.jpg",path:"C:/secret",url:"https://signed-audio/secret"},{id:"MPREabcdefghijk",kind:"album",title:"Album"}];
   const file=exportMusicProfile(state,taste()),restored=importMusicProfile(file);assert.equal(restored.saved.collections.length,2);assert.equal(restored.saved.collections[0].kind,"artist");assert.ok(!file.includes("secret"));
   const raw=JSON.parse(file);raw.saved.collections[0].id="../../secret";assert.throws(()=>importMusicProfile(JSON.stringify(raw)));
 });
 
-test("thousands of likes survive save and import, and a full profile fails without evicting favorites",()=>{
+test("large profiles above localStorage capacity retain every like and all preferences",()=>{
  const state=saved();state.favorites=Array.from({length:5000},(_,n)=>song(n));
  const file=exportMusicProfile(state,taste()),restored=importMusicProfile(file);
  assert.equal(restored.saved.favorites.length,5000);assert.equal(restored.saved.favorites.at(-1).id,song(4999).id);
  const memory=new Map(),storage={getItem:key=>memory.get(key),setItem:(key,value)=>memory.set(key,value)};
  saveMusicProfile(storage,state,taste());const before=memory.get(PROFILE_KEY);
- const tooLarge={...state,favorites:Array.from({length:30000},(_,n)=>song(n))};
- assert.throws(()=>saveMusicProfile(storage,tooLarge,taste()),/too large/);assert.equal(memory.get(PROFILE_KEY),before);
+ const large={...state,favorites:Array.from({length:40000},(_,n)=>song(n))};
+ const preferences=taste();recordListening(preferences,song(2),{seconds:90,duration:100,session:42});
+ saveMusicProfile(storage,large,preferences);
+ assert.ok(Buffer.byteLength(memory.get(PROFILE_KEY))>5*1024*1024);
+ const loaded=readMusicProfile(storage);assert.equal(loaded.saved.favorites.length,40000);
+ assert.deepEqual(loaded.saved.favorites.at(-1),song(39999));assert.equal(loaded.saved.volume,.4);
+ assert.equal(loaded.taste.entries[song(2).id].score,2.5);assert.notEqual(memory.get(PROFILE_KEY),before);
 });
 
 test("playlist description, pin and raster cover survive export, import and local restart",()=>{

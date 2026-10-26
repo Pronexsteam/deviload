@@ -3,7 +3,8 @@ import {musicGain} from "./music-volume.js";
 export function createMusicDecks({makeAudio=()=>new Audio(),now=Date.now,schedule=setInterval,cancel=clearInterval}={}){
   const nodes=[makeAudio(),makeAudio()];let active=nodes[0],prepared=null,tail=null;
   for(const [index,node]of nodes.entries()){node.id=`music-audio${index?'-next':''}`;node.hidden=true;node.preload="auto";node.crossOrigin="anonymous";}
-  function stopTail(){if(tail){cancel(tail.timer);tail.node.pause();tail.node.volume=active.volume;tail=null;}}
+  function release(node){node.pause();node.removeAttribute("src");node.load();}
+  function stopTail(){if(tail){const old=tail;tail=null;cancel(old.timer);release(old.node);old.node.volume=active.volume;}}
   const fraction=()=>tail?Math.max(0,1-(now()-tail.start)/tail.duration):0;
   function setVolume(value){
     const gain=musicGain(value);active.volume=gain;
@@ -20,7 +21,7 @@ export function createMusicDecks({makeAudio=()=>new Audio(),now=Date.now,schedul
       if(overlap>0&&!old.paused){
         tail={node:old,start:now(),duration:overlap*1000,gain:active.volume,timer:null};
         tail.timer=schedule(()=>{const remaining=fraction();old.volume=tail.gain*remaining;if(!remaining)stopTail();},30);
-      }else old.pause();
+      }else release(old);
       return active;
     },
     clear(){stopTail();prepared=null;const node=nodes.find(node=>node!==active);node.pause();node.removeAttribute("src");node.load();},

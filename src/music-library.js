@@ -9,8 +9,7 @@ export function createMusicLibrary({saved,commit,onOpen,notify,button,cover}){
   let previous=null;
   function update(lists,remember=true){
     let message="";
-    if(lists.length>30||lists.reduce((sum,list)=>sum+list.items.length,0)>500)message=t("Your library holds up to 30 playlists and 500 playlist entries.");
-    else {const before=saved.playlists;if(commit(lists)){if(remember)previous=before;return true;}message=t("Could not save your music preferences.");}
+    {const before=saved.playlists;if(commit(lists)){if(remember)previous=before;return true;}message=t("Could not save your music preferences.");}
 
     notify(message,true);const modal=document.querySelector(".music-library-dialog[open]");
     if(modal){let error=modal.querySelector("[role=alert]");if(!error){error=el("p","music-status error");error.setAttribute("role","alert");modal.append(error);}error.textContent=message;}

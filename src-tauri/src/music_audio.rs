@@ -42,6 +42,7 @@ pub struct Source {
     failed: Mutex<Option<SourceError>>,
     limit: Arc<PlaybackLimit>,
     available_at: Option<Instant>,
+    cancelled: AtomicBool,
 }
 
 pub fn trusted_url(url: &url::Url) -> bool {
@@ -51,7 +52,33 @@ pub fn trusted_url(url: &url::Url) -> bool {
 
 impl Source {
     pub fn new(url: url::Url, size: u64, mime: &'static str, agent: &str, proxy: &str, limit: Arc<PlaybackLimit>) -> Result<Self, String> {
-        if !trusted_url(&url) || size == 0 || size > 2 * 1024 * 1024 * 1024 { return Err("Could not open this track".into()); }
+        Self::bounded(url,size,mime,agent,proxy,limit,2 * 1024 * 1024 * 1024)
+    }
+
+    pub fn video(url: url::Url, size: u64, agent: &str, proxy: &str) -> Result<Self,String> {
+        // Video shares only the bounded byte transport, not music state/cache.
+        let mut source=Self::bounded(url,size.max(1),"video/mp4",agent,proxy,Arc::default(),32 * 1024 * 1024 * 1024)
+            .map_err(|_|"Could not start the video. Try again later.".to_owned())?;
+        // Progressive formats may omit both filesize and the signed clen field.
+        // A bounded HEAD obtains the real length; never guess from bitrate.
+        if size==0 { source.probe_video_size()?; }
+        Ok(source)
+    }
+
+    fn probe_video_size(&mut self) -> Result<(),String> {
+        let response=self.client.head(self.url.clone()).headers(self.headers.clone()).timeout(Duration::from_secs(6)).send()
+            .map_err(|_|{eprintln!("Cinema preparation failed: size-probe-network");crate::cinema::source_failure(SourceError::Network)})?;
+        let size=response.headers().get(reqwest::header::CONTENT_LENGTH).and_then(|v|v.to_str().ok()).and_then(|v|v.parse::<u64>().ok());
+        if response.status()!=reqwest::StatusCode::OK || !size.is_some_and(|n|n>0&&n<=32*1024*1024*1024){
+            let status=response.status().as_u16();eprintln!("Cinema preparation failed: size-probe (status={status}, valid-length={})",size.is_some_and(|n|n>0&&n<=32*1024*1024*1024));
+            let error=match status {401|403=>SourceError::Denied,429=>SourceError::Limited,408|500..=599=>SourceError::Network,_=>SourceError::Invalid};
+            return Err(crate::cinema::source_failure(error).into());
+        }
+        self.size=size.unwrap();Ok(())
+    }
+
+    fn bounded(url: url::Url, size: u64, mime: &'static str, agent: &str, proxy: &str, limit: Arc<PlaybackLimit>, max_size: u64) -> Result<Self, String> {
+        if !trusted_url(&url) || size == 0 || size > max_size { return Err("Could not open this track".into()); }
         let _ = rustls::crypto::ring::default_provider().install_default();
         let mut builder = Client::builder().timeout(Duration::from_secs(15)).connect_timeout(Duration::from_secs(6))
             .redirect(reqwest::redirect::Policy::custom(|attempt| {
@@ -61,7 +88,7 @@ impl Source {
         let client = builder.build().map_err(|_| "Could not open this track")?;
         let mut headers = HeaderMap::new();
         headers.insert(USER_AGENT, HeaderValue::from_str(agent).map_err(|_| "Could not open this track")?);
-        Ok(Self { url, size, mime, client, headers, chunks: Mutex::new(Vec::new()), fetch_lock: Mutex::new(()), failed: Mutex::new(None), limit, available_at: None })
+        Ok(Self { url, size, mime, client, headers, chunks: Mutex::new(Vec::new()), fetch_lock: Mutex::new(()), failed: Mutex::new(None), limit, available_at: None, cancelled:AtomicBool::new(false) })
     }
 
     pub fn with_availability(mut self, timestamp: Option<u64>) -> Self {
@@ -94,7 +121,9 @@ impl Source {
     }
 
     fn fetch_chunk_cancellable(&self, start: u64, deadline: Instant, cancelled: &dyn Fn() -> bool) -> Result<Vec<u8>, SourceError> {
+        let cancelled=||self.cancelled.load(Ordering::Relaxed)||cancelled();
         if cancelled() { return Err(SourceError::Network); }
+        if self.mime=="video/mp4" {if let Some(error)=*self.failed.lock().unwrap(){return Err(error);}}
         if let Some((_, bytes)) = self.chunks.lock().unwrap().iter().find(|(offset, _)| *offset == start) { return Ok(bytes.clone()); }
         if start >= self.size { return Err(SourceError::Invalid); }
         if Instant::now() >= deadline { return Err(SourceError::Network); }
@@ -121,7 +150,8 @@ impl Source {
                     .timeout(remaining.min(Duration::from_secs(6))).send().map_err(|_| SourceError::Network)?;
                 let status = response.status();
                 if !status.is_success() {
-                    #[cfg(debug_assertions)] eprintln!("Guest audio upstream status: {status}");
+                    if self.mime=="video/mp4" {eprintln!("Cinema upstream status: {}",status.as_u16());}
+                    else {#[cfg(debug_assertions)] eprintln!("Guest audio upstream status: {status}");}
                     if status.as_u16() == 429 {
                         self.limit.note(response.headers().get("Retry-After").and_then(|h| h.to_str().ok()).and_then(|s| s.parse().ok()));
                     }
@@ -147,7 +177,7 @@ impl Source {
                     // Fresh signed URLs can briefly return 403 before becoming usable.
                     // Retry those exact bytes once after a pause, without extracting
                     // another URL. A 429 never retries and also stops other sources.
-                    if error == SourceError::Limited || error == SourceError::Invalid { break; }
+                    if error == SourceError::Limited || error == SourceError::Invalid || (self.mime=="video/mp4" && error==SourceError::Denied) { break; }
                     if attempt == 0 {
                         let delay = if error == SourceError::Denied {
                             self.available_at.map(|at|at.saturating_duration_since(Instant::now())+Duration::from_millis(150)).unwrap_or(Duration::from_secs(3))
@@ -186,6 +216,25 @@ struct Entry { source: Arc<Source>, created: Instant }
 struct Relay { port: u16, entries: Arc<Mutex<HashMap<String, Entry>>>, stopped: Arc<AtomicBool> }
 impl Drop for Relay { fn drop(&mut self) { self.stopped.store(true, Ordering::Relaxed); } }
 static RELAY: OnceLock<Mutex<Option<Relay>>> = OnceLock::new();
+static VIDEO_RELAY: OnceLock<Mutex<Option<Relay>>> = OnceLock::new();
+
+pub fn register_video(source: Arc<Source>) -> Result<String,String> {
+    let mut relay=VIDEO_RELAY.get_or_init(||Mutex::new(None)).lock().unwrap();
+    if relay.is_none(){*relay=Some(Relay::start().map_err(|_|"Could not start the video. Try again later.")?);}
+    Ok(relay.as_ref().unwrap().insert(source))
+}
+pub fn clear_video() {
+    if let Some(relay)=VIDEO_RELAY.get(){if let Some(relay)=relay.lock().unwrap().as_ref(){
+        let mut entries=relay.entries.lock().unwrap();
+        for entry in entries.values(){entry.source.cancelled.store(true,Ordering::Relaxed);}
+        entries.clear();
+    }}
+}
+pub fn release_video(address: &str) {
+    if let Some(relay)=VIDEO_RELAY.get(){if let Some(relay)=relay.lock().unwrap().as_ref(){
+        if let Some(token)=address.strip_prefix(&format!("http://127.0.0.1:{}/",relay.port)){if let Some(entry)=relay.entries.lock().unwrap().remove(token){entry.source.cancelled.store(true,Ordering::Relaxed);}}
+    }}
+}
 
 pub fn register(source: Arc<Source>) -> Result<String, String> {
     let mut relay = RELAY.get_or_init(|| Mutex::new(None)).lock().unwrap();
@@ -300,6 +349,7 @@ fn serve(mut stream: TcpStream, registry: &Mutex<HashMap<String,Entry>>, port: u
     stream.write_all(b"\r\n")?;
     if method == "HEAD" { return Ok(()); }
     loop {
+        if source.cancelled.load(Ordering::Relaxed){return Err(std::io::ErrorKind::Interrupted.into());}
         let from = start.saturating_sub(offset) as usize;
         let to = (end - offset + 1).min(chunk.len() as u64) as usize;
         stream.write_all(&chunk[from..to])?;
@@ -313,6 +363,30 @@ fn serve(mut stream: TcpStream, registry: &Mutex<HashMap<String,Entry>>, port: u
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn video_release_stops_retained_source_and_leaves_music_registry_alone() {
+        let source=Arc::new(Source::video(url::Url::parse("https://rr1.googlevideo.com/videoplayback").unwrap(),100,"test","").unwrap());
+        source.chunks.lock().unwrap().push((0,vec![42;100]));
+        let music=Arc::new(Source::new(url::Url::parse("https://rr1.googlevideo.com/audio").unwrap(),100,"audio/mp4","test","",Arc::default()).unwrap());
+        music.chunks.lock().unwrap().push((0,vec![24;100]));
+        let video_url=register_video(source.clone()).unwrap();let music_url=register(music.clone()).unwrap();
+        let client=Client::builder().no_proxy().build().unwrap();
+        let response=client.get(&video_url).header("Range","bytes=20-29").send().unwrap();assert_eq!(response.headers()["Content-Type"],"video/mp4");assert_eq!(response.bytes().unwrap().as_ref(),&[42;10]);
+        release_video(&video_url);assert!(source.fetch_chunk(0).is_err());assert!(!music.cancelled.load(Ordering::Relaxed));
+        assert_eq!(client.get(&video_url).send().unwrap().status(),404);assert!(client.head(&music_url).send().unwrap().status().is_success());
+    }
+
+    #[test]
+    fn missing_video_size_uses_bounded_head_metadata() {
+        let (mut source,requests,worker)=fixture(vec![200],false);
+        source.size=1;source.probe_video_size().unwrap();worker.join().unwrap();
+        assert_eq!(source.size,100);assert_eq!(requests.load(Ordering::Relaxed),1);
+        let (mut denied,_,worker)=fixture(vec![403],false);
+        assert!(denied.probe_video_size().is_err());worker.join().unwrap();
+        let (mut partial,_,worker)=fixture(vec![206],false);
+        assert!(partial.probe_video_size().is_err());worker.join().unwrap();
+    }
 
     fn fixture(statuses: Vec<u16>, truncated: bool) -> (Source, Arc<AtomicUsize>, thread::JoinHandle<()>) {
         use std::io::BufRead;
@@ -330,13 +404,13 @@ mod tests {
                 let mut input=std::io::BufReader::new(&stream);let mut line=String::new();
                 loop {line.clear();if input.read_line(&mut line).unwrap_or(0)==0 || line=="\r\n" {break;}}
                 let index=seen.fetch_add(1,Ordering::Relaxed);let status=statuses[index];
-                let length=if status==200 {100}else{0};
+                let length=if status==200||status==206 {100}else{0};
                 let _=write!(stream,"HTTP/1.1 {status} Test\r\nContent-Length: {length}\r\nConnection: close\r\n\r\n");
                 if length>0 {let _=stream.write_all(&vec![42;if truncated&&index==0 {50}else{100}]);}
             }
         });
         // Tests inject loopback directly; production Source::new still rejects it.
-        (Source {url,size:100,mime:"audio/mp4",client:Client::builder().no_proxy().build().unwrap(),headers:HeaderMap::new(),chunks:Mutex::new(vec![]),fetch_lock:Mutex::new(()),failed:Mutex::new(None),limit:Arc::default(),available_at:None},count,thread)
+        (Source {url,size:100,mime:"audio/mp4",client:Client::builder().no_proxy().build().unwrap(),headers:HeaderMap::new(),chunks:Mutex::new(vec![]),fetch_lock:Mutex::new(()),failed:Mutex::new(None),limit:Arc::default(),available_at:None,cancelled:AtomicBool::new(false)},count,thread)
     }
 
     #[test]
@@ -369,6 +443,16 @@ mod tests {
         assert!(!source.failed());
         assert_eq!(source.fetch_chunk(0).unwrap(),vec![42;100]);
         worker.join().unwrap();assert_eq!(count.load(Ordering::Relaxed),3);
+    }
+
+    #[test]
+    fn denied_or_limited_video_stops_without_retrying_on_new_range_requests() {
+        for (status,error) in [(403,SourceError::Denied),(429,SourceError::Limited)] {
+            let (mut source,count,worker)=fixture(vec![status],false);source.mime="video/mp4";
+            assert_eq!(source.fetch_chunk(0),Err(error));worker.join().unwrap();
+            assert_eq!(source.fetch_chunk(0),Err(error));
+            assert_eq!(count.load(Ordering::Relaxed),1);
+        }
     }
 
     #[test]
@@ -481,7 +565,7 @@ mod tests {
     #[test]
     fn relay_serves_seek_ranges_and_head_without_an_upstream_request() {
         let _ = rustls::crypto::ring::default_provider().install_default();
-        let source=Arc::new(Source {url:url::Url::parse("https://rr1.googlevideo.com/a").unwrap(),size:100,mime:"audio/mp4",client:Client::new(),headers:HeaderMap::new(),chunks:Mutex::new(vec![(0,(0..100).collect())]),fetch_lock:Mutex::new(()),failed:Mutex::new(None),limit:Arc::default(),available_at:None});
+        let source=Arc::new(Source {url:url::Url::parse("https://rr1.googlevideo.com/a").unwrap(),size:100,mime:"audio/mp4",client:Client::new(),headers:HeaderMap::new(),chunks:Mutex::new(vec![(0,(0..100).collect())]),fetch_lock:Mutex::new(()),failed:Mutex::new(None),limit:Arc::default(),available_at:None,cancelled:AtomicBool::new(false)});
         let relay=Relay::start().unwrap();let address=relay.insert(source);
         let client=Client::builder().no_proxy().build().unwrap();
         let response=client.get(&address).header("Range","bytes=20-29").send().unwrap();

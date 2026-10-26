@@ -44,7 +44,10 @@ pub fn set_music_controls(window: tauri::WebviewWindow, mut playback: Playback) 
         item.set_enabled(playback.active && enabled).map_err(|e| e.to_string())?;
     }
     #[cfg(windows)]
-    taskbar::refresh(&window);
+    {
+        taskbar::refresh(&window);
+        if let Some(mini)=app.get_webview_window("music-mini") { taskbar::refresh(&mini); }
+    }
     Ok(())
 }
 

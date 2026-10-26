@@ -13,6 +13,7 @@ import {rememberInterestTrack,interestProfile,interestSources,interestSeeds} fro
 import {sanitizeMusicTrack,saveMusicProfile} from "../src/music-profile.js";
 import {musicGain} from "../src/music-volume.js";
 import {createPlaybackOrder} from "../src/music-session.js";
+import {playbackCandidates as eligiblePlaybackCandidates} from "../src/music-playback-candidates.js";
 import {createMusicDiagnostics,playbackFailure} from "../src/music-diagnostics.js";
 import ru from "../src/locales/ru.js";
 import es from "../src/locales/es.js";
@@ -36,7 +37,7 @@ function player(invoke,items=[song(1)]){
     pause(){if(!this.paused){this.paused=true;events.pause?.();}},
     removeAttribute(){this.src="";},load(){this.currentTime=0;this.ended=false;}};
   Object.defineProperty(audio,"src",{get(){return this.address||"";},set(value){this.address=value;if(value)queueMicrotask(()=>events.loadedmetadata?.());}});
-  const ctx={audio,queue:items,index:-1,current:null,resolvedTrack:null,resolvedOffline:false,autoplay:true,radioPending:false,streamLoading:false,playRequest:0,
+  const ctx={eligiblePlaybackCandidates,musicRoom:null,audio,queue:items,index:-1,current:null,resolvedTrack:null,resolvedOffline:false,autoplay:true,radioPending:false,streamLoading:false,playRequest:0,
     needsRefresh:false,privateSession:false,resumeSnapshot:null,discordPresence:{sync(){}},diagnostics:createMusicDiagnostics(),playbackFailure,
     listen:audio.addEventListener,decks:{take:()=>null,stopTail(){},warm(){},clear(){ctx.deckClears=(ctx.deckClears||0)+1;},setVolume(){},ready:()=>false,owns:node=>node===audio},sound:{resume(){},transition:0},lyrics:{update(){}},window:{},
     nextPlan:null,preloadPending:false,preloadAttempts:new Set(),radioAhead:null,time:String,recordingRoutingRevision:-1,recordingBoundIds:new Set(),recordingFamilies:new Map(),
@@ -44,7 +45,7 @@ function player(invoke,items=[song(1)]){
     saved:{favorites:[],recent:[],collections:[],playlists:[],sourceBindings:[],interestMixes:[]},playbackContext:[],playbackOrigin:"manual",contextRevision:0,sourceRevision:0,interestPool:null,interestViewId:null,interestRotations:new Map(),personalization:0,recommendationRevision:0,playbackSourceContext:{kind:"restored"},recommendationSession:createRecommendationSession(),automaticQueueIds:new Set(),impressionTimers:new Map(),refreshRecommendationImpressions(){},clearRecommendationObservations(){},discoveryCandidates:[],recommendationReasons:new Map(),
     view:"home",lastQuery:{kind:"home"},activeMood:"",playlistId:null,browseItem:null,getPlaylist:()=>null,
     taste:readTaste(),clock:{seconds:0,reset(){this.seconds=0;},sample() {return this.seconds;}},
-    title:field(),artist:field(),artwork:field(),seek:field(),isRangeDragging:()=>false,elapsed:field(),duration:field(),previous:{click(){}},
+    title:field(),artist:field(),artwork:field(),updateDockArt(){},seek:field(),isRangeDragging:()=>false,elapsed:field(),duration:field(),previous:{click(){}},
     invoke:(command,args)=>{if(command==="music_cancel_stream"){ctx.cancellations=(ctx.cancellations||0)+1;return Promise.resolve();}return invoke(command,args);},tracks,remember,nextIndex,recommend,recordListening,tasteSeeds,tasteArtistKeys,canonicalArtistKey,mergeRecommendationPools,rankMusicRecommendations,recommendationFamiliarity,createRecordingView,resolveRecordingSource,setRecordingSource,removeRecordingSource,recordingFamilyIds,sanitizeMusicTrack,saveMusicProfile,rememberInterestTrack,interestProfile,interestSources,interestSeeds,cover:()=>null,displaySubtitle:item=>item?.artists?.join(", ")||"Unknown artist",language:()=>"en",t:s=>s,errorText:String,
     storage:{getItem:key=>memory.get(key),setItem:(key,value)=>memory.set(key,value)},playbackQueue,button(){},openRecordingPicker:options=>{ctx.picker=options;},downloadsPending:new Set(),presentation:{notify(){}},onDownload:null,homeCache:null,
     wireMusicProfile:options=>{ctx.profileActions=options;},library:{invalidateUndo(){},find(){}},musicGain,previousVolume:.7,syncVolume(){},showLocal(){},load(){},
@@ -57,6 +58,13 @@ function player(invoke,items=[song(1)]){
   const actions=runInNewContext(`(()=>{${code}\nreturn {playAt,playItems,togglePlay,resumeListening,advance,preloadNext,clearRecommendationContext,plannedNext,rankRadioPool,radioCandidates,playbackSource,invalidateRecommendations,chooseRecording,refreshCurrentRecording,restoreProfile:profileActions.restore,downloadTrack,showInterestMix,renderInterestPool};})()`,ctx);
   return {ctx,...actions,emit:name=>events[name]?.(),expire(){const pending=[...timers.values()];timers.clear();pending.forEach(fn=>fn());}};
 }
+test("room guests cannot replace the host track and exact room playback ignores local version bindings",async()=>{
+ const calls=[],p=player(async(_command,args)=>{calls.push(args.id);return{url:args.id};});p.ctx.musicRoom={isGuest:()=>true};
+ p.ctx.saved.sourceBindings=[{trackId:song(1).id,source:song(2)}];
+ await p.playAt(0);p.playItems([song(3)],song(3).id);assert.equal(calls.length,0);assert.equal(p.ctx.queue[0].id,song(1).id);
+ await p.playAt(0,{origin:'room',autoplay:false});assert.deepEqual(calls,[song(1).id]);assert.equal(p.ctx.audio.paused,true);
+ await p.togglePlay();await p.advance(true);assert.equal(p.ctx.audio.paused,true);assert.equal(calls.length,1);
+});
 test("source restrictions explain the failure without starting audio or scheduling retries",async()=>{
   let calls=0;const failure="Playback restricted: YouTube requires sign-in or verification. Try another track.";
   const p=player(async()=>{calls++;throw failure;});
@@ -172,9 +180,18 @@ test("mid-track errors recover once at the same position instead of retrying for
   assert.equal(calls.length,2);assert.equal(calls[1].refresh,true);assert.equal(p.ctx.audio.currentTime,35);
   p.emit("error");await settle();assert.equal(calls.length,2);assert.equal(p.ctx.resolvedTrack,null);
 });
+test("a stalled first start reopens the same song once through the fresh source",async()=>{
+ const calls=[];let p;
+ p=player(async(_command,args)=>{calls.push(args);if(args.refresh)p.ctx.audio.hang=false;return {url:args.refresh?"reserve":"initial"};});
+ p.ctx.audio.hang=true;const start=p.playAt(0);await settle();p.expire();await start;
+ assert.equal(calls.length,2);assert.equal(calls[1].refresh,true);
+ assert.equal(p.ctx.audio.src,"reserve");assert.equal(p.ctx.audio.paused,false);assert.equal(p.ctx.streamLoading,false);
+ assert.equal(p.ctx.current.id,song(1).id);
+});
+
 test("stalled audio startup and resume leave an enabled retry state after the deadline",async()=>{
   const p=player(async()=>({url:"audio"}));p.ctx.audio.hang=true;
-  const start=p.playAt(0);await settle();p.expire();await start;
+  const start=p.playAt(0);await settle();p.expire();await settle();p.expire();await start;
   assert.equal(p.ctx.streamLoading,false);assert.equal(p.ctx.resolvedTrack,null);assert.match(p.ctx.message,/did not start in time/);
   p.ctx.audio.hang=false;await p.togglePlay();p.ctx.audio.currentTime=50;p.ctx.audio.pause();p.ctx.audio.hang=true;
   const resume=p.togglePlay();await settle();p.expire();await resume;
@@ -423,7 +440,7 @@ test("selecting a song after the first 200 library entries plays that exact song
   const items=Array.from({length:500},(_,n)=>song(n)),p=player(async(_,args)=>({url:args.id})),before=structuredClone(items);
   p.playItems(items,items[250].id);await settle();
   assert.equal(p.ctx.current.id,items[250].id);assert.equal(p.ctx.audio.src,items[250].id);
-  assert.equal(p.ctx.queue.length,200);assert.deepEqual(Array.from(p.ctx.queue,item=>item.id),items.slice(250,450).map(item=>item.id));
+  assert.equal(p.ctx.queue.length,500);assert.deepEqual(Array.from(p.ctx.queue,item=>item.id),items.map(item=>item.id));
   assert.deepEqual(items,before);
 });
 
@@ -485,7 +502,8 @@ test("saving a new source discards an older speculative decoder and prepares the
   const p=player(async(command,args)=>{calls.push({command,...args});return args.id===oldSource.id?pending.promise:{url:args.id};},queued);
   p.ctx.saved.sourceBindings=[{trackId:queued[1].id,track:queued[1],source:oldSource}];p.ctx.decks.warm=(id,url)=>warmed.push({id,url});
   await p.playAt(0);p.ctx.audio.currentTime=150;p.emit("timeupdate");await settle();
-  p.chooseRecording(queued[1]);assert.equal(p.ctx.picker.save(newSource),true);assert.equal(p.ctx.sourceRevision,1);assert.equal(p.ctx.deckClears,1);
+  const before=p.ctx.deckClears||0;
+  p.chooseRecording(queued[1]);assert.equal(p.ctx.picker.save(newSource),true);assert.equal(p.ctx.sourceRevision,1);assert.equal(p.ctx.deckClears,before+1);
   pending.resolve({url:"stale-decoder"});await settle();await settle();assert.deepEqual(warmed,[]);
   p.emit("timeupdate");await settle();await settle();
   assert.deepEqual(warmed,[{id:queued[1].id,url:newSource.id}]);

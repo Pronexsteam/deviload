@@ -9,7 +9,7 @@ export function createAmbientEnvelope(){
       const dt=Math.max(.001,Math.min(.1,seconds)),audible=signal&&Number.isFinite(signal.rms)&&signal.rms>.00005;
       const bass=audible?clamp(signal.bass):0;
       const onset=Math.max(0,bass-baseline);baseline+=(bass-baseline)*(1-Math.exp(-dt/.24));
-      const target=audible?[clamp(bass*.9+onset*2.1),clamp(clamp(signal.mid)*1.15),clamp(clamp(signal.high)*1.25)]:[0,0,0];
+      const target=audible?[clamp(bass*.95+onset*2.65),clamp(clamp(signal.mid)*1.2),clamp(clamp(signal.high)*1.3)]:[0,0,0];
       previous=target.map((level,i)=>previous[i]+(level-previous[i])*(1-Math.exp(-dt/(level > previous[i] ? .025 : .26))));
       return [...previous];
     }

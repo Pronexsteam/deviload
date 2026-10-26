@@ -27,3 +27,9 @@ test("perceptual volume, mute and unmute apply to prepared decks and a running o
   now=4000;tick();assert.equal(first.paused,true);assert.equal(cancelled,1);
   decks.warm("later","later");decks.setVolume(.25);assert.ok(decks.nodes.every(node=>node.volume===.25));
 });
+
+test("completed transitions release the old decoder and abandon unused preloads",()=>{
+ const decks=createMusicDecks({makeAudio:audio}),old=decks.current;old.src='old';decks.warm('two','two');
+ const active=decks.take('two',.7);assert.equal(old.src,'');assert.equal(active.src,'two');
+ decks.warm('unused','unused');decks.clear();assert.equal(old.src,'');assert.equal(active.src,'two');
+});

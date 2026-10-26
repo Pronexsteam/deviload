@@ -2,37 +2,52 @@ import {t, onLanguageChange} from "./i18n.js";
 import {wireGlassMaterial} from "./theme-glass.js";
 
 export const THEME_KEY = "deviload-theme";
-export const THEMES = Object.freeze(["glass-light", "matte-black", "glass-black", "midnight", "spotify", "ambient"]);
-const themeLabels = {"glass-light":"Light Liquid Glass", "matte-black":"Matte black", "glass-black":"Black Liquid Glass", midnight:"Midnight", spotify:"Studio green", ambient:"Ambient"};
+export const THEMES = Object.freeze(["ambient", "glass-light", "aurora", "prism"]);
+const themeLabels = {ambient:"Ambient", "glass-light":"Light Liquid Glass", aurora:"Aurora", prism:"Prism"};
+export const THEME_COLLECTION_KEY = "deviload-theme-collection";
+export const THEME_COLLECTION = "ambient-aurora-prism-v1";
 const wired = new WeakMap();
+const applied = new WeakMap();
 export function normalizeTheme(value) { return THEMES.includes(value) ? value : "ambient"; }
 
 function browserStorage(window) {
   try { return window.localStorage; } catch { return null; }
 }
 export function readTheme(storage) {
-  try { const saved = storage?.getItem(THEME_KEY);if(saved === "classic") { try { storage.setItem(THEME_KEY,"ambient"); } catch {} }return normalizeTheme(saved); } catch { return "ambient"; }
+  try {
+    if (storage?.getItem(THEME_COLLECTION_KEY) !== THEME_COLLECTION) {
+      // One-time collection migration, including previously selected Light.
+      // Write the theme first: a partial storage failure must not mark it done.
+      storage?.setItem(THEME_KEY, "ambient");
+      storage?.setItem(THEME_COLLECTION_KEY, THEME_COLLECTION);
+      return "ambient";
+    }
+    return normalizeTheme(storage?.getItem(THEME_KEY));
+  } catch { return "ambient"; }
 }
 
 // Only appearance changes: switching never reloads a window or touches playback.
 export function applyTheme(value, {document = globalThis.document, window = globalThis.window,
   storage = browserStorage(window), persist = false} = {}) {
   const theme = normalizeTheme(value), root = document.documentElement;
+  const previous=applied.get(document);
+  const themeChanged=previous!==theme||root.dataset.theme!==theme;
+  const motionChanged=previous===undefined||root.dataset.motion!=="reduced";
   let saved = !persist;
   if (persist) {
-    try { if (storage) { storage.setItem(THEME_KEY, theme); saved = true; } } catch { /* session only */ }
+    try { if (storage) { storage.setItem(THEME_KEY, theme); storage.setItem(THEME_COLLECTION_KEY, THEME_COLLECTION); saved = true; } } catch { /* session only */ }
   }
-  root.dataset.theme = theme;
-  root.dataset.motion = "reduced";
-  root.style.colorScheme = theme === "glass-light" ? "light" : "dark";
+  if(themeChanged){root.dataset.theme=theme;root.style.colorScheme=theme==="glass-light"?"light":"dark";}
+  if(motionChanged)root.dataset.motion="reduced";
   const select = document.getElementById("appearance-theme");
   if (select) select.value = theme;
   for (const item of document.querySelectorAll?.("[data-theme-choice]") || []) {
     const selected = item.dataset.themeChoice === theme;
     item.setAttribute("aria-checked", String(selected));item.tabIndex = selected ? 0 : -1;
   }
-  document.dispatchEvent(new window.CustomEvent("deviload-theme-change", {detail:{theme}}));
-  document.dispatchEvent(new window.Event("deviload-motion-change"));
+  applied.set(document,theme);
+  if(themeChanged)document.dispatchEvent(new window.CustomEvent("deviload-theme-change", {detail:{theme}}));
+  if(motionChanged)document.dispatchEvent(new window.Event("deviload-motion-change"));
   return {theme, saved};
 }
 

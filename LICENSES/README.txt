@@ -38,3 +38,7 @@ engines\gallery-dl.exe / engines/gallery-dl  GNU GPL v2
                       Release: https://codeberg.org/mikf/gallery-dl/releases/tag/v1.32.17
                       Corresponding source: https://codeberg.org/mikf/gallery-dl/archive/v1.32.17.tar.gz
                       This separate executable is optional and is not compiled into Deviload.
+
+Optional listening-room helper (downloaded on first host creation)
+cloudflared 2026.10.3 -- Apache-2.0, cloudflared.LICENSE.txt
+https://github.com/cloudflare/cloudflared/releases/tag/2026.10.3

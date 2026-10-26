@@ -91,12 +91,12 @@ test("surface geometry culls invisible panels while preserving a scrolled edge a
   assert.equal(glassSurfaceRect({left:NaN, top:0, width:200, height:200}, 800, 600), null);
 });
 
-test("classic and matte allocate no canvas; unavailable GPU falls back once per activation", () => {
-  const app = fixture({theme:"classic", gpu:false});
+test("Ambient presets allocate no canvas; unavailable GPU falls back once per activation", () => {
+  const app = fixture({theme:"ambient", gpu:false});
   const cleanup = wireGlassMaterial(app);
   assert.equal(wireGlassMaterial(app), cleanup);
   assert.equal(app.canvases.length, 0);
-  app.switchTheme("matte-black");assert.equal(app.canvases.length, 0);
+  app.switchTheme("aurora");assert.equal(app.canvases.length, 0);
   app.switchTheme("glass-light");assert.equal(app.root.dataset.glassRenderer, "fallback");
   assert.equal(app.canvases.length, 1);assert.equal(app.images.length, 0);
   app.window.emit("resize");app.observers[0].callback([]);
@@ -126,12 +126,14 @@ test("successful optics are static, bounded and release all GPU resources on ski
   app.panels[0].getBoundingClientRect = () => ({left:18, top:70, width:320, height:450});
   app.document.emit("scroll");app.flush();
   assert.equal(gl.draws, 2);assert.equal(app.frames.size, 0);
-  app.switchTheme("glass-black");
+  app.switchTheme("prism");
+  assert.equal(app.images.length,1);
+  app.switchTheme("glass-light");
   assert.equal(canvas.isConnected, false);
   assert.deepEqual(gl.disposed.sort(), ["buffer", "context", "program", "shader", "shader", "texture"]);
-  app.images[1].onload();assert.equal(app.contexts[1].uniforms.u_brightness, .30);
-  assert.equal(app.contexts[1].uniforms.u_saturation, .45);
-  app.switchTheme("matte-black");assert.equal(app.canvases[1].isConnected, false);
+  app.images[1].onload();assert.equal(app.contexts[1].uniforms.u_brightness, 1);
+  assert.equal(app.contexts[1].uniforms.u_saturation, .55);
+  app.switchTheme("aurora");assert.equal(app.canvases[1].isConnected, false);
   assert.equal(app.root.dataset.glassRenderer, undefined);
   cleanup();
 });

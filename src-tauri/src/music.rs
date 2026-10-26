@@ -22,10 +22,18 @@ pub struct Item {
 }
 
 #[derive(Clone, Debug, Serialize)]
-pub struct Section { title: String, items: Vec<Item> }
+pub struct BrowseTarget { id: String, params: String }
+#[derive(Clone, Debug, Serialize)]
+pub struct Section { title: String, items: Vec<Item>, #[serde(skip_serializing_if = "Option::is_none")] more: Option<BrowseTarget> }
 
 #[derive(Clone, Debug, Serialize)]
-pub struct Catalog { sections: Vec<Section>, continuation: Option<String> }
+pub struct Catalog {
+    sections: Vec<Section>, continuation: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    artwork: Option<BrowseArtwork>,
+}
+#[derive(Clone, Debug, Serialize)]
+pub struct BrowseArtwork { id: String, image: String }
 
 fn bounded(response: Response) -> Result<Vec<u8>, String> {
     let response = response.error_for_status().map_err(|_| CATALOG_ERROR)?;
@@ -74,11 +82,10 @@ fn valid_id(id: &str) -> bool { !id.is_empty() && id.len() <= 160 && id.bytes().
 fn video_id(id: &str) -> bool { id.len() == 11 && valid_id(id) }
 
 fn image(value: &Value) -> String {
-    find(value, "thumbnails").and_then(Value::as_array).and_then(|items| items.last())
-        .and_then(|v| v["url"].as_str()).filter(|raw| {
-            url::Url::parse(raw).ok().is_some_and(|u| u.scheme() == "https" && u.host_str().is_some_and(|h|
+    find(value, "thumbnails").and_then(Value::as_array).and_then(|items| items.iter().rev().filter_map(|v| v["url"].as_str()).find(|raw| {
+            raw.len() <= 2048 && url::Url::parse(raw).ok().is_some_and(|u| u.scheme() == "https" && u.username().is_empty() && u.password().is_none() && u.port().is_none() && u.host_str().is_some_and(|h|
                 h == "i.ytimg.com" || h == "lh3.googleusercontent.com" || h == "yt3.googleusercontent.com"))
-        }).unwrap_or("").to_owned()
+        })).unwrap_or("").to_owned()
 }
 
 fn artists(value: &Value) -> Vec<String> {
@@ -207,7 +214,15 @@ fn shelves(value: &Value, sections: &mut Vec<Section>) {
                 let mut items = Vec::new();
                 collect_items(&v["contents"], &mut items);
                 unique(&mut items);
-                if !items.is_empty() { sections.push(Section { title, items }); }
+                let more = find(&v["bottomEndpoint"], "browseEndpoint")
+                    .or_else(|| find(&v["header"], "moreContentButton").and_then(|button| find(button, "browseEndpoint")))
+                    .and_then(|target| {
+                        let id=target["browseId"].as_str()?;
+                        let params=target["params"].as_str().unwrap_or("");
+                        (valid_id(id) && ["UC","VL","MPRE"].iter().any(|prefix|id.starts_with(prefix)) && params.len()<=8192 && !params.chars().any(char::is_control))
+                            .then(|| BrowseTarget{id:id.into(),params:params.into()})
+                    });
+                if !items.is_empty() { sections.push(Section { title, items, more }); }
             } else if !matches!(key.as_str(), "menu" | "header") { shelves(v, sections); }
         },
         Value::Array(values) => for v in values { shelves(v, sections); },
@@ -222,12 +237,32 @@ fn parse(value: &Value, grouped: bool) -> Catalog {
         let mut items = Vec::new();
         collect_items(value, &mut items);
         unique(&mut items);
-        if !items.is_empty() { sections.push(Section { title: String::new(), items }); }
+        if !items.is_empty() { sections.push(Section { title: String::new(), items, more: None }); }
     }
     let continuation = find(value, "nextContinuationData").and_then(|v| v["continuation"].as_str())
         .or_else(|| find(value, "continuationCommand").and_then(|v| v["token"].as_str()))
         .filter(|v| v.len() <= 8192).map(str::to_owned);
-    Catalog { sections, continuation }
+    Catalog { sections, continuation, artwork: None }
+}
+
+// Only primary page headers can provide collection artwork. Never pick a
+// thumbnail recursively from recommendations, menus or a song's artist link.
+fn browse_artwork(value: &Value, id: &str) -> Option<BrowseArtwork> {
+    let candidates = [
+        &value["header"],
+        value.pointer("/contents/twoColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0").unwrap_or(&Value::Null),
+        value.pointer("/contents/singleColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0").unwrap_or(&Value::Null),
+    ];
+    for candidate in candidates {
+        for renderer in ["musicDetailHeaderRenderer", "musicResponsiveHeaderRenderer", "musicImmersiveHeaderRenderer", "musicVisualHeaderRenderer"] {
+            let header = &candidate[renderer];
+            for field in ["thumbnail", "foregroundThumbnail"] {
+                let cover = image(&header[field]);
+                if !cover.is_empty() { return Some(BrowseArtwork { id: id.into(), image: cover }); }
+            }
+        }
+    }
+    None
 }
 
 fn mix_body(value: &str) -> Result<Value, String> {
@@ -240,6 +275,9 @@ fn mix_body(value: &str) -> Result<Value, String> {
 }
 
 pub fn catalog_page(kind: &str, value: &str, language: &str, proxy: &str, filter: &str, continuation: &str) -> Result<Catalog, String> {
+    catalog_page_with_params(kind,value,language,proxy,filter,continuation,"")
+}
+fn catalog_page_with_params(kind: &str, value: &str, language: &str, proxy: &str, filter: &str, continuation: &str, params: &str) -> Result<Catalog, String> {
     let (endpoint, mut body) = match kind {
         "home" => ("browse", json!({"browseId":"FEmusic_home"})),
         "search" if !value.trim().is_empty() && value.chars().count() <= 120 => ("search", json!({"query":value.trim()})),
@@ -249,6 +287,8 @@ pub fn catalog_page(kind: &str, value: &str, language: &str, proxy: &str, filter
         _ => return Err("Invalid music request".into()),
     };
     if continuation.len() > 8192 || continuation.chars().any(char::is_control) { return Err("Invalid music request".into()); }
+    if params.len()>8192 || params.chars().any(char::is_control) || (!params.is_empty() && kind!="browse") {return Err("Invalid music request".into());}
+    if !params.is_empty(){body["params"]=json!(params);}
     if kind == "search" {
         let code = match filter { "all" => None, "songs" => Some("II"), "albums" => Some("IY"), "artists" => Some("Ig"), _ => return Err("Invalid music request".into()) };
         if let Some(code) = code { body["params"] = json!(format!("EgWKAQ{code}AWoMEA4QChADEAQQCRAF")); }
@@ -261,15 +301,17 @@ pub fn catalog_page(kind: &str, value: &str, language: &str, proxy: &str, filter
     if !continuation.is_empty() { address.query_pairs_mut().append_pair("continuation", continuation).append_pair("ctoken", continuation); }
     let request = client.post(address);
     let response = request.header("Origin", ORIGIN).json(&body).send().map_err(|_| CATALOG_ERROR)?;
-    let value: Value = serde_json::from_slice(&bounded(response)?).map_err(|_| CATALOG_ERROR)?;
-    if value.get("error").is_some() { return Err(CATALOG_ERROR.into()); }
-    Ok(parse(&value, kind == "home" || kind == "browse"))
+    let response_value: Value = serde_json::from_slice(&bounded(response)?).map_err(|_| CATALOG_ERROR)?;
+    if response_value.get("error").is_some() { return Err(CATALOG_ERROR.into()); }
+    let mut catalog = parse(&response_value, kind == "home" || kind == "browse");
+    if kind == "browse" && continuation.is_empty() { catalog.artwork = browse_artwork(&response_value, value); }
+    Ok(catalog)
 }
 
 #[tauri::command]
-pub async fn music_catalog(kind: String, value: String, language: String, filter: Option<String>, continuation: Option<String>, engine: tauri::State<'_, crate::Engine>) -> Result<Catalog, String> {
+pub async fn music_catalog(kind: String, value: String, language: String, filter: Option<String>, continuation: Option<String>, params: Option<String>, engine: tauri::State<'_, crate::Engine>) -> Result<Catalog, String> {
     let proxy = crate::stored_proxy(&engine.dir);
-    tauri::async_runtime::spawn_blocking(move || catalog_page(&kind, &value, &language, &proxy, filter.as_deref().unwrap_or("all"), continuation.as_deref().unwrap_or(""))).await.map_err(|_| CATALOG_ERROR.to_owned())?
+    tauri::async_runtime::spawn_blocking(move || catalog_page_with_params(&kind, &value, &language, &proxy, filter.as_deref().unwrap_or("all"), continuation.as_deref().unwrap_or(""), params.as_deref().unwrap_or(""))).await.map_err(|_| CATALOG_ERROR.to_owned())?
 }
 
 #[derive(Serialize)]
@@ -314,18 +356,11 @@ struct Streams {
 }
 static STREAMS: OnceLock<Mutex<Streams>> = OnceLock::new();
 static RESOLUTION: Mutex<()> = Mutex::new(());
-static WARMED: OnceLock<()> = OnceLock::new();
 
 pub fn prepare_engine() {
+    // Opening the music page only boots the small worker. The reserve tools
+    // are launched on demand; version subprocesses do not warm audio itself.
     crate::music_engine::prepare();
-    WARMED.get_or_init(|| {
-        // Warm executable pages before the first Play, without network traffic.
-        for name in ["yt-dlp", "deno"] {
-            if let Ok(exe) = crate::binary(name) {
-                let _ = crate::engine_update::output(crate::command(&exe).arg("--version"), Duration::from_secs(15));
-            }
-        }
-    });
 }
 
 #[tauri::command]
@@ -369,7 +404,10 @@ fn stream_reserved(id: &str, proxy: &str, refresh: bool, preload: bool, generati
     // The newest selection cancels stale foreground work as well as preloads.
     // Selecting the track already being prepared adopts that work instead.
     let cancelled = || selection().lock().unwrap().cancelled(generation, &key);
-    if proxy.is_empty() && !cancelled() {
+    // A deliberate recovery must try the independent verified-range relay.
+    // Reopening the same fast prefix/SABR route can fail at the same position
+    // repeatedly even though the reserve can serve the full recording.
+    if proxy.is_empty() && !refresh && !cancelled() {
         match crate::music_engine::play(id, refresh, preload, generation, &cancelled) {
             Ok(url) if !cancelled() => return Ok(Stream { url }),
             Ok(_) => return Err("Cancelled".into()),
@@ -502,6 +540,17 @@ pub async fn music_stream(id: String, refresh: Option<bool>, preload: Option<boo
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn artwork_comes_only_from_primary_header_and_valid_thumbnail() {
+        let image_url = "https://lh3.googleusercontent.com/album=w600-h600";
+        let header = json!({"musicResponsiveHeaderRenderer":{"thumbnail":{"thumbnails":[{"url":image_url},{"url":"https://evil.test/image"}]}}});
+        let response = json!({"contents":{"twoColumnBrowseResultsRenderer":{"tabs":[{"tabRenderer":{"content":{"sectionListRenderer":{"contents":[header]}}}}]}}});
+        let art = browse_artwork(&response,"MPREalbum").unwrap();
+        assert_eq!(art.id,"MPREalbum");assert_eq!(art.image,image_url);
+        assert!(browse_artwork(&json!({"recommendations":{"header":{"musicResponsiveHeaderRenderer":{"thumbnail":{"thumbnails":[{"url":image_url}]}}}}}),"MPREalbum").is_none());
+        assert!(browse_artwork(&json!({"header":{"musicDetailHeaderRenderer":{"menu":{"thumbnails":[{"url":image_url}]}}}}),"MPREalbum").is_none());
+    }
+
     fn catalog(kind: &str, value: &str, language: &str, proxy: &str) -> Result<Catalog, String> {
         catalog_page(kind, value, language, proxy, "all", "")
     }
@@ -643,6 +692,25 @@ mod tests {
         assert_eq!(parsed.sections[0].items[0].kind, "artist");
     }
 
+    #[test]
+    fn artist_shelves_keep_the_full_catalog_endpoint() {
+        let song=json!({"musicResponsiveListItemRenderer":{"playlistItemData":{"videoId":"abcdefghijk"},"flexColumns":[{"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"A song"}]}}}]}});
+        let value=json!({"musicShelfRenderer":{"title":{"runs":[{"text":"Top songs"}]},"contents":[song],"bottomEndpoint":{"browseEndpoint":{"browseId":"VLallSongs","params":"wAEB"}}}});
+        let page=parse(&value,true);let target=page.sections[0].more.as_ref().unwrap();assert_eq!(target.id,"VLallSongs");assert_eq!(target.params,"wAEB");
+        let mut bad=value.clone();bad["musicShelfRenderer"]["bottomEndpoint"]["browseEndpoint"]["browseId"]=json!("https://localhost");assert!(parse(&bad,true).sections[0].more.is_none());
+        assert!(catalog_page_with_params("browse","VLallSongs","en","","all","",&"x".repeat(8193)).is_err());
+    }
+    #[test]
+    fn live_artist_catalog_when_explicitly_requested() {
+        if std::env::var_os("DEVILOAD_ARTIST_NETWORK_TEST").is_none(){return;}
+        let search=catalog("search","Massive Attack","en","").unwrap();
+        let artist=search.sections.iter().flat_map(|s|&s.items).find(|i|i.kind=="artist"&&i.title=="Massive Attack").unwrap();
+        let artist=catalog("browse",&artist.id,"en","").unwrap();
+        let shelf=artist.sections.iter().find(|s|s.items.iter().all(|i|i.kind=="song")&&s.more.is_some()).expect("artist songs endpoint");let target=shelf.more.as_ref().unwrap();
+        let songs=catalog_page_with_params("browse",&target.id,"en","","all","",&target.params).unwrap();
+        assert!(songs.sections.iter().map(|s|s.items.len()).sum::<usize>()>shelf.items.len());
+        if let Some(next)=songs.continuation{let next=catalog_page_with_params("browse",&target.id,"en","","all",&next,&target.params).unwrap();assert!(!next.sections.is_empty());}
+    }
     #[test]
     #[ignore = "live guest YouTube Music check"]
     fn live_guest_catalog() {

@@ -1,3 +1,7 @@
+import {orderDownloads, orderLibrary} from "./download-order.js";
+import {createCinema} from "./cinema-player.js";
+import {wireCinemaControls} from "./cinema-controls.js";
+import {wireCinemaHome} from "./cinema-home.js";
 import {CompletionScene} from './completion-scene.js';
 const completionScene = new CompletionScene();
 import {MediaPulse} from "./media-pulse.js";
@@ -15,6 +19,7 @@ import {t, tn, errorText, translateMessage, translateDom, setLanguage, onLanguag
 import {createEngineUpdater} from "./engine-update.js";
 import {createAppUpdateScheduler,isAppUpdateDismissed,dismissAppUpdate,clearAppUpdateDismissal,updateDownloadProgress} from "./app-update-prompt.js";
 import {createMusic} from "./devil-music.js";
+import {initializeMusic} from "./music-profile-startup.js";
 import {wireReleaseNotes} from "./app-release-notes.js";
 import {wireSupporters} from "./supporters.js";
 import {wireAppearance} from "./appearance.js";
@@ -33,9 +38,9 @@ const liveFire = new FireAnimation($("live-download"));
 const taskOrbs = new Map();
 const stateNames = {idle:"Ready to download",running:"Downloading",queued:"Tasks in the queue",done:"All done",error:"There are errors",interrupted:"Can be resumed",cancelling:"Stopping…",pausing:"Pausing…",paused:"The queue is paused"};
 const filters = {all:["all-tab","All tasks"],active:["active-tab","Current tasks"],scheduled:["scheduled-tab","Scheduled"],issues:["issues-tab","Problems"]};
-const pageTabs = {downloads:"downloads-tab",library:"library-tab",search:"search-tab",editor:"devilcut-tab",music:"music-tab"};
-const pageTitles = {downloads:"Downloads",library:"Library",search:"Media search",editor:"Devil Cut",music:"Devil Music"};
-const devilMusic = createMusic({invoke,onDownload:async item=>{
+const pageTabs = {downloads:"downloads-tab",library:"library-tab",cinema:"cinema-tab",editor:"devilcut-tab",music:"music-tab"};
+const pageTitles = {downloads:"Downloads",library:"Devil Library",cinema:"Devil Cinema",editor:"Devil Cut",music:"Devil Music"};
+const devilMusic = initializeMusic({createMusic,invoke,onDownload:async item=>{
   const count=await downloadMusic(invoke,item,{
     folder:$("folder").value.trim(),cookiesMode:$("cookies-mode").value,cookies:$("cookies").value.trim(),signedInPath,
     sponsorblock:$("sponsorblock").checked,archive:$("archive").checked,rateMbps:Number($("rate").value),
@@ -47,7 +52,7 @@ const devilMusic = createMusic({invoke,onDownload:async item=>{
 $("music-tab").addEventListener("click", () => navigate("music"));
 let quality = "1080", currentFilter = "all", search = "", mediaFilter = "all", mediaSearch = "", jobs = [], currentAudioId = null;
 let rateLimits = [];
-let cinemaIds = [], currentPlayerId = null;
+let cinemaIds = [];
 let cinemaPositions = {}, libraryMeta = {};
 // Tasks hidden while their Undo is on screen, each with the timer that removes it for real.
 const REMOVE_DELAY = 6000;
@@ -146,7 +151,7 @@ function navigate(page, focus = false) {
     else $(id).removeAttribute("aria-current");
   }
   window.scrollTo({top:0,behavior:"instant"});
-  if (focus) (page === "search" ? $("media-query") : page === "downloads" ? $("urls") : null)?.focus({preventScroll:true});
+  if (focus) (page === "cinema" ? $("cinema-home-url") : page === "downloads" ? $("urls") : null)?.focus({preventScroll:true});
 }
 function syncTitle() {
   document.title = "Deviload — " + t(pageTitles[document.querySelector("main").dataset.page] || "Downloads");
@@ -236,12 +241,17 @@ function showSettingsFor(id) {
 const musicNavigation=document.createElement("button");musicNavigation.type="button";musicNavigation.className="music-navigation-toggle";musicNavigation.hidden=true;
 const appNavigation=document.querySelector(".sidebar");appNavigation.id="deviload-navigation";musicNavigation.setAttribute("aria-controls",appNavigation.id);
 document.querySelector(".workspace-breadcrumb").prepend(musicNavigation);
+// Keep a single search form and its listeners when switching app sections.
+document.querySelector(".workspace-breadcrumb").after($("music-search"));
+function labelMusicNavigation(){musicNavigation.textContent="";musicNavigation.title=musicNavigation.ariaLabel=t("Deviload sections");}
 function setMusicFocus(enabled){
   document.body.classList.toggle("music-focus",enabled);musicNavigation.hidden=document.querySelector("main").dataset.page!=="music";
-  musicNavigation.setAttribute("aria-expanded",String(!enabled));musicNavigation.textContent=t("Deviload sections");
+  document.body.classList.toggle("music-navigation-layout",!musicNavigation.hidden);
+  appNavigation.inert=enabled;appNavigation.setAttribute("aria-hidden",String(enabled));
+  musicNavigation.setAttribute("aria-expanded",String(!enabled));labelMusicNavigation();
 }
 musicNavigation.addEventListener("click",()=>setMusicFocus(!document.body.classList.contains("music-focus")));
-onLanguageChange(()=>{musicNavigation.textContent=t("Deviload sections");});
+onLanguageChange(labelMusicNavigation);
 wireReleaseNotes(document.querySelector("main"));
 const toolbar = document.querySelector(".topbar-actions");
 const overflowControls = [document.querySelector(".lang-menu"), $("open-youtube-view"), $("notice-button"), $("open-folder")];
@@ -739,7 +749,7 @@ $("clipboard-dismiss").addEventListener("click", () => {
 window.addEventListener("focus", scanClipboard);
 document.addEventListener("visibilitychange", scanClipboard);
 setInterval(scanClipboard, 3500);
-$("search-tab").addEventListener("click", () => navigate("search", true));
+$("cinema-tab").addEventListener("click", () => navigate("cinema", true));
 $("downloads-tab").addEventListener("click", () => showDownloads());
 function syncPlaylist() {
   const enabled = $("playlist").checked;
@@ -1168,113 +1178,15 @@ $("audio-normalize").addEventListener("click", async () => {
     addNotice(t("Loudness normalized"), file.split(/[\\/]/).pop());
   } catch (error) { if (currentAudioId === id) audioStatus(errorText(error), true); }
   finally { if (currentAudioId === id) $("audio-normalize").disabled = false; }
-});async function openPlayer(id) {
-  if (!invoke || !convertFileSrc) { message(t("The player is available in the Deviload app."), true); return; }
-  const job = jobs.find(item => item.id === id && item.status === "done");
-  if (!job) return;
-  currentPlayerId = id;
-  const dialog = $("player-dialog");
-  const video = $("player-video"), audio = $("player-audio"), image = $("player-image");
-  video.pause(); audio.pause(); video.removeAttribute("src"); audio.removeAttribute("src"); image.removeAttribute("src");
-  video.hidden = true; audio.hidden = true; image.hidden = true;
-  video.querySelectorAll("track").forEach(track => track.remove());
-  $("player-chapters").replaceChildren(); $("player-chapters").hidden = true;
-  $("player-title").textContent = job.file.split(/[\\/]/).pop();
-  renderCinemaQueue();
-  $("player-status").textContent = t("Opening the file…");
-  if (!dialog.open) dialog.showModal();
-  brandMascot.setActivity("cinema"); brandMascot.reactCinema();
-  try {
-    const file = await invoke("media_source", {id});
-    if (!dialog.open || currentPlayerId !== id) return;
-    const element = /\.(gif|jpg|jpeg|png|webp|bmp|avif)$/i.test(file) ? image : /\.(mp3|flac|wav|m4a|ogg|opus|aac|aiff)$/i.test(file) ? audio : video;
-    element.hidden = false;
-    element.src = convertFileSrc(file);
-    if (element !== image) {
-      const saved = Number(cinemaPositions[job.file] || 0);
-      element.addEventListener("loadedmetadata", () => { if (currentPlayerId === id && saved > 1 && saved < element.duration - 10) element.currentTime = saved; }, {once:true});
-      element.load();
-    }
-    $("player-status").textContent = t("Use the player buttons to control playback.");
-    if (element === video) {
-      let metadata;
-      try { metadata = await invoke("player_metadata", {id}); }
-      catch { return; }
-      if (!dialog.open || currentPlayerId !== id || video.hidden) return;
-      const chapters = $("player-chapters");
-      for (const chapter of metadata.chapters || []) {
-        const title = chapter.title || t("Chapter · {time}", {time:Math.floor(chapter.start / 60) + ":" + String(Math.floor(chapter.start % 60)).padStart(2,"0")});
-        const button = node("button", "", title);
-        button.type = "button"; button.addEventListener("click", () => { video.currentTime = chapter.start; video.play().catch(() => {}); });
-        chapters.append(button);
-      }
-      chapters.hidden = !chapters.childElementCount;
-      if (metadata.subtitles) {
-        const track = document.createElement("track");
-        const subtitleLanguage = metadata.subtitleLanguage || "und";
-        track.kind = "subtitles";
-        track.label = subtitleLanguage === "und" ? t("Subtitles") : t("Subtitles · {language}", {language:subtitleLanguage});
-        track.srclang = subtitleLanguage;
-        track.src = metadata.subtitles;
-        video.append(track);
-      }
-    }
-  } catch (error) { $("player-status").textContent = errorText(error); }
-}
-$("player-video").addEventListener("error", () => { if ($("player-video").getAttribute("src")) $("player-status").textContent = t("The built-in player does not support this codec."); });
-$("player-audio").addEventListener("error", () => { if ($("player-audio").getAttribute("src")) $("player-status").textContent = t("The built-in player cannot play this audio format."); });
-$("close-player").addEventListener("click", () => $("player-dialog").close());
-$("player-dialog").addEventListener("close", () => {
-  saveCinemaPosition();
-  currentPlayerId = null;
-  brandMascot.setActivity($("share-dialog").open ? "share" : "idle");
-  for (const id of ["player-video", "player-audio"]) { const el = $(id); el.pause(); el.removeAttribute("src"); el.load(); }
-  $("player-image").removeAttribute("src"); $("player-image").hidden = true;
-});
-let lastCinemaSave = -1;
-function saveCinemaPosition() {
-  const job = jobs.find(item => item.id === currentPlayerId);
-  if (!job) return;
-  const element = $("player-video").hidden ? $("player-audio") : $("player-video");
-  if (!Number.isFinite(element.currentTime)) return;
-  const second = element.ended ? 0 : Math.floor(element.currentTime);
-  if (second === lastCinemaSave) return;
-  lastCinemaSave = second;
-  cinemaPositions[job.file] = second;
-  persistSection("positions", cinemaPositions);
-}
-for (const id of ["player-video", "player-audio"]) {
-  $(id).addEventListener("timeupdate", () => { if (Math.floor($(id).currentTime) % 5 === 0) saveCinemaPosition(); });
-  $(id).addEventListener("ended", () => {
-    saveCinemaPosition();
-    const index = cinemaIds.indexOf(currentPlayerId);
-    if (index >= 0 && index < cinemaIds.length - 1) openPlayer(cinemaIds[index + 1]);
-  });
-}
-function renderCinemaQueue() {
-  const list = $("cinema-items");
-  list.replaceChildren();
-  for (const id of cinemaIds) {
-    const job = jobs.find(item => item.id === id);
-    if (!job) continue;
-    const button = node("button", id === currentPlayerId ? "selected" : "", job.file.split(/[\\/]/).pop());
-    button.type = "button";
-    button.addEventListener("click", () => { saveCinemaPosition(); openPlayer(id); });
-    list.append(button);
-  }
-  const index = cinemaIds.indexOf(currentPlayerId);
-  $("cinema-prev").disabled = index <= 0;
-  $("cinema-next").disabled = index < 0 || index >= cinemaIds.length - 1;
-  $("player-cut").hidden = !jobs.some(job => job.id === currentPlayerId && isVideoJob(job));
-}
-$("cinema-open").addEventListener("click", () => {
-  if (!cinemaIds.length) { message(t("The library has no files to watch yet."), true); return; }
-  openPlayer(cinemaIds[0]);
-});
-$("cinema-prev").addEventListener("click", () => { const index = cinemaIds.indexOf(currentPlayerId); if (index > 0) { saveCinemaPosition(); openPlayer(cinemaIds[index - 1]); } });
-$("cinema-next").addEventListener("click", () => { const index = cinemaIds.indexOf(currentPlayerId); if (index >= 0 && index < cinemaIds.length - 1) { saveCinemaPosition(); openPlayer(cinemaIds[index + 1]); } });
-$("player-cut").addEventListener("click", () => { if (currentPlayerId == null) return; const id = currentPlayerId; $("player-dialog").close(); devilCut.open(id); });
-$("player-share").addEventListener("click", () => { if (currentPlayerId != null) startShare(currentPlayerId); });
+});const cinema = createCinema({invoke,convertFileSrc,t,errorText,getJobs:()=>jobs,getIds:()=>cinemaIds,
+  getPositions:()=>cinemaPositions,persistPositions:()=>persistSection("positions",cinemaPositions),
+  onCut:id=>devilCut.open(id),onShare:id=>startShare(id),
+  onSearch:value=>cinemaHome.search(value),onCurrent:item=>cinemaHome.current(item),onClose:()=>cinemaHome.close(),
+  onActivity:active=>{brandMascot.setActivity(active?"cinema":$("share-dialog").open?"share":"idle");if(active)brandMascot.reactCinema();}});
+function openPlayer(id){cinema.openLocal(id);}
+wireCinemaControls({dialog:$("player-dialog"),video:$("player-video"),audio:$("player-audio"),invoke,t,onLanguageChange});
+$("cinema-open").addEventListener("click",()=>cinema.open());
+const cinemaHome=wireCinemaHome({invoke,t,errorText,player:cinema,onLibrary:()=>navigate("library"),onHome:()=>navigate("cinema")});
 // Devil Cut opens in its own window; this page lists its projects.
 const devilCut = createCutHome({t, tn, locale, node, getJobs:() => jobs, isVideoJob,
   openEditor:request => invoke ? invoke("open_devil_cut", request).catch(error => message(errorText(error), true)) : message(t("Devil Cut works in the installed Deviload app."), true),
@@ -1358,66 +1270,6 @@ window.__TAURI__?.event?.listen?.("power-simulated", () => { closePower(); messa
 window.__TAURI__?.event?.listen?.("power-failed", event => { closePower(); message(errorText(event.payload), true); });
 $("power-cancel").addEventListener("click", () => invoke("cancel_power").catch(() => {}));
 $("power-dialog").addEventListener("cancel", event => { event.preventDefault(); invoke("cancel_power").catch(() => {}); });
-let searchRequest = 0, searchPage = null;
-$("media-search-form").addEventListener("submit", async event => {
-  event.preventDefault();
-  if (!invoke) { $("media-search-status").textContent = t("Search works in the installed Deviload app."); return; }
-  const query = $("media-query").value.trim();
-  if (!query) return;
-  searchPage = {request:++searchRequest, query, source:$("media-source").value, offset:0, urls:new Set(), busy:false};
-  $("media-results").replaceChildren();
-  await loadSearchPage(searchPage);
-});
-$("media-search-more").addEventListener("click", () => { if (searchPage) loadSearchPage(searchPage); });
-async function loadSearchPage(page) {
-  if (page.busy || page.offset === null) return;
-  page.busy = true;
-  const request = page.request, button = $("media-search-more");
-  button.disabled = true; button.hidden = true;
-  $("media-search-button").disabled = true;
-  $("media-search-status").textContent = t("Searching…");
-  setPose($("search-mascot"), "working");
-  try {
-    const result = await invoke("search_media", {query:page.query, source:page.source, offset:page.offset});
-    if (request !== searchRequest) return;
-    page.offset = result.nextOffset;
-    for (const hit of result.hits) {
-      if (page.urls.has(hit.url)) continue;
-      page.urls.add(hit.url);
-      const card = node("article", "search-result");
-      if (hit.thumbnail) {
-        const picture = node("img", "search-thumb");
-        picture.src = hit.thumbnail;
-        picture.alt = "";
-        picture.loading = "lazy";
-        picture.referrerPolicy = "no-referrer";
-        card.append(picture);
-      }
-      const body = node("div", "search-result-body");
-      body.append(node("strong", "", hit.title || t("Untitled")),
-        node("span", "", [hit.channel, hit.duration ? Math.floor(hit.duration/60) + ":" + String(hit.duration%60).padStart(2,"0") : ""].filter(Boolean).join(" · ")));
-      const add = node("button", "outline small", t("Add"));
-      add.type = "button";
-      add.addEventListener("click", () => {
-        const existing = $("urls").value.trim();
-        if (!existing.split(/\s+/).includes(hit.url)) $("urls").value = [existing,hit.url].filter(Boolean).join("\n");
-        $("urls").dispatchEvent(new Event("input"));
-        showDownloads(true);
-        message(t("Link added. Choose a format and press “Download”."));
-        pop($("urls"), 6);
-      });
-      card.append(body, add);
-      $("media-results").append(card);
-    }
-    $("media-search-status").textContent = page.urls.size ? t("Found: {count}", {count:page.urls.size}) : t("Nothing found. Try another query.");
-    setPose($("search-mascot"), page.urls.size ? "victory" : "look", page.urls.size ? "look" : null);
-  } catch (error) {
-    if (request === searchRequest) { $("media-search-status").textContent = errorText(error); setPose($("search-mascot"), "error", "look", 3500); }
-  } finally {
-    page.busy = false;
-    if (request === searchRequest) { $("media-search-button").disabled = false; button.disabled = false; button.hidden = page.offset === null; }
-  }
-}
 let inspectTimer = 0, inspectSerial = 0, inspectedInfo = null, inspectedOptionsKey="", inspectedAt=0, inspectPending=Promise.resolve(),pendingInspectAddress="",pendingInspectKey="";
 function linksIn(text) {
   return text.trim().split(/\s+/).filter(item => /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i.test(item));
@@ -1510,7 +1362,8 @@ async function inspectLink(address) {
   const work=inspectPending.catch(()=>{}).then(async()=>{
     if(serial!==inspectSerial)return;
     const card=$("inspect-card"),loading=node("div","inspect-loading");
-    loading.append(mascotSpot("working","inspect-mascot"),node("span","",t("Loading the preview…")));
+    const indicator=node("span","download-loading-indicator");indicator.setAttribute("aria-hidden","true");
+    loading.append(indicator,node("span","",t("Loading the preview…")));
     card.replaceChildren(loading);card.dataset.state="loading";card.hidden=false;
     try{
       const options=buildDownloadRequest().options,key=inspectionKey(options);
@@ -1609,7 +1462,9 @@ function createCard(job) {
   taskOrbs.set(job.id, new MediaPulse(icon, job.status));
   const content = node("div", "job-content");
   const body = node("div", "job-body");
-  body.append(node("h3", "job-title"), node("p", "job-source"), node("div", "job-meta"), node("p", "job-help"));
+  const statusRow = node("div", "job-status-row");
+  statusRow.append(node("div", "job-meta"));
+  body.append(node("h3", "job-title"), node("p", "job-source"), statusRow, node("p", "job-help"));
   content.append(body, node("div", "job-controls"));
   row.append(cover, content);
   pop(row, 12);
@@ -1622,6 +1477,7 @@ function addAction(controls, label, className, handler, title = "", iconName = "
   if (title) button.title = title;
   button.addEventListener("click", handler);
   controls.append(button);
+  return button;
 }
 function addJobAction(controls, job, action) {
   const title = {retry:"Retry",cancel:"Cancel",pause:"Pause",resume:"Resume",stop:"Stop recording"}[action];
@@ -1730,7 +1586,7 @@ function render(data) {
   $("stat-done").textContent = totals.done;
   $("counts").textContent = t("{active} active · {done} finished", {active:totals.active, done:totals.done});
   $("queue-title").textContent = t(filters[currentFilter][1]);
-  const visible = visibleJobs(jobs, currentFilter, search);
+  const visible = orderDownloads(visibleJobs(jobs, currentFilter, search));
   $("empty").hidden = visible.length > 0;
   const emptyTitle = search ? "Nothing found" :
     currentFilter === "active" ? "No current tasks" :
@@ -1774,6 +1630,16 @@ function render(data) {
     const wait = cooldown ? t("Waiting for {site} · retry in {minutes} min",{site:cooldown.host,minutes:cooldown.minutes}) : "";
     meta.replaceChildren(node("span", "", job.options.downloadEngine === "gallery-dl" ? t("Gallery") : job.options.quality.toUpperCase()),
       node("span", recording && !job.stopRequested ? "recording" : "", nextRun && nextRun + repeatText || wait || recording && recordingText(job) || (job.status === "running" ? (isProcessing(job) ? processingLabel(job) : [Math.round(job.percent) + "%", speedText(job.speed)].filter(Boolean).join(" · ")) : statusLabel(job.status))));
+    let reveal = row.querySelector(".job-reveal");
+    if (job.status === "done" && job.file) {
+      if (!reveal) {
+        reveal = addAction(row.querySelector(".job-status-row"), t("Show in folder"), "quiet small job-reveal", async () => {
+          try { await invoke("reveal_download", {id:job.id}); }
+          catch (error) { message(errorText(error), true); }
+        }, "", "folder-open");
+      }
+      reveal.title = job.file;
+    } else reveal?.remove();
     const issue = job.status === "error" ? diagnoseError(job.log, signInSite(job.url) ? siteSessions.includes(signInSite(job.url).key) : Boolean(signedInPath), job.url) : null;
     // yt-dlp skips what the download archive lists, even when the file was deleted since.
     const skipped = ["done", "skipped"].includes(job.status) && job.archived > 0 ? job.archived : 0;
@@ -1834,10 +1700,6 @@ function render(data) {
       if (job.status === "done" && job.file) {
         addAction(controls, t("Watch"), "quiet", () => openPlayer(job.id), t("Play the finished file in Deviload."), "play");
         addAction(controls, t("To phone"), "transfer-button", () => startShare(job.id), t("Send this file to a phone with a QR code."), "phone-transfer");
-        addAction(menu, t("Show in folder"), "quiet", async () => {
-          try { await invoke("reveal_download", {id:job.id}); }
-          catch (error) { message(errorText(error), true); }
-        }, "", "folder-open");
         if (isAudioJob(job)) addAction(menu, t("Audio"), "quiet", () => openAudioTools(job.id), t("Edit tags or normalize loudness."), "music-notes");
         if (isVideoJob(job)) addAction(menu, "Devil Cut", "quiet", () => devilCut.open(job.id), t("Trim the video or make a GIF locally."), "scissors");
       }
@@ -1983,7 +1845,7 @@ function renderMediaLibrary() {
   const done = jobs.filter(inLibrary);
   $("media-library-total").textContent = String(done.length);
   $("clear-library").hidden = !done.length;
-  const visible = done.filter(job => {
+  let visible = done.filter(job => {
     if (mediaFilter === "audio" && !isLibraryAudio(job)) return false;
     if (mediaFilter === "video" && isLibraryAudio(job)) return false;
     const entry = libraryEntry(job);
@@ -1998,7 +1860,7 @@ function renderMediaLibrary() {
   const byChannel = (a, b) => (!channelOf(a) - !channelOf(b)) || channelOf(a).localeCompare(channelOf(b)) || b.id - a.id;
   const compare = {new:(a, b) => b.id - a.id, old:(a, b) => a.id - b.id, size:(a, b) => (b.bytes || 0) - (a.bytes || 0),
     length:(a, b) => (b.duration || 0) - (a.duration || 0), playlist:(a,b) => (b.libraryParent || b.id) - (a.libraryParent || a.id) || a.id - b.id, name:(a, b) => name(a).localeCompare(name(b)), channel:byChannel}[order] || ((a, b) => b.id - a.id);
-  visible.sort(compare);
+  visible = ["new", "playlist"].includes(order) ? orderLibrary(visible, jobs, order) : visible.sort(compare);
   const total = done.reduce((sum, job) => sum + (job.bytes > 1 ? job.bytes : 0), 0);
   $("media-library-size").textContent = total ? t("Takes {size}.", {size:bigSizeText(total)}) : "";
   cinemaIds = visible.map(job => job.id);
@@ -2046,11 +1908,12 @@ function renderMediaLibrary() {
     const tags = [entry.favorite ? "★" : "", entry.collection, ...(entry.tags || [])].filter(Boolean);
     if (tags.length) info.append(node("p", "library-tags", tags.join(" · ")));
     const buttons = node("div", "media-library-actions");
-    addAction(buttons, t("Watch"), "quiet", () => openPlayer(job.id), "", "play");
-    addAction(buttons, t("To phone · QR"), "transfer-button", () => startShare(job.id), t("Open a QR code to send this file to a phone"), "phone-transfer");
+    addAction(buttons, t("Watch"), "quiet library-watch", () => openPlayer(job.id), "", "play");
     const more = node("details", "library-more");
     const moreActions = node("div", "library-more-actions");
     more.append(node("summary", "", t("More")), moreActions);
+    more.addEventListener("keydown",event=>{if(event.key==="Escape"){event.stopPropagation();more.open=false;more.querySelector("summary").focus();}});
+    addAction(moreActions, t("To phone · QR"), "quiet", () => startShare(job.id), t("Open a QR code to send this file to a phone"), "phone-transfer");
     addAction(moreActions, t("Organize"), "quiet", () => openLibraryEdit(job));
     addAction(moreActions, t("Show in folder"), "quiet", async () => {
       try { await invoke("reveal_download", {id:job.id}); }

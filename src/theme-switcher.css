@@ -13,15 +13,7 @@
 .quick-theme-menu>[aria-checked="true"]{background:var(--theme-selected,#ffffff0c)}
 .quick-theme-menu>[aria-checked="true"]::after{content:"✓";font-size:14px;text-align:center;color:var(--theme-text,#ecf0f6)}
 .quick-theme-swatch{width:18px;height:18px;border:1px solid #ffffff40;border-radius:5px;box-shadow:inset 0 0 0 1px #0002}
-[data-theme-choice="classic"] .quick-theme-swatch{background:linear-gradient(135deg,#17202c 55%,#d83252 56%)}
 [data-theme-choice="glass-light"] .quick-theme-swatch{background:linear-gradient(135deg,#c5d4df,#f8fbff)}
-[data-theme-choice="matte-black"] .quick-theme-swatch{background:#191c21}
-[data-theme-choice="glass-black"] .quick-theme-swatch{background:linear-gradient(135deg,#1b2633,#687b8e)}
-[data-theme-choice="midnight"] .quick-theme-swatch{background:linear-gradient(135deg,#091426,#284b74)}
-[data-theme-choice="spotify"] .quick-theme-swatch{background:linear-gradient(135deg,#151d18 58%,#83dba1 59%)}
-:root[data-theme="spotify"] .quick-theme-toggle{background:#151d18;border-color:#496653;color:#e8f3eb}
-:root[data-theme="spotify"] .quick-theme-toggle:is(:hover,[aria-expanded="true"]){background:#294233;border-color:#83dba1}
-:root[data-theme="spotify"] .quick-theme-menu>[aria-checked="true"]::after{color:#a7e2bc}
 .quick-theme-menu>[data-theme-choice]:focus-visible{outline:2px solid var(--theme-accent,#f2bba6);outline-offset:-2px}
 .quick-theme-status{margin:7px 4px 2px;padding:10px 6px 2px;border-top:1px solid var(--theme-line,#ffffff15);color:var(--theme-muted,#adb8c7);font-size:11px;line-height:1.5}
 @media(max-width:720px){.quick-theme-toggle{padding:7px 9px;font-size:11px}.quick-theme-menu>[data-theme-choice]{min-height:42px}}

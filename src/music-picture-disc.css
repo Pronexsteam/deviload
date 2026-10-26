@@ -1,0 +1,29 @@
+/* One picture-disc material for the hero, playback indicators and mini player.
+   Only the print rotates; the specular light and spindle remain stationary. */
+body .picture-disc{position:relative;display:inline-block;isolation:isolate;flex:none;border-radius:50%;background:#14221f;box-shadow:0 0 0 1px #cbded75c,0 0 0 3px #0d1514,0 0 0 4px #8da49b29;overflow:visible}
+body .picture-disc-rotor{position:absolute;inset:1.2%;display:block;width:auto;height:auto;border-radius:50%;overflow:hidden;background:conic-gradient(from 20deg,#13201d,#3c4d45 55deg,#15201c 80deg,#111b18 210deg,#3c4d45 235deg,#13201d 260deg);mask:radial-gradient(circle,transparent 0 3.6%,#000 4%);animation:picture-disc-turn 16s linear infinite;animation-play-state:paused}
+body .picture-disc-rotor>img{position:static;display:block;width:100%;height:100%;border-radius:50%;object-fit:cover;box-shadow:none}
+body .picture-disc-rotor::after{content:"";position:absolute;inset:0;border-radius:50%;background:repeating-radial-gradient(circle,transparent 0,transparent 2px,#06141236 2.5px,transparent 3px);opacity:.35;pointer-events:none}
+body .picture-disc::before{content:"";display:block;position:absolute;inset:1.2%;z-index:1;border-radius:50%;pointer-events:none;mask:radial-gradient(circle,transparent 0 4%,#000 5%);background:conic-gradient(from 20deg,transparent 0deg,#ebf9f30b 38deg,#eafbf526 55deg,transparent 78deg,transparent 200deg,#d9eee910 231deg,transparent 260deg);box-shadow:inset 0 0 0 1px #d4e4da25,inset 0 0 8px #0005}
+body .picture-disc::after{content:"";display:block;position:absolute;inset:46.9%;z-index:2;border-radius:50%;background:#080d0d;box-shadow:inset 1px 2px 3px #000,0 0 0 1px #d3dcd55c;pointer-events:none}
+body .is-playing .picture-disc-rotor,body .picture-disc.is-playing>.picture-disc-rotor{animation-play-state:running}
+body #devil-music .music-hero-cover{background:transparent;border:0;box-shadow:none}
+body .music-hero-cover>.picture-disc{display:block;width:100%;height:100%;box-shadow:0 0 0 1px #cbded75c,0 0 0 5px #0d1514,0 0 0 6px #8da49b29,0 12px 28px #0008}
+body .mini-art.picture-disc{width:48px;height:48px;animation:none;filter:none}
+body .music-equalizer.picture-disc{display:none;width:20px;height:20px;min-width:20px;margin-right:6px;vertical-align:-5px;animation:none;border:0;box-shadow:0 0 0 1px #cbded780}
+body .active .music-equalizer.picture-disc,body .music-now-info .music-equalizer.picture-disc{display:inline-block}
+body .music-equalizer.picture-disc .picture-disc-rotor::after{opacity:.16}
+/* The rim needs its own gutter; the workspace clips horizontal overflow. */
+:root body #devil-music #music-home-hero.music-listening-hero{padding:26px 14px 30px;gap:22px;box-sizing:border-box}
+body .picture-disc::before{background:conic-gradient(from 20deg,transparent 0deg,#edfdf518 30deg,#f4fff35c 55deg,transparent 84deg,transparent 188deg,#d9eee935 231deg,transparent 270deg);box-shadow:inset 0 0 0 1px #d4e4da55,inset 0 0 10px #0004}
+body .picture-disc::after{background:radial-gradient(circle,#030707 0 48%,#6e817a 53%,#c9d7cc 62%,#263a32 72%,#080d0d 80%);box-shadow:inset 0 1px 2px #000,0 0 0 1px #d3dcd580,0 0 9px #d3eddf40}
+body .music-dock .music-now-art[role="button"]{width:56px;height:56px;margin:3px 5px;overflow:visible;border-radius:50%;flex:none}
+body .music-dock .music-now-art>.music-art{display:none}
+body .music-dock-disc{display:none}
+body .music-dock .music-dock-disc{display:block;width:100%;height:100%}
+body .music-dock .music-now-art[role="button"]::after{display:none}
+@media(max-width:800px){body .music-dock .music-now-art[role="button"]{width:48px;height:48px;margin:3px}}
+:root[data-theme="glass-light"] body .picture-disc{box-shadow:0 0 0 1px #253e3966,0 0 0 3px #15251f,0 0 0 4px #253e3929}
+@keyframes picture-disc-turn{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:no-preference){html[data-motion="reduced"] body .picture-disc-rotor{animation-name:picture-disc-turn!important;animation-duration:16s!important;animation-timing-function:linear!important;animation-iteration-count:infinite!important}}
+@media(prefers-reduced-motion:reduce){body .picture-disc-rotor{animation:none!important}}

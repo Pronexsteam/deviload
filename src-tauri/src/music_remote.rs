@@ -76,6 +76,7 @@ fn serve(mut stream:TcpStream,hub:&Hub,emit:&dyn Fn(&str,Option<f64>)->Result<()
  "/"=>Some(("text/html; charset=utf-8",include_bytes!("../../src/music-remote.html"))),
  "/music-remote.js"=>Some(("text/javascript",include_bytes!("../../src/music-remote.js"))),
  "/music-remote.css"=>Some(("text/css",include_bytes!("../../src/music-remote.css"))),
+ "/theme-colors.css"=>Some(("text/css",include_bytes!("../../src/theme-colors.css"))),
  "/themes.css"=>Some(("text/css",include_bytes!("../../src/themes.css"))),
  "/assets/music-vinyl.png"=>Some(("image/png",include_bytes!("../../src/assets/music-vinyl.png"))),
  _=>None};

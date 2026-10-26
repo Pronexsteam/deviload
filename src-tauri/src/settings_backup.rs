@@ -27,7 +27,7 @@ fn preferences(value: &Value) -> Value {
     let mut output = serde_json::Map::new();
     for (key, allowed) in [
         ("deviload-lang", vec!["en", "ru", "es"]),
-        ("deviload-theme", vec!["classic", "glass-light", "matte-black", "glass-black", "midnight", "spotify"]),
+        ("deviload-theme", vec!["ambient", "glass-light", "aurora", "prism", "classic", "matte-black", "glass-black", "midnight", "spotify"]),
         ("deviload-tray", vec!["true", "false"]),
         ("deviload-os-notify", vec!["true", "false"]),
         ("deviload-ytdlp-auto", vec!["true", "false"]),
@@ -35,7 +35,7 @@ fn preferences(value: &Value) -> Value {
         ("deviload-library-view", vec!["large", "small", "list"]),
         ("deviload-library-sort", vec!["new", "old", "name", "size", "duration"]),
     ] {
-        if let Some(text) = value[key].as_str().filter(|text| allowed.contains(text)) { output.insert(key.into(), json!(text)); }
+        if let Some(text) = value[key].as_str().filter(|text| allowed.contains(text)) { let text = if key == "deviload-theme" && matches!(text, "classic" | "matte-black" | "glass-black" | "midnight" | "spotify") { "ambient" } else { text }; output.insert(key.into(), json!(text)); }
     }
     output.into()
 }
@@ -181,6 +181,17 @@ fn restore(text: &str, engine: &Engine) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn retired_themes_restore_as_ambient_without_affecting_other_preferences() {
+        let dir=tempfile::tempdir().unwrap();
+        for theme in ["classic", "matte-black", "glass-black", "midnight", "spotify"] {
+            let mut value:Value=serde_json::from_str(&sample(dir.path())).unwrap();
+            value["preferences"]["deviload-theme"]=json!(theme);
+            let (backup,_)=checked(&value.to_string()).unwrap();
+            assert_eq!(backup.preferences["deviload-theme"],"ambient");
+            assert_eq!(backup.preferences["deviload-lang"],"es");
+        }
+    }
 
     #[test]
     fn settings_backups_keep_languages_but_not_link_specific_audio_or_estimates() {
@@ -209,7 +220,7 @@ mod tests {
         assert_eq!(legacy.version, 1);
         assert!(legacy.preferences.get("deviload-theme").is_none());
         assert_eq!(legacy.preferences["deviload-lang"], "es");
-        for theme in ["classic", "glass-light", "matte-black", "glass-black", "midnight", "spotify"] {
+        for theme in ["ambient", "glass-light", "aurora", "prism"] {
             let mut value: Value = serde_json::from_str(&original).unwrap();
             value["preferences"]["deviload-theme"] = json!(theme);
             let (backup, _) = checked(&value.to_string()).unwrap();
@@ -269,10 +280,10 @@ mod tests {
         let engine = Engine {data:std::sync::Arc::new(std::sync::Mutex::new(data)),dir:dir.path().into(),shutdown:std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false))};
         fs::write(dir.path().join("library.json"), br#"{"projects":{"keep":{}},"network":{"proxy":"local-secret"}}"#).unwrap();
         let mut backup: Value = serde_json::from_str(&sample(dir.path())).unwrap();
-        backup["preferences"]["deviload-theme"] = json!("glass-black");
+        backup["preferences"]["deviload-theme"] = json!("aurora");
         let prefs = restore(&backup.to_string(), &engine).unwrap();
         assert_eq!(prefs["deviload-lang"], "es");
-        assert_eq!(prefs["deviload-theme"], "glass-black");
+        assert_eq!(prefs["deviload-theme"], "aurora");
         let store = super::super::read_store(dir.path());
         assert!(store["projects"].get("keep").is_some()); assert_eq!(store["network"]["proxy"], "local-secret");
         let data = engine.data.lock().unwrap(); assert_eq!(data.next_id, 42); assert_eq!(data.options.cookies_browser,"firefox");

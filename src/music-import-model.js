@@ -60,9 +60,7 @@ export function mergeMusicImport(saved,taste,{rows=[],name='Imported music',sour
     nextSaved.playlists ||= [];
     const target=nextSaved.playlists.find(list=>list.id===id),existing=new Set(target?.items.map(item=>item.id)||[]),items=playlistItems.filter(item=>!existing.has(item.id));
     skipped+=playlistItems.length-items.length;
-    if(!target&&nextSaved.playlists.length>=30)throw Error('Music import exceeds the limit of 30 playlists.');
-    if(nextSaved.playlists.reduce((total,list)=>total+list.items.length,0)+items.length>500)throw Error('Music import exceeds the limit of 500 playlist entries.');
-    if(target)target.items.push(...items);else nextSaved.playlists.push({id,name:title,items});
+    if(target)target.items=target.items.concat(items);else nextSaved.playlists.push({id,name:title,items});
     added+=items.length;
   }
   if(useForTaste){
