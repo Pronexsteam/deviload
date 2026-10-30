@@ -13,7 +13,7 @@ Built with Rust and Tauri 2 · English, Russian and Spanish
 [![Windows download](docs/downloads/windows.svg)](https://github.com/Pronexsteam/deviload/releases/latest)
 [![macOS download](docs/downloads/macos.svg)](https://github.com/Pronexsteam/deviload/releases/latest)
 [![Linux download](docs/downloads/linux.svg)](https://github.com/Pronexsteam/deviload/releases/latest)
-[![Android download](docs/downloads/android.svg)](https://github.com/Pronexsteam/DevilMusic/releases/tag/v0.0.17)
+[![Devil Music for Android](docs/downloads/android.svg)](https://github.com/Pronexsteam/DevilMusic)
 
 [![Latest release](https://img.shields.io/github/v/release/Pronexsteam/deviload?style=for-the-badge&label=version&color=607d9d&labelColor=171717)](https://github.com/Pronexsteam/deviload/releases/latest)
 [![Total release downloads](https://img.shields.io/github/downloads/Pronexsteam/deviload/total?style=for-the-badge&label=downloads&color=607d9d&labelColor=171717)](https://github.com/Pronexsteam/deviload/releases)
@@ -54,11 +54,11 @@ Playback and catalog availability depend on YouTube, your region and your connec
 
 Devil Music now has a separate **native Android preview** for phones and tablets. Discover music, keep a queue, turn the picture disc and switch to lyrics in a layout that adapts to portrait and landscape.
 
-[**Visit Devil Music →**](https://github.com/Pronexsteam/DevilMusic) · [**Download the Android APK →**](https://github.com/Pronexsteam/DevilMusic/releases/tag/v0.0.17)
+[**Visit Devil Music →**](https://github.com/Pronexsteam/DevilMusic) · [**Download the Android APK →**](https://github.com/Pronexsteam/DevilMusic/releases/download/v0.0.18/Devil-Music-0.0.18-android.apk)
 
 ![Devil Music Android on a tablet with a real album cover](docs/screenshots/devil-music-android.png)
 
-Android 8.0 or newer is required. This is a preview with its own app data and GPL-3.0-or-later license; desktop Deviload stays MIT-licensed. Library transfer uses an explicit file, not automatic account sync. Word-level lyrics depend on available timing data. The Android download is separate from Deviload's desktop updater.
+Android 8.0 or newer is required. This is a preview with its own app data and GPL-3.0-or-later license; desktop Deviload stays MIT-licensed. Library transfer uses an explicit file, not automatic account sync. Word-level lyrics depend on available timing data. The Android download is separate from Deviload's desktop updater. Version 0.0.18 and newer check GitHub for updates while the app is open; Android asks you to confirm installation. Install over your existing preview to keep its library and settings.
 
 ## What can I do with it?
 
@@ -94,7 +94,7 @@ Read the [2.7.8 change list](.github/release-notes/v2.7.8.md). Earlier updates a
 
 ## Installation
 
-The Windows, macOS and Linux buttons open the [latest desktop release](https://github.com/Pronexsteam/deviload/releases/latest). The Android button opens the separate [Devil Music preview](https://github.com/Pronexsteam/DevilMusic/releases/tag/v0.0.17). Choose the asset for your system:
+The Windows, macOS and Linux buttons open the [latest desktop release](https://github.com/Pronexsteam/deviload/releases/latest). The Android button opens the separate [Devil Music project](https://github.com/Pronexsteam/DevilMusic), with its APK and mobile release notes. Choose the asset for your system:
 
 | System | Release asset | Instructions |
 |---|---|---|

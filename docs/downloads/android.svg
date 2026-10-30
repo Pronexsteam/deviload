@@ -1,1 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="224" height="64" viewBox="0 0 224 64"><defs><linearGradient id="s" x2="0" y2="1"><stop stop-color="#252d34"/><stop offset="1" stop-color="#151b20"/></linearGradient></defs><rect x=".5" y=".5" width="223" height="63" rx="14" fill="url(#s)" stroke="#3c4851"/><g transform="translate(16 16)" color="#d5e5df"><path d="M6 15A11 11 0 0128 15V25H6ZM10 5L7 1M24 5L27 1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="22" cy="12" r="1.5" fill="currentColor"/><path d="M2 15V24M32 15V24M11 26V31M23 26V31" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></g><text x="62" y="28" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="600" fill="#f2f5f7">Android</text><text x="62" y="46" font-family="Segoe UI,Arial,sans-serif" font-size="11" fill="#b0bdc5">Devil Music · Preview</text><path d="M205 26V37M201 33L205 37L209 33" stroke="#b0bdc5" fill="none" stroke-width="1.4" stroke-linecap="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="224" height="64" viewBox="0 0 224 64" role="img" aria-label="Devil Music for Android">
+  <defs><linearGradient id="surface" x2="0" y2="1"><stop stop-color="#24352e"/><stop offset="1" stop-color="#141e1a"/></linearGradient></defs>
+  <rect x=".5" y=".5" width="223" height="63" rx="14" fill="url(#surface)" stroke="#3c5849"/>
+  <g transform="translate(15 14)">
+    <rect width="36" height="36" rx="11" fill="#a8e4b6" fill-opacity=".09"/>
+    <path d="m10 10-3-5m19 5 3-5" stroke="#a8e4b6" stroke-width="1.7" stroke-linecap="round"/>
+    <path d="M4 25a14 14 0 0 1 28 0Z" fill="#a8e4b6"/>
+    <circle cx="11.5" cy="19" r="1.5" fill="#19271f"/><circle cx="24.5" cy="19" r="1.5" fill="#19271f"/>
+  </g>
+  <text x="62" y="28" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="600" fill="#f2f7f3">Android</text>
+  <text x="62" y="46" font-family="Segoe UI,Arial,sans-serif" font-size="11" fill="#b3c9ba">Devil Music · Mobile</text>
+  <path d="M198 32h11m-4-4 4 4-4 4" stroke="#a8e4b6" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
