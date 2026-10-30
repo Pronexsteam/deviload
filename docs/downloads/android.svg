@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="224" height="64" viewBox="0 0 224 64" role="img" aria-label="Devil Music for Android">
+  <defs><linearGradient id="surface" x2="0" y2="1"><stop stop-color="#24352e"/><stop offset="1" stop-color="#141e1a"/></linearGradient></defs>
+  <rect x=".5" y=".5" width="223" height="63" rx="14" fill="url(#surface)" stroke="#3c5849"/>
+  <g transform="translate(15 14)">
+    <rect width="36" height="36" rx="11" fill="#a8e4b6" fill-opacity=".09"/>
+    <path d="m10 10-3-5m19 5 3-5" stroke="#a8e4b6" stroke-width="1.7" stroke-linecap="round"/>
+    <path d="M4 25a14 14 0 0 1 28 0Z" fill="#a8e4b6"/>
+    <circle cx="11.5" cy="19" r="1.5" fill="#19271f"/><circle cx="24.5" cy="19" r="1.5" fill="#19271f"/>
+  </g>
+  <text x="62" y="28" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="600" fill="#f2f7f3">Android</text>
+  <text x="62" y="46" font-family="Segoe UI,Arial,sans-serif" font-size="11" fill="#b3c9ba">Devil Music · Mobile</text>
+  <path d="M198 32h11m-4-4 4 4-4 4" stroke="#a8e4b6" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
