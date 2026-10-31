@@ -483,19 +483,19 @@ fn squeeze_to_size(state: &Converter, source: &Path, base: &Path, file: &MediaFi
     let video = video.unwrap();
     let (mut video_kbps, audio_kbps, height) = squeeze(total, !audio.is_empty())?;
     let scale = scale_filter(&job.resolution, Some(height))?;
-    // Two passes: the first measures the video, the second spends the budget where it is needed.
+    // Two passes apply only to video; audio has no first-pass statistics to read.
     let logs = tempfile::tempdir().map_err(|e| e.to_string())?;
     let log = logs.path().join("pass");
     let mut first = ffmpeg_command()?;
     first.arg("-i").arg(source).args(["-map", &format!("0:{}", video.index), "-vf", &scale, "-c:v", "libx264", "-preset", "medium",
-        "-b:v", &format!("{video_kbps}k"), "-pass", "1", "-passlogfile"]).arg(&log).args(["-an", "-f", "null", "-"]);
+        "-b:v", &format!("{video_kbps}k"), "-pass:v", "1", "-passlogfile:v"]).arg(&log).args(["-an", "-f", "null", "-"]);
     run(state, first, file.duration, None, &|share| progress(share * 0.5))?;
     let output = output_path(base, &label, "mp4")?;
     for attempt in 0..2 {
         let mut second = ffmpeg_command()?;
         second.arg("-i").arg(source); map_tracks(&mut second, &[video]); map_tracks(&mut second, &audio);
         second.args(["-vf", &scale, "-c:v", "libx264", "-preset", "medium",
-            "-b:v", &format!("{video_kbps}k"), "-pass", "2", "-passlogfile"]).arg(&log)
+            "-b:v", &format!("{video_kbps}k"), "-pass:v", "2", "-passlogfile:v"]).arg(&log)
             .args(["-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", &format!("{audio_kbps}k"), "-movflags", "+faststart"]);
         let part = write_to(&mut second, &output);
         run(state, second, file.duration, Some(&part), &|share| progress(0.5 + share * 0.5))?;
@@ -917,6 +917,9 @@ mod tests {
         let small = convert(&state, &job("size", 1), &|_| {}).unwrap();
         let bytes = fs::metadata(&small).unwrap().len();
         assert!(bytes <= 1_000_000 && bytes > 300_000, "{bytes}");
+        let squeezed = probe(&small).unwrap();
+        assert!(squeezed.video && squeezed.audio, "Size-limited output must retain video and audio");
+        assert_eq!(squeezed.audio_codec, "aac");
         assert!(convert(&state, &job("size", 4000), &|_| {}).is_err());
         // The source file is never touched.
         assert_eq!(fs::read(&source).unwrap(), original);
