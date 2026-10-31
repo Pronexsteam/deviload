@@ -10,10 +10,13 @@ Discover and listen with Devil Music. Save with yt-dlp. Create with Devil Cut an
 <br>
 Built with Rust and Tauri 2 · English, Russian and Spanish
 
-[![Windows download](docs/downloads/windows.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.7.9/Deviload-2.7.9-setup.exe)
-[![macOS download](docs/downloads/macos.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.7.9/Deviload-2.7.9-macos-test.zip)
-[![Linux download](docs/downloads/linux.svg)](#install-on-linux)
-[![Devil Music for Android](docs/downloads/android.svg)](https://github.com/Pronexsteam/DevilMusic/releases/download/v0.0.18/Devil-Music-0.0.18-android.apk)
+[![Windows installer (.exe)](docs/downloads/windows.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.7.9/Deviload-2.7.9-setup.exe)
+[![Windows Portable (.zip)](docs/downloads/windows-portable.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.7.9/Deviload-2.7.9-windows-x64-portable.zip)
+[![macOS test build (.zip)](docs/downloads/macos.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.7.9/Deviload-2.7.9-macos-test.zip)
+<br>
+[![Linux Debian / Ubuntu (.deb)](docs/downloads/linux.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.7.9/Deviload-2.7.9-amd64.deb)
+[![Linux AppImage (x86_64)](docs/downloads/linux-appimage.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.7.9/Deviload-2.7.9-x86_64.AppImage)
+[![Devil Music for Android (.apk)](docs/downloads/android.svg)](https://github.com/Pronexsteam/DevilMusic/releases/download/v0.0.18/Devil-Music-0.0.18-android.apk)
 
 Desktop downloads: **2.7.9** · Android: **0.0.18 preview**
 
@@ -98,7 +101,7 @@ Read the [2.7.8 change list](.github/release-notes/v2.7.8.md). Earlier updates a
 
 ## Installation
 
-Windows opens the x64 installer; macOS opens the unsigned test-build archive. Linux opens the package choices below. Android downloads the separate [Devil Music](https://github.com/Pronexsteam/DevilMusic) APK. The Release badge opens the [latest desktop release](https://github.com/Pronexsteam/deviload/releases/latest). Choose the asset for your system:
+Each download button opens its named file: Windows installer or Portable ZIP, macOS unsigned test-build archive, Linux DEB or AppImage, and the separate [Devil Music](https://github.com/Pronexsteam/DevilMusic) Android APK. Choose DEB for Debian / Ubuntu or AppImage for a standalone Linux package. The Release badge opens the [latest desktop release](https://github.com/Pronexsteam/deviload/releases/latest).
 
 | System | Release asset | Instructions |
 |---|---|---|
