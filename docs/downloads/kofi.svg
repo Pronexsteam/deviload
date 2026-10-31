@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="64" viewBox="0 0 260 64" role="img" aria-label="Support Deviload on Ko-fi">
+<defs><linearGradient id="surface" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#252d34"/><stop offset="1" stop-color="#151b20"/></linearGradient></defs>
+<rect x=".5" y=".5" width="259" height="63" rx="14" fill="url(#surface)" stroke="#3c4851"/>
+<g transform="translate(17 17)" fill="none" stroke="#d5e5df" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+<path d="M6 7h20v11a8 8 0 0 1-8 8h-4a8 8 0 0 1-8-8Z"/><path d="M26 9h3a5 5 0 0 1 0 10h-3M4 30h26M11 1v2M20 1v2"/>
+<path d="M16 20c-8-5-5-10 0-6 5-4 8 1 0 6Z" fill="#d5e5df" stroke="none"/>
+</g>
+<text x="65" y="28" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="600" fill="#f2f5f7">Support on Ko-fi</text>
+<text x="65" y="46" font-family="Segoe UI,Arial,sans-serif" font-size="11" fill="#b0bdc5">Help keep Deviload growing</text>
+<path d="M235 32h10m-4-4 4 4-4 4" fill="none" stroke="#b0bdc5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
