@@ -1,4 +1,5 @@
 import {t,onLanguageChange} from "./i18n.js";
+import {playlistArtwork} from "./music-playlist-art.js";
 
 const STORAGE_KEY="deviload-music-library-panel";
 const el=(tag,cls,text)=>{const node=document.createElement(tag);node.className=cls;if(text!==undefined)node.textContent=text;return node;};
@@ -64,9 +65,7 @@ export function createMusicLibrarySidebar({workspace,saved,onPlaylist,onFavorite
       if(query&&!normalize(playlist.name).includes(query))continue;
       matchingPlaylists++;
       const art=el("span","music-library-nav-art");
-      if(typeof playlist.cover==="string"&&playlist.cover.length<=110000&&/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(playlist.cover)){
-        const image=el("img","");image.src=playlist.cover;image.alt="";image.loading="lazy";image.decoding="async";art.append(image);
-      }else if(cover)art.append(cover(playlist.items?.[0],"",96));else art.append(glyph("playlist"));
+      if(cover)art.append(playlistArtwork(playlist,cover,96));else art.append(glyph("playlist"));
       list.append(row(playlist.name,playlist.items?.length||0,art,()=>onPlaylist(playlist.id),playlist.id,playlist.pinned));
     }
     empty.textContent=query?t("No matching playlists."):t("Create a playlist to keep your favorites close.");

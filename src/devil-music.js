@@ -1036,19 +1036,36 @@ export function createMusic({invoke,onDownload,storage}) {
     const token=playRequest,stalledAt=audio.currentTime;
     const depleted=!resolvedOffline&&currentEndSource()&&!audio.seeking&&audio.readyState<3&&
       stalledAt>=1&&audio.duration-stalledAt>1&&bufferedSeconds(audio)<=.25;
-    bufferingTimer=setTimeout(()=>{bufferingTimer=null;if(token!==playRequest||audio.paused||audio.seeking||audio.ended)return;
+    const timer=setTimeout(async()=>{
+      if(bufferingTimer!==timer)return;
+      const currentWait=()=>bufferingTimer===timer&&token===playRequest&&!audio.paused&&!audio.seeking&&!audio.ended;
+      const finish=()=>{if(bufferingTimer===timer)bufferingTimer=null;};
+      if(!currentWait()){finish();return;}
       // A browser can resume decoding without another playing event. Never
       // reopen a healthy stream merely because an old waiting timer expired.
-      if(audio.readyState>=3&&audio.currentTime>stalledAt+.1){artist.textContent=displaySubtitle(current)||"YouTube Music";return;}
+      if(audio.readyState>=3&&audio.currentTime>stalledAt+.1){finish();artist.textContent=displaySubtitle(current)||"YouTube Music";return;}
       // Data or playback resumed while the short watchdog was armed. Let that
       // source continue and reassess only if the decoder is still waiting.
-      if(depleted&&(audio.currentTime>stalledAt+.1||bufferedSeconds(audio)>.25)){
+      if(audio.currentTime>stalledAt+.1||(depleted&&bufferedSeconds(audio)>.25)){
+        finish();
         if(audio.readyState<3)waitForAudio();
         return;
       }
-      if(!recoveryUsed&&navigator.onLine!==false){recoveryUsed=true;playAt(index,{refresh:true,resume:audio.currentTime,recovery:true,origin:playbackOrigin,automatic:true,raceLocal:!resolvedOffline,transportFault:!resolvedOffline});}
-      else{diagnostics.record("buffering","timeout");failPlayback("timeout");}
+      // waiting/stalled can clear on the same connection. Never unload the
+      // decoder for an online recovery the active worker cannot perform.
+      if(navigator.onLine===false){finish();return;}
+      if(recoveryUsed){
+        finish();
+        if(endSource?.alternateRetry)failPlayback("timeout");
+        return;
+      }
+      if(!resolvedOffline){
+        const allowed=await invoke("music_recovery_allowed",{id:current.id}).catch(()=>false);
+        if(!currentWait()||allowed!==true||audio.currentTime>stalledAt+.1||audio.readyState>=3){finish();return;}
+      }
+      finish();recoveryUsed=true;playAt(index,{refresh:true,resume:audio.currentTime,recovery:true,origin:playbackOrigin,automatic:true,raceLocal:!resolvedOffline,transportFault:!resolvedOffline});
     },depleted?2500:20000);
+    bufferingTimer=timer;
   }
   listen("waiting",waitForAudio);
   listen("stalled",()=>{if(audio.readyState<3)waitForAudio();});

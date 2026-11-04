@@ -24,19 +24,23 @@ function text(value,limit){
   }
   return result;
 }
-function item(value){
-  if(!object(value)||value.kind!=="song"||!isMusicTrackId(value.id)||typeof value.title!=="string"||!value.title.trim())fail();
-  const image=safeArtworkUrl(value.image);
-  return {id:value.id,kind:"song",title:text(value.title,240),subtitle:text(value.subtitle,180),
+function metadata(value){
+  if(typeof value.title!=="string"||!value.title.trim())fail();
+  const image=!value.image&&value.kind==="song"&&idPattern.test(value.id)
+    ? `https://i.ytimg.com/vi/${value.id}/hqdefault.jpg` : safeArtworkUrl(value.image);
+  return {id:value.id,kind:value.kind,title:text(value.title,240),subtitle:text(value.subtitle,180),
     artists:[...new Set((Array.isArray(value.artists)?value.artists:[]).filter(name=>typeof name==="string").map(name=>text(name,80)).filter(Boolean))].slice(0,4),image,
     ...(isLocalMusicId(value.id)&&value.album?{album:text(value.album,240)}:{}),
     ...(Number.isFinite(value.duration)&&value.duration>0&&value.duration<=86400?{duration:value.duration}:{})};
 }
+function item(value){
+  if(!object(value)||value.kind!=="song"||!isMusicTrackId(value.id))fail();
+  return metadata(value);
+}
 export const sanitizeMusicTrack=item;
 export function sanitizeMusicCollection(value){
   if(!object(value)||!['album','artist','playlist'].includes(value.kind)||typeof value.id!=="string"||! /^(MPRE|UC|VL)[\w-]{1,156}$/.test(value.id))fail();
-  const track=item({...value,kind:"song",id:"___________"});
-  return {...track,id:value.id,kind:value.kind};
+  return metadata(value);
 }
 function collections(values=[]){
   if(!Array.isArray(values)||values.length>200)fail();

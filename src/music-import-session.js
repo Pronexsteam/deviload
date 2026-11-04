@@ -1,4 +1,5 @@
 import {sanitizeMusicTrack} from './music-profile.js';
+import {safeArtworkUrl} from './music-artwork.js';
 
 // A resumable staging area, separate from likes, listening history and taste.
 export const IMPORT_DRAFT_KEY='deviload-music-import-draft-v1';
@@ -11,7 +12,7 @@ function normalize(value){
     const videoId=/^[\w-]{11}$/.test(entry.videoId||'')?entry.videoId:undefined;
     if(!key||seen.has(key)||!videoId&&(!title||!artists.length))throw Error('Invalid music import.');seen.add(key);
     return {key,title,artists,liked:entry.liked===true,plays:Number.isFinite(entry.plays)?Math.max(0,Math.min(100,entry.plays)):0,
-      ...(videoId?{videoId}:{}),...(Number.isFinite(entry.lastPlayed)?{lastPlayed:entry.lastPlayed}:{}),
+      ...(videoId?{videoId,...(safeArtworkUrl(entry.image)?{image:entry.image}:{})}:{}),...(Number.isFinite(entry.lastPlayed)?{lastPlayed:entry.lastPlayed}:{}),
       ...(/^[a-zA-Z0-9]{22}$/.test(entry.spotifyId||'')?{spotifyId:entry.spotifyId}:{}),
       ...(Number.isFinite(entry.durationMs)&&entry.durationMs>0&&entry.durationMs<=86400000?{durationMs:entry.durationMs}:{}),
       ...(text(entry.album,300)?{album:text(entry.album,300)}:{}),...(/^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(entry.isrc||'')?{isrc:entry.isrc}:{})};

@@ -761,12 +761,12 @@ test('a weak current buffer defers preparation until it has recovered',async()=>
 });
 
 test('repeated stall events share one recovery deadline and preserve playback position',async()=>{
- const calls=[];const p=player(async(_,args)=>{calls.push(args);return {url:args.id};});
+ const calls=[];const p=player(async(cmd,args)=>{if(cmd==='music_recovery_allowed')return true;calls.push(args);return {url:args.id};});
  await p.playAt(0);p.ctx.audio.currentTime=42;p.ctx.audio.readyState=2;
  p.emit('waiting');const timer=p.ctx.bufferingTimer;p.emit('waiting');p.emit('stalled');assert.equal(p.ctx.bufferingTimer,timer);
  p.expire();await settle();assert.equal(calls.length,2);assert.equal(p.ctx.audio.currentTime,42);assert.equal(p.ctx.bufferingTimer,null);
  p.ctx.navigator.onLine=false;p.emit('waiting');p.expire();await settle();
- assert.equal(calls.length,2);assert.equal(p.ctx.retryPosition,42);assert.equal(p.ctx.audio.paused,true);
+ assert.equal(calls.length,2);assert.equal(p.ctx.audio.currentTime,42);assert.equal(p.ctx.audio.paused,false);
 });
 
 test('temporary source lookup failures recover once and keep the requested position',async()=>{
@@ -779,7 +779,7 @@ test('temporary source lookup failures recover once and keep the requested posit
 
 test('an empty mid-track buffer recovers promptly but fresh bytes or a seek keep the original source',async()=>{
   for(const state of ['empty','refilled','seek']){
-    const calls=[],p=player(async(cmd,args)=>{calls.push(cmd);return {url:'track'};});
+    const calls=[],p=player(async(cmd,args)=>{calls.push(cmd);return cmd==='music_recovery_allowed'?true:{url:'track'};});
     await p.playAt(0);const a=p.ctx.audio;a.currentTime=31;a.readyState=2;
     let end=31, delay, fire;
     a.buffered.end=()=>end;
@@ -802,12 +802,27 @@ test('source recovery never retries restrictions, verification, cancellation or 
 });
 
 test('a recovered decoder is not restarted by an obsolete buffering deadline',async()=>{
- const calls=[];const p=player(async(_,args)=>{calls.push(args);return {url:'audio'};});
+ const calls=[];const p=player(async(cmd,args)=>{if(cmd==='music_recovery_allowed')return true;calls.push(args);return {url:'audio'};});
  await p.playAt(0);p.ctx.audio.currentTime=42;p.ctx.audio.readyState=2;p.emit('waiting');
  p.ctx.audio.currentTime=46;p.ctx.audio.readyState=4;p.expire();await settle();
  assert.equal(calls.length,1);assert.equal(p.ctx.audio.paused,false);assert.equal(p.ctx.audio.currentTime,46);
  p.ctx.audio.readyState=2;p.emit('waiting');p.expire();await settle();
  assert.equal(calls.length,2);assert.equal(p.ctx.audio.currentTime,46);
+});
+
+test('a temporary stall keeps the decoder when the installed worker cannot recover or the buffer refills during the check',async()=>{
+ for(const resumed of [false,true]){
+  const guard=deferred(),calls=[];
+  const p=player(async(cmd)=>{calls.push(cmd);return cmd==='music_recovery_allowed'?guard.promise:{url:'original'};});
+  await p.playAt(0);
+  const a=p.ctx.audio;a.currentTime=32;a.readyState=2;a.buffered.end=()=>32;
+  p.emit('waiting');p.expire();await settle();
+  if(resumed){a.currentTime=33;a.readyState=4;p.emit('playing');}
+  guard.resolve(resumed);await settle();
+  assert.deepEqual(calls,['music_stream','music_recovery_allowed']);assert.equal(a.src,'original');assert.equal(a.paused,false);
+  if(!resumed){a.currentTime=33;a.readyState=4;p.emit('playing');}
+  assert.equal(a.currentTime,33);assert.equal(p.ctx.bufferingTimer,null);
+ }
 });
 
 test('transient preparation retries after a cooldown at most once per candidate',async()=>{

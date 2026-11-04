@@ -39,7 +39,8 @@ test('local and legacy music survive profile migration, likes, taste and playbac
  recordListening(migrated.taste,song(1),{seconds:90,duration:100,session:43},Date.now());
  const restored=importMusicProfile(exportMusicProfile(migrated.saved,migrated.taste));
  assert.equal(restored.saved.volume,.37);assert.equal(restored.saved.publicDiscovery,false);assert.deepEqual(restored.taste.entries[online.id],migrated.taste.entries[online.id]);
- assert.deepEqual(restored.saved.favorites,[online,song(1)]);assert.deepEqual(restored.saved.playlists[0].items,[online,song(1)]);assert(restored.taste.entries[song(1).id]);
+ const expected=[{...online,image:'https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg'},song(1)];
+ assert.deepEqual(restored.saved.favorites,expected);assert.deepEqual(restored.saved.playlists[0].items,expected);assert(restored.taste.entries[song(1).id]);
  const data=new Map(),storage={getItem:k=>data.get(k),setItem:(k,v)=>data.set(k,v)};
  saveMusicSession(storage,{queue:restored.saved.favorites,id:song(1).id,position:12,duration:180,repeat:'all',shuffle:true,autoplay:false});
  const session=readMusicSession(storage);assert.equal(session.id,song(1).id);assert.equal(session.queue.length,2);

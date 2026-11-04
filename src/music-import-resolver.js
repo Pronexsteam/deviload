@@ -63,7 +63,7 @@ export async function resolveMusicImport(entries,{invoke,language="en",signal,on
       if(limited)row.error=RATE_LIMIT;
       else if(!entry||typeof entry!=="object")row.error="Invalid music import.";
       else if(validId(entry.videoId)&&text(entry.title)){
-        row={entry,item:sanitizeMusicTrack({kind:"song",id:entry.videoId,title:entry.title,artists:entry.artists,subtitle:(Array.isArray(entry.artists)?entry.artists:[]).filter(value=>typeof value==="string").join(", "),image:""}),confidence:"exact"};
+        row={entry,item:sanitizeMusicTrack({kind:"song",id:entry.videoId,title:entry.title,artists:entry.artists,subtitle:(Array.isArray(entry.artists)?entry.artists:[]).filter(value=>typeof value==="string").join(", "),image:entry.image}),confidence:"exact"};
       }else{
         const title=text(entry.title),artists=(Array.isArray(entry.artists)?entry.artists:[]).map(text).filter(Boolean);
         const key=JSON.stringify([language,entry.videoId||"",title,artists,entry.spotifyId||'',entry.durationMs||0,entry.album||'',entry.isrc||'']),cached=cache.get(key);
@@ -149,7 +149,7 @@ export async function readPlaylistLink(input,{invoke,language="en",signal,onProg
     const before=seen.size,items=candidates(response);let overflow=false;
     for(const item of items){
       if(seen.has(item.id))continue;if(result.entries.length>=collection.limit){overflow=true;break;}
-      seen.add(item.id);result.entries.push({key:"youtube:"+item.id,title:item.title,artists:item.artists,videoId:item.id,liked:false,plays:0});
+      seen.add(item.id);result.entries.push({key:"youtube:"+item.id,title:item.title,artists:item.artists,videoId:item.id,image:item.image,liked:false,plays:0});
     }
     onProgress(result.entries.length,collection.limit);check(signal);
     const invalidContinuation=response?.continuation&&(typeof response.continuation!=="string"||response.continuation.length>20000);
