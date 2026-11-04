@@ -4,6 +4,18 @@ import {readTaste,recordListening,tasteSeeds,recommend,recommendWithReasons,reco
 const song=(n,artist="Artist")=>({id:String(n).padStart(11,"0"),kind:"song",title:`Song ${n}`,artists:[artist]});
 const now=1800000000000,random=()=>.5;
 
+test("home seed rotation explores other positive artists without losing the anchor or rewriting taste",()=>{
+ const profile=readTaste(),favorites=Array.from({length:9},(_,n)=>song(n+1,`Artist ${n}`));
+ profile.blockedArtists=[canonicalArtistKey(favorites[8].artists[0])];
+ const before=JSON.stringify(profile),visited=new Set();let anchor;
+ for(let rotation=0;rotation<8;rotation++){
+  const seeds=tasteSeeds(profile,favorites,{now,random,limit:3,rotation});anchor??=seeds[0].id;
+  assert.equal(seeds[0].id,anchor);assert.equal(seeds.length,3);assert.equal(new Set(seeds.flatMap(item=>item.artists)).size,3);
+  assert.ok(!seeds.some(item=>item.id===favorites[8].id));for(const seed of seeds)visited.add(seed.id);
+ }
+ assert.equal(visited.size,8);assert.equal(JSON.stringify(profile),before);
+});
+
 test("listening and early skips change recommendations; pause clicks do not inflate taste",()=>{
   const profile=readTaste(),a=song(1,"A"),b=song(2,"B");
   recordListening(profile,a,{seconds:190,duration:200,ended:true},now);

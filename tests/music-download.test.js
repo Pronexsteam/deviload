@@ -1,3 +1,5 @@
+import {isLocalMusicId} from '../src/music-track-id.js';
+import {localPlaybackSource} from '../src/music-local-model.js';
 import test from "node:test";
 import assert from "node:assert/strict";
 import {downloadMusic} from "../src/music-download.js";
@@ -24,7 +26,7 @@ test("repeated clicks enqueue once and report failures without changing playback
   const source=readFileSync(new URL("../src/devil-music.js",import.meta.url),"utf8");
   const code=source.slice(source.indexOf("  async function downloadTrack("),source.indexOf("  function syncDock()"));
   let finish,calls=0;const notices=[],chosen={...item,id:"abcdefghijk",title:"Get Lucky (Live)"},before=JSON.stringify(item);
-  const ctx={saved:{sourceBindings:[{trackId:item.id,track:item,source:chosen}]},resolveRecordingSource,downloadsPending:new Set(),syncDock(){},t:s=>s,errorText:String,status:s=>notices.push(s),presentation:{notify(){}},
+  const ctx={isLocalMusicId,localPlaybackSource,saved:{sourceBindings:[{trackId:item.id,track:item,source:chosen}]},resolveRecordingSource,downloadsPending:new Set(),syncDock(){},t:s=>s,errorText:String,status:s=>notices.push(s),presentation:{notify(){}},
     onDownload:selected=>{assert.equal(selected,chosen);calls++;return new Promise(resolve=>{finish=resolve;});}};
   const download=runInNewContext(`(()=>{${code};return downloadTrack;})()`,ctx);
   const first=download(item);await download(item);assert.equal(calls,1);finish(1);await first;

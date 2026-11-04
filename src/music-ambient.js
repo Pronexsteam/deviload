@@ -2,8 +2,10 @@ import {createAmbientEnvelope} from './music-ambient-model.js';
 import {paintAmbient,ambientArtwork} from './music-ambient-light.js';
 import {createArtworkWash} from './artwork-wash.js';
 import {artworkCandidates} from './music-artwork.js';
+import {createLyricPalette} from './music-lyric-palette.js';
 
 export function createMusicAmbient({dock,sound,getAudio,getTrack,nodes,hasMini=()=>false,onLevels=()=>{}}){
+  const lyricPalette=createLyricPalette();
   const scene=document.createElement('div');scene.className='ambient-scene';scene.setAttribute('aria-hidden','true');document.body.prepend(scene);const wash=createArtworkWash(scene);
   const layer=document.createElement('div');layer.className='music-ambient-glow';layer.setAttribute('aria-hidden','true');
   const lights=Array.from({length:3},()=>{const node=document.createElement('span');layer.append(node);return node;});dock.prepend(layer);
@@ -37,9 +39,10 @@ export function createMusicAmbient({dock,sound,getAudio,getTrack,nodes,hasMini=(
     layer.hidden=!enabled();
     const track=getTrack();if(trackId!==track?.id){trackId=track?.id;envelope.reset();}
     const source=artworkCandidates(track?.image,256)[0]||'';
-    if(image!==source){image=source;
+    if(image!==source){image=source;lyricPalette.update(track?.image);
       // A blurred background needs only a bounded thumbnail, not the full
-      // artwork used by the expanded player. No pixel sampling is needed.
+      // artwork used by the expanded player. Lyric colors sample only once
+      // on a cover change, independently from the audio animation loop.
       layer.style.setProperty('--ambient-art',ambientArtwork(source));
       document.documentElement.style.setProperty('--ambient-art',ambientArtwork(source));
       wash.update(ambientArtwork(source));

@@ -28,5 +28,5 @@ export function initializeMusic({createMusic,...options}){
   // Don't discard an in-flight import through a normal browser/window navigation.
   window.addEventListener('beforeunload',event=>{if(storage&&(storage.pending||storage.error)){event.preventDefault();event.returnValue='';}});
   onLanguageChange(render);start();
-  return {open(){wantsOpen=true;music?.open();}};
+  return {open(entering=true){wantsOpen=true;music?.open(entering);}};
 }

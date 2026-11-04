@@ -1,3 +1,5 @@
+import {isLocalMusicId} from '../src/music-track-id.js';
+import {localPlaybackSource} from '../src/music-local-model.js';
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
@@ -23,10 +25,10 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
 const response=items=>({recordings:items.map((item,index)=>({mbid:`00000000-0000-0000-0000-${String(index+1).padStart(12,"0")}`,title:item.title,artists:item.artists,duration:item.duration}))});
 
 function music({discovery=async()=>response([song(11)]),extra=[song(11)],radioItems=[song(2)]}={}){
-  const calls=[],renders=[],controls=new Map(),ctx={
+  const calls=[],renders=[],controls=new Map(),ctx={isLocalMusicId,localPlaybackSource,
     saved:{favorites:[song(1)],recent:[],collections:[],playlists:[],sourceBindings:[],interestMixes:[],publicDiscovery:true,showRegional:false},
     taste:readTaste(),queue:[],current:null,privateSession:false,navigator:{onLine:true},publicGeneration:0,sourceRevision:0,
-    request:1,personalization:0,recommendationRevision:0,playRequest:1,contextRevision:0,
+    request:1,personalization:0,recommendationRevision:0,playRequest:1,contextRevision:0,homeSeedRotation:0,homeRefreshRevision:-1,nextHomeCandidates:[],
     view:"home",lastQuery:{kind:"home"},followedCursor:0,playbackContext:[],playbackSourceContext:{kind:"manual"},
     recommendationSession:createRecommendationSession(),recommendationReasons:new Map(),radioCache:new Map(),discoveryCandidates:[],sections:[],
     interestViewId:null,interestPool:null,interestRotations:new Map(),activeMood:"",browseItem:null,continuation:null,morePending:false,listFilter:"",listSort:"original",loading:false,loaded:true,
@@ -48,15 +50,27 @@ function music({discovery=async()=>response([song(11)]),extra=[song(11)],radioIt
   return {ctx,calls,renders,...actions,publicCalls:()=>calls.filter(row=>row.command==="music_discovery"),searchCalls:()=>calls.filter(row=>row.command==="music_catalog"&&row.args.kind==="search")};
 }
 
-test("slow public discovery augments home after the existing radio renders without changing playback or queue",async()=>{
+test("late public discovery stays off the visible shelf until the next visit",async()=>{
   const pending=deferred(),m=music({discovery:()=>pending.promise});
   m.ctx.current=song(90);m.ctx.queue=[song(90),song(91)];const queue=JSON.stringify(m.ctx.queue);
   await m.personalize(1,[]);
   assert.ok(m.ctx.sections.flatMap(row=>row.items).some(item=>item.id===song(2).id));
   assert.equal(m.ctx.sections.flatMap(row=>row.items).some(item=>item.id===song(11).id),false);
+  const visible=m.ctx.sections,renders=m.renders.length;
   pending.resolve(response([song(11)]));await settle();
+  assert.equal(m.ctx.sections,visible);
+  assert.equal(m.renders.length,renders);
+  await m.personalize(1,[]);
   assert.ok(m.ctx.sections.flatMap(row=>row.items).some(item=>item.id===song(11).id));
   assert.equal(JSON.stringify(m.ctx.queue),queue);assert.equal(m.ctx.current.id,song(90).id);assert.equal(m.ctx.audio.paused,false);
+});
+
+test("reopening personalized home rotates upstream radio seeds without introducing regional home feeds",async()=>{
+ const m=music();m.ctx.saved.favorites=Array.from({length:8},(_,i)=>song(i+1));m.ctx.saved.publicDiscovery=false;
+ for(let i=0;i<5;i++)await m.personalize(1,[]);
+ const seeds=new Set(m.calls.filter(row=>row.command==='music_catalog'&&row.args.kind==='radio').map(row=>row.args.value));
+ assert.ok(seeds.size>=6);assert.equal(m.ctx.homeRefreshRevision,m.ctx.recommendationRevision);
+ assert.ok(!m.calls.some(row=>row.args.kind==='home'));
 });
 
 test("an unavailable public provider leaves primary home and autoplay candidates usable",async()=>{

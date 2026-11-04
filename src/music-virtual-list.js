@@ -19,6 +19,9 @@ export function mountMusicList(container,items,renderRow,onVisible=()=>{}){
  while(scrollRoot&&scrollRoot!==document.body&&!/(auto|scroll)/.test(getComputedStyle(scrollRoot).overflowY))scrollRoot=scrollRoot.parentElement;
  if(!scrollRoot||scrollRoot===document.body)scrollRoot=window;
  let nodes=new Map(),frame=0,disposed=false,lastStart=-1,lastEnd=-1;
+ // A small reverse-scroll buffer reuses image nodes/decoders. Never retain a
+ // whole library: at most 48 detached rows in addition to the visible window.
+ const spare=new Map();
  function draw(){
   frame=0;if(disposed||!container.isConnected)return;
   const rect=container.getBoundingClientRect(),viewport=scrollRoot===window?{top:0,height:innerHeight}:scrollRoot.getBoundingClientRect();
@@ -29,9 +32,10 @@ export function mountMusicList(container,items,renderRow,onVisible=()=>{}){
   const scrollPosition=scrollRoot===window?window.scrollY:scrollRoot.scrollTop;
   const next=new Map();
   top.style.height=start*height+'px';bottom.style.height=(items.length-end)*height+'px';
-  for(const [index,row] of nodes)if(index<start||index>=end)row.remove();
+  for(const [index,row] of nodes)if(index<start||index>=end){row.remove();spare.delete(index);spare.set(index,row);}
   let cursor=top.nextSibling;
-  for(let i=start;i<end;i++){const row=nodes.get(i)||renderRow(items[i],i);row.setAttribute('role','listitem');row.setAttribute('aria-posinset',String(i+1));row.setAttribute('aria-setsize',String(items.length));next.set(i,row);if(row!==cursor)container.insertBefore(row,cursor);cursor=row.nextSibling;}
+  for(let i=start;i<end;i++){const row=nodes.get(i)||spare.get(i)||renderRow(items[i],i);spare.delete(i);row.setAttribute('role','listitem');row.setAttribute('aria-posinset',String(i+1));row.setAttribute('aria-setsize',String(items.length));next.set(i,row);if(row!==cursor)container.insertBefore(row,cursor);cursor=row.nextSibling;}
+  while(spare.size>48)spare.delete(spare.keys().next().value);
   nodes=next;
   if(scrollRoot===window)window.scrollTo({top:scrollPosition,behavior:'instant'});else scrollRoot.scrollTop=scrollPosition;
   onVisible(items.slice(start,end).map(item=>item.id));
@@ -47,5 +51,5 @@ export function mountMusicList(container,items,renderRow,onVisible=()=>{}){
  }
  scrollRoot.addEventListener('scroll',schedule,{passive:true});window.addEventListener('resize',schedule);container.addEventListener('keydown',keys);
  const resize=new ResizeObserver(schedule);resize.observe(container);if(scrollRoot!==window)resize.observe(scrollRoot);
- draw();return {destroy(){disposed=true;cancelAnimationFrame(frame);resize.disconnect();scrollRoot.removeEventListener('scroll',schedule);window.removeEventListener('resize',schedule);container.removeEventListener('keydown',keys);nodes.clear();}};
+ draw();return {destroy(){disposed=true;cancelAnimationFrame(frame);resize.disconnect();scrollRoot.removeEventListener('scroll',schedule);window.removeEventListener('resize',schedule);container.removeEventListener('keydown',keys);nodes.clear();spare.clear();}};
 }

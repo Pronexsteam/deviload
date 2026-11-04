@@ -18,7 +18,7 @@ test("home never fetches regional shelves, while explicit search remains availab
   rememberNavigation(){},searchFilter:'songs',activeMood:'all',browseItem:null,request:0,
   selectView(){},t:s=>s,status(){},skeleton(){},render(){},homeSections:()=>[],personalize(){},
   language:()=> 'ru',audio:{paused:false},invoke:async(command,args)=>{calls.push({command,...args});return {sections:base};},
-  homeCache:{sections:base},saved:{showRegional:true},listFilter:'',listSort:'',lastQuery:null,
+  homeCache:{sections:base},saved:{showRegional:true},listFilter:'',listSort:'',view:'home',lastQuery:{kind:'home'},
   continuation:null,morePending:false,loading:false,sections:[],loaded:false};
  const load=runInNewContext(`(()=>{${source.slice(source.indexOf('  async function load('),source.indexOf('  function renderInterestPool('))};return load;})()`,ctx);
  await load('home');await load('home','','',true);assert.equal(calls.length,0);
@@ -28,9 +28,23 @@ test("home never fetches regional shelves, while explicit search remains availab
 });
 function home(showRegional){
   const ctx={saved:{favorites:[],recent:[recent],showRegional,sourceBindings:[],interestMixes:[],playlists:[],collections:[]},taste:{},queue:[],request:1,personalization:0,playbackContext:[],playbackSourceContext:{kind:"manual"},followedCursor:0,privateSession:false,recommendationReasons:new Map(),current:null,sections:[],audio:{paused:true},prepared:[],tracks:items=>items,intent:{enter:id=>ctx.prepared.push(id)},captureListening(){},tasteSeeds:()=>[liked],radio:async()=>[personal],createRecordingView,recommendationSession:{seeds:(_,seeds)=>seeds,contextItems:()=>[],preferenceItems:()=>[],mergePools:pools=>({items:pools.flatMap(pool=>pool.items),scores:new Map()}),allowed:items=>items},recommendationOptions:()=>({}),rankMusicRecommendations:items=>items.map(item=>({item,reason:{code:"catalog"}})),t:s=>s,render(){}};
-  Object.assign(ctx,{publicDiscovery:{candidates:async()=>[],clear(){}},publicGeneration:0,sourceRevision:0,navigator:{},resolveRecordingSource,language:()=>"en",view:"home",lastQuery:{kind:"home"}});
+  Object.assign(ctx,{publicDiscovery:{candidates:async()=>[],clear(){}},publicGeneration:0,sourceRevision:0,navigator:{},resolveRecordingSource,language:()=>"en",view:"home",lastQuery:{kind:"home"},recommendationRevision:0,homeRefreshRevision:-1,nextHomeCandidates:[],homeSeedRotation:0});
   return {ctx,...runInNewContext(`(()=>{${code};return {personalize,homeSections};})()`,ctx)};
 }
+
+test('taste radio starts before a slow followed-artist page completes, without publishing stale results',async()=>{
+ const h=home(false),radios=[];let complete;
+ h.ctx.saved.collections=[{kind:'artist',id:'UCslow',title:'Artist'}];h.ctx.canonicalArtistKey=canonicalArtistKey;
+ h.ctx.invoke=()=>new Promise(resolve=>complete=resolve);h.ctx.radio=async seed=>{radios.push(seed.id);return [personal];};
+ const pending=h.personalize(1,[]);assert.deepEqual(radios,[liked.id]);
+ h.ctx.request=2;complete({sections:[]});await pending;assert.equal(h.ctx.sections.length,0);
+});
+test('an artist can still supply initial radio seeds when the profile has none',async()=>{
+ const h=home(false),radios=[];h.ctx.tasteSeeds=()=>[];
+ h.ctx.saved.collections=[{kind:'artist',id:'UCstarter',title:'Artist'}];h.ctx.canonicalArtistKey=canonicalArtistKey;
+ h.ctx.invoke=async()=>({sections:[{items:[liked]}]});h.ctx.radio=async seed=>{radios.push(seed.id);return [personal];};
+ await h.personalize(1,[]);assert.deepEqual(radios,[liked.id]);assert.ok(h.ctx.sections[0].items.some(item=>item.id===personal.id));
+});
 test("legacy regional preferences cannot reintroduce regional catalog sections",async()=>{
   const h=home(true);await h.personalize(1,base);
   assert.equal(h.ctx.sections[0].title,"For you");assert.equal(h.ctx.sections[0].items.length,1);assert.equal(h.ctx.sections[0].items[0].id,personal.id);assert.equal(h.ctx.sections.length,2);assert.ok(!h.ctx.sections.flatMap(s=>s.items).some(item=>item.id===local.id));
@@ -51,7 +65,8 @@ test("home represents the chosen music context within three stations and rotates
   h.ctx.invoke=async(_,args)=>{queries.push(args.value);return {sections:[{items:[]}]};};
   h.ctx.radio=async seed=>{radios.push(seed.id);return [song(20+Number(seed.id),seed.artists[0])];};
   for(let i=0;i<4;i++){const before=radios.length;await h.personalize(1,[]);assert.equal(radios.length-before,3);}
-  assert.ok(radios.every(id=>context.some(item=>item.id===id)));assert.equal(queries.length,8);
+  for(let i=0;i<radios.length;i+=3){const seeds=radios.slice(i,i+3);assert.ok(context.some(item=>item.id===seeds[0]));assert.ok(seeds.includes(song(9,"Phonk").id));}
+  assert.equal(queries.length,8);
   assert.deepEqual(new Set(queries),new Set(["UC0","UC1","UC2","UC3"]));
 });
 

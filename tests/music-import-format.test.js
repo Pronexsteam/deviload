@@ -10,7 +10,7 @@ test("custom liked-song JSON preserves collaborations, deduplicates and excludes
     {position:2,title:'Second',artists:['Three']},{position:3,title:'First',artists:['One','Two']}
   ],unidentified:[{position:4,title:'',artists:['Various Artists'],reason:'Missing title'}]}),'spotify-liked-songs.json');
   assert.deepEqual(result.entries.map(e=>[e.title,e.artists,e.liked,e.plays]),[['First',['One','Two'],true,0],['Second',['Three'],true,0]]);
-  assert.equal(result.warnings.length,2);assert.ok(!/private|secret|cookie|position|album/.test(JSON.stringify(result.entries)));
+  assert.equal(result.warnings.length,2);assert.equal(result.entries[0].album,'Album');assert.ok(!/private|secret|cookie|position/.test(JSON.stringify(result.entries)));
 });
 
 test("Spotify API saved tracks, raw track arrays and playlist pages keep their like semantics",()=>{

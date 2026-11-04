@@ -6,6 +6,15 @@ import {readTaste,recommend} from "../src/music-taste.js";
 const song=(n,artist=`Artist ${n}`)=>({id:String(n).padStart(11,"0"),kind:"song",title:`Song ${n}`,artists:[artist]});
 const now=1800000000000,minute=60000;
 
+test("home broadening keeps a live interest but leaves room for durable tastes",()=>{
+ const session=createRecommendationSession();session.setContext([song(1),song(2),song(3)]);
+ for(let n=4;n<8;n++)session.recordListen(song(n),{seconds:40,duration:180,session:n},now+n);
+ const seeds=session.seeds(null,[song(20),song(21)],{limit:3,broaden:true,now:now+100});
+ assert.deepEqual(seeds.map(item=>item.id),[song(7).id,song(20).id,song(21).id]);
+ const radio=session.seeds(song(7),[song(20),song(21)],{limit:2,now:now+100});
+ assert.ok(!radio.some(item=>item.id===song(20).id),'explicit radio keeps its narrower context');
+});
+
 test("radio seeds represent the chosen context, rotate artists and keep the request limit",()=>{
   const session=createRecommendationSession(),current=song(1,"Jazz A"),other=song(2,"Jazz B"),third=song(3,"Jazz C"),global=song(9,"Phonk");
   session.setContext([current,song(4,"Jazz A"),other,third]);

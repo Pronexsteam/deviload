@@ -1,7 +1,8 @@
 import {musicGain,DEFAULT_MUSIC_GAIN} from "./music-volume.js";
+import {isMusicTrackId} from './music-track-id.js';
 export function tracks(items) {
   const seen = new Set();
-  return items.filter(item => item?.kind === "song" && typeof item.title === "string" && /^[\w-]{11}$/.test(item.id) && !seen.has(item.id) && seen.add(item.id));
+  return items.filter(item => item?.kind === "song" && typeof item.title === "string" && isMusicTrackId(item.id) && !seen.has(item.id) && seen.add(item.id));
 }
 
 // Keep metadata for the complete collection. Only visible queue rows are mounted;

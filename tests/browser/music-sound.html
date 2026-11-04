@@ -1,0 +1,26 @@
+<!doctype html><html lang="en" data-theme="ambient"><meta charset="utf-8"><title>Sound panel verification</title>
+<link rel="stylesheet" href="../../src/styles.css"><link rel="stylesheet" href="../../src/devil-music.css"><link rel="stylesheet" href="../../src/music-sound.css">
+<body style="padding:24px"><h1>Sound panel · local verification</h1><p>Generated local WAV. Separate test preferences; personal library is never opened.</p>
+<button id="open">Open sound</button><button id="start">Play test tone</button><button id="stop">Pause</button><button id="room">Toggle guest room</button><button id="checks">Run audio checks</button><pre id="result"></pre>
+<script type="module">
+import {createMusicSound} from '../../src/music-sound.js';
+import {frequencies,presets,equalizerHeadroom} from '../../src/music-sound-model.js';
+const nodes=[new Audio(),new Audio()];nodes.forEach(n=>{n.controls=true;n.volume=.05;document.body.append(n);});
+const storage={getItem:k=>localStorage.getItem('sound-qa:'+k),setItem:(k,v)=>localStorage.setItem('sound-qa:'+k,v)};
+const button=(label,icon,handler,className='')=>{const b=document.createElement('button');b.textContent=label;b.className=className;b.onclick=handler;return b;};
+const result=document.getElementById('result'),sound=createMusicSound({nodes,storage,button,notify:text=>result.textContent=text});
+const samples=48000*8,buffer=new ArrayBuffer(44+samples*2),view=new DataView(buffer),str=(offset,text)=>[...text].forEach((c,i)=>view.setUint8(offset+i,c.charCodeAt(0)));
+str(0,'RIFF');view.setUint32(4,36+samples*2,true);str(8,'WAVEfmt ');view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);view.setUint32(24,48000,true);view.setUint32(28,96000,true);view.setUint16(32,2,true);view.setUint16(34,16,true);str(36,'data');view.setUint32(40,samples*2,true);
+for(let i=0;i<samples;i++)view.setInt16(44+i*2,Math.sin(i*2*Math.PI*440/48000)*16000,true);
+const url=URL.createObjectURL(new Blob([buffer],{type:'audio/wav'}));nodes.forEach(n=>{n.src=url;sound.setSource(n,true);});
+document.getElementById('open').onclick=()=>sound.open();document.getElementById('start').onclick=()=>{sound.resume();nodes[0].play();};document.getElementById('stop').onclick=()=>nodes[0].pause();
+let guest=false;document.getElementById('room').onclick=()=>{guest=!guest;sound.setRoomMode(guest?'guest':'');result.textContent='Guest: '+guest;};
+document.getElementById('checks').onclick=async()=>{
+ const lines=[];
+ for(const [name,bands]of Object.entries({...presets,allBoost:[12,12,12,12,12,12]})){
+  const ctx=new OfflineAudioContext(1,48000,48000),input=ctx.createBufferSource(),data=ctx.createBuffer(1,48000,48000);for(let i=0;i<48000;i++)data.getChannelData(0)[i]=Math.sin(2*Math.PI*1000*i/48000)*.95;input.buffer=data;
+  const gain=ctx.createGain();gain.gain.value=equalizerHeadroom(bands,48000);input.connect(gain);let out=gain;const f=new Float32Array(2048),mag=new Float32Array(2048),phase=new Float32Array(2048),combined=new Float32Array(2048).fill(gain.gain.value);for(let i=0;i<f.length;i++)f[i]=24000*i/(f.length-1);
+  for(let i=0;i<6;i++){const filter=ctx.createBiquadFilter();filter.type='peaking';filter.Q.value=.7;filter.frequency.value=frequencies[i];filter.gain.value=bands[i];filter.getFrequencyResponse(f,mag,phase);for(let j=0;j<f.length;j++)combined[j]*=mag[j];out.connect(filter);out=filter;}out.connect(ctx.destination);input.start();const rendered=await ctx.startRendering();const peak=Math.max(...rendered.getChannelData(0).map(Math.abs)),response=Math.max(...combined);lines.push(name+': '+(peak<=1&&response<=1.001?'PASS':'FAIL')+' peak='+peak.toFixed(4)+' response='+response.toFixed(4));
+ }lines.push('Pitch API: '+nodes.every(n=>n.preservesPitch===true));lines.push('Deck rates: '+nodes.map(n=>n.playbackRate).join(', '));result.textContent=lines.join('\n');
+};
+</script></body></html>

@@ -53,6 +53,7 @@ fn parse_page(html: &str, kind: &str, id: &str) -> Result<Value, String> {
 
 pub fn read_public_playlist(link: &str) -> Result<Value, String> {
     let (kind, id) = collection_id(link)?;
+    if kind == "playlist" { return read_full_playlist(&format!("https://open.spotify.com/playlist/{id}")); }
     let _ = rustls::crypto::ring::default_provider().install_default();
     let client = reqwest::blocking::Client::builder().user_agent("Deviload/2.6 public playlist import").connect_timeout(Duration::from_secs(8)).timeout(Duration::from_secs(20)).redirect(reqwest::redirect::Policy::none()).build().map_err(|_| UNAVAILABLE)?;
     let response = client.get(format!("https://open.spotify.com/embed/{kind}/{id}")).send().map_err(|_| UNAVAILABLE)?;
@@ -62,6 +63,28 @@ pub fn read_public_playlist(link: &str) -> Result<Value, String> {
     response.take(MAX_HTML as u64 + 1).read_to_end(&mut bytes).map_err(|_| UNAVAILABLE)?;
     if bytes.len() > MAX_HTML { return Err(UNAVAILABLE.into()); }
     parse_page(std::str::from_utf8(&bytes).map_err(|_| UNAVAILABLE)?, &kind, &id)
+}
+
+fn read_full_playlist(link: &str) -> Result<Value, String> {
+    // A separate bounded metadata process cannot occupy the audio worker.
+    static ACTIVE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = ACTIVE.try_lock().map_err(|_| "A Spotify import is already running. Please wait.")?;
+    let root = dirs::cache_dir().ok_or(UNAVAILABLE)?.join("com.deviload.desktop").join("spotify-import");
+    std::fs::create_dir_all(&root).map_err(|_| UNAVAILABLE)?;
+    let mut script = tempfile::Builder::new().prefix("public-playlist-").suffix(".mjs").tempfile_in(&root).map_err(|_| UNAVAILABLE)?;
+    use std::io::Write;
+    script.write_all(include_bytes!("../spotify-import.mjs")).map_err(|_| UNAVAILABLE)?;
+    script.flush().map_err(|_| UNAVAILABLE)?;
+    let mut command = crate::command(&crate::binary("deno")?);
+    command.env_clear();
+    for name in ["SystemRoot", "TEMP", "TMP"] { if let Some(v) = std::env::var_os(name) { command.env(name, v); } }
+    command.current_dir(&root).args(["run", "--no-config", "--no-npm", "--no-remote", "--no-prompt", "--allow-net=open.spotify.com,open.spotifycdn.com,clienttoken.spotify.com,api-partner.spotify.com,code.thetadev.de"])
+        .arg(script.path()).arg(link);
+    let output = crate::engine_update::json_output(&mut command, Duration::from_secs(155)).map_err(|_| UNAVAILABLE)?;
+    let data: Value = serde_json::from_slice(&output.stdout).map_err(|_| UNAVAILABLE)?;
+    if !output.status.success() { return Err(data["error"].as_str().unwrap_or(UNAVAILABLE).to_owned()); }
+    if data["source"] != "spotify" || data["completeness"] != "complete" || data["receivedCount"] != data["reportedTotal"] || !data["entries"].is_array() { return Err(UNAVAILABLE.into()); }
+    Ok(data)
 }
 
 #[tauri::command]
@@ -95,6 +118,17 @@ mod tests {
         let result = read_public_playlist("https://open.spotify.com/album/7sFZGbkCitoqQz7Rt3LoKg").unwrap();
         assert_eq!(result["name"], "MUSIC - SORRY 4 DA WAIT");
         assert!(!result["entries"].as_array().unwrap().is_empty());
+    }
+    #[test]
+    #[ignore = "live full public Spotify playlist import"]
+    fn live_spotify_full_playlist_import() {
+        if std::env::var_os("DEVILOAD_LIVE_IMPORT_TEST").is_none() { return; }
+        let result = read_public_playlist("https://open.spotify.com/playlist/2WkXJXAOqb1MQWhPrlGdlL").unwrap();
+        assert_eq!(result["completeness"], "complete");
+        assert_eq!(result["receivedCount"], result["reportedTotal"]);
+        assert!(result["entries"].as_array().unwrap().len() > 1400);
+        assert!(result["entries"][0]["spotifyId"].as_str().is_some());
+        println!("Spotify full import: received={}, usable={}, unavailable={}", result["receivedCount"], result["entries"].as_array().unwrap().len(), result["unavailableCount"]);
     }
     #[test]
     fn public_metadata_keeps_more_than_500_tracks() {

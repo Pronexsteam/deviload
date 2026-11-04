@@ -3,7 +3,7 @@ export function wirePlaybackSettings(invoke,{diagnostics}={}){
   const dialog=document.getElementById("music-preferences"),open=document.getElementById("music-settings-open");
   open.addEventListener("click",()=>dialog.showModal());
   document.getElementById("music-settings-close").addEventListener("click",()=>dialog.close());
-  dialog.addEventListener("close",()=>open.focus());
+  dialog.addEventListener("close",()=>{const menu=open.closest('details');(menu&&!menu.open?menu.querySelector('summary'):open)?.focus();});
   dialog.addEventListener("click",event=>{if(event.target!==dialog)return;const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)dialog.close();});
   const panel=document.getElementById("music-playback-settings"),status=panel.querySelector("[role=status]"),clear=panel.querySelector("[data-clear-cache]"),update=panel.querySelector("[data-update-engine]");
   const limit=document.getElementById("music-cache-limit");

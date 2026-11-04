@@ -1,38 +1,44 @@
+import {createMotionCover} from './music-motion.js';
 import {t,onLanguageChange} from "./i18n.js";
 
 // Move the existing controls into a modal, so both views share one audio player.
-export function createNowPlaying({dock,identity,artwork,info,like,transport,extras,queuePanel,button,cover,renderDockArtwork,onDownload,onHideSong,onHideArtist,onArtist}) {
+export function createNowPlaying({invoke,convertFileSrc,dock,identity,artwork,info,like,transport,extras,queuePanel,button,cover,renderDockArtwork,onDownload,onHideSong,onHideArtist,onArtist,onDismissQueue}) {
   const make=(tag,cls)=>{const node=document.createElement(tag);node.className=cls;return node;};
-  const stage=make("dialog","music-stage"),background=make("div","music-stage-background"),header=make("header","music-stage-header");
+  const stage=make("dialog","music-stage is-immersive"),background=make("div","music-stage-background"),header=make("header","music-stage-header");
   stage.id="music-now-playing";background.setAttribute("aria-hidden","true");
   const brand=make("span","music-stage-brand");brand.textContent="Devil Music";
   const heading=make("span","music-eyebrow"),close=button(t("Back to browsing"),"caret-down",()=>stage.close());header.append(brand,heading,close);
+  close.classList.add('music-stage-tool');
   const layout=make("div","music-stage-layout"),art=make("div","music-stage-art"),details=make("div","music-stage-details");
   const caption=make("span","music-eyebrow"),controls=make("div","music-stage-controls"),actions=make("div","music-stage-actions");
   const download=button(t("Download MP3"),"download-simple",onDownload);
+  download.classList.add('music-stage-download');
   const dislike=button(t("Do not recommend this song"),"eye-slash",onHideSong),block=button(t("Do not recommend this artist"),"user-minus",onHideArtist);
   const notice=make("div","music-stage-notice");notice.hidden=true;notice.setAttribute("role","status");
   actions.append(download,dislike,block);details.append(caption,controls,actions,notice);layout.append(art,details);
   const lyricsPanel=make("aside","music-stage-lyrics");lyricsPanel.hidden=true;lyricsPanel.setAttribute("aria-label",t("Lyrics"));layout.append(lyricsPanel);
-  stage.append(background,header,layout);document.body.append(stage);
+  art.inert=true;stage.append(background,header,layout);document.body.append(stage);
   const expand=button(t("Now playing"),"arrows-out",()=>open());expand.id="music-expand";extras.append(expand);
-  const preview=make("aside","music-playing-preview"),previewArt=button(t("Now playing"),null,()=>open(),"music-preview-art"),previewTitle=make("strong",""),previewArtist=make("span",""),previewOpen=button(t("Lyrics"),"arrows-out",()=>open(),"music-preview-open");
+  const preview=make("aside","music-playing-preview is-immersive-preview"),previewArt=button(t("Now playing"),null,()=>open(),"music-preview-art"),previewTitle=make("strong",""),previewArtist=make("span",""),previewOpen=button(t("Lyrics"),"arrows-out",()=>open(),"music-preview-open");
   const previewHeading=make("span","music-eyebrow"),previewLabel=make("span","");previewOpen.append(previewLabel);preview.hidden=true;
+  previewOpen.setAttribute('aria-haspopup','dialog');previewArt.setAttribute('aria-haspopup','dialog');expand.setAttribute('aria-haspopup','dialog');
   previewArtist.setAttribute('role','button');previewArtist.tabIndex=0;previewArtist.className='music-artist-link';
   previewArtist.addEventListener('click',()=>onArtist?.(current));
   previewArtist.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onArtist?.(current);}});
-  const ambient=make("div","music-preview-ambient"),facts=make("p","music-playing-facts"),reason=make("p","music-playing-reason");ambient.setAttribute("aria-hidden","true");
+  const ambient=make("div","music-preview-ambient"),scene=make('div','music-scene-backdrop'),facts=make("p","music-playing-facts"),reason=make("p","music-playing-reason");ambient.setAttribute("aria-hidden","true");scene.setAttribute('aria-hidden','true');
   const flip=make('div','music-preview-flip'),faces=make('div','music-preview-faces'),inlineLyrics=make('section','music-preview-lyrics');inlineLyrics.hidden=true;inlineLyrics.setAttribute('aria-label',t('Lyrics'));
   const flipButton=button(t('Show lyrics'),'music-notes',()=>setPreviewLyrics(!previewLyricsOn),'music-preview-toggle');
-  const previewTop=make('div','music-preview-top');previewTop.append(previewHeading,flipButton);faces.append(previewArt,inlineLyrics);flip.append(faces);
-  preview.append(ambient,previewTop,flip,previewTitle,previewArtist,facts,reason,previewOpen);
+  const previewTop=make('div','music-preview-top'),previewTools=make('div','music-preview-tools');previewTools.append(flipButton,previewOpen);previewTop.append(previewHeading,previewTools);faces.append(previewArt,inlineLyrics);flip.append(faces);
+  preview.append(ambient,previewTop,flip,previewTitle,previewArtist,facts,reason);
   artwork.setAttribute("role","button");artwork.tabIndex=0;artwork.setAttribute("aria-haspopup","dialog");
   artwork.addEventListener("click",()=>{if(!stage.open)open();});
   artwork.addEventListener("keydown",event=>{if(!stage.open&&(event.key==="Enter"||event.key===" ")){event.preventDefault();open();}});
-  let current=null,returnFocus=null,lyrics=null,lyricsTrigger=null,previewLyricsOn=false,flipCleanup=0;
+  let current=null,currentImage='',returnFocus=null,lyrics=null,lyricsTrigger=null,previewLyricsOn=false,flipCleanup=0;
   function setPreviewLyrics(value){
     clearTimeout(flipCleanup);previewLyricsOn=value;preview.classList.toggle('showing-lyrics',value);faces.classList.toggle('is-flipped',value);previewArt.inert=value;inlineLyrics.inert=!value;
+    motion.update(current);
     flipButton.setAttribute('aria-pressed',String(value));flipButton.title=flipButton.ariaLabel=value?t('Show cover'):t('Show lyrics');
+    const glyph=flipButton.querySelector('.icon');if(glyph)glyph.dataset.icon=value?'image':'music-notes';
     if(value){inlineLyrics.hidden=false;if(lyrics&&!stage.open)lyrics.mount(inlineLyrics);}
     else {
       // Keep the back face painted until the return turn finishes. Hiding or
@@ -42,26 +48,37 @@ export function createNowPlaying({dock,identity,artwork,info,like,transport,extr
     }
   }
   let idleTimer=null,playing=false;
+  const motion=createMotionCover({invoke,convertFileSrc,getHost:()=>stage.open?artwork:previewArt,isVisible:()=>stage.open||(!preview.hidden&&!previewLyricsOn&&preview.getClientRects().length>0),isPlaying:()=>playing});
+
+  const previewVisibility=new ResizeObserver(()=>motion.update(current));previewVisibility.observe(preview);
   function wake(){stage.classList.remove("music-stage-idle");clearTimeout(idleTimer);if(stage.open&&playing)idleTimer=setTimeout(()=>{if(!stage.contains(document.activeElement)||document.activeElement===close)stage.classList.add("music-stage-idle");},3500);}
   stage.addEventListener("pointermove",wake);stage.addEventListener("pointerdown",wake);stage.addEventListener("keydown",wake);
+  let lyricsWanted=false;
+  function syncRail(){
+    const queueVisible=stage.open&&!queuePanel.hidden,visible=stage.open&&lyricsWanted&&!queueVisible;
+    stage.classList.toggle('showing-stage-queue',queueVisible);stage.classList.toggle('has-lyrics',visible||queueVisible);
+    if(!lyrics)return;lyricsTrigger?.setAttribute('aria-pressed',String(visible));
+    if(lyricsPanel.hidden===!visible)return;lyricsPanel.hidden=!visible;
+    if(visible)lyrics.mount(lyricsPanel);else lyrics.unmount();
+  }
   function showLyrics(value){
-    if(!lyrics)return;lyricsPanel.hidden=!value;stage.classList.toggle("has-lyrics",value);
-    lyricsTrigger?.setAttribute("aria-pressed",String(value));
-    if(value)lyrics.mount(lyricsPanel);else if(previewLyricsOn&&!stage.open)lyrics.mount(inlineLyrics);else lyrics.unmount();
+    lyricsWanted=value;syncRail();
   }
   function open(){
     if(!current||stage.open)return;
     returnFocus=document.activeElement;
     artwork.replaceChildren(cover(current,"",1024));
+    background.replaceChildren(cover(current,"",320));
     art.append(artwork);details.insertBefore(info,controls);controls.append(transport);actions.prepend(like);details.append(extras);
-    stage.append(queuePanel);document.body.classList.add("music-stage-open");stage.showModal();showLyrics(true);close.focus();wake();
+    layout.append(queuePanel);document.body.classList.add("music-stage-open");stage.showModal();if(previewLyricsOn&&!queuePanel.hidden)lyrics?.unmount();showLyrics(true);close.focus();motion.update(current);wake();
   }
   stage.addEventListener("close",()=>{
     clearTimeout(idleTimer);stage.classList.remove("music-stage-idle");
-    showLyrics(false);lyricsTrigger?.removeAttribute("aria-pressed");
+    motion.update(current);background.replaceChildren();
+    showLyrics(false);if(previewLyricsOn)lyrics?.mount(inlineLyrics);lyricsTrigger?.removeAttribute("aria-pressed");
     identity.append(artwork,info,like);dock.append(identity,transport,extras);document.body.append(queuePanel);
     if(renderDockArtwork)renderDockArtwork(current);else artwork.replaceChildren(cover(current,"",128));
-    document.body.classList.remove("music-stage-open");returnFocus?.focus();
+    document.body.classList.remove("music-stage-open");motion.update(current);returnFocus?.focus();
   });
   function labels(){
     stage.setAttribute("aria-label",t("Now playing"));heading.textContent=t("NOW PLAYING");caption.textContent=t("YOUR OWN FREQUENCY");lyricsPanel.setAttribute("aria-label",t("Lyrics"));
@@ -70,14 +87,17 @@ export function createNowPlaying({dock,identity,artwork,info,like,transport,extr
     flipButton.title=flipButton.ariaLabel=previewLyricsOn?t('Show cover'):t('Show lyrics');flipButton.setAttribute('aria-pressed',String(previewLyricsOn));
   }
   labels();onLanguageChange(labels);
-  return {open,attachPreview(workspace){workspace.append(preview);},attachLyrics(controller,trigger){lyrics=controller;lyricsTrigger=trigger;},toggleLyrics(){if(!stage.open)return false;showLyrics(lyricsPanel.hidden);wake();return true;},update(item,downloading=false,meta={}){
-    if(current?.id!==item?.id){background.replaceChildren(cover(item));previewArt.replaceChildren(cover(item,"",640));ambient.replaceChildren(cover(item));notice.hidden=true;for(const node of [previewArt,info]){node.classList.remove("music-track-arriving");requestAnimationFrame(()=>node.classList.add("music-track-arriving"));}}
-    if(stage.open&&current?.id!==item?.id)artwork.replaceChildren(cover(item,"",1024));
+  return {open,syncQueueVisibility(){if(stage.open)syncRail();},attachPreview(workspace){workspace.append(scene,preview);},attachLyrics(controller,trigger){lyrics=controller;lyricsTrigger=trigger;},toggleLyrics(){if(!stage.open)return false;if(!queuePanel.hidden){lyricsWanted=true;onDismissQueue?.();}else showLyrics(lyricsPanel.hidden);wake();return true;},update(item,downloading=false,meta={}){
+    const trackChanged=current?.id!==item?.id,imageChanged=currentImage!==(item?.image||'');
+    if(trackChanged||imageChanged){if(stage.open)background.replaceChildren(cover(item,"",320));previewArt.replaceChildren(cover(item,"",640));ambient.replaceChildren(cover(item,"",320));scene.replaceChildren(cover(item,"",320));}scene.hidden=!item;
+    if(trackChanged){notice.hidden=true;for(const node of [previewArt,info]){node.classList.remove("music-track-arriving");requestAnimationFrame(()=>node.classList.add("music-track-arriving"));}}
+    if(stage.open&&(trackChanged||imageChanged))artwork.replaceChildren(cover(item,"",1024));
+    currentImage=item?.image||'';
     if(playing!==meta.playing){playing=!!meta.playing;wake();}
     const duration=Number(meta.duration)||0;facts.textContent=[duration?`${Math.floor(duration/60)}:${String(Math.floor(duration%60)).padStart(2,"0")}`:"",meta.offline?t("Downloaded music"):""].filter(Boolean).join(" · ");facts.hidden=!facts.textContent;
     reason.textContent=meta.reason||"";reason.hidden=!meta.reason;
     preview.hidden=!item;preview.parentElement?.classList.toggle("has-playing-preview",!!item);previewTitle.textContent=item?.title||"";previewArtist.textContent=item?.artists?.join(", ")||"";artwork.setAttribute("aria-disabled",String(!item));
-    current=item;expand.disabled=!item;download.disabled=!item||downloading;dislike.disabled=!item;block.disabled=!item?.artists?.length;
+    current=item;motion.update(item);expand.disabled=!item;download.disabled=!item||downloading;dislike.disabled=!item;block.disabled=!item?.artists?.length;
     if(!item&&stage.open)stage.close();
   },notify(text,undo){const message=make("span","");message.textContent=text;notice.replaceChildren(message);if(undo)notice.append(button(t("Undo"),"arrow-clockwise",()=>{undo();notice.hidden=true;}));notice.hidden=false;},close(){if(stage.open)stage.close();}};
 }

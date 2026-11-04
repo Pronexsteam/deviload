@@ -10,7 +10,7 @@ function icon(id,name,one=false){const button=$(id);if(button.dataset.icon===nam
 const record=mountPictureDisc(document.querySelector(".mini-art"));
 let state={},pinned=false,receivedAt=0;
 const queueView=wireMiniQueue({invoke});
-registerPlaybackRange($('mini-progress'),()=>state.duration?Math.min(state.duration,state.position+(state.playing?Math.min(1.1,(performance.now()-receivedAt)/1000):0))/state.duration:0);
+registerPlaybackRange($('mini-progress'),()=>state.duration?Math.min(state.duration,state.position+(state.playing?Math.min(1.1,(performance.now()-receivedAt)/1000)*(state.rate||1):0))/state.duration:0);
 $('mini-progress').step='any';
 const glow=document.createElement('div');glow.className='mini-ambient-glow';glow.setAttribute('aria-hidden','true');
 const lights=Array.from({length:3},()=>{const node=document.createElement('span');glow.append(node);return node;});document.body.prepend(glow);
@@ -25,7 +25,7 @@ function render(value){state=value||{};receivedAt=performance.now();document.doc
  icon('mini-play',state.playing?'pause':'play');icon('mini-previous','previous');icon('mini-next','next');icon('mini-repeat','repeat',state.repeat==='one');icon('mini-shuffle','shuffle');icon('mini-mute',state.volume>0?'volume':'muted');
  $('mini-play').disabled=!state.active;$('mini-previous').disabled=!state.previousEnabled;$('mini-next').disabled=!state.nextEnabled;
  $('mini-repeat').setAttribute('aria-pressed',String(state.repeat!=='off'));$('mini-shuffle').setAttribute('aria-pressed',String(!!state.shuffle));$('mini-mute').setAttribute('aria-pressed',String(!state.volume));
- $('mini-position').textContent=time(state.position);$('mini-duration').textContent=time(state.duration);if(!isRangeDragging($('mini-progress')))$('mini-progress').value=state.duration?Math.min(1,state.position/state.duration):0;$('mini-progress').disabled=!state.duration;
+ $('mini-position').textContent=time(state.position);$('mini-duration').textContent=time(state.duration);$('mini-progress').disabled=!state.duration;
  if(!isRangeDragging($('mini-volume')))$('mini-volume').value=state.volume||0;labels();queueView.update(state);
 }
 function labels(){for(const [id,label]of [['mini-pin',t('Always on top')],['mini-show',t('Open Devil Music')],['mini-close',t('Close')],['mini-play',state.playing?t('Pause'):t('Play')],['mini-previous',t('Previous track')],['mini-next',t('Next track')],['mini-repeat',state.repeat==='one'?t('Repeat one song'):state.repeat==='all'?t('Repeat queue'):t('Repeat off')],['mini-shuffle',t('Shuffle')],['mini-mute',state.volume>0?t('Mute'):t('Unmute')],['mini-volume',t('Volume')],['mini-progress',t('Playback position')]])$(id).title=$(id).ariaLabel=label;$('mini-pin').setAttribute('aria-pressed',String(pinned));$('mini-volume').setAttribute('aria-valuetext',Math.round(Number($('mini-volume').value)*100)+'%');}

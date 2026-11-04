@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {createMusicDiagnostics,playbackErrorCode,playbackFailure} from "../src/music-diagnostics.js";
+test("stream verification keeps pending distinct and does not flatten protective failures",()=>{
+  for(const [source,code] of [["attestation pending; Download aborted","pending"],["attestation required; timeout","verification_required"],["attestation rejected","verification_rejected"],["unknown stream protection state","protection_unknown"]]){
+    const failure=playbackFailure(source);assert.equal(failure.code,code);assert.equal(playbackErrorCode(failure.message),code);
+    const diagnostics=createMusicDiagnostics();assert.equal(diagnostics.record("recovery",code),true);
+  }
+  assert.ok(!playbackFailure("attestation pending").message.includes("denied"));
+});
 
 test("diagnostics retain bounded fixed facts without arbitrary source errors or metadata",()=>{
   let now=100000;const diagnostics=createMusicDiagnostics({now:()=>now});
@@ -22,6 +29,16 @@ test("duplicate stages coalesce and timings remain bounded",()=>{
   diagnostics.record("source");assert.equal(diagnostics.record("source"),false);now+=400000;
   diagnostics.record("resolve","ready");assert.equal(diagnostics.snapshot().at(-1).elapsedMs,300000);
   now=NaN;assert.equal(diagnostics.record("start"),false);
+});
+
+test("incomplete track information is actionable and distinct from an access denial",()=>{
+  assert.equal(playbackErrorCode("Invalid music engine response after network timeout"),"invalid_response");
+  assert.equal(playbackErrorCode("Requested format is not available"),"unsupported");
+  assert.equal(playbackErrorCode("HTTP 403: requested format is not available"),"restricted");
+  const failure=playbackFailure("Invalid music engine response: missing or unknown playability status");
+  assert.equal(failure.code,"invalid_response");assert.match(failure.message,/incomplete track information/);
+  assert.equal(playbackErrorCode(failure.message),failure.code);
+  assert.notEqual(playbackFailure("Playback restricted: YouTube denied access to the audio.").code,failure.code);
 });
 
 test("source restrictions preserve distinct sign-in, unavailable, denied and regional guidance",()=>{

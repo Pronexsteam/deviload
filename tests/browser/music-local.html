@@ -1,0 +1,31 @@
+<!doctype html><html lang="en" data-theme="ambient"><meta charset="utf-8"><title>Local library verification</title>
+<link rel="stylesheet" href="../../src/styles.css"><link rel="stylesheet" href="../../src/devil-music.css"><link rel="stylesheet" href="../../src/music-sound.css">
+<body style="padding:24px"><h1>Local library · verification</h1><p>Synthetic metadata and a separate test database. No personal library is opened.</p>
+<button id="open">Open local library</button><button id="profile">Verify profile migration</button><pre id="result"></pre>
+<script type="module">
+import {createLocalLibrary} from '../../src/music-local-library.js';
+import {openMusicProfileStore,MUSIC_PROFILE_BEFORE_LOCAL} from '../../src/music-profile-store.js';
+import {exportMusicProfile,importMusicProfile,saveMusicProfile,PROFILE_KEY} from '../../src/music-profile.js';
+import {readTaste} from '../../src/music-taste.js';
+const result=document.getElementById('result');
+const button=(label,icon,handler,cls='')=>{const b=document.createElement('button');b.textContent=label;b.className=cls;b.onclick=handler;return b;};
+const local=createLocalLibrary({button,invoke:async(name)=>{if(name==='music_local_list')return {items:[],total:0,generation:1,scanning:false};if(name==='music_local_choose')throw Error('Local music metadata could not be read.');return false;},onChange:()=>{}});
+document.getElementById('open').onclick=()=>local.open();
+document.getElementById('profile').onclick=async()=>{
+ try{
+  const name='local-migration-qa-'+Date.now(),online={id:'abcdefghijk',kind:'song',title:'Existing',artists:['Original'],subtitle:'Original',image:''},taste=readTaste();
+  const saved={favorites:[online],recent:[],playlists:[],volume:.37,publicDiscovery:false};
+  const raw=JSON.parse(exportMusicProfile(saved,taste));raw.version=2;const old=JSON.stringify(raw),settings=new Map([[PROFILE_KEY,old],['devil-music-sound','original-sound']]);
+  const legacy={getItem:k=>settings.get(k)??null,setItem:(k,v)=>settings.set(k,v)};
+  let store=await openMusicProfileStore({name,legacy});const original=importMusicProfile(old);
+  const local={...online,id:'local:'+'a'.repeat(64),title:'Local',album:'Album',image:'music-art://localhost/'+'a'.repeat(64)+'.jpg'};
+  original.saved.favorites.push(local);await saveMusicProfile(store,original.saved,original.taste);
+  for(let n=0;n<3;n++)await saveMusicProfile(store,{...original.saved,volume:.4+n*.1},original.taste);
+  await store.close();store=await openMusicProfileStore({name,legacy});const reopened=importMusicProfile(store.getItem(PROFILE_KEY));
+  const db=await new Promise((resolve,reject)=>{const req=indexedDB.open(name);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
+  const backup=await new Promise((resolve,reject)=>{const req=db.transaction('profiles').objectStore('profiles').get(MUSIC_PROFILE_BEFORE_LOCAL);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});db.close();
+  if(backup!==old||reopened.saved.favorites.length!==2||reopened.saved.favorites[1].album!=='Album'||reopened.saved.publicDiscovery!==false||settings.get('devil-music-sound')!=='original-sound')throw Error('Migration failed');
+  await store.close();result.textContent='PASS: v2 → v3; immutable original backup survives 4 saves; mixed library and album survive reopen; preferences and sound settings preserved.';
+ }catch(e){result.textContent='FAIL: '+e.message;}
+};
+</script></body></html>

@@ -95,6 +95,33 @@ export function recordingAlternatives(original,candidates,{limit=12}={}){
     .slice(0,limit).map(({index,...row})=>row);
 }
 
+export function videoRecordingCandidates(hits){
+  return (Array.isArray(hits)?hits:[]).flatMap(hit=>{
+    const id=/^https:\/\/www\.youtube\.com\/watch\?v=([\w-]{11})$/.exec(hit?.url)?.[1];
+    if(!id||typeof hit.title!=="string"||!hit.title.trim())return [];
+    return [{id,kind:"song",title:hit.title,artists:hit.channel?[hit.channel]:[],duration:hit.duration,image:hit.thumbnail}];
+  });
+}
+
+// Catalog songs only. A match is used for one playback attempt, never saved as a source choice.
+export function singleCatalogMatch(original,items){
+  const video=item=>item?.isVideo===true||/music_video_type_(?:omv|ugc)|music video|official video|lyric(?:s)? video|visuali[sz]er|video oficial|videoclip|\bclip\b|\u043a\u043b\u0438\u043f/iu.test([item?.title,item?.musicVideoType].join(" "));
+  if(!Array.isArray(items)||items.length>MAX_CANDIDATES||video(original))return null;
+  const explicit=item=>item?.explicit??item?.isExplicit??null;
+  const albumId=item=>item?.albumId||item?.album?.id||"";
+  const albumTitle=item=>text(typeof item?.album==="string"?item.album:item?.album?.title);
+  let selected=null;
+  for(const item of items){
+    if(item?.id===original?.id||item?.unavailable===true||video(item)||explicit(item)!==explicit(original)||
+      (albumId(original)&&albumId(item)&&albumId(original)!==albumId(item))||
+      (albumTitle(original)&&albumTitle(item)&&albumTitle(original)!==albumTitle(item))||
+      recordingMatch(original,item).confidence!=="high")continue;
+    if(selected&&selected.id!==item.id)return null;
+    selected=item;
+  }
+  return selected;
+}
+
 function bindingsList(bindings){
   const seen=new Set();
   return (Array.isArray(bindings)?bindings.slice(0,MAX_BINDINGS):[]).filter(binding=>
@@ -103,6 +130,19 @@ function bindingsList(bindings){
 export function resolveRecordingSource(item,bindings=[]){
   if(!validTrack(item))return item;
   return bindingsList(bindings).find(binding=>binding.trackId===item.id)?.source||item;
+}
+// The desktop profile replaces its bindings array on every edit or import.
+// Build its direct source index once for the whole queue, including shuffle snapshots.
+export function createRecordingSourceResolver(){
+  let previous,byId=new Map();
+  return (item,bindings)=>{
+    if(bindings!==previous){
+      byId=new Map(bindingsList(bindings).map(binding=>[binding.trackId,binding.source]));
+      previous=bindings;
+    }
+    const source=byId.get(item?.id);
+    return source&&validTrack(item)?source:item;
+  };
 }
 export function removeRecordingSource(bindings,trackId){
   return bindingsList(bindings).filter(binding=>binding.trackId!==trackId).map(binding=>({trackId:binding.trackId,source:binding.source,

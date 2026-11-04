@@ -1,12 +1,13 @@
+import {isLocalMusicId} from '../src/music-track-id.js';
+import {localPlaybackSource,getExactLocalCopy} from '../src/music-local-model.js';
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {runInNewContext} from "node:vm";
+import {soundSettings} from '../src/music-sound-model.js';
 import {parseLyrics} from '../src/music-lyrics-timing.js';
-const soundCode=readFileSync(new URL("../src/music-sound.js",import.meta.url),"utf8");
-const soundSettings=runInNewContext(`(()=>{${soundCode.slice(soundCode.indexOf('const frequencies'),soundCode.indexOf('export function createMusicSound')).replace('export ','')};return soundSettings;})()`);
 const source=readFileSync(new URL("../src/devil-music.js",import.meta.url),"utf8");
-function paging(invoke){const ctx={request:1,continuation:"page2",morePending:false,sections:[{title:"",items:[{id:"one"}]}],lastQuery:{kind:"search",value:"artist"},searchFilter:"songs",language:()=>"en",invoke,render(){},status(message){ctx.message=message;},errorText:String};return {ctx,load:runInNewContext(`(()=>{${source.slice(source.indexOf('  async function loadMore()'),source.indexOf('  function trackRow('))};return loadMore;})()`,ctx)};}
+function paging(invoke){const ctx={isLocalMusicId,localPlaybackSource,request:1,continuation:"page2",morePending:false,sections:[{title:"",items:[{id:"one"}]}],lastQuery:{kind:"search",value:"artist"},searchFilter:"songs",language:()=>"en",invoke,render(){},status(message){ctx.message=message;},errorText:String};return {ctx,load:runInNewContext(`(()=>{${source.slice(source.indexOf('  async function loadMore()'),source.indexOf('  function trackRow('))};return loadMore;})()`,ctx)};}
 test("search continuation appends distinct results and retries the same page after failure",async()=>{
   let fails=true;const requests=[];const p=paging(async(_,args)=>{requests.push(args);if(fails)throw Error("offline");return {sections:[{items:[{id:"one"},{id:"two"}]}],continuation:"page3"};});
   await p.load();assert.equal(p.ctx.sections.length,1);assert.equal(p.ctx.continuation,"page2");assert.equal(p.ctx.morePending,false);
@@ -21,12 +22,13 @@ test("timed lyrics preserve repeated lines, sort timestamps and reject invalid m
   assert.equal(parseLyrics(null).length,0);assert.equal(parseLyrics('[999999:01]bad').length,0);
 });
 test("untrusted sound settings cannot enable arbitrary gains or transitions",()=>{
-  assert.deepEqual(JSON.parse(JSON.stringify(soundSettings({preset:"evil",soft:"true",transition:999}))),{preset:"flat",soft:false,transition:0});
+  assert.deepEqual(JSON.parse(JSON.stringify(soundSettings({preset:"evil",soft:"true",transition:999}))),{preset:"flat",bands:[0,0,0,0,0,0],custom:[],selected:"",bypass:false,soft:false,transition:0,rate:1});
 });
 test("an existing download takes priority over the network and a missing file falls back",async()=>{
   for(const bound of [false,true]){
     const logical={kind:"song",id:"abcdefghijk",title:"Logical song"},physical={kind:"song",id:"lmnopqrstuv",title:"Chosen recording"},calls=[],stages=[];
-    const ctx={navigator:{onLine:true},resolvedOffline:false,saved:{sourceBindings:bound?[{trackId:logical.id,track:logical,source:physical}]:[]},diagnostics:{record:(stage,code)=>stages.push({stage,code})},streamLoading:false,window:{__TAURI__:{core:{convertFileSrc:path=>`asset:${path}`}}},invoke:async(command,args)=>{calls.push({command,...args});return command==="music_offline_source"?"local.mp3":{url:"remote"};}};
+    const ctx={isLocalMusicId,localPlaybackSource,navigator:{onLine:true},resolvedOffline:false,saved:{sourceBindings:bound?[{trackId:logical.id,track:logical,source:physical}]:[]},diagnostics:{record:(stage,code)=>stages.push({stage,code})},streamLoading:false,window:{__TAURI__:{core:{convertFileSrc:path=>`asset:${path}`}}},invoke:async(command,args)=>{calls.push({command,...args});return command==="music_offline_source"?"local.mp3":{url:"remote"};}};
+    Object.assign(ctx,{getExactLocalCopy,storage:null,pendingLocalCancel:null});
     const resolve=runInNewContext(`(()=>{${source.slice(source.indexOf('  async function playbackSource('),source.indexOf('  async function showOffline('))};return playbackSource;})()`,ctx),selectedId=bound?physical.id:logical.id;
     assert.equal((await resolve(logical.id)).url,"asset:local.mp3");assert.deepEqual(calls,[{command:"music_offline_source",id:selectedId}]);
     ctx.invoke=async(command,args)=>{calls.push({command,...args});return command==="music_offline_source"?null:{url:"remote"};};assert.equal((await resolve(logical.id)).url,"remote");

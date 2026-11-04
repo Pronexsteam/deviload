@@ -26,6 +26,6 @@ test("report export is explicit, disables concurrent actions and submits sanitiz
 });
 test("opening playback settings reads engine facts and cancelling export preserves existing status",async()=>{
   const calls=[];const p=setup(async(command)=>{calls.push(command);return command==="music_cache"?{bytes:1048576,limit:209715200}:command==="music_diagnostics"?{engine:{running:true}}:false;});
-  p.panel.open=true;p.panel.emit("toggle");await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(calls,["music_cache","music_diagnostics"]);assert.equal(p.panel.children[0].textContent,t("Music engine: running."));
+  p.panel.open=true;p.panel.emit("toggle");await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(calls,["music_cache","music_diagnostics"]);assert.ok(p.panel.children.some(node=>node.textContent===t("Music engine: running.")));
   const before=p.status.textContent;await p.report.emit("click");assert.equal(p.status.textContent,before);assert.equal(p.report.disabled,false);
 });

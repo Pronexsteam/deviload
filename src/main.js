@@ -140,9 +140,10 @@ function renderEngines() {
 }
 function navigate(page, focus = false) {
   if (!pageTabs[page]) return;
+  const entering=document.querySelector("main").dataset.page!==page;
   document.querySelector("main").dataset.page = page;
   setMusicFocus(page === "music");
-  if (page === "music") devilMusic.open();
+  if (page === "music") devilMusic.open(entering);
   syncTitle();
   for (const [name,id] of Object.entries(pageTabs)) {
     const active = name === page;

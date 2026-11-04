@@ -1,38 +1,57 @@
-import {t} from "./i18n.js";
-const frequencies=[60,170,350,1000,3500,10000];
-const presets={flat:[0,0,0,0,0,0],bass:[5,3,0,-1,0,1],voice:[-3,-2,1,3,2,0],night:[-2,-1,0,1,-1,-3]};
-export function soundSettings(raw={}){
-  return {preset:Object.hasOwn(presets,raw.preset)?raw.preset:"flat",soft:raw.soft===true,transition:[0,2,4].includes(raw.transition)?raw.transition:0};
-}
-export function createMusicSound({nodes,storage,button,notify}){
+import {t,onLanguageChange} from "./i18n.js";
+import {frequencies,presets,soundSettings,equalizerHeadroom,createMusicRate} from './music-sound-model.js';
+export {soundSettings} from './music-sound-model.js';
+export function createMusicSound({nodes,storage,button,notify,getAudio=()=>nodes[0],onRateChange=()=>{}}){
   let settings;try{settings=soundSettings(JSON.parse(storage?.getItem("devil-music-sound")||"{}"));}catch{settings=soundSettings();}
-  let context=null,graphs=[];
-  function apply(){for(const graph of graphs){graph.filters.forEach((filter,i)=>filter.gain.value=presets[settings.preset][i]);graph.preamp.gain.value=settings.preset==="flat"?1:.5;graph.compressor.threshold.value=settings.soft?-24:0;graph.compressor.ratio.value=settings.soft?3:1;}}
+  let context=null,graphs=[],revision=0;
+  const speed=createMusicRate(nodes,()=>settings.rate);
+  function ramp(param,value,delay=0){const now=context.currentTime;param.cancelScheduledValues(now);param.setValueAtTime(param.value,now);param.setTargetAtTime(value,now+delay,.025);}
+  function apply(){const bands=settings.bypass?frequencies.map(()=>0):settings.bands;
+    for(const graph of graphs){const gain=equalizerHeadroom(bands,context.sampleRate);ramp(graph.preamp.gain,gain,gain>graph.preamp.gain.value?.12:0);
+      graph.filters.forEach((filter,i)=>ramp(filter.gain,bands[i]));ramp(graph.compressor.threshold,!settings.bypass&&settings.soft?-24:0);ramp(graph.compressor.ratio,!settings.bypass&&settings.soft?3:1);}
+  }
   async function activate(){
     if(!context){
       const AudioContext=window.AudioContext||window.webkitAudioContext;if(!AudioContext)throw Error(t("Sound processing is unavailable on this device."));
       context=new AudioContext();
       for(const node of nodes){const source=context.createMediaElementSource(node),preamp=context.createGain(),compressor=context.createDynamicsCompressor();
-        const filters=frequencies.map(frequency=>{const filter=context.createBiquadFilter();filter.type="peaking";filter.frequency.value=frequency;filter.Q.value=.7;return filter;});
+        const filters=frequencies.map(frequency=>{const filter=context.createBiquadFilter();filter.type="peaking";filter.frequency.value=Math.min(frequency,context.sampleRate*.49);filter.Q.value=.7;return filter;});
         source.connect(preamp);let output=preamp;for(const filter of filters){output.connect(filter);output=filter;}output.connect(compressor);compressor.connect(context.destination);graphs.push({node,filters,preamp,compressor});
       }
     }apply();await context.resume();
   }
-  const dialog=document.createElement("dialog");dialog.className="music-settings-dialog";dialog.setAttribute("aria-label",t("Sound and transitions"));
-  const heading=document.createElement("h2");heading.textContent=t("Sound and transitions");dialog.append(heading);
-  function select(label,options,value,onchange){const row=document.createElement("label"),text=document.createElement("span"),input=document.createElement("select");text.textContent=label;
-    for(const [key,label]of options){const option=document.createElement("option");option.value=key;option.textContent=label;input.append(option);}input.value=String(value);row.append(text,input);dialog.append(row);input.addEventListener("change",async()=>{onchange(input.value);try{if(settings.preset!=="flat"||settings.soft||context)await activate();storage?.setItem("devil-music-sound",JSON.stringify(settings));}catch(error){notify(error.message,true);}});return input;}
-  const presetInput=select(t("Equalizer"),[["flat",t("Flat")],["bass",t("Bass boost")],["voice",t("Vocals")],["night",t("Night")]],settings.preset,value=>settings.preset=value);
-  const softInput=select(t("Volume smoothing"),[["off",t("Off")],["on",t("On")]],settings.soft?"on":"off",value=>settings.soft=value==="on");
-  const transitionInput=select(t("Track transition"),[[0,t("No overlap")],[2,t("2 seconds")],[4,t("4 seconds")]],settings.transition,value=>settings.transition=Number(value));
-  const reset=button(t("Reset sound settings"),null,()=>{
-    settings=soundSettings();presetInput.value="flat";softInput.value="off";transitionInput.value="0";apply();
-    try{storage?.setItem("devil-music-sound",JSON.stringify(settings));}catch(error){notify(error.message,true);}
-  },"secondary");
-  const actions=document.createElement("div");actions.className="music-sound-actions";actions.append(reset,button(t("Close"),null,()=>dialog.close(),"secondary"));
-  const note=document.createElement("p");note.textContent=t("Prepared tracks start immediately. Overlap applies when the next track is ready. Volume smoothing reduces sudden peaks; it does not measure album loudness.");dialog.append(note,actions);document.body.append(dialog);
-  document.addEventListener("pointerdown",()=>{if(settings.preset!=="flat"||settings.soft)activate().catch(()=>{});},{once:true});
-  return {open(){dialog.showModal();},get transition(){return settings.transition;},resume(){if(context)context.resume().catch(()=>{});},
+  async function commit(){const token=++revision;try{storage?.setItem('devil-music-sound',JSON.stringify(settings));speed.refresh();onRateChange();if(context||settings.soft||settings.bands.some(Boolean))await activate();}catch(error){if(token===revision)notify(error.message,true);}refresh();}
+  const node=(tag,text)=>{const n=document.createElement(tag);if(text)n.textContent=text;return n;};
+  const dialog=node('dialog');dialog.className='music-settings-dialog music-sound-panel';dialog.setAttribute('aria-label',t('Sound and transitions'));
+  const heading=node('h2'),intro=node('p');dialog.append(heading,intro);
+  const presetRow=node('label'),presetLabel=node('span'),presetInput=node('select');presetRow.append(presetLabel,presetInput);dialog.append(presetRow);
+  presetInput.addEventListener('change',()=>{const key=presetInput.value;if(key.startsWith('saved:')){settings.bands=[...settings.custom[Number(key.slice(6))].bands];settings.preset='custom';settings.selected=settings.custom[Number(key.slice(6))].name;}else if(presets[key]){settings.selected='';settings.preset=key;settings.bands=[...presets[key]];}commit();});
+  const grid=node('div');grid.className='music-eq-bands';const sliders=frequencies.map((frequency,i)=>{const row=node('label'),caption=node('span',frequency>=1000?frequency/1000+' kHz':frequency+' Hz'),input=node('input'),value=node('output');input.type='range';input.min=-12;input.max=12;input.step=.5;input.ariaLabel=caption.textContent;input.addEventListener('input',()=>{settings.bands[i]=Number(input.value);settings.preset='custom';settings.selected='';commit();});row.append(caption,input,value);grid.append(row);return {input,value};});dialog.append(grid);
+  const presetEditor=node('div');presetEditor.className='music-preset-editor';const name=node('input');name.maxLength=48;
+  const save=button('',null,()=>{const title=name.value.trim();if(!title){name.focus();return;}const existing=settings.custom.findIndex(p=>p.name.toLocaleLowerCase()===title.toLocaleLowerCase());if(existing>=0)settings.custom[existing]={name:title,bands:[...settings.bands]};else if(settings.custom.length<50)settings.custom.push({name:title,bands:[...settings.bands]});else{notify(t('You can save up to 50 sound presets.'),true);return;}settings.selected=title;settings.preset='custom';name.value='';commit();},'outline small');
+  const remove=button('',null,()=>{const selected=settings.custom.findIndex(p=>p.name===settings.selected);if(selected>=0){settings.custom.splice(selected,1);settings.selected='';commit();}},'outline small');presetEditor.append(name,save,remove);dialog.append(presetEditor);
+  function choice(onchange){const row=node('label'),label=node('span'),input=node('select');row.append(label,input);dialog.append(row);input.addEventListener('change',()=>{onchange(input.value);commit();});return {label,input};}
+  const bypass=choice(value=>settings.bypass=value==='on'),soft=choice(value=>settings.soft=value==='on'),transition=choice(value=>settings.transition=Number(value));
+  const rateRow=node('label'),rateLabel=node('span'),rate=node('input'),rateValue=node('output');rate.type='range';rate.min=.5;rate.max=2;rate.step=.05;rate.addEventListener('input',()=>{if(!speed.reason(getAudio())){settings.rate=Number(rate.value);commit();}});rateRow.className='music-sound-rate';rateRow.append(rateLabel,rate,rateValue);dialog.append(rateRow);
+  const rateHelp=node('p');rateHelp.role='status';dialog.append(rateHelp);
+  const actions=node('div');actions.className='music-sound-actions';const reset=button('',null,()=>{settings=soundSettings({custom:settings.custom});commit();},'outline small'),close=button('',null,()=>dialog.close(),'outline small');actions.append(reset,close);dialog.append(actions);
+  const note=node('p');dialog.append(note);document.body.append(dialog);
+  const options=(input,values,value)=>{input.replaceChildren(...values.map(([key,label])=>{const option=node('option',label);option.value=key;return option;}));input.value=value;};
+  function refresh(){heading.textContent=t('Sound and transitions');intro.textContent=t('Shape your sound. Your original files stay unchanged.');
+    const customIndex=settings.custom.findIndex(p=>p.name===settings.selected);
+    options(presetInput,[['flat',t('Flat')],['bass',t('Bass boost')],['voice',t('Vocals')],['night',t('Night')],['custom',t('Custom')],...settings.custom.map((p,i)=>['saved:'+i,p.name])],settings.preset==='custom'&&customIndex>=0?'saved:'+customIndex:settings.preset);presetLabel.textContent=t('Equalizer');
+    for(const [i,slider]of sliders.entries()){slider.input.value=settings.bands[i];slider.input.disabled=settings.bypass;slider.value.textContent=(settings.bands[i]>0?'+':'')+settings.bands[i]+' dB';slider.input.setAttribute('aria-valuetext',slider.value.textContent);}
+    name.placeholder=name.ariaLabel=t('Preset name');save.textContent=save.ariaLabel=t('Save preset');remove.textContent=remove.ariaLabel=t('Delete preset');remove.disabled=customIndex<0;
+    for(const entry of [bypass,soft])options(entry.input,[['off',t('Off')],['on',t('On')]],(entry===bypass?settings.bypass:settings.soft)?'on':'off');bypass.label.textContent=t('Bypass sound effects');soft.label.textContent=t('Volume smoothing');soft.input.disabled=settings.bypass;
+    transition.label.textContent=t('Track transition');options(transition.input,[[0,t('No overlap')],[2,t('2 seconds')],[4,t('4 seconds')]],String(settings.transition));
+    rateLabel.textContent=rate.ariaLabel=t('Playback speed');rate.value=settings.rate;rateValue.textContent=settings.rate.toFixed(2)+'\u00d7';rate.disabled=!!speed.reason(getAudio());
+    const reason=speed.reason(getAudio());rateHelp.textContent=reason==='room'?t('Listening rooms use normal speed for synchronization.'):reason==='pitch'?t('This device cannot preserve pitch at other speeds.'):reason==='online'?t('Speed is available for music stored on this device.'):t('Voice pitch is preserved.');
+    reset.textContent=reset.ariaLabel=t('Reset sound settings');close.textContent=close.ariaLabel=t('Close');note.textContent=t('Prepared tracks start immediately. Overlap applies when the next track is ready. Volume smoothing reduces sudden peaks; it does not measure album loudness.');
+  }
+  refresh();onLanguageChange(refresh);
+  document.addEventListener('pointerdown',()=>{if(settings.bands.some(Boolean)||settings.soft)activate().catch(()=>{});},{once:true});
+  return {open(){refresh();if(!dialog.open)dialog.showModal();},get transition(){return settings.transition;},resume(){if(context)context.resume().catch(()=>{});},
+    setSource(node,offline){speed.setSource(node,offline);if(dialog.open)refresh();},setRoomMode(mode){speed.setMode(mode);refresh();onRateChange();},
     async enableAnalysis(){
       await activate();
       for(const graph of graphs)if(!graph.analyser){

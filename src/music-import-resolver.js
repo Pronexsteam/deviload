@@ -66,13 +66,21 @@ export async function resolveMusicImport(entries,{invoke,language="en",signal,on
         row={entry,item:sanitizeMusicTrack({kind:"song",id:entry.videoId,title:entry.title,artists:entry.artists,subtitle:(Array.isArray(entry.artists)?entry.artists:[]).filter(value=>typeof value==="string").join(", "),image:""}),confidence:"exact"};
       }else{
         const title=text(entry.title),artists=(Array.isArray(entry.artists)?entry.artists:[]).map(text).filter(Boolean);
-        const key=JSON.stringify([language,entry.videoId||"",title,artists]),cached=cache.get(key);
+        const key=JSON.stringify([language,entry.videoId||"",title,artists,entry.spotifyId||'',entry.durationMs||0,entry.album||'',entry.isrc||'']),cached=cache.get(key);
         if(!validId(entry.videoId)&&(!title||!artists.length))row.error="Invalid music import.";
         else if(cached&&Date.now()-cached.at<30*60*1000){row={entry,...cached.match};}
         else try{
           const args=validId(entry.videoId)?{kind:"radio",value:entry.videoId,language}:{kind:"search",value:(title+" "+artists.join(" ")).slice(0,120),filter:"songs",language};
           const result=await request(args);check(signal);errors=0;
-          const match=selectImportMatch(entry,candidates(result));row={entry,...match};
+          let match=selectImportMatch(entry,candidates(result));
+          // Large multi-artist queries can return nothing. One shorter search
+          // retains the original entry for strict title/artist/version checks.
+          const shortQuery=(title.replace(/[([]\s*(?:feat\.?|ft\.?|featuring|with)\s+[^)\]]*[)\]]/gi,'').trim()+' '+artists[0]).slice(0,120);
+          if(!match.item&&args.kind==='search'&&shortQuery!==args.value){
+            const fallback=await request({...args,value:shortQuery});check(signal);
+            match=selectImportMatch(entry,candidates(fallback));
+          }
+          row={entry,...match};
           if(match.item){if(cache.size>=2000)cache.delete(cache.keys().next().value);cache.set(key,{at:Date.now(),match});}
         }catch(error){
           if(signal?.aborted||error?.name==="AbortError")throw canceled();
@@ -110,15 +118,18 @@ export async function readPlaylistLink(input,{invoke,language="en",signal,onProg
     if(url.protocol!=='https:'||url.username||url.password||url.port||url.hash||!/^\/(?:intl-[a-zA-Z-]{2,7}\/)?(?:playlist|album)\/[a-zA-Z0-9]{22}\/?$/.test(url.pathname))throw Error("Enter a public Spotify playlist or album link.");
     if(typeof invoke!=="function")throw Error("Music catalog is unavailable.");check(signal);
     const result=await wait(invoke("music_import_spotify_playlist",{link:url.href}),signal);check(signal);
-    if(!Array.isArray(result?.entries)||!result.entries.length)throw Error("Could not read this public Spotify playlist or album. Try a music export instead.");
-    // Normalize link metadata by the same path as file imports. Never call a
-    // public embed a complete playlist: it exposes no supported pagination.
-    const normalized=parseMusicImport(JSON.stringify({tracks:result.entries.map(entry=>({title:entry.title,artists:entry.artists}))}),'spotify-public-preview.json');
+    if(!Array.isArray(result?.entries))throw Error("Could not read this public Spotify playlist or album. Try a music export instead.");
+    // Normalize both sources identically, retaining recording identity.
+    // Only a verified paginated response can establish completeness.
+    const normalized=result.entries.length?parseMusicImport(JSON.stringify({tracks:result.entries.map(entry=>({title:entry.title,artists:entry.artists,spotifyId:entry.spotifyId,uri:entry.key,durationMs:entry.durationMs,album:entry.album}))}),'spotify-playlist.json'):{source:'spotify',entries:[],warnings:[],playlists:[]};
     normalized.name=text(result.name)||'Imported Spotify playlist';
     normalized.playlists=[{name:normalized.name,keys:normalized.entries.map(entry=>entry.key)}];
     normalized.warnings=[...new Set([...normalized.warnings,...(Array.isArray(result.warnings)?result.warnings:[])])];
-    normalized.completeness='unknown';normalized.origin='link';
-    onProgress(normalized.entries.length,null);return normalized;
+    const count=Number.isSafeInteger(result.reportedTotal)&&result.reportedTotal>=0?result.reportedTotal:null;
+    normalized.completeness=result.completeness==='complete'&&count!==null&&result.receivedCount===count?'complete':'unknown';normalized.origin='link';
+    if(count!==null){normalized.reportedTotal=count;normalized.receivedCount=result.receivedCount;normalized.unavailableCount=Number.isSafeInteger(result.unavailableCount)?result.unavailableCount:0;}
+    normalized.unidentified=Array.isArray(result.unidentified)?result.unidentified.filter(row=>/^spotify:track:[a-zA-Z0-9]{22}$/.test(row?.uri||'')).map(row=>({uri:row.uri})):[];
+    onProgress(normalized.entries.length,count);return normalized;
   }
   const collection=youtubeCollection(input),mix=collection.kind==='mix';if(typeof invoke!=="function")throw Error("Music catalog is unavailable.");check(signal);
   const result={source:"youtube",name:mix?"Imported YouTube Mix":"Imported YouTube Music playlist",entries:[],playlists:[],warnings:[]},request=caller(invoke,signal,delay),seen=new Set(),tokens=new Set();

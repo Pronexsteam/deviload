@@ -8,9 +8,10 @@ fn main() {
         let args = &value["args"];
         let result = match value["command"].as_str() {
             Some("music_import_spotify_playlist") => deviload_lib::preview_spotify_playlist(args["link"].as_str().unwrap_or("")),
-            Some("music_catalog") => deviload_lib::preview_music_catalog(args["kind"].as_str().unwrap_or(""), args["value"].as_str().unwrap_or(""), args["language"].as_str().unwrap_or("en"), "", args["filter"].as_str().unwrap_or("all"), args["continuation"].as_str().unwrap_or("")).and_then(|v| serde_json::to_value(v).map_err(|_| "Invalid response".to_owned())),
-            Some("music_cancel_stream") => { deviload_lib::preview_music_cancel_stream(); Ok(serde_json::Value::Null) },
-            Some("music_stream") => deviload_lib::preview_music_stream_request(args["id"].as_str().unwrap_or(""), "", args["refresh"].as_bool().unwrap_or(false), args["preload"].as_bool().unwrap_or(false)).and_then(|v| serde_json::to_value(v).map_err(|_| "Invalid response".to_owned())),
+            Some("music_catalog") => deviload_lib::preview_music_recovery_catalog(args["kind"].as_str().unwrap_or(""), args["value"].as_str().unwrap_or(""), args["language"].as_str().unwrap_or("en"), "", args["filter"].as_str().unwrap_or("all"), args["continuation"].as_str().unwrap_or(""),args["params"].as_str().unwrap_or(""),args["originalId"].as_str()).and_then(|v| serde_json::to_value(v).map_err(|_| "Invalid response".to_owned())),
+            Some("music_cancel_stream") => { deviload_lib::preview_music_cancel_stream(args["preserve"].as_bool()); Ok(serde_json::Value::Null) },
+            Some("music_recovery_allowed") => Ok(serde_json::json!(tauri::async_runtime::block_on(deviload_lib::preview_music_recovery_allowed(args["id"].as_str().unwrap_or("").to_owned(),args["originalId"].as_str().map(str::to_owned))))),
+            Some("music_stream") => deviload_lib::preview_music_stream_with_origin(args["id"].as_str().unwrap_or(""), "", args["refresh"].as_bool().unwrap_or(false), args["preload"].as_bool().unwrap_or(false),args["automatic"].as_bool().unwrap_or(false),args["originalId"].as_str(),args["recoverFromCache"].as_bool().unwrap_or(false),args["retryAlternate"].as_bool().unwrap_or(false)).and_then(|v| serde_json::to_value(v).map_err(|_| "Invalid response".to_owned())),
             Some("music_prepare") => { deviload_lib::preview_music_prepare(); Ok(serde_json::Value::Null) },
             Some("music_cache") => tauri::async_runtime::block_on(deviload_lib::preview_music_cache(args["clear"].as_bool(),args["limit"].as_u64())),
             Some("music_engine_update") => tauri::async_runtime::block_on(deviload_lib::preview_music_engine_update()),

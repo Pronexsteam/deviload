@@ -16,6 +16,15 @@ test("weekly listening counts real deltas, repeat sessions and unique songs sepa
   assert.deepEqual(createWeeklyStats(saved,{now:()=>date(14)}).summary(),stats.summary());
 });
 
+test('daily chart retains empty dates and splits genuine listening across midnight',()=>{
+ const stats=createWeeklyStats(storage(),{now:()=>date(14,0,0,10)});
+ stats.record({item:song(),seconds:20});
+ const days=stats.daily();assert.equal(days.length,7);
+ assert.deepEqual(days.slice(-2),[{date:'2026-10-13',seconds:10},{date:'2026-10-14',seconds:10}]);
+ assert(days.slice(0,5).every(day=>day.seconds===0));
+ assert.equal(days.reduce((sum,day)=>sum+day.seconds,0),stats.summary().totalSeconds);
+});
+
 test("midnight splits seconds by local calendar day and prunes the seventh previous day",()=>{
   let now=date(8,0,0,10);const saved=storage(),stats=createWeeklyStats(saved,{now:()=>now});
   stats.record({item:song(),seconds:20,qualified:true});

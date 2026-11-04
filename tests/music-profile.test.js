@@ -8,6 +8,25 @@ const song=n=>({kind:"song",id:String(n).padStart(11,"0"),title:`Track ${n}`,sub
 const saved=()=>({favorites:[song(1)],recent:[song(2)],volume:.4});
 const taste=()=>readTaste();
 
+test("metadata keeps the same JSON byte boundaries for Unicode and escaped characters",()=>{
+  const reference=(value,limit)=>{
+    let result="",size=0;
+    for(const char of String(value||"").replace(/[\u0000-\u001f\u007f]/g,"").trim()){
+      size+=Buffer.byteLength(JSON.stringify(char))-2;if(size>limit)break;result+=char;
+    }
+    return result;
+  };
+  const values=['  Ordinary title  ','\t\u041f\u0435\u0441\u043d\u044f\n','Café 🎵 漢字','"\\'.repeat(130),
+    'a'.repeat(239)+'🎵','🎵'.repeat(61),'漢'.repeat(81),'\ud800'.repeat(41),
+    'a'.repeat(79)+'é','a'.repeat(179)+'🎵','a'.repeat(250000)];
+  for(const value of values){
+    const actual=sanitizeMusicTrack({...song(1),title:value,subtitle:value,artists:[value]});
+    assert.equal(actual.title,reference(value,240));
+    assert.equal(actual.subtitle,reference(value,180));
+    assert.deepEqual(actual.artists,[reference(value,80)]);
+  }
+});
+
 test("long trusted artwork survives collections and profile roundtrip; unsafe URLs are rejected",()=>{
  const image='https://lh3.googleusercontent.com/'+ 'a'.repeat(300)+'=w600-h600';
  const album={kind:'album',id:'MPREtest',title:'Album',artists:['Artist'],image};
@@ -79,7 +98,7 @@ test("existing local preferences migrate without losing likes or learned scores"
 
 test("playlists retain names and song order in bounded backups and old profiles still import",()=>{
   const state={...saved(),showRegional:false,playlists:[{id:"night",name:"Night drive",items:[song(4),song(3)]}]};
-  const profile=JSON.parse(exportMusicProfile(state,taste()));assert.equal(profile.version,2);
+  const profile=JSON.parse(exportMusicProfile(state,taste()));assert.equal(profile.version,3);
   assert.deepEqual(importMusicProfile(JSON.stringify(profile)).saved.playlists,state.playlists);
   assert.equal(importMusicProfile(JSON.stringify(profile)).saved.showRegional,false);
   profile.version=1;delete profile.saved.playlists;assert.deepEqual(importMusicProfile(JSON.stringify(profile)).saved.playlists,[]);

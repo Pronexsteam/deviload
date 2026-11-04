@@ -14,7 +14,7 @@ export function createMusicDecks({makeAudio=()=>new Audio(),now=Date.now,schedul
   return {
     nodes,get current(){return active;},owns:node=>nodes.includes(node),stopTail,setVolume,
     ready(id){return prepared?.id===id&&now()-prepared.at<240000&&prepared.node.readyState>=3&&!prepared.node.error;},
-    warm(id,url){stopTail();const node=nodes.find(node=>node!==active);node.pause();node.src=url;node.load();prepared={id,node,at:now()};},
+    warm(id,url){if(prepared?.id===id&&prepared.url===url&&now()-prepared.at<240000&&!prepared.node.error)return prepared.node;stopTail();const node=nodes.find(node=>node!==active);node.pause();node.src=url;node.load();prepared={id,url,node,at:now()};return node;},
     take(id,volume,overlap=0){
       if(!this.ready(id))return null;
       stopTail();const old=active;active=prepared.node;prepared=null;setVolume(volume);

@@ -9,6 +9,7 @@ import es from "../src/locales/es.js";
 import {labels, diagnoseError} from "../src/view-model.js";
 import {playbackFailure} from "../src/music-diagnostics.js";
 import {downloadAuthView} from "../src/account-status.js";
+import {SPOTIFY_MESSAGES} from '../src-tauri/spotify-import.mjs';
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const read = path => readFileSync(join(root, path), "utf8");
@@ -58,7 +59,7 @@ function htmlStrings() {
     for(const [,message] of read(file).matchAll(/(?:Error|warn)\(["']([^"']+)["']/g))strings.add(message);
     for(const [,message] of read(file).matchAll(/warnings\.push\("([^"]+)"/g))strings.add(message);
   }
-  for(const error of ["HTTP 429", "restricted", "timed out", "Music engine is busy", "Could not start music engine", "Network failed", "decode", "unsupported", "unknown", "unplayable", "HTTP 403", "not available in your country"]){
+  for(const error of ["HTTP 429", "restricted", "timed out", "Music engine is busy", "Could not start music engine", "Network failed", "decode", "unsupported", "Invalid music engine response", "unknown", "unplayable", "HTTP 403", "not available in your country"]){
     strings.add(playbackFailure(error).message);
   }
   return strings;
@@ -69,7 +70,7 @@ const normalize = text => text.replace(/\{[^}]*\}/g, "{}");
 
 function rustMessages() {
   const found = [];
-  for (const file of ["cinema_embed.rs", "cinema.rs", "lib.rs", "gallery.rs", "gallery_install.rs", "download_recovery.rs", "music.rs", "music_audio.rs", "music_profile.rs", "music_import.rs", "music_room.rs", "music_playlist_import.rs", "music_lyrics.rs", "music_offline.rs", "music_engine_diagnostics.rs", "download_details.rs", "quick_cut.rs", "cookies.rs", "engine_update.rs", "model.rs", "share.rs", "settings_backup.rs", "watch.rs", "convert.rs", "power.rs", "media_server.rs"]) {
+  for (const file of ["cinema_embed.rs", "cinema.rs", "lib.rs", "gallery.rs", "gallery_install.rs", "download_recovery.rs", "music.rs", "music_audio.rs", "music_profile.rs", "music_import.rs", "music_room.rs", "music_playlist_import.rs", "music_lyrics.rs", "music_offline.rs", "music_local.rs", "music_engine_diagnostics.rs", "music_engine_protection.rs", "download_details.rs", "quick_cut.rs", "cookies.rs", "engine_update.rs", "model.rs", "share.rs", "settings_backup.rs", "watch.rs", "convert.rs", "power.rs", "media_server.rs"]) {
     const source = read(join("src-tauri/src", file)).split("#[cfg(test)]")[0];
     if(file === 'cinema.rs')for(const text of literals(block(source,'pub(crate) fn source_failure','// Never log')))found.push({file,text});
     // Start inside the body so Rust lifetimes such as &'static are not parsed
@@ -82,7 +83,8 @@ function rustMessages() {
     if(file === "quick_cut.rs" || file === "convert.rs")for(const [,text]of source.matchAll(/Some\("([A-Z][^"]*[.!?])"/g))found.push({file,text});
     // Converter map_err closures can return an error from an if/else branch.
     if(file === "convert.rs")for(const [,text]of source.matchAll(/"([A-Z][^"\n]+[.!?])"\.into\(\)/g))found.push({file,text});
-    if(file === "convert.rs")for(const [,text]of source.matchAll(/=>\s*"([A-Z][^"\n]+[.!?])"/g))found.push({file,text});
+    if(file === "convert.rs" || file === "music_engine_protection.rs")for(const [,text]of source.matchAll(/=>\s*"([A-Z][^"\n]+[.!?])"/g))found.push({file,text});
+    if(file === "music.rs")for(const [,text]of block(source,"fn catalog_bytes(","\n}").matchAll(/=>\s*"([A-Z][^"\n]+[.!?])"/g))found.push({file,text});
     // The gallery adapter returns one of four fixed, sanitized failure messages
     // from branches instead of Err(...). Classifier keywords are not UI copy.
     if(file === "gallery.rs")for(const [,text]of block(source,"fn failure(","\n}").matchAll(/"([A-Z][^"\n]+[.!?])"/g))found.push({file,text});
@@ -91,6 +93,7 @@ function rustMessages() {
     }
   }
   const reportCommand=block(read("src-tauri/src/music_engine.rs"),"pub async fn export_music_diagnostics", "\nfn update()");
+  for(const [,text]of read("src-tauri/src/music_local/exact.rs").matchAll(/const (?:MISSING|CHANGED):&str="([^"]+)"/g))found.push({file:"music_local/exact.rs",text});
   for(const [,text]of reportCommand.matchAll(/"([^"\n]+\.)"/g))found.push({file:"music_engine.rs",text});
   return found;
 }
@@ -180,7 +183,7 @@ test("music engine playback restrictions have translations", () => {
 });
 
 test("the Russian locale has no unused strings", () => {
-  const used = new Set([...htmlStrings(), ...tableStrings(), "Deviload — Downloads"]);
+  const used = new Set([...htmlStrings(), ...tableStrings(), ...SPOTIFY_MESSAGES, "Deviload — Downloads"]);
   for (const file of translatedSources) for (const text of translatedLiterals(read(file), true)) used.add(text);
   const rust = new Set(rustMessages().map(({text}) => normalize(text)));
   for (const file of ["engines/music/engine.ts", "engines/music/errors.ts"]) {
@@ -188,6 +191,7 @@ test("the Russian locale has no unused strings", () => {
   }
   const unused = [...keys].filter(key => !used.has(key) && !rust.has(normalize(key)));
   assert.deepEqual(unused, []);
+  assert.deepEqual(missing(SPOTIFY_MESSAGES), []);
 });
 
 test("translations keep every placeholder", () => {
@@ -198,7 +202,8 @@ test("translations keep every placeholder", () => {
 });
 
 test("Cyrillic text lives only in the Russian locale", () => {
-  const skip = new Set(["node_modules", "target", "gen", ".git", ".work", ".playwright-cli", "bin", "dist", "vendor"]);
+  // Gradle's generated HTML reports can contain localized dates; they are not application strings.
+  const skip = new Set(["node_modules", "target", "build", "gen", ".git", ".work", ".playwright-cli", "bin", "dist", "vendor"]);
   const offenders = [];
   const walk = dir => {
     for (const name of readdirSync(dir)) {

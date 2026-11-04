@@ -12,6 +12,7 @@ pub struct MiniState {
     active: bool, playing: bool, previous_enabled: bool, next_enabled: bool,
     position: f64, duration: f64,
     #[serde(default)] volume: f64,
+    #[serde(default)] rate: f64,
     #[serde(default)] repeat: String,
     #[serde(default)] shuffle: bool,
     #[serde(default)] queue: Vec<MiniQueueItem>,
@@ -53,12 +54,14 @@ pub(super) fn sanitize(mut state: MiniState) -> MiniState {
     state.title = state.title.chars().filter(|c| !c.is_control()).take(240).collect();
     state.artist = state.artist.chars().filter(|c| !c.is_control()).take(320).collect();
     let allowed = url::Url::parse(&state.image).is_ok_and(|url| url.scheme() == "https" && matches!(url.host_str(), Some("i.ytimg.com" | "lh3.googleusercontent.com" | "yt3.googleusercontent.com")) && url.username().is_empty() && url.password().is_none());
-    if !allowed || state.image.len() > 2048 { state.image.clear(); }
+    let local_art=state.image.strip_prefix("music-art://localhost/").and_then(|s|s.strip_suffix(".jpg")).is_some_and(|s|crate::music_local::local_id(&format!("local:{s}")));
+    if !(allowed||local_art) || state.image.len() > 2048 { state.image.clear(); }
     if !matches!(state.theme.as_str(), "ambient" | "glass-light" | "aurora" | "prism") { state.theme = "ambient".into(); }
     for value in [&mut state.position, &mut state.duration] { *value = if value.is_finite() { value.clamp(0.0, 86400.0) } else { 0.0 }; }
+    state.rate = if state.rate.is_finite() && state.rate >= 0.5 { state.rate.clamp(0.5, 2.0) } else { 1.0 };
     state.volume = if state.volume.is_finite() { state.volume.clamp(0.0, 1.0) } else { 0.0 };
     if !matches!(state.repeat.as_str(), "off" | "all" | "one") { state.repeat = "off".into(); }
-    state.queue.retain(|item| item.id.len()==11 && item.id.bytes().all(|b| b.is_ascii_alphanumeric() || b==b'_' || b==b'-'));
+    state.queue.retain(|item| crate::music_local::local_id(&item.id) || (item.id.len()==11 && item.id.bytes().all(|b| b.is_ascii_alphanumeric() || b==b'_' || b==b'-')));
     state.queue.truncate(32);
     for item in &mut state.queue {
         item.title=item.title.chars().filter(|c| !c.is_control()).take(240).collect();
