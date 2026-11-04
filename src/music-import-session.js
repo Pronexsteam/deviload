@@ -1,4 +1,5 @@
 import {sanitizeMusicTrack} from './music-profile.js';
+import {safeArtworkUrl} from './music-artwork.js';
 
 // A resumable staging area, separate from likes, listening history and taste.
 export const IMPORT_DRAFT_KEY='deviload-music-import-draft-v1';
@@ -11,7 +12,10 @@ function normalize(value){
     const videoId=/^[\w-]{11}$/.test(entry.videoId||'')?entry.videoId:undefined;
     if(!key||seen.has(key)||!videoId&&(!title||!artists.length))throw Error('Invalid music import.');seen.add(key);
     return {key,title,artists,liked:entry.liked===true,plays:Number.isFinite(entry.plays)?Math.max(0,Math.min(100,entry.plays)):0,
-      ...(videoId?{videoId}:{}),...(Number.isFinite(entry.lastPlayed)?{lastPlayed:entry.lastPlayed}:{})};
+      ...(videoId?{videoId,...(safeArtworkUrl(entry.image)?{image:entry.image}:{})}:{}),...(Number.isFinite(entry.lastPlayed)?{lastPlayed:entry.lastPlayed}:{}),
+      ...(/^[a-zA-Z0-9]{22}$/.test(entry.spotifyId||'')?{spotifyId:entry.spotifyId}:{}),
+      ...(Number.isFinite(entry.durationMs)&&entry.durationMs>0&&entry.durationMs<=86400000?{durationMs:entry.durationMs}:{}),
+      ...(text(entry.album,300)?{album:text(entry.album,300)}:{}),...(/^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(entry.isrc||'')?{isrc:entry.isrc}:{})};
   });
   const entryMap=new Map(entries.map(e=>[e.key,e])),rowKeys=new Set(),rows=[];
   for(const row of Array.isArray(value.rows)?value.rows:[]){
@@ -20,7 +24,9 @@ function normalize(value){
   }
   const keys=list=>Array.isArray(list)?[...new Set(list.filter(k=>seen.has(k)))]:[];
   return {version:1,batch:{name:text(value.batch.name,60)||'Imported music',source:text(value.batch.source,80),entries,
-    ...(value.batch.completeness==='unknown'?{completeness:'unknown',origin:'link'}:{}),
+    ...(['unknown','complete'].includes(value.batch.completeness)?{completeness:value.batch.completeness,origin:'link'}:{}),
+    ...(Number.isSafeInteger(value.batch.reportedTotal)&&value.batch.reportedTotal>=0?{reportedTotal:value.batch.reportedTotal,receivedCount:value.batch.receivedCount,unavailableCount:value.batch.unavailableCount||0}:{}),
+    unidentified:(Array.isArray(value.batch.unidentified)?value.batch.unidentified:[]).filter(row=>/^spotify:track:[a-zA-Z0-9]{22}$/.test(row?.uri||'')).map(row=>({uri:row.uri})),
     playlists:(Array.isArray(value.batch.playlists)?value.batch.playlists:[]).map(p=>({name:text(p.name,60),keys:keys(p.keys)})),
     warnings:(Array.isArray(value.batch.warnings)?value.batch.warnings:[]).filter(w=>typeof w==='string').slice(0,100).map(w=>w.slice(0,300))},
     rows,selected:keys(value.selected),applied:keys(value.applied),destination:['export','favorites','playlist'].includes(value.destination)?value.destination:'export',

@@ -12,6 +12,13 @@ const titleOf=item=>{
 };
 const variants=title=>[...title.matchAll(/\b(live|remix|remastered|remaster|slowed|sped up|speed up|acoustic|instrumental|karaoke|cover|extended|radio edit|reverb)\b/g)].map(match=>match[0]).sort();
 const matchingTitle=item=>titleOf({...item,title:String(item.title||'').replace(/\(\s*(?:feat\.?|ft\.?|featuring)\s+[^)]*\)/gi,'')});
+// Guests count only when explicitly credited in the title. Do not infer them
+// from a matching duration or silently ignore missing artist metadata.
+function creditedArtists(item){
+  const guests=[...String(item?.title||'').matchAll(/\(\s*(?:feat\.?|ft\.?|featuring)\s+([^)]*)\)/gi)]
+    .flatMap(match=>match[1].split(/\s*(?:,|&|\band\b)\s*/i));
+  return names([...(Array.isArray(item?.artists)?item.artists:[]),...guests]);
+}
 const overlap=(a,b)=>{const left=new Set(a.split(' ').filter(Boolean)),right=new Set(b.split(' ').filter(Boolean));return left.size&&right.size?[...left].filter(value=>right.has(value)).length/new Set([...left,...right]).size:0;};
 
 // Ambiguous recordings stay reviewable; never silently replace a studio track
@@ -22,11 +29,14 @@ export function selectImportMatch(entry,candidates){
     const item=pool.find(item=>item.id===entry.videoId);
     if(item)return {item,confidence:'exact'};
   }
-  const title=titleOf(entry||{}),artists=names(entry?.artists);
+  const title=titleOf(entry||{}),artists=creditedArtists(entry);
   if(!title)return {item:null,confidence:'none'};
   const ranked=pool.map(item=>{
-    const candidateTitle=titleOf(item),candidateArtists=names(item.artists),titleScore=overlap(matchingTitle(entry),matchingTitle(item)),artistScore=artists.length?artists.filter(artist=>candidateArtists.includes(artist)).length/artists.length:0;
-    return {item,titleScore,score:titleScore*.6+artistScore*.4,exact:title===candidateTitle&&artists.length>0&&equal(artists,candidateArtists)&&equal(variants(title),variants(candidateTitle))};
+    const candidateTitle=titleOf(item),candidateArtists=creditedArtists(item),titleScore=overlap(matchingTitle(entry),matchingTitle(item)),artistScore=artists.length?artists.filter(artist=>candidateArtists.includes(artist)).length/artists.length:0;
+    const expected=Number(entry.durationMs)/1000,actual=Number(item.duration),hasDuration=expected>0&&actual>0,delta=hasDuration?Math.abs(expected-actual):0;
+    const durationMatches=!hasDuration||delta<=Math.max(3,expected*.02),versionMatches=equal(variants(title),variants(candidateTitle));
+    const sameTitle=title===candidateTitle||hasDuration&&matchingTitle(entry)===matchingTitle(item);
+    return {item,titleScore,score:titleScore*.6+artistScore*.4+(hasDuration?Math.max(-.35,.15-delta/expected):0)-(versionMatches?0:.4),exact:sameTitle&&artists.length>0&&equal(artists,candidateArtists)&&versionMatches&&durationMatches};
   }).filter(value=>value.titleScore>=.5).sort((a,b)=>b.score-a.score);
   const exact=ranked.filter(value=>value.exact);
   if(exact.length===1)return {item:exact[0].item,confidence:'exact'};

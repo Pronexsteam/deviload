@@ -10,12 +10,12 @@ Discover and listen with Devil Music. Save with yt-dlp. Create with Devil Cut an
 <br>
 Built with Rust and Tauri 2 · English, Russian and Spanish
 
-[![Windows download](docs/downloads/windows.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.7.9/Deviload-2.7.9-setup.exe)
-[![macOS download](docs/downloads/macos.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.7.9/Deviload-2.7.9-macos-test.zip)
+[![Windows download](docs/downloads/windows.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.8.0/Deviload-2.8.0-setup.exe)
+[![macOS download](docs/downloads/macos.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.8.0/Deviload-2.8.0-macos-test.zip)
 [![Linux download](docs/downloads/linux.svg)](#install-on-linux)
 [![Devil Music for Android](docs/downloads/android.svg)](https://github.com/Pronexsteam/DevilMusic/releases/download/v0.0.18/Devil-Music-0.0.18-android.apk)
 
-Desktop downloads: **2.7.9** · Android: **0.0.18 preview**
+Desktop downloads: **2.8.0** · Android: **0.0.18 preview**
 
 <p>
 <a href="https://github.com/Pronexsteam/deviload/releases/latest"><img src="https://img.shields.io/github/v/release/Pronexsteam/deviload?style=flat&amp;label=Release&amp;logo=github&amp;logoColor=d5e5df&amp;color=252d34&amp;labelColor=151b20" height="28" alt="Latest release"></a>
@@ -56,7 +56,7 @@ Playback and catalog availability depend on YouTube, your region and your connec
 
 ## Devil Music on Android
 
-Devil Music now has a separate **native Android preview** for phones and tablets. Discover music, keep a queue, turn the picture disc and switch to lyrics in a layout that adapts to portrait and landscape.
+Devil Music is built into Deviload on desktop. A **native Android preview** brings the player to phones and tablets. Discover music, keep a queue, turn the picture disc and switch to lyrics in a layout that adapts to portrait and landscape.
 
 [**Visit Devil Music →**](https://github.com/Pronexsteam/DevilMusic) · [**Download the Android APK →**](https://github.com/Pronexsteam/DevilMusic/releases/download/v0.0.18/Devil-Music-0.0.18-android.apk)
 
@@ -84,17 +84,9 @@ Add a live link to record from that moment, then stop when you have what you nee
 
 ## Latest update
 
-**2.7.8 brings a new Devil Music workspace, Ambient lighting, synced lyrics and a phone remote.** The download buttons identify the builds linked above; see [Releases](https://github.com/Pronexsteam/deviload/releases) for the newest published version.
+**Deviload 2.8.0 keeps Devil Music in the desktop app.** Search as you type, reorder your queue by dragging tracks, and follow synced lyrics in the sidebar or full player. Add local audio or bring a collection from Spotify using a public playlist link, a JSON export or a CSV file.
 
-- A larger search, resizable side panels, clearer buttons and navigation that stays readable in narrow windows.
-- Ambient is the default for new profiles and replaces the retired Classic theme. Existing choices of the other themes are preserved. Its cover-based glow reaches the sidebar, header and player; the logo has a slow pearlescent shimmer.
-- Lyrics in the full player or directly in the Now Playing sidebar, with word highlights where timings exist.
-- A compact mini-player that replaces the main window, plus smooth seeking and volume controls.
-- A separate QR music remote for your local network. File transfer keeps its own connection.
-- Personal discovery without regional chart shelves. Search still lets you choose music from any region.
-- Automatic use of the reported WebKit rendering workaround on Debian 13 GNOME/Wayland, including normal launches of the Debian package. Confirmation on the affected machine is still pending; see [Linux compatibility](docs/linux-renderer-compatibility.md).
-
-Read the [2.7.8 change list](.github/release-notes/v2.7.8.md). Earlier updates are documented in [release history](https://github.com/Pronexsteam/deviload/releases).
+Read the [2.8.0 release notes](.github/release-notes/v2.8.0.md).
 
 ## Installation
 
@@ -201,7 +193,7 @@ The archive includes yt-dlp, FFmpeg and Deno. The in-app updater signature is se
 
 ## Install on Linux
 
-**Download 2.7.9:** [Debian / Ubuntu (.deb)](https://github.com/Pronexsteam/deviload/releases/download/v2.7.9/Deviload-2.7.9-amd64.deb) · [AppImage (x86_64)](https://github.com/Pronexsteam/deviload/releases/download/v2.7.9/Deviload-2.7.9-x86_64.AppImage)
+**Download 2.8.0:** [Debian / Ubuntu (.deb)](https://github.com/Pronexsteam/deviload/releases/download/v2.8.0/Deviload-2.8.0-amd64.deb) · [AppImage (x86_64)](https://github.com/Pronexsteam/deviload/releases/download/v2.8.0/Deviload-2.8.0-x86_64.AppImage)
 
 
 `sudo apt install ./Deviload-<version>-amd64.deb` on Debian or Ubuntu, or make the AppImage executable (`chmod +x Deviload-<version>-x86_64.AppImage`) and run it. Both bring yt-dlp, FFmpeg and Deno along; the AppImage updates itself from inside the app, the .deb package is updated by installing the new one. The built-in player uses the system's GStreamer, so MKV playback needs its usual plugins (`gstreamer1.0-plugins-good`).

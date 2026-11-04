@@ -1,4 +1,4 @@
-use reqwest::blocking::{Client, Response};
+use reqwest::blocking::Client;
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::{collections::{HashMap, HashSet}, io::Read, sync::{Arc, Mutex, OnceLock}, time::{Duration, Instant}};
@@ -7,6 +7,7 @@ const ORIGIN: &str = "https://music.youtube.com";
 const AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 const CATALOG_ERROR: &str = "Music is unavailable right now. Check your connection and try again.";
 static VERSION: OnceLock<Mutex<Option<(Instant, String)>>> = OnceLock::new();
+static CATALOG_CLIENT: OnceLock<Mutex<Option<(String,Client)>>> = OnceLock::new();
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,33 +36,75 @@ pub struct Catalog {
 #[derive(Clone, Debug, Serialize)]
 pub struct BrowseArtwork { id: String, image: String }
 
-fn bounded(response: Response) -> Result<Vec<u8>, String> {
-    let response = response.error_for_status().map_err(|_| CATALOG_ERROR)?;
-    let mut bytes = Vec::new();
-    response.take(6 * 1024 * 1024 + 1).read_to_end(&mut bytes).map_err(|_| CATALOG_ERROR)?;
-    if bytes.len() > 6 * 1024 * 1024 { return Err(CATALOG_ERROR.into()); }
-    Ok(bytes)
+fn transient_catalog_status(status:u16)->bool{matches!(status,500|502|503|504)}
+// Include the body in the attempt: a successful header does not guarantee a complete page.
+fn catalog_bytes(request:reqwest::blocking::RequestBuilder,original_id:Option<&str>)->Result<Vec<u8>,String>{
+    const LIMIT:u64=6*1024*1024;
+    let attempt=|request:reqwest::blocking::RequestBuilder,seconds|{
+        let response=request.timeout(Duration::from_secs(seconds)).send().map_err(|e|{
+            eprintln!("Music catalog transport failed (timeout: {}, connection: {})",e.is_timeout(),e.is_connect());
+            (e.is_timeout()||e.is_connect()||e.is_request(),CATALOG_ERROR)
+        })?;
+        if !response.status().is_success(){
+            eprintln!("Music catalog HTTP {}",response.status().as_u16());
+            let status=response.status().as_u16();
+            if let Some(id)=original_id{
+                if matches!(status,401|403){crate::music_engine::note_reserve_denial(id);}
+                if status==429{
+                    let seconds=response.headers().get("Retry-After").and_then(|v|v.to_str().ok()).and_then(|v|crate::music_audio::retry_after_seconds(v,std::time::SystemTime::now()));
+                    note_playback_limit(seconds);
+                }
+            }
+            let reason=match status {
+                401|403=>"YouTube declined this catalog request.",
+                429=>"YouTube is temporarily limiting catalog requests.",
+                _=>CATALOG_ERROR
+            };
+            return Err((transient_catalog_status(status),reason));
+        }
+        if response.content_length().is_some_and(|length|length>LIMIT){return Err((false,CATALOG_ERROR));}
+        let mut bytes=Vec::new();
+        response.take(LIMIT+1).read_to_end(&mut bytes).map_err(|_|(true,CATALOG_ERROR))?;
+        if bytes.len() as u64>LIMIT{return Err((false,CATALOG_ERROR));}
+        Ok(bytes)
+    };
+    if let Some(id)=original_id{allow_catalog_recovery(id)?;}
+    let retry=request.try_clone();
+    match (attempt(request,8),retry){
+        (Ok(bytes),_)=>Ok(bytes),
+        (Err((true,_)),Some(retry))=>{
+            std::thread::sleep(Duration::from_millis(150));
+            if let Some(id)=original_id{allow_catalog_recovery(id)?;}
+            attempt(retry,12).map_err(|(_,reason)|reason.to_owned())
+        },
+        (Err((_,reason)),_)=>Err(reason.to_owned()),
+    }
 }
 
 fn client(proxy: &str) -> Result<Client, String> {
+    let mut cached=CATALOG_CLIENT.get_or_init(||Mutex::new(None)).lock().unwrap();
+    if let Some((key,client))=cached.as_ref(){if key==proxy{return Ok(client.clone());}}
     let _ = rustls::crypto::ring::default_provider().install_default();
     let mut builder = Client::builder().user_agent(AGENT).timeout(Duration::from_secs(20))
         .connect_timeout(Duration::from_secs(8)).redirect(reqwest::redirect::Policy::limited(3));
     if !proxy.is_empty() { builder = builder.proxy(reqwest::Proxy::all(proxy).map_err(|_| CATALOG_ERROR)?); }
-    builder.build().map_err(|_| CATALOG_ERROR.into())
+    let client=builder.build().map_err(|_|CATALOG_ERROR.to_owned())?;
+    *cached=Some((proxy.to_owned(),client.clone()));
+    Ok(client)
 }
 
-fn client_version(client: &Client) -> Result<String, String> {
-    let cache = VERSION.get_or_init(|| Mutex::new(None));
-    if let Some((at, value)) = cache.lock().unwrap().as_ref() {
+fn client_version(client: &Client) -> Result<String, String> {client_version_for_recovery(client,None)}
+fn client_version_for_recovery(client:&Client,original_id:Option<&str>)->Result<String,String>{
+    let mut cache = VERSION.get_or_init(|| Mutex::new(None)).lock().unwrap();
+    if let Some((at, value)) = cache.as_ref() {
         if at.elapsed() < Duration::from_secs(3600) { return Ok(value.clone()); }
     }
-    let bytes = bounded(client.get(ORIGIN).send().map_err(|_| CATALOG_ERROR)?)?;
+    let bytes = catalog_bytes(client.get(ORIGIN),original_id)?;
     let text = String::from_utf8_lossy(&bytes);
     let version = text.split("\"INNERTUBE_CLIENT_VERSION\":\"").nth(1)
         .and_then(|tail| tail.split('"').next()).filter(|v| v.len() < 60 && !v.is_empty())
         .ok_or(CATALOG_ERROR)?.to_owned();
-    *cache.lock().unwrap() = Some((Instant::now(), version.clone()));
+    *cache = Some((Instant::now(), version.clone()));
     Ok(version)
 }
 
@@ -278,6 +321,9 @@ pub fn catalog_page(kind: &str, value: &str, language: &str, proxy: &str, filter
     catalog_page_with_params(kind,value,language,proxy,filter,continuation,"")
 }
 fn catalog_page_with_params(kind: &str, value: &str, language: &str, proxy: &str, filter: &str, continuation: &str, params: &str) -> Result<Catalog, String> {
+    catalog_page_for_recovery(kind,value,language,proxy,filter,continuation,params,None)
+}
+pub fn catalog_page_for_recovery(kind:&str,value:&str,language:&str,proxy:&str,filter:&str,continuation:&str,params:&str,original_id:Option<&str>)->Result<Catalog,String>{
     let (endpoint, mut body) = match kind {
         "home" => ("browse", json!({"browseId":"FEmusic_home"})),
         "search" if !value.trim().is_empty() && value.chars().count() <= 120 => ("search", json!({"query":value.trim()})),
@@ -294,14 +340,14 @@ fn catalog_page_with_params(kind: &str, value: &str, language: &str, proxy: &str
         if let Some(code) = code { body["params"] = json!(format!("EgWKAQ{code}AWoMEA4QChADEAQQCRAF")); }
     }
     let client = client(proxy)?;
-    let version = client_version(&client)?;
+    let version = client_version_for_recovery(&client,original_id)?;
     let language = if ["en", "ru", "es"].contains(&language) { language } else { "en" };
     body["context"] = json!({"client":{"clientName":"WEB_REMIX","clientVersion":version,"hl":language}});
     let mut address = url::Url::parse(&format!("{ORIGIN}/youtubei/v1/{endpoint}?prettyPrint=false")).map_err(|_| CATALOG_ERROR)?;
     if !continuation.is_empty() { address.query_pairs_mut().append_pair("continuation", continuation).append_pair("ctoken", continuation); }
     let request = client.post(address);
-    let response = request.header("Origin", ORIGIN).json(&body).send().map_err(|_| CATALOG_ERROR)?;
-    let response_value: Value = serde_json::from_slice(&bounded(response)?).map_err(|_| CATALOG_ERROR)?;
+    let bytes = catalog_bytes(request.header("Origin", ORIGIN).json(&body),original_id)?;
+    let response_value: Value = serde_json::from_slice(&bytes).map_err(|_| CATALOG_ERROR)?;
     if response_value.get("error").is_some() { return Err(CATALOG_ERROR.into()); }
     let mut catalog = parse(&response_value, kind == "home" || kind == "browse");
     if kind == "browse" && continuation.is_empty() { catalog.artwork = browse_artwork(&response_value, value); }
@@ -309,9 +355,42 @@ fn catalog_page_with_params(kind: &str, value: &str, language: &str, proxy: &str
 }
 
 #[tauri::command]
-pub async fn music_catalog(kind: String, value: String, language: String, filter: Option<String>, continuation: Option<String>, params: Option<String>, engine: tauri::State<'_, crate::Engine>) -> Result<Catalog, String> {
+pub async fn music_catalog(kind: String, value: String, language: String, filter: Option<String>, continuation: Option<String>, params: Option<String>, original_id: Option<String>, engine: tauri::State<'_, crate::Engine>) -> Result<Catalog, String> {
     let proxy = crate::stored_proxy(&engine.dir);
-    tauri::async_runtime::spawn_blocking(move || catalog_page_with_params(&kind, &value, &language, &proxy, filter.as_deref().unwrap_or("all"), continuation.as_deref().unwrap_or(""), params.as_deref().unwrap_or(""))).await.map_err(|_| CATALOG_ERROR.to_owned())?
+    tauri::async_runtime::spawn_blocking(move || catalog_page_for_recovery(&kind, &value, &language, &proxy, filter.as_deref().unwrap_or("all"), continuation.as_deref().unwrap_or(""), params.as_deref().unwrap_or(""),original_id.as_deref())).await.map_err(|_| CATALOG_ERROR.to_owned())?
+}
+
+fn suggestion_texts(value:&Value)->Vec<String>{
+    fn visit(value:&Value,out:&mut Vec<String>,depth:usize){
+        if depth>16||out.len()>=8{return;}
+        match value{
+            Value::Object(map)=>{
+                if let Some(row)=map.get("searchSuggestionRenderer"){
+                    let suggestion=text(&row["suggestion"]);let suggestion=suggestion.trim();
+                    if !suggestion.is_empty()&&suggestion.chars().count()<=120&&!suggestion.chars().any(char::is_control)&&!out.iter().any(|s|s.to_lowercase()==suggestion.to_lowercase()){out.push(suggestion.to_owned());}
+                }else{for child in map.values(){visit(child,out,depth+1);}}
+            },
+            Value::Array(values)=>for child in values{visit(child,out,depth+1);},
+            _=>{},
+        }
+    }
+    let mut result=Vec::new();visit(value,&mut result,0);result
+}
+
+#[tauri::command]
+pub async fn music_suggestions(value:String,language:String,engine:tauri::State<'_,crate::Engine>)->Result<Vec<String>,String>{
+    if !(2..=120).contains(&value.trim().chars().count())||value.chars().any(char::is_control){return Ok(Vec::new());}
+    let proxy=crate::stored_proxy(&engine.dir);
+    tauri::async_runtime::spawn_blocking(move||{
+        let client=client(&proxy)?;let version=client_version(&client)?;
+        let lang=if ["en","ru","es"].contains(&language.as_str()){language.as_str()}else{"en"};
+        let body=json!({"input":value.trim(),"context":{"client":{"clientName":"WEB_REMIX","clientVersion":version,"hl":lang}}});
+        let response=client.post(format!("{ORIGIN}/youtubei/v1/music/get_search_suggestions?prettyPrint=false")).header("Origin",ORIGIN).timeout(Duration::from_secs(5)).json(&body).send().map_err(|_|CATALOG_ERROR)?.error_for_status().map_err(|_|CATALOG_ERROR)?;
+        let mut bytes=Vec::new();response.take(256001).read_to_end(&mut bytes).map_err(|_|CATALOG_ERROR)?;
+        if bytes.len()>256000{return Err(CATALOG_ERROR.into());}
+        let data:Value=serde_json::from_slice(&bytes).map_err(|_|CATALOG_ERROR)?;
+        Ok(suggestion_texts(&data))
+    }).await.map_err(|_|CATALOG_ERROR.to_owned())?
 }
 
 #[derive(Serialize)]
@@ -323,6 +402,12 @@ fn stream_error(stderr: &[u8]) -> &'static str {
         "YouTube is temporarily limiting playback. Try again later."
     } else if error.contains("sign in") || error.contains("private video") || error.contains("members-only") || error.contains("video unavailable") {
         "This track is unavailable for guest playback. Try another track."
+    } else if error.contains("http error 403") || error.contains("http error 401") {
+        "Playback restricted: YouTube denied access to the audio. Try another track."
+    } else if error.contains("requested format is not available"){
+        "Unsupported audio format"
+    } else if ["http error 500","http error 502","http error 503","http error 504","connection reset","network error"].iter().any(|key|error.contains(key)){
+        "Audio network request failed"
     } else {
         "Could not play this track. Try another track or try again later."
     }
@@ -342,8 +427,8 @@ fn extraction_failure(stderr: &[u8]) -> ResolveFailure {
     // YouTube can return a session with no direct formats, then provide them
     // on a fresh resolution. Bound this to one retry; never retry account or
     // rate restrictions, or a video explicitly reported as unavailable.
-    let retry = message == stream_error(b"unknown") && !detail.contains("video unavailable") &&
-        ["requested format is not available", "http error 403", "http error 500", "http error 502", "http error 503", "http error 504", "connection reset"].iter().any(|part| detail.contains(part));
+    let retry = matches!(message,"Unsupported audio format"|"Audio network request failed") &&
+        !detail.contains("http error 403") && !detail.contains("http error 401");
     ResolveFailure { message: message.into(), retry }
 }
 
@@ -369,52 +454,177 @@ pub async fn music_prepare(engine: tauri::State<'_, crate::Engine>) -> Result<()
     Ok(())
 }
 #[derive(Default)]
-struct Selection { generation: u64, key: Option<(String, String)> }
+struct Selection { generation: u64, invalid_before: u64, worker_cancelled_through: Option<u64>, key: Option<(String, String)>, automatic_origin: Option<String>, recovery_exhausted:bool }
 impl Selection {
     fn select(&mut self, key: Option<(String, String)>) -> u64 {
         self.generation = self.generation.wrapping_add(1);
         self.key = key;
+        self.automatic_origin = None;
+        self.recovery_exhausted=false;
         self.generation
     }
+    fn select_play(&mut self,key:(String,String),origin:Option<&str>,refresh:bool,retry_alternate:bool)->u64{
+        let generation=self.select(Some(key));
+        self.automatic_origin=origin.map(str::to_owned);
+        self.recovery_exhausted=retry_alternate;
+        if refresh{self.invalid_before=generation;}
+        generation
+    }
+    fn permits_recovery(&self,origin:&str,id:&str,retry_alternate:bool)->bool{
+        if self.recovery_exhausted{return false;}
+        let selected=self.key.as_ref().map(|key|key.0.as_str());
+        if retry_alternate {
+            id!=origin && selected==Some(id) && self.automatic_origin.as_deref()==Some(origin)
+        }else{
+            selected==Some(origin) && self.automatic_origin.as_deref().is_none_or(|owner|owner==origin)
+        }
+    }
     fn cancelled(&self, generation: u64, key: &(String, String)) -> bool {
-        self.generation != generation && self.key.as_ref() != Some(key)
+        generation < self.invalid_before || (self.generation != generation && self.key.as_ref() != Some(key))
     }
 }
 static SELECTION: OnceLock<Mutex<Selection>> = OnceLock::new();
 fn selection() -> &'static Mutex<Selection> { SELECTION.get_or_init(|| Mutex::new(Selection::default())) }
-fn reserve(id: &str, proxy: &str, preload: bool) -> u64 {
+pub(crate) fn note_playback_limit(seconds:Option<u64>){
+    STREAMS.get_or_init(Mutex::default).lock().unwrap().limit.note(seconds);
+}
+fn automatic_guard(original:&str,id:&str)->Result<(),String>{
+    if STREAMS.get().is_some_and(|state|state.lock().unwrap().limit.active()){return Err(stream_error(b"429").into());}
+    if let Some(reason)=crate::music_engine::recovery_error(original).or_else(||crate::music_engine::recovery_error(id)){return Err(reason);}
+    if !crate::music_engine::recovery_monitor_ready(){return Err("Playback verification unavailable".into());}
+    Ok(())
+}
+fn confirm_automatic_guard(origin:&str,id:&str)->Result<(),String>{
+    let confirmed=crate::music_engine::confirm_recovery_monitor(origin) && (origin==id||crate::music_engine::confirm_recovery_monitor(id));
+    automatic_guard(origin,id)?;
+    if !confirmed{return Err("Playback verification unavailable".into());}
+    Ok(())
+}
+fn recovery_generation(origin:&str,id:&str,retry_alternate:bool)->Result<u64,String>{
+    if !video_id(id)||!video_id(origin){return Err("Invalid music request".into());}
+    let generation={
+        let state=selection().lock().unwrap();
+        if !state.permits_recovery(origin,id,retry_alternate){return Err("Cancelled".into());}
+        state.generation
+    };
+    confirm_automatic_guard(origin,id)?;
+    if selection().lock().unwrap().generation!=generation{return Err("Cancelled".into());}
+    Ok(generation)
+}
+fn allow_catalog_recovery(id:&str)->Result<(),String>{recovery_generation(id,id,false).map(|_|())}
+#[tauri::command(async)]
+pub async fn music_recovery_allowed(id:String,original_id:Option<String>)->bool{
+    tauri::async_runtime::spawn_blocking(move||{
+        let origin=original_id.as_deref().unwrap_or(&id);
+        recovery_generation(origin,&id,id!=origin).is_ok()
+    }).await.unwrap_or(false)
+}
+
+fn reserve(id: &str, proxy: &str, preload: bool, refresh: bool, original:Option<&str>, retry_alternate:bool) -> Result<u64,String> {
+    if retry_alternate && (original.is_none()||preload||!refresh){return Err("Invalid music request".into());}
+    let checked=original.map(|origin|recovery_generation(origin,id,retry_alternate)).transpose()?;
     let mut state = selection().lock().unwrap();
-    if preload { state.generation } else { state.select(Some((id.into(), proxy.into()))) }
+    if let Some(origin)=original {
+        if Some(state.generation)!=checked{return Err("Cancelled".into());}
+        automatic_guard(origin,id)?;
+    }
+    if preload { Ok(state.generation) } else {
+        Ok(state.select_play((id.into(),proxy.into()),original,refresh,retry_alternate))
+    }
 }
 
 #[tauri::command]
-pub fn music_cancel_stream() { let generation=selection().lock().unwrap().select(None); crate::music_engine::cancel(generation); }
+pub fn music_cancel_stream(preserve: Option<bool>) {
+    let preserve=preserve.unwrap_or(false);
+    let generation={let mut state=selection().lock().unwrap();let key=if preserve{state.key.clone()}else{None};
+        let origin=if preserve{state.automatic_origin.take()}else{None};
+        let generation=state.select(key);state.automatic_origin=origin;state.recovery_exhausted=true;if !preserve{state.invalid_before=generation;}generation};
+    crate::music_engine::cancel(generation,preserve);
+}
 
 pub fn stream(id: &str, proxy: &str, refresh: bool) -> Result<Stream, String> {
     stream_request(id, proxy, refresh, false)
 }
 
 pub fn stream_request(id: &str, proxy: &str, refresh: bool, preload: bool) -> Result<Stream, String> {
-    if !video_id(id) { return Err("Invalid music request".into()); }
-    stream_reserved(id, proxy, refresh, preload, reserve(id, proxy, preload))
+    stream_request_with_origin(id,proxy,refresh,preload,false,None,false,false)
+}
+pub fn stream_request_with_origin(id:&str,proxy:&str,refresh:bool,preload:bool,automatic:bool,original_id:Option<&str>,recover_from_cache:bool,retry_alternate:bool)->Result<Stream,String>{
+    if !video_id(id){return Err("Invalid music request".into());}
+    let original=automatic.then_some(original_id.unwrap_or(id));
+    stream_reserved(id,proxy,refresh,preload,reserve(id,proxy,preload,refresh,original,retry_alternate)?,original,recover_from_cache,retry_alternate)
 }
 
-fn stream_reserved(id: &str, proxy: &str, refresh: bool, preload: bool, generation: u64) -> Result<Stream, String> {
+fn completed_recovery_requested(id:&str, original:Option<&str>, refresh:bool, preload:bool, hint:bool,retry_alternate:bool)->bool{
+    hint && refresh && !preload && (original==Some(id)||(retry_alternate&&original.is_some()))
+}
+
+fn stream_reserved(id: &str, proxy: &str, refresh: bool, preload: bool, generation: u64, original:Option<&str>, recover_from_cache:bool,retry_alternate:bool) -> Result<Stream, String> {
     let key = (id.to_owned(), proxy.to_owned());
     // The newest selection cancels stale foreground work as well as preloads.
     // Selecting the track already being prepared adopts that work instead.
-    let cancelled = || selection().lock().unwrap().cancelled(generation, &key);
-    // A deliberate recovery must try the independent verified-range relay.
+    let guard=||if let Some(origin)=original{automatic_guard(origin,id)}else{Ok(())};
+    guard()?;
+    let superseded=||{let state=selection().lock().unwrap();state.cancelled(generation,&key)||(original.is_some()&&state.generation!=generation)};
+    let cancelled = || superseded() || guard().is_err();
+    // A protected continuation must not become a yt-dlp retry through frontend recovery.
+    if refresh {if let Some(error)=crate::music_engine::recovery_error(id){return Err(error);}}
+    // A complete verified reserve recording already in memory can replay without
+    // reopening a remote prefix. A partial/expired recording cannot take this path.
+    let try_completed=completed_recovery_requested(id,original,refresh,preload,recover_from_cache,retry_alternate);
+    if (!refresh||try_completed) && !cancelled() && crate::music_engine::recovery_error(id).is_none() {
+        let buffered=STREAMS.get().and_then(|streams|{
+            let streams=streams.lock().unwrap();
+            let entry=streams.entries.get(&key)?;
+            (!streams.limit.active() && entry.source.reusable(entry.at.elapsed()) && entry.source.fully_buffered())
+                .then(||entry.source.clone())
+        });
+        if let Some(source)=buffered {
+            if cancelled(){return Err("Cancelled".into());}
+            if !preload {crate::music_engine::cancel(generation,false);}
+            let url=crate::music_audio::register(source)?;
+            if try_completed{
+                guard()?;
+                if cancelled(){return Err("Cancelled".into());}
+                diagnostics::record(Stage::CachedAudio,Code::Success,None);
+            }
+            return Ok(Stream{url});
+        }
+    }
+    if try_completed {
+        let completed=crate::music_engine::completed_playback(id,generation,&cancelled);
+        guard()?;
+        if cancelled(){return Err("Cancelled".into());}
+        match completed {
+            Ok(Some(url))=>return Ok(Stream{url}),
+            Err(error) if crate::music_engine::restricted_error(&error)||error=="Cancelled"=>return Err(error),
+            _=>{}, // An absent/unreadable local copy falls through to normal recovery.
+        }
+    }
+    // Without a completed local source, recovery uses the independent verified-range relay.
     // Reopening the same fast prefix/SABR route can fail at the same position
     // repeatedly even though the reserve can serve the full recording.
     if proxy.is_empty() && !refresh && !cancelled() {
-        match crate::music_engine::play(id, refresh, preload, generation, &cancelled) {
+        match crate::music_engine::play(id, refresh, preload, original, generation, &cancelled) {
             Ok(url) if !cancelled() => return Ok(Stream { url }),
             Ok(_) => return Err("Cancelled".into()),
             Err(error) if cancelled() || preload || crate::music_engine::restricted_error(&error) || error.contains("Cancelled") => return Err(error),
             Err(_) => {}, // Bounded legacy path if the bundled worker is unavailable.
         }
     }
+    // The worker may have reported protection before a generic timeout/abort reply.
+    guard()?;
+    if let Some(error)=crate::music_engine::recovery_error(id){return Err(error);}
+    // Hand off to the independent relay instead of leaving the old producer
+    // downloading the same track during refresh or a worker timeout.
+    if !preload && !cancelled() {
+        {let mut state=selection().lock().unwrap();state.worker_cancelled_through=Some(state.worker_cancelled_through.unwrap_or(0).max(generation));}
+        crate::music_engine::cancel(generation,false);
+    }
+    use crate::music_engine::diagnostics::{self,Stage,Code};
+    diagnostics::record(Stage::ReserveStream,Code::Requested,None);
+    let route_started=Instant::now();
+    let result=(|| {
     let streams = STREAMS.get_or_init(|| Mutex::new(Streams::default()));
     // Cache hits must not wait behind a speculative network request. Only new
     // extraction is serialized; the cache mutex is never held across I/O.
@@ -463,18 +673,11 @@ fn stream_reserved(id: &str, proxy: &str, refresh: bool, preload: bool, generati
             }
         };
         #[cfg(debug_assertions)] eprintln!("Music source resolved in {} ms (attempt {})",timing.elapsed().as_millis(),attempt+1);
-        // Renew a rejected signed URL once. A denied account/region or rate
-        // limit is handled above and must never trigger a retry loop.
+        // Report a verified denial from this source; acquiring another URL
+        // does not establish permission to play the same recording.
         if cancelled() { return Err("Could not open this track".into()); }
         #[cfg(debug_assertions)] let verified=Instant::now();
-        if let Err(error) = source.verify_cancellable(deadline.min(Instant::now() + Duration::from_secs(12)), &cancelled) {
-            if error == crate::music_audio::SourceError::Limited {
-                limit.note(None);
-                return Err(error.to_string());
-            }
-            if error == crate::music_audio::SourceError::Denied && attempt == 0 && !cancelled() { continue; }
-            return Err(error.to_string());
-        }
+        verify_reserve_source(&source,deadline.min(Instant::now()+Duration::from_secs(12)),&cancelled)?;
         if cancelled() { return Err("Could not open this track".into()); }
         #[cfg(debug_assertions)] eprintln!("Music first audio bytes verified in {} ms",verified.elapsed().as_millis());
         let address = crate::music_audio::register(source.clone())?;
@@ -482,10 +685,28 @@ fn stream_reserved(id: &str, proxy: &str, refresh: bool, preload: bool, generati
         if cache.entries.len() >= 12 {
             if let Some(oldest) = cache.entries.iter().max_by_key(|(_,item)| item.at.elapsed()).map(|(key,_)| key.clone()) { cache.entries.remove(&oldest); }
         }
-        cache.entries.insert(key, CachedStream { at: Instant::now(), source });
+        cache.entries.insert(key.clone(), CachedStream { at: Instant::now(), source });
         return Ok(Stream { url: address });
     }
     Err("Could not open this track".into())
+    })();
+    let result=if superseded(){
+        Err("Cancelled".into())
+    }else{
+        guard().and(result)
+    };
+    diagnostics::record(Stage::ReserveStream,result.as_ref().map(|_|Code::Ready).unwrap_or_else(|error:&String|diagnostics::classify(error)),Some(route_started.elapsed().as_millis() as u64));
+    result
+}
+
+pub(super) fn verify_reserve_source(source:&crate::music_audio::Source,deadline:Instant,cancelled:&dyn Fn()->bool)->Result<(),String>{
+    use crate::music_audio::SourceError;
+    match source.verify_cancellable(deadline,cancelled) {
+        // The relay records denial before returning. Its own guard must not turn it into a user cancellation.
+        Err(error @ (SourceError::Denied|SourceError::Limited))=>Err(error.to_string()),
+        Err(_) if cancelled()=>Err("Cancelled".into()),
+        result=>result.map_err(|error|error.to_string()),
+    }
 }
 
 fn resolve(id: &str, proxy: &str, timeout: Duration, limit: Arc<crate::music_audio::PlaybackLimit>, cancelled: &dyn Fn() -> bool) -> Result<crate::music_audio::Source, ResolveFailure> {
@@ -502,7 +723,10 @@ fn resolve(id: &str, proxy: &str, timeout: Duration, limit: Arc<crate::music_aud
     let output = crate::engine_update::json_output_cancellable(command.arg("--")
         .arg(format!("https://www.youtube.com/watch?v={id}")), timeout, cancelled)?;
     if !output.status.success() {
-        return Err(extraction_failure(&output.stderr));
+        let error=extraction_failure(&output.stderr);
+        if error.message==stream_error(b"429"){limit.note(None);}
+        if error.message==stream_error(b"http error 403")||error.message==stream_error(b"private video"){crate::music_engine::note_reserve_denial(id);}
+        return Err(error);
     }
     let value: Value = serde_json::from_slice(&output.stdout).map_err(|_| "Could not open this track")?;
     let raw = value["url"].as_str().ok_or("Could not open this track")?;
@@ -511,30 +735,52 @@ fn resolve(id: &str, proxy: &str, timeout: Duration, limit: Arc<crate::music_aud
     let mime = match value["ext"].as_str() { Some("m4a") => "audio/mp4", Some("webm") => "audio/webm", _ => return Err("Could not open this track".into()) };
     let agent = value["http_headers"]["User-Agent"].as_str().unwrap_or(AGENT);
     crate::music_audio::Source::new(url, size, mime, agent, proxy, limit)
-        .map(|source|source.with_availability(value["available_at"].as_u64())).map_err(Into::into)
+        .map(|source|source.with_music_id(id).with_availability(value["available_at"].as_u64())).map_err(Into::into)
 }
 
-pub(crate) fn reserve_audio(id: &str) -> Result<String, String> {
+fn reserve_slot(deadline:Instant,cancelled:&dyn Fn()->bool)->Result<std::sync::MutexGuard<'static,()>,String>{
+    loop{
+        if cancelled()||Instant::now()>=deadline{return Err("Cancelled".into());}
+        if let Ok(lock)=RESOLUTION.try_lock(){
+            if cancelled(){return Err("Cancelled".into());}
+            return Ok(lock);
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+pub(crate) fn reserve_audio(id: &str, generation: Option<u64>) -> Result<String, String> {
     if !video_id(id) { return Err("Invalid music request".into()); }
+    if let Some(error)=crate::music_engine::recovery_error(id){return Err(error);}
     let limit=STREAMS.get_or_init(||Mutex::new(Streams::default())).lock().unwrap().limit.clone();
     if limit.active(){return Err(stream_error(b"429").into());}
     // Pausing may finish the current buffer, but choosing another song cancels
     // an obsolete reserve extraction as well as the main worker request.
-    let cancelled=||selection().lock().unwrap().key.as_ref().is_some_and(|(selected,_)|selected!=id);
+    let generation=generation.unwrap_or_else(||selection().lock().unwrap().generation);
+    let key=(id.to_owned(),String::new());
+    let cancelled=||{
+        let state=selection().lock().unwrap();
+        state.key.as_ref()!=Some(&key) || state.cancelled(generation,&key) || state.worker_cancelled_through.is_some_and(|last|generation<=last)
+            || crate::music_engine::recovery_error(id).is_some() || state.automatic_origin.as_deref().is_some_and(|origin|automatic_guard(origin,id).is_err())
+    };
     if cancelled(){return Err("Cancelled".into());}
-    let source=resolve(id,"",Duration::from_secs(25),limit.clone(),&cancelled).map_err(|e|e.message)?;
+    let deadline=Instant::now()+Duration::from_secs(25);
+    let _resolution=reserve_slot(deadline,&cancelled)?;
+    let source=resolve(id,"",deadline.saturating_duration_since(Instant::now()),limit.clone(),&cancelled).map_err(|e|e.message)?;
+    if cancelled(){return Err("Cancelled".into());}
     crate::music_audio::register(Arc::new(source))
 }
 
 #[tauri::command]
-pub async fn music_stream(id: String, refresh: Option<bool>, preload: Option<bool>, engine: tauri::State<'_, crate::Engine>) -> Result<Stream, String> {
+pub async fn music_stream(id: String, refresh: Option<bool>, preload: Option<bool>, automatic:Option<bool>, original_id:Option<String>, recover_from_cache:Option<bool>, retry_alternate:Option<bool>, engine: tauri::State<'_, crate::Engine>) -> Result<Stream, String> {
     if !video_id(&id) { return Err("Invalid music request".into()); }
     let proxy = crate::stored_proxy(&engine.dir);
     let preload = preload.unwrap_or(false);
     // Reserve priority before dispatching to the worker pool, whose start order
     // is not necessarily the order of commands from the player.
-    let generation = reserve(&id, &proxy, preload);
-    tauri::async_runtime::spawn_blocking(move || stream_reserved(&id, &proxy, refresh.unwrap_or(false), preload, generation)).await.map_err(|_| "Could not open this track".to_owned())?
+    let original=automatic.unwrap_or(false).then(||original_id.unwrap_or_else(||id.clone()));
+    let retry_alternate=retry_alternate.unwrap_or(false);
+    let generation = reserve(&id, &proxy, preload, refresh.unwrap_or(false),original.as_deref(),retry_alternate)?;
+    tauri::async_runtime::spawn_blocking(move || stream_reserved(&id, &proxy, refresh.unwrap_or(false), preload, generation,original.as_deref(),recover_from_cache.unwrap_or(false),retry_alternate)).await.map_err(|_| "Could not open this track".to_owned())?
 }
 
 #[cfg(test)]
@@ -577,6 +823,72 @@ mod tests {
         state.select(None);
         assert!(state.cancelled(prepared, &a));
         assert!(state.cancelled(playing, &b));
+    }
+    #[test]
+    fn alternate_retry_belongs_to_one_selected_pair_and_excludes_chaining(){
+        let (a,b,c)=("aaaaaaaaaaa","bbbbbbbbbbb","ccccccccccc");
+        let mut s=Selection::default();
+        s.select_play((a.into(),String::new()),None,false,false);
+        assert!(s.permits_recovery(a,a,false));
+        assert!(s.permits_recovery(a,b,false));
+        assert!(!s.permits_recovery(a,b,true));
+        let handoff=s.select_play((b.into(),String::new()),Some(a),false,false);
+        assert!(s.permits_recovery(a,b,true));
+        assert!(!s.permits_recovery(a,b,false));
+        assert!(!s.permits_recovery(a,c,false));
+        assert!(!s.permits_recovery(a,c,true));
+        assert!(!s.permits_recovery(b,c,false));
+        s.select_play((b.into(),String::new()),Some(a),true,true);
+        assert!(s.cancelled(handoff,&(b.into(),String::new())));
+        assert!(!s.permits_recovery(a,b,true));
+        s.select(None);assert!(!s.permits_recovery(a,b,true));
+        s.select_play((b.into(),String::new()),None,false,false);
+        assert!(!s.permits_recovery(a,b,true));
+    }
+    #[test]
+    fn alternate_retry_preserves_each_tracks_terminal_guard(){
+        let a="origGuard01";let b="destGuard01";
+        crate::music_engine::note_reserve_denial(b);
+        assert_eq!(automatic_guard(a,b).unwrap_err(),crate::music_engine::recovery_error(b).unwrap());
+        crate::music_engine::note_reserve_denial(a);
+        assert_eq!(automatic_guard(a,"otherTrack1").unwrap_err(),crate::music_engine::recovery_error(a).unwrap());
+    }
+    #[test]
+    fn completed_recovery_is_scoped_to_the_same_foreground_item_and_explicit_hint() {
+        let id="abcdefghijk";
+        assert!(completed_recovery_requested(id,Some(id),true,false,true,false));
+        assert!(completed_recovery_requested(id,Some("lmnopqrstuv"),true,false,true,true)); // admitted retry of B
+        assert!(!completed_recovery_requested(id,None,true,false,true,false)); // manual
+        assert!(!completed_recovery_requested(id,Some("lmnopqrstuv"),true,false,true,false)); // alternate
+        assert!(!completed_recovery_requested(id,Some(id),true,true,true,false)); // preload
+        assert!(!completed_recovery_requested(id,Some(id),false,false,true,false));
+        assert!(!completed_recovery_requested(id,Some(id),true,false,false,false)); // unsupported/decode
+    }
+    #[test]
+    fn late_denial_cancels_reserve_before_extraction_starts() {
+        let id="raceTest001";
+        assert!(crate::music_engine::recovery_error(id).is_none());
+        let checks=std::cell::Cell::new(0);
+        let result=reserve_slot(Instant::now()+Duration::from_secs(1),&||{
+            checks.set(checks.get()+1);
+            if checks.get()==2{crate::music_engine::note_reserve_denial(id);}
+            crate::music_engine::recovery_error(id).is_some()
+        });
+        assert!(result.is_err());
+        assert!(checks.get()>=2);
+    }
+    #[test]
+    fn recovery_invalidates_the_old_producer_even_for_the_same_track() {
+        let mut state=Selection::default();let key=("abcdefghijk".into(),String::new());
+        let old=state.select(Some(key.clone()));
+        let adopted=state.select(Some(key.clone()));
+        assert!(!state.cancelled(old,&key));
+        let refresh=state.select(Some(key.clone()));state.invalid_before=refresh;
+        assert!(state.cancelled(old,&key));assert!(state.cancelled(adopted,&key));
+        assert!(!state.cancelled(refresh,&key));
+        let paused=state.select(Some(key.clone()));assert!(!state.cancelled(refresh,&key));
+        let stopped=state.select(None);state.invalid_before=stopped;
+        assert!(state.cancelled(paused,&key));
     }
 
     #[test]
@@ -670,15 +982,15 @@ mod tests {
         assert!(stream_error(b"Sign in to confirm you're not a bot").contains("temporarily limiting"));
         assert!(stream_error(b"Private video").contains("guest playback"));
         assert!(stream_error(b"Video unavailable").contains("guest playback"));
-        assert!(stream_error(b"Network error").contains("Could not play"));
+        assert!(stream_error(b"Network error").contains("network"));
     }
 
     #[test]
     fn extraction_retries_transient_formats_without_retrying_access_restrictions() {
-        for error in ["Requested format is not available", "Unable to download API page: HTTP Error 503", "HTTP Error 403"] {
+        for error in ["Requested format is not available", "Unable to download API page: HTTP Error 503"] {
             assert!(extraction_failure(error.as_bytes()).retry);
         }
-        for error in ["HTTP Error 429", "Sign in to confirm you're not a bot", "Private video", "Video unavailable", "Sign in to confirm your age", "members-only"] {
+        for error in ["HTTP Error 429", "HTTP Error 403: Requested format is not available", "HTTP Error 401", "Sign in to confirm you're not a bot", "Private video", "Video unavailable", "Sign in to confirm your age", "members-only"] {
             assert!(!extraction_failure(error.as_bytes()).retry);
         }
     }
@@ -763,5 +1075,45 @@ mod tests {
                 assert_eq!(response.bytes().unwrap().len(),1024);
             }
         }
+    }
+}
+
+#[cfg(test)] mod suggestion_tests{
+    use super::*;
+    #[test] fn catalog_retries_a_truncated_body_once(){
+        use std::io::Write;
+        let listener=std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address=listener.local_addr().unwrap();
+        let server=std::thread::spawn(move||{
+            for payload in ["a","abc"]{
+                let(mut socket,_)=listener.accept().unwrap();
+                let mut request=[0;2048];socket.read(&mut request).unwrap();
+                write!(socket,"HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\n{payload}").unwrap();
+            }
+        });
+        let client=Client::builder().no_proxy().build().unwrap();
+        assert_eq!(catalog_bytes(client.get(format!("http://{address}/")),None).unwrap(),b"abc");
+        server.join().unwrap();
+    }
+    #[test] fn catalog_retries_a_temporary_response_but_preserves_access_denial(){
+        use std::io::Write;
+        for statuses in [vec![503,200],vec![403]]{
+            let listener=std::net::TcpListener::bind("127.0.0.1:0").unwrap();let address=listener.local_addr().unwrap();
+            let expected=*statuses.last().unwrap();
+            let server=std::thread::spawn(move||{
+                for status in statuses{let(mut socket,_)=listener.accept().unwrap();socket.set_read_timeout(Some(Duration::from_secs(3))).unwrap();let mut request=[0u8;2048];let _=socket.read(&mut request);write!(socket,"HTTP/1.1 {status} Test\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();}
+            });
+            let client=Client::builder().no_proxy().build().unwrap();
+            assert_eq!(catalog_bytes(client.get(format!("http://{address}/")),None).is_ok(),expected==200);server.join().unwrap();
+        }
+    }
+    #[test] fn suggestions_are_text_only_bounded_and_deduplicated(){
+        let mut rows=vec![json!({"searchSuggestionRenderer":{"suggestion":{"runs":[{"text":"Miley "},{"text":"Cyrus"}]}}}),json!({"searchSuggestionRenderer":{"suggestion":{"simpleText":"miley cyrus"}}})];
+        rows.push(json!({"unrelated":{"title":"do not suggest"}}));
+        assert_eq!(suggestion_texts(&json!({"contents":rows})),vec!["Miley Cyrus"]);
+        let many:Vec<Value>=(0..50).map(|i|json!({"searchSuggestionRenderer":{"suggestion":{"simpleText":format!("Song {i}")}}})).collect();
+        assert_eq!(suggestion_texts(&json!(many)).len(),8);
+        for status in [401,403,404,429]{assert!(!transient_catalog_status(status));}
+        for status in [500,502,503,504]{assert!(transient_catalog_status(status));}
     }
 }

@@ -2,6 +2,7 @@ import {PROFILE_KEY,exportMusicProfile,importMusicProfile,readMusicProfile} from
 
 export const MUSIC_PROFILE_DATABASE='deviload-music-profile';
 const TABLE='profiles',CURRENT='current',BACKUP='previous';
+export const MUSIC_PROFILE_BEFORE_LOCAL='before-local-v3';
 const unavailable=()=>Error('Music library storage is unavailable. Your saved data has not been replaced.');
 
 function transaction(db,mode,action){
@@ -58,7 +59,15 @@ export async function openMusicProfileStore({indexedDB=globalThis.indexedDB,lega
     const promise=transaction(db,'readwrite',(store)=>{
       const request=store.get(CURRENT);
       request.onsuccess=()=>{
-        if(request.result!==undefined)store.put(request.result,BACKUP);
+        if(request.result!==undefined){
+          store.put(request.result,BACKUP);
+          // Keep the original pre-local-library profile after subsequent saves,
+          // not just until the first playback checkpoint replaces `previous`.
+          if([1,2].includes(JSON.parse(request.result).version)&&JSON.parse(value).version===3){
+            const original=request.result,backup=store.get(MUSIC_PROFILE_BEFORE_LOCAL);
+            backup.onsuccess=()=>{if(backup.result===undefined)store.put(original,MUSIC_PROFILE_BEFORE_LOCAL);};
+          }
+        }
         store.put(value,CURRENT);
       };
     });

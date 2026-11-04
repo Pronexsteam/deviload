@@ -41,15 +41,19 @@ export function parseMusicImport(text,filename=""){
   const basename=clean(String(filename).split(/[\\/]/).pop(),150).replace(/\.(json|csv)$/i,"");
   const result={source:null,name:basename||"Imported music",entries:[],playlists:[],warnings:[]},entries=new Map();
   const warn=message=>{if(!result.warnings.includes(message))result.warnings.push(message);};
-  function add({title,artists=[],id,liked=false,plays=0,lastPlayed}){
+  function add({title,artists=[],id,spotifyId,uri,durationMs,album,isrc,liked=false,plays=0,lastPlayed}){
     title=clean(title);artists=[...new Map(artists.map(value=>clean(value,150)).filter(Boolean).slice(0,10).map(value=>[norm(value),value])).values()];
     const validVideo=videoId(id);
     if(!validVideo&&(!title||!artists.length)){warn("Some incomplete or unsupported tracks were skipped.");return null;}
-    const key=validVideo?"youtube:"+validVideo:result.source+":"+JSON.stringify([norm(title),artists.map(norm)]);
+    const sid=/^[a-zA-Z0-9]{22}$/.test(spotifyId||'')?spotifyId:/^spotify:track:[a-zA-Z0-9]{22}$/.test(uri||'')?uri.slice(14):null;
+    const key=validVideo?"youtube:"+validVideo:sid?'spotify:track:'+sid:result.source+":"+JSON.stringify([norm(title),artists.map(norm)]);
     let entry=entries.get(key);
     if(entry)warn("Repeated songs were combined.");
     if(!entry){
-      entry={key,title,artists,liked:false,plays:0};if(validVideo)entry.videoId=validVideo;entries.set(key,entry);
+      entry={key,title,artists,liked:false,plays:0};if(validVideo)entry.videoId=validVideo;if(sid)entry.spotifyId=sid;
+      if(Number.isFinite(durationMs)&&durationMs>0&&durationMs<=86400000)entry.durationMs=durationMs;
+      if(clean(album))entry.album=clean(album);if(/^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(isrc||''))entry.isrc=isrc;
+      entries.set(key,entry);
     }
     if(!entry.title&&title)entry.title=title;if(!entry.artists.length&&artists.length)entry.artists=artists;
     entry.liked||=liked===true;entry.plays=Math.min(100,entry.plays+Math.max(0,plays));
@@ -75,7 +79,7 @@ export function parseMusicImport(text,filename=""){
       const savedSongs=/(?:liked[ _-]*songs|saved[ _-]*tracks|your[ _-]*library)/i.test(basename)||(!Array.isArray(raw)&&Array.isArray(raw.items)&&raw.items.some(row=>own(row,'added_at')));
       for(const row of customRows){const item=trackData(row);
         if(!recognizable(row)||item.type&&item.type!=='track'){warn("Some incomplete or unsupported tracks were skipped.");continue;}
-        add({title:item.title??item.name,artists:item.artists.map(artist=>typeof artist==='string'?artist:artist?.name),liked:savedSongs||row.liked===true||item.liked===true});
+        add({title:item.title??item.name,artists:item.artists.map(artist=>typeof artist==='string'?artist:artist?.name),spotifyId:item.spotifyId,uri:item.uri,durationMs:item.durationMs??item.duration_ms,album:typeof item.album==='string'?item.album:item.album?.name,isrc:item.isrc??item.external_ids?.isrc,liked:savedSongs||row.liked===true||item.liked===true});
       }
       if(Array.isArray(raw?.unidentified)&&raw.unidentified.length)warn("The export also contains unidentified songs without enough metadata to match.");
     }else if(Array.isArray(raw?.tracks)&&(raw.tracks.length===0||raw.tracks.some(row=>own(row,"track")&&own(row,"artist")))){

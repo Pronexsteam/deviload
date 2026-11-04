@@ -33,3 +33,12 @@ test("completed transitions release the old decoder and abandon unused preloads"
  const active=decks.take('two',.7);assert.equal(old.src,'');assert.equal(active.src,'two');
  decks.warm('unused','unused');decks.clear();assert.equal(old.src,'');assert.equal(active.src,'two');
 });
+
+test('repeated preparation keeps an already buffering decoder and its expiration',()=>{
+ let now=0;const decks=createMusicDecks({makeAudio:audio,now:()=>now});
+ const standby=decks.warm('two','two');let loads=0;standby.load=()=>loads++;
+ now=120000;assert.equal(decks.warm('two','two'),standby);assert.equal(loads,0);
+ now=240001;assert.equal(decks.ready('two'),false);
+ decks.warm('two','two');assert.equal(loads,1);assert.equal(decks.ready('two'),true);
+ decks.warm('two','replacement');assert.equal(loads,2);assert.equal(standby.src,'replacement');
+});

@@ -1,4 +1,5 @@
 import {tracks} from "./music-state.js";
+import {isMusicTrackId} from './music-track-id.js';
 import {adaptiveDiscoveryShare} from "./music-recommendation-blend.js";
 
 const DAY=86400000, HALF_LIFE=30*DAY, REPEAT_WINDOW=10*60000, TRACK_COOLDOWN=30*60000;
@@ -6,7 +7,7 @@ const MAX_ENTRIES=1000, MAX_CANDIDATES=5000, CLOCK_SKEW=5*60000;
 const finite=value=>Number.isFinite(value)?value:0;
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 const safeNow=value=>Number.isFinite(value)?clamp(value,0,Number.MAX_SAFE_INTEGER):Date.now();
-const validId=id=>typeof id==="string"&&/^[\w-]{11}$/.test(id);
+const validId=isMusicTrackId;
 const validSong=item=>item?.kind==="song"&&typeof item.title==="string"&&validId(item.id);
 const songs=value=>tracks(Array.isArray(value)?value.filter(validSong):[]);
 const entryList=profile=>Object.values(profile?.entries&&typeof profile.entries==="object"?profile.entries:{}).filter(entry=>validSong(entry?.item)).slice(0,MAX_ENTRIES);
@@ -139,19 +140,22 @@ function sessionAffinity(items) {
   return artists;
 }
 
-export function tasteSeeds(profile,favorites,{now=Date.now(),random=Math.random,limit=3}={}) {
+export function tasteSeeds(profile,favorites,{now=Date.now(),random=Math.random,limit=3,rotation=0}={}) {
   now=safeNow(now);limit=limitValue(limit,3,10);if(!limit)return [];
   const evidence=affinities(profile,favorites,now);
   const candidates=songs([...songs(favorites),...entryList(profile).map(entry=>entry.item)])
     .filter(item=>evidence.allowed(item)&&(evidence.songs.get(item.id)||0)>0)
     .map((item,index)=>({item,index,keys:tasteArtistKeys(item),score:(evidence.songs.get(item.id)||0)+Math.max(0,...tasteArtistKeys(item).map(key=>evidence.artists.get(key)||0))*.2+jitter(random)}))
     .sort((a,b)=>b.score-a.score||a.index-b.index);
-  const chosen=[],seen=new Set();
+  const diverse=[],seen=new Set();
   for(const {item,keys}of candidates) {
     if(keys.some(key=>seen.has(key)))continue;
-    chosen.push(item);for(const key of keys)seen.add(key);if(chosen.length>=limit)break;
+    diverse.push(item);for(const key of keys)seen.add(key);if(diverse.length>=Math.max(limit,20))break;
   }
-  return chosen;
+  // Keep the strongest anchor while rotating through other positive interests.
+  // This changes upstream candidate pools, not likes or the persisted taste profile.
+  const tail=diverse.slice(1),offset=tail.length&&Number.isSafeInteger(rotation)?Math.max(0,rotation)%tail.length:0;
+  return [...diverse.slice(0,1),...tail.slice(offset),...tail.slice(0,offset)].slice(0,limit);
 }
 
 function reasonFor(item,evidence,now) {

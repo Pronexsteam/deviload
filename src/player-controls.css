@@ -13,8 +13,9 @@ body.music-mini-page{--player-ink:var(--ink);--player-muted:var(--muted);--playe
 :root body :is(.music-dock,.music-stage) input[type="range"],:root body.music-mini-page input[type="range"]{appearance:none;-webkit-appearance:none;height:14px;padding:0;margin:0;border:0;border-radius:8px;box-shadow:none;background:transparent;accent-color:var(--player-primary);cursor:pointer;--player-track:color-mix(in srgb,var(--player-muted) 28%,transparent)}
 /* Old theme rules painted the entire input box, not the three-pixel track. */
 :root body :is(.music-dock,.music-stage) input[type="range"]{background:transparent!important}
-:is(.music-dock,.music-stage,.music-mini-page) input[type="range"]::-webkit-slider-runnable-track{height:3px;border:0;border-radius:3px;background:linear-gradient(to right,var(--player-primary) var(--range-progress,0%),var(--player-track) var(--range-progress,0%))}
-:is(.music-dock,.music-stage,.music-mini-page) input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;margin-top:-3.5px;border:0;border-radius:50%;background:var(--player-primary);box-shadow:none}
+:is(.music-dock,.music-stage,.music-mini-page) input[type="range"]{--player-thumb-size:10px}
+:is(.music-dock,.music-stage,.music-mini-page) input[type="range"]::-webkit-slider-runnable-track{height:3px;border:0;border-radius:3px;background:linear-gradient(to right,var(--player-primary) var(--range-fill,0%),var(--player-track) var(--range-fill,0%))}
+:is(.music-dock,.music-stage,.music-mini-page) input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:var(--player-thumb-size);height:var(--player-thumb-size);margin-top:-3.5px;border:0;border-radius:50%;background:var(--player-primary);box-shadow:none}
 :is(.music-dock,.music-stage,.music-mini-page) input[type="range"]::-moz-range-track{height:3px;border:0;border-radius:3px;background:var(--player-track)}
 :is(.music-dock,.music-stage,.music-mini-page) input[type="range"]::-moz-range-progress{height:3px;border-radius:3px;background:var(--player-primary)}
 :is(.music-dock,.music-stage,.music-mini-page) input[type="range"]::-moz-range-thumb{width:10px;height:10px;border:0;border-radius:50%;background:var(--player-primary)}

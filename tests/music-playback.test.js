@@ -1,3 +1,5 @@
+import {isLocalMusicId} from '../src/music-track-id.js';
+import {localPlaybackSource,getExactLocalCopy,setExactLocalCopy,exactLocalPlaybackSource} from '../src/music-local-model.js';
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
@@ -8,13 +10,14 @@ import {mergeRecommendationPools} from "../src/music-recommendation-view.js";
 import {createRecommendationSession} from "../src/music-recommendation-session.js";
 import {rankMusicRecommendations,recommendationFamiliarity} from "../src/music-recommendation-engine.js";
 import {createRecordingView} from "../src/music-recording-view.js";
-import {resolveRecordingSource,setRecordingSource,removeRecordingSource,recordingFamilyIds} from "../src/music-recordings.js";
+import {resolveRecordingSource,setRecordingSource,removeRecordingSource,recordingFamilyIds,recordingMatch,singleCatalogMatch} from "../src/music-recordings.js";
 import {rememberInterestTrack,interestProfile,interestSources,interestSeeds} from "../src/music-interest-mixes.js";
 import {sanitizeMusicTrack,saveMusicProfile} from "../src/music-profile.js";
 import {musicGain} from "../src/music-volume.js";
 import {createPlaybackOrder} from "../src/music-session.js";
 import {playbackCandidates as eligiblePlaybackCandidates} from "../src/music-playback-candidates.js";
 import {createMusicDiagnostics,playbackFailure} from "../src/music-diagnostics.js";
+import {bufferedSeconds,canPrepareAudio} from "../src/music-playback-health.js";
 import ru from "../src/locales/ru.js";
 import es from "../src/locales/es.js";
 
@@ -30,23 +33,25 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 function player(invoke,items=[song(1)]){
   const events={},timers=new Map(),controls=new Map(),memory=new Map();let serial=0;
-  const field=()=>({textContent:"",disabled:false,value:"",replaceChildren(){}});
-  const audio={currentTime:0,duration:180,paused:true,ended:false,readyState:4,seeking:false,volume:.7,muted:false,src:"",playError:null,hang:false,
+  const field=()=>({textContent:"",disabled:false,value:"",replaceChildren(){},setAttribute(){}});
+  const audio={playbackRate:1,currentTime:0,duration:180,paused:true,ended:false,readyState:4,seeking:false,volume:.7,muted:false,src:"",playError:null,hang:false,
     addEventListener:(name,callback)=>{events[name]=callback;},
     async play(){if(this.playError)throw this.playError;if(this.hang)return new Promise(()=>{});this.paused=false;this.ended=false;events.play?.();events.playing?.();},
     pause(){if(!this.paused){this.paused=true;events.pause?.();}},
     removeAttribute(){this.src="";},load(){this.currentTime=0;this.ended=false;}};
   Object.defineProperty(audio,"src",{get(){return this.address||"";},set(value){this.address=value;if(value)queueMicrotask(()=>events.loadedmetadata?.());}});
-  const ctx={eligiblePlaybackCandidates,musicRoom:null,audio,queue:items,index:-1,current:null,resolvedTrack:null,resolvedOffline:false,autoplay:true,radioPending:false,streamLoading:false,playRequest:0,
+  Object.defineProperty(audio,"currentSrc",{get(){return this.selectedUrl??this.src;},set(value){this.selectedUrl=value;}});
+  audio.buffered={length:1,start:()=>0,end:()=>audio.duration};
+  const ctx={isLocalMusicId,localPlaybackSource,getExactLocalCopy,setExactLocalCopy,exactLocalPlaybackSource,recordingMatch,singleCatalogMatch,findLocalRecording:async()=>null,recoveryLocal:null,recoveryCatalog:null,pendingLocalCancel:null,alternateTried:false,localItems:[],eligiblePlaybackCandidates,musicRoom:null,audio,queue:items,index:-1,current:null,resolvedTrack:null,resolvedOffline:false,autoplay:true,radioPending:false,streamLoading:false,playRequest:0,
     needsRefresh:false,privateSession:false,resumeSnapshot:null,discordPresence:{sync(){}},diagnostics:createMusicDiagnostics(),playbackFailure,
-    listen:audio.addEventListener,decks:{take:()=>null,stopTail(){},warm(){},clear(){ctx.deckClears=(ctx.deckClears||0)+1;},setVolume(){},ready:()=>false,owns:node=>node===audio},sound:{resume(){},transition:0},lyrics:{update(){}},window:{},
-    nextPlan:null,preloadPending:false,preloadAttempts:new Set(),radioAhead:null,time:String,recordingRoutingRevision:-1,recordingBoundIds:new Set(),recordingFamilies:new Map(),
-    order:createPlaybackOrder(),knownDuration:0,sessionTransition:false,sessionSavedAt:Date.now(),intent:{leave(){}},radioCache:new Map(),repeat:"off",shuffle:false,session:0,checkpoint:0,historyAdded:false,recoveryUsed:false,pendingSeek:0,retryPosition:0,bufferingTimer:null,
+    listen:audio.addEventListener,decks:{take:()=>null,stopTail(){},warm(){},clear(){ctx.deckClears=(ctx.deckClears||0)+1;},setVolume(){},ready:()=>false,owns:node=>node===audio},sound:{resume(){},setSource(node,offline){ctx.lastSoundSource={node,offline};},transition:0},lyrics:{update(){}},window:{},
+    bufferedSeconds,canPrepareAudio,nextPlan:null,preloadPending:false,preloadAttempts:new Map(),preloadWindow:[],radioAhead:null,time:String,recordingRoutingRevision:-1,recordingBoundIds:new Set(),recordingFamilies:new Map(),
+    order:createPlaybackOrder(),knownDuration:0,endSource:null,sessionTransition:false,sessionSavedAt:Date.now(),intent:{leave(){}},radioCache:new Map(),repeat:"off",shuffle:false,session:0,checkpoint:0,historyAdded:false,recoveryUsed:false,pendingSeek:0,retryPosition:0,bufferingTimer:null,
     saved:{favorites:[],recent:[],collections:[],playlists:[],sourceBindings:[],interestMixes:[]},playbackContext:[],playbackOrigin:"manual",contextRevision:0,sourceRevision:0,interestPool:null,interestViewId:null,interestRotations:new Map(),personalization:0,recommendationRevision:0,playbackSourceContext:{kind:"restored"},recommendationSession:createRecommendationSession(),automaticQueueIds:new Set(),impressionTimers:new Map(),refreshRecommendationImpressions(){},clearRecommendationObservations(){},discoveryCandidates:[],recommendationReasons:new Map(),
     view:"home",lastQuery:{kind:"home"},activeMood:"",playlistId:null,browseItem:null,getPlaylist:()=>null,
     taste:readTaste(),clock:{seconds:0,reset(){this.seconds=0;},sample() {return this.seconds;}},
-    title:field(),artist:field(),artwork:field(),updateDockArt(){},seek:field(),isRangeDragging:()=>false,elapsed:field(),duration:field(),previous:{click(){}},
-    invoke:(command,args)=>{if(command==="music_cancel_stream"){ctx.cancellations=(ctx.cancellations||0)+1;return Promise.resolve();}return invoke(command,args);},tracks,remember,nextIndex,recommend,recordListening,tasteSeeds,tasteArtistKeys,canonicalArtistKey,mergeRecommendationPools,rankMusicRecommendations,recommendationFamiliarity,createRecordingView,resolveRecordingSource,setRecordingSource,removeRecordingSource,recordingFamilyIds,sanitizeMusicTrack,saveMusicProfile,rememberInterestTrack,interestProfile,interestSources,interestSeeds,cover:()=>null,displaySubtitle:item=>item?.artists?.join(", ")||"Unknown artist",language:()=>"en",t:s=>s,errorText:String,
+    changeSource:{hidden:true},nextHomeCandidates:[],title:field(),artist:field(),artwork:field(),updateDockArt(){},seek:field(),isRangeDragging:()=>false,elapsed:field(),duration:field(),previous:{click(){}},
+    invoke:(command,args)=>{if(command==="music_cancel_stream"){ctx.cancellations=(ctx.cancellations||0)+1;ctx.lastCancellation=args;return Promise.resolve();}return invoke(command,args);},tracks,remember,nextIndex,recommend,recordListening,tasteSeeds,tasteArtistKeys,canonicalArtistKey,mergeRecommendationPools,rankMusicRecommendations,recommendationFamiliarity,createRecordingView,resolveRecordingSource,setRecordingSource,removeRecordingSource,recordingFamilyIds,sanitizeMusicTrack,saveMusicProfile,rememberInterestTrack,interestProfile,interestSources,interestSeeds,cover:()=>null,displaySubtitle:item=>item?.artists?.join(", ")||"Unknown artist",language:()=>"en",t:s=>s,errorText:String,
     storage:{getItem:key=>memory.get(key),setItem:(key,value)=>memory.set(key,value)},playbackQueue,button(){},openRecordingPicker:options=>{ctx.picker=options;},downloadsPending:new Set(),presentation:{notify(){}},onDownload:null,homeCache:null,
     wireMusicProfile:options=>{ctx.profileActions=options;},library:{invalidateUndo(){},find(){}},musicGain,previousVolume:.7,syncVolume(){},showLocal(){},load(){},
     request:0,loading:false,loaded:false,sections:[],continuation:null,morePending:false,listFilter:"",listSort:"original",rememberNavigation(){},selectView:next=>{ctx.view=next;},skeleton(){},render(){ctx.rendered=ctx.sections;},prepareHomeSelection(){},showPlaylist(){},
@@ -55,9 +60,40 @@ function player(invoke,items=[song(1)]){
     document:{querySelectorAll:()=>[],addEventListener(){}},navigator:{},performance,DOMException,
     setTimeout(fn){const id=++serial;timers.set(id,fn);return id;},clearTimeout(id){timers.delete(id);}};
   Object.assign(ctx,{publicDiscovery:{candidates:async()=>[],clear(){}},publicGeneration:0});
-  const actions=runInNewContext(`(()=>{${code}\nreturn {playAt,playItems,togglePlay,resumeListening,advance,preloadNext,clearRecommendationContext,plannedNext,rankRadioPool,radioCandidates,playbackSource,invalidateRecommendations,chooseRecording,refreshCurrentRecording,restoreProfile:profileActions.restore,downloadTrack,showInterestMix,renderInterestPool};})()`,ctx);
-  return {ctx,...actions,emit:name=>events[name]?.(),expire(){const pending=[...timers.values()];timers.clear();pending.forEach(fn=>fn());}};
+  const actions=runInNewContext(`(()=>{${code}\nreturn {playAt,playItems,togglePlay,yieldToOtherMedia,resumeListening,advance,preloadNext,clearRecommendationContext,plannedNext,rankRadioPool,radioCandidates,playbackSource,invalidateRecommendations,chooseRecording,refreshCurrentRecording,restoreProfile:profileActions.restore,downloadTrack,showInterestMix,renderInterestPool};})()`,ctx);
+  return {ctx,...actions,emit:(name,event)=>events[name]?.(event),expire(){const pending=[...timers.values()];timers.clear();pending.forEach(fn=>fn());}};
 }
+test('indexed local playback, seek recovery and autoplay never resolve an online source',async()=>{
+ const local={...song(1),id:'local:'+'a'.repeat(64)},calls=[];
+ const p=player(async(command,args)=>{calls.push([command,args]);if(command==='music_offline_source')return 'D:/test.flac';throw Error('Unexpected network command '+command);},[local]);
+ p.ctx.window={__TAURI__:{core:{convertFileSrc:path=>'asset:'+path}}};
+ await p.playAt(0,{resume:42});assert.equal(p.ctx.audio.paused,false);assert.equal(p.ctx.audio.currentTime,42);assert.equal(p.ctx.lastSoundSource.offline,true);
+ p.ctx.audio.playError={code:3,message:'decode'};p.ctx.audio.pause();await p.togglePlay();await settle();
+ assert(calls.every(([command])=>command==='music_offline_source'));
+ assert.equal((await p.radioCandidates(local)).length,0);
+});
+
+test('For you selections and their following tracks retain recommendation provenance',async()=>{
+ const p=player(async()=>({url:'audio'})),items=[song(1),song(2),song(3)];
+ p.playItems(items,items[0].id,{kind:'personal'});await settle();
+ assert.equal(p.ctx.playbackOrigin,'recommendation');assert.equal(p.ctx.automaticQueueIds.size,3);
+ await p.advance(true);assert.equal(p.ctx.current.id,items[1].id);assert.equal(p.ctx.playbackOrigin,'recommendation');
+ p.playItems(items,items[0].id,{kind:'playlist'});await settle();
+ assert.equal(p.ctx.playbackOrigin,'manual');assert.equal(p.ctx.automaticQueueIds.size,0);
+});
+
+test('retrying a recommended track at zero preserves its recommendation origin',async()=>{
+ const p=player(async()=>({url:'audio'}));p.ctx.audio.playError=Error('temporary');
+ await p.playAt(0,{origin:'recommendation'});assert.equal(p.ctx.resolvedTrack,null);
+ p.ctx.audio.playError=null;await p.togglePlay();assert.equal(p.ctx.playbackOrigin,'recommendation');assert.equal(p.ctx.audio.paused,false);
+});
+test('autoplay continuation never truncates a manually selected large library',async()=>{
+ const items=Array.from({length:1420},(_,n)=>song(n)),extra=song(2000);
+ const p=player(async(command)=>command==='music_catalog'?{sections:[{items:[extra]}]}:{url:'audio'},items);
+ await p.playAt(items.length-1);await p.advance(false);await settle();
+ assert.equal(p.ctx.current.id,extra.id);assert.equal(p.ctx.queue.length,1421);assert.equal(p.ctx.queue[0].id,items[0].id);
+});
+
 test("room guests cannot replace the host track and exact room playback ignores local version bindings",async()=>{
  const calls=[],p=player(async(_command,args)=>{calls.push(args.id);return{url:args.id};});p.ctx.musicRoom={isGuest:()=>true};
  p.ctx.saved.sourceBindings=[{trackId:song(1).id,source:song(2)}];
@@ -70,14 +106,14 @@ test("source restrictions explain the failure without starting audio or scheduli
   const p=player(async()=>{calls++;throw failure;});
   await p.playAt(0);p.expire();await settle();
   assert.equal(calls,1);assert.equal(p.ctx.audio.paused,true);assert.equal(p.ctx.streamLoading,false);
-  assert.equal(p.ctx.artist.textContent,"Unavailable from source. Try another track.");assert.equal(p.ctx.message,failure);
+  assert.equal(p.ctx.artist.textContent,failure);assert.equal(p.ctx.message,failure);assert.equal(p.ctx.changeSource.hidden,false);
 });
 
-test("playback updates cannot pull the seek thumb away during a drag",async()=>{
+test("timeupdate leaves seek painting to the shared frame clock, including during a drag",async()=>{
  const p=player(async()=>({url:"audio"}));await p.playAt(0);
  p.ctx.audio.duration=100;p.ctx.audio.currentTime=20;p.ctx.seek.value='750';p.ctx.isRangeDragging=()=>true;
  p.emit('timeupdate');assert.equal(p.ctx.seek.value,'750');
- p.ctx.isRangeDragging=()=>false;p.emit('timeupdate');assert.equal(p.ctx.seek.value,'200');
+ p.ctx.isRangeDragging=()=>false;p.emit('timeupdate');assert.equal(p.ctx.seek.value,'750');
 });
 
 test("muted playback never teaches taste and unmuting starts a fresh listening interval",async()=>{
@@ -179,6 +215,406 @@ test("mid-track errors recover once at the same position instead of retrying for
   await p.playAt(0);p.ctx.clock.seconds=15;p.ctx.audio.currentTime=35;p.emit("error");await settle();
   assert.equal(calls.length,2);assert.equal(calls[1].refresh,true);assert.equal(p.ctx.audio.currentTime,35);
   p.emit("error");await settle();assert.equal(calls.length,2);assert.equal(p.ctx.resolvedTrack,null);
+});
+test("a shortened decoder duration cannot finish the queue or spend more than one recovery",async()=>{
+  const calls=[],p=player(async(_,args)=>{calls.push(args);return {url:"stream:"+calls.length};},[song(1),song(2)]);
+  await p.playAt(0);
+  const a=p.ctx.audio;
+  a.duration=65;a.currentTime=64.6;a.ended=true;p.emit("durationchange");p.emit("ended");await settle();
+  assert.equal(calls.length,2);assert.equal(calls[1].refresh,true);assert.equal(p.ctx.current.id,song(1).id);
+  assert.ok(a.currentTime>=64&&a.currentTime<=64.6);
+  a.currentTime=65;a.ended=true;p.emit("ended");await settle();
+  assert.equal(calls.length,2);assert.equal(p.ctx.resolvedTrack,null);assert.equal(p.ctx.retryPosition,65);
+  assert.equal(p.ctx.current.id,song(1).id);assert.equal(p.ctx.changeSource.hidden,false);
+});
+test("an old ended notification cannot advance the new source on a reused deck",async()=>{
+  const p=player(async(_,args)=>({url:args.id}),[song(1),song(2),song(3)]);
+  await p.playAt(0);await p.playAt(1);
+  p.emit("ended");await settle();assert.equal(p.ctx.index,1);
+  const a=p.ctx.audio;a.ended=true;a.currentTime=a.duration;
+  p.emit("ended",{timeStamp:p.ctx.endSource.since-1});await settle();assert.equal(p.ctx.index,1);
+  a.currentSrc=song(1).id;p.emit("ended");await settle();assert.equal(p.ctx.index,1);
+  a.currentSrc=song(2).id;p.emit("ended");await settle();assert.equal(p.ctx.index,2);
+});
+test("seeking to the genuine end advances even if the catalog gives a longer duration",async()=>{
+  const p=player(async(_,args)=>({url:args.id}),[{...song(1),duration:300},song(2)]);
+  p.ctx.audio.duration=80;await p.playAt(0);p.ctx.audio.currentTime=80;p.ctx.audio.ended=true;
+  p.emit("ended");await settle();assert.equal(p.ctx.index,1);assert.equal(p.ctx.recoveryUsed,false);
+});
+test("a transport denial attached to ended never retries or silently advances",async()=>{
+  const calls=[],p=player(async(_,args)=>{calls.push(args);return {url:args.id};},[song(1),song(2)]);
+  await p.playAt(0);const a=p.ctx.audio;a.currentTime=a.duration;a.ended=true;a.error={code:2,message:"403 Forbidden"};
+  p.emit("ended");await settle();
+  assert.equal(calls.length,1);assert.equal(p.ctx.resolvedTrack,null);assert.equal(p.ctx.index,0);
+  assert.match(p.ctx.message,/denied access/);
+});
+test("crossfade does not advance at a shortened prefix even with the next deck ready",async()=>{
+  const p=player(async(_,args)=>({url:args.id}),[song(1),song(2)]);
+  await p.playAt(0);p.ctx.sound.transition=4;p.ctx.decks.ready=()=>true;
+  p.ctx.audio.duration=65;p.ctx.audio.currentTime=63;p.emit("durationchange");p.emit("timeupdate");await settle();
+  assert.equal(p.ctx.index,0);
+  p.ctx.audio.duration=180;p.ctx.audio.currentTime=178;p.emit("durationchange");p.emit("timeupdate");await settle();
+  assert.equal(p.ctx.index,1);
+});
+test("premature EOF in a local file does not try the network",async()=>{
+  const local={...song(1),id:"local:"+"a".repeat(64)},calls=[];
+  const p=player(async(command)=>{calls.push(command);return "D:/local.wav";},[local,song(2)]);
+  p.ctx.window={__TAURI__:{core:{convertFileSrc:path=>"asset:"+path}}};
+  await p.playAt(0);p.ctx.audio.currentTime=65;p.ctx.audio.ended=true;p.emit("ended");await settle();
+  assert.deepEqual(calls,["music_offline_source"]);assert.equal(p.ctx.index,0);assert.equal(p.ctx.resolvedTrack,null);
+});
+test("a transient resolver error at zero retries the primary path before changing the source",async()=>{
+  const calls=[],p=player(async(_,args)=>{calls.push(args);if(calls.length===1)throw Error("Network unavailable");return {url:"recovered"};});
+  await p.playAt(0);
+  assert.deepEqual(calls.map(call=>call.refresh),[false,false]);
+  assert.equal(p.ctx.audio.paused,false);
+});
+test("a second decoder failure resumes one equivalent catalog song at the latest position without rebinding the logical song",async()=>{
+  const original={...song(1),duration:180},alternate={...original,id:song(3).id},calls=[];
+  const p=player(async(cmd,args)=>{
+    calls.push([cmd,args]);
+    if(cmd==="music_recovery_allowed")return true;
+    if(cmd==="music_catalog")return {sections:[{items:[original,alternate]}]};
+    return {url:args.id+"-"+calls.length};
+  },[original,song(2)]);
+  p.ctx.saved.favorites=[original];
+  await p.playAt(0);const a=p.ctx.audio;
+  assert.deepEqual(calls.map(([c])=>c),["music_stream"]);
+  a.currentTime=31;a.error={code:2};p.emit("error");await settle();
+  assert.deepEqual({...calls[1][1]},{id:original.id,refresh:true,preload:false,automatic:true,originalId:original.id,recoverFromCache:true});
+  a.currentTime=47.125;p.emit("error");await settle();
+  assert.deepEqual(calls.map(([cmd])=>cmd),["music_stream","music_stream","music_recovery_allowed","music_catalog","music_stream"]);
+  assert.equal(calls[3][1].originalId,original.id);assert.equal(calls[4][1].id,alternate.id);
+  assert.equal(calls[4][1].originalId,original.id);assert.equal(calls[4][1].automatic,true);
+  assert.equal(a.currentTime,47.125);assert.equal(a.paused,false);assert.equal(p.ctx.current.id,original.id);
+  assert.deepEqual(p.ctx.queue.map(item=>item.id),[original.id,song(2).id]);assert.deepEqual(p.ctx.saved.sourceBindings,[]);
+  assert.deepEqual(p.ctx.saved.favorites,[original]);assert.equal(p.ctx.saved.recent[0].id,original.id);
+  a.currentTime=54;p.emit("error");await settle();
+  assert.equal(calls.length,5);assert.equal(p.ctx.resolvedTrack,null);assert.equal(p.ctx.retryPosition,54);
+});
+test("a verified local file resumes while the same-ID retry is still pending and its late remote result cannot start another decoder",async()=>{
+  const track={...song(1),duration:180},remote=deferred(),local=deferred(),calls=[];
+  const p=player(async(cmd,args)=>{calls.push([cmd,args]);return args.automatic?remote.promise:{url:"primary"};},[track,song(2)]);
+  let scans=0,starts=0;
+  p.ctx.findLocalRecording=()=>{scans++;return local.promise;};
+  const play=p.ctx.audio.play.bind(p.ctx.audio);p.ctx.audio.play=()=>{starts++;return play();};
+  await p.playAt(0);assert.equal(scans,0);
+  const a=p.ctx.audio;a.currentTime=37.125;a.error={code:2};p.emit("error");await settle();
+  assert.equal(scans,1);assert.equal(calls.at(-1)[1].automatic,true);assert.equal(a.paused,true);
+  local.resolve({url:"verified-file",offline:true});await settle();
+  assert.equal(a.src,"verified-file");assert.equal(a.currentTime,37.125);assert.equal(a.paused,false);assert.equal(p.ctx.cancellations,1);
+  remote.resolve({url:"late-remote"});await settle();
+  assert.equal(a.src,"verified-file");assert.equal(starts,2);assert.equal(p.ctx.current.id,track.id);
+  assert.equal(calls.filter(([cmd])=>cmd==="music_catalog").length,0);
+});
+test("only a progressed automatic B gets one guarded same-B retry at its real playhead",async()=>{
+  const original={...song(1),duration:180},alt={...original,id:song(3).id},anchor=5.75;
+  for(const mode of ["short","eight","long","gap","seek","early-end","decode","limited","guard-denied","retry-denied","stall","pause-during-guard"]){
+    const calls=[],guard=deferred(),p=player(async(cmd,args)=>{
+      calls.push([cmd,args]);
+      if(cmd==="music_recovery_allowed")return args.originalId?(mode==="pause-during-guard"?guard.promise:mode!=="guard-denied"):true;
+      if(cmd==="music_catalog")return {sections:[{items:[alt]}]};
+      if(args.id===original.id)throw Error("Network unavailable");
+      if(args.retryAlternate&&mode==="retry-denied")throw Error("HTTP 429");
+      return {url:args.retryAlternate?"B-refreshed":"B"};
+    },[original,song(2)]);
+    await p.playAt(0,{resume:anchor});
+    const a=p.ctx.audio;assert.equal(a.src,"B");
+    p.emit("seeking");p.emit("seeked"); // The startup seek to the saved position is expected.
+    const at=anchor+(mode==="short"?7.99:mode==="eight"?8:36.319);
+    a.currentTime=at;a.played={length:1,start:()=>mode==="gap"?anchor+2:anchor,end:()=>at};
+    if(mode==="seek"){p.emit("seeking");p.emit("seeked");}
+    if(mode==="early-end"){a.ended=true;p.emit("ended");}
+    else if(mode==="stall"){a.readyState=2;p.emit("waiting");p.expire();}
+    else{a.error={code:mode==="decode"?3:2,message:mode==="limited"?"HTTP 429":""};p.emit("error");}
+    await settle();
+    const sufficient=["eight","long","guard-denied","retry-denied","stall","pause-during-guard"].includes(mode);
+    assert.equal(calls.filter(([cmd,args])=>cmd==="music_recovery_allowed"&&args.id===alt.id&&args.originalId===original.id).length,sufficient?1:0,mode);
+    if(mode==="pause-during-guard"){await p.togglePlay();guard.resolve(true);await settle();}
+    const retry=calls.filter(([cmd,args])=>cmd==="music_stream"&&args.retryAlternate);
+    const sent=sufficient&&!["guard-denied","pause-during-guard"].includes(mode);
+    assert.equal(retry.length,sent?1:0,mode);
+    if(sent)assert.deepEqual({...retry[0][1]},{id:alt.id,originalId:original.id,automatic:true,refresh:true,preload:false,retryAlternate:true,recoverFromCache:true});
+    if(sent&&mode!=="retry-denied"){
+      assert.equal(a.currentTime,at);assert.equal(a.paused,false);assert.equal(p.ctx.endSource.duration,180);
+      a.currentTime=at+12;a.played={length:1,start:()=>at,end:()=>at+12};a.error={code:2};p.emit("error");await settle();
+      assert.equal(calls.filter(([cmd,args])=>cmd==="music_stream"&&args.retryAlternate).length,1);assert.equal(a.paused,true);
+    }
+    assert.equal(p.ctx.current.id,original.id);assert.deepEqual(p.ctx.queue.map(x=>x.id),[original.id,song(2).id]);
+    assert.equal(calls.filter(([cmd])=>cmd==="music_catalog").length,1);assert.deepEqual(p.ctx.saved.sourceBindings,[]);
+  }
+});
+test("a draining existing range prewarms one local check before any fault, and no other audio or catalog is requested",async()=>{
+  const track={...song(1),duration:180},calls=[],local=deferred(),retry=deferred();
+  const p=player(async(cmd,args)=>{calls.push(cmd);return args.automatic?retry.promise:{url:"initial"};},[track]);
+  p.ctx.autoplay=false;p.ctx.performance={now:()=>p.ctx.audio.currentTime*1000};
+  let scans=0;p.ctx.findLocalRecording=()=>{scans++;return local.promise;};
+  await p.playAt(0);const a=p.ctx.audio;a.buffered={length:1,start:()=>0,end:()=>13};
+  for(const pos of [4,7,8,9,10]){a.currentTime=pos;p.emit("timeupdate");}
+  assert.equal(scans,0);
+  for(const pos of [10.75,12.5,12.75]){a.currentTime=pos;p.emit("timeupdate");}
+  assert.equal(scans,1);assert.equal(a.src,"initial");assert.deepEqual(calls,["music_stream"]);
+  a.error={code:2};p.emit("error");await settle();assert.equal(scans,1);
+  local.resolve({url:"prewarmed",offline:true});await settle();
+  assert.equal(a.currentTime,12.75);assert.equal(a.src,"prewarmed");assert.equal(a.paused,false);
+  retry.resolve({url:"too-late"});await settle();assert.deepEqual(calls,["music_stream","music_stream"]);
+});
+test("healthy/growing buffers, startup, seek, paused, data saver and a genuine end never prewarm a local recording",async()=>{
+  const track={...song(1),duration:180};
+  for(const scenario of ["growing","startup","seek","paused","save-data","end","too-soon"]){
+    const p=player(async()=>({url:"initial"}),[track]);let scans=0;p.ctx.findLocalRecording=async()=>{scans++;return null;};
+    p.ctx.autoplay=false;p.ctx.performance={now:()=>scenario==="too-soon"?1200:p.ctx.audio.currentTime*1000};
+    await p.playAt(0);const a=p.ctx.audio;let edge=scenario==="end"?180:13;a.buffered={length:1,start:()=>0,end:()=>edge};
+    a.currentTime=scenario==="end"?167:7;p.emit("timeupdate");
+    if(scenario==="seek")p.emit("seeking");
+    if(scenario==="paused")a.pause();
+    if(scenario==="save-data")p.ctx.navigator.connection={saveData:true};
+    if(scenario==="growing")edge=21;
+    if(scenario==="startup"){a.currentTime=1;edge=1.6;}
+    else a.currentTime=scenario==="end"?179.25:12.5;
+    p.emit("timeupdate");assert.equal(scans,0,scenario);
+  }
+});
+test("low runway prepares guarded metadata once before the fault, transfers the in-flight query through retry A, and rechecks protection before B",async()=>{
+  for(const lastPermission of [true,false]){
+    const track={...song(1),duration:180},alt={...track,id:song(3).id},catalog=deferred(),retry=deferred(),calls=[];let permissions=0;
+    const p=player(async(cmd,args)=>{
+      calls.push([cmd,args]);
+      if(cmd==="music_recovery_allowed")return ++permissions===1||lastPermission;
+      if(cmd==="music_catalog")return catalog.promise;
+      if(args.id===alt.id)return {url:"B"};
+      return args.automatic?retry.promise:{url:"A"};
+    },[track]);
+    p.ctx.autoplay=false;p.ctx.performance={now:()=>p.ctx.audio.currentTime*1000};
+    await p.playAt(0);const a=p.ctx.audio;a.buffered={length:1,start:()=>0,end:()=>20};
+    for(const pos of [8,13,14.75,17.75,18]){a.currentTime=pos;p.emit("timeupdate");}
+    await settle();assert.deepEqual(calls.map(([cmd])=>cmd),["music_stream","music_recovery_allowed","music_catalog"]);
+    assert.equal(a.src,"A");assert.equal(a.paused,false);
+    a.error={code:2};p.emit("error");await settle();assert.equal(calls.filter(([cmd])=>cmd==="music_catalog").length,1);
+    catalog.resolve({sections:[{items:[alt]}]});await settle();assert.ok(!calls.some(([cmd,args])=>cmd==="music_stream"&&args.id===alt.id));
+    retry.reject(Error("Network unavailable"));await settle();
+    assert.equal(permissions,2);assert.equal(calls.filter(([cmd])=>cmd==="music_catalog").length,1);
+    assert.equal(calls.some(([cmd,args])=>cmd==="music_stream"&&args.id===alt.id),lastPermission);
+    if(lastPermission){assert.equal(a.src,"B");assert.equal(a.currentTime,18);assert.equal(a.paused,false);}
+  }
+});
+test("runway metadata waits for permission and is discarded on recovered buffering, skip, user pause or a terminal retry",async()=>{
+  for(const action of ["filled","skip","pause","terminal"]){
+    const track={...song(1),duration:180},alt={...track,id:song(3).id},permission=deferred(),calls=[];
+    const p=player(async(cmd,args)=>{
+      calls.push([cmd,args]);
+      if(cmd==="music_recovery_allowed")return permission.promise;
+      if(cmd==="music_catalog")return {sections:[{items:[alt]}]};
+      if(args.automatic)throw Error("HTTP 429");
+      return {url:args.id};
+    },[track,song(2)]);
+    p.ctx.autoplay=false;p.ctx.performance={now:()=>p.ctx.audio.currentTime*1000};
+    await p.playAt(0);const a=p.ctx.audio;let edge=20;a.buffered={length:1,start:()=>0,end:()=>edge};
+    for(const pos of [8,14.75,17.75]){a.currentTime=pos;p.emit("timeupdate");}
+    await settle();assert.equal(calls.at(-1)[0],"music_recovery_allowed");
+    if(action==="filled")edge=45;else if(action==="skip")await p.playAt(1);else if(action==="pause")await p.togglePlay();
+    else{a.error={code:2};p.emit("error");await settle();}
+    permission.resolve(true);await settle();
+    assert.ok(!calls.some(([cmd])=>cmd==="music_catalog"),action);
+    assert.ok(!calls.some(([cmd,args])=>cmd==="music_stream"&&args.id===alt.id),action);
+  }
+});
+test("guarded metadata may finish before the same-ID retry, but B opens only after a transient failure",async()=>{
+  const track={...song(1),duration:180},alt={...track,id:song(3).id};
+  for(const outcome of ["network","success","restricted","limited","save-data"]){
+    const retry=deferred(),calls=[];
+    const p=player(async(cmd,args)=>{
+      calls.push([cmd,args]);
+      if(cmd==="music_recovery_allowed")return true;
+      if(cmd==="music_catalog")return {sections:[{items:[alt]}]};
+      if(args.id===alt.id)return {url:"B"};
+      return args.automatic?retry.promise:{url:"initial"};
+    },[track]);
+    await p.playAt(0);const a=p.ctx.audio;a.currentTime=42.25;
+    if(outcome==="save-data")p.ctx.navigator.connection={saveData:true};
+    a.error={code:2};p.emit("error");await settle();
+    const searched=()=>calls.filter(([cmd])=>cmd==="music_catalog").length;
+    const openedB=()=>calls.filter(([cmd,args])=>cmd==="music_stream"&&args.id===alt.id).length;
+    assert.equal(searched(),outcome==="save-data"?0:1,outcome);
+    assert.equal(openedB(),0);
+    if(outcome==="success"||outcome==="save-data")retry.resolve({url:"healthy-A"});
+    else retry.reject(Error(outcome==="restricted"?"HTTP 403":outcome==="limited"?"HTTP 429":"Network unavailable"));
+    await settle();
+    assert.equal(openedB(),outcome==="network"?1:0,outcome);
+    assert.equal(searched(),outcome==="save-data"?0:1);
+    if(outcome==="network"){assert.equal(a.src,"B");assert.equal(a.currentTime,42.25);}
+  }
+});
+test("late permission cannot dispatch speculative metadata after pause, skip, a recovered retry, denial or a restriction",async()=>{
+  const track={...song(1),duration:180};
+  for(const action of ["pause","skip","success","deny","restricted"]){
+    const permission=deferred(),retry=deferred(),calls=[];
+    const p=player(async(cmd,args)=>{
+      calls.push(cmd);if(cmd==="music_recovery_allowed")return permission.promise;
+      if(cmd==="music_catalog")throw Error("Unexpected catalog");
+      return args.automatic?retry.promise:{url:args.id};
+    },[track,song(2)]);
+    await p.playAt(0);p.ctx.audio.currentTime=31;p.ctx.audio.error={code:2};p.emit("error");await settle();
+    assert.equal(calls.at(-1),"music_recovery_allowed");
+    if(action==="pause")await p.togglePlay();else if(action==="skip")await p.playAt(1);
+    else if(action==="success")retry.resolve({url:"renewed"});else if(action==="restricted")retry.reject(Error("HTTP 403"));
+    await settle();permission.resolve(action!=="deny");await settle();
+    assert.ok(!calls.includes("music_catalog"),action);
+    if(action!=="restricted")retry.resolve({url:"late"});await settle();
+  }
+});
+test("cache replay is requested only for an automatic same-ID network fault, never decoder faults, early EOF or manual playback",async()=>{
+  for(const fault of ["network","decode","unsupported","early"]){
+    const calls=[],p=player(async(cmd,args)=>{if(cmd==="music_stream")calls.push(args);return {url:"audio"+calls.length};},[song(1)]);
+    await p.playAt(0);assert.equal(calls[0].recoverFromCache,undefined);
+    const a=p.ctx.audio;a.currentTime=42;
+    if(fault==="early"){a.ended=true;p.emit("ended");}
+    else{a.error={code:{network:2,decode:3,unsupported:4}[fault]};p.emit("error");}
+    await settle();assert.equal(calls.length,2,fault);assert.equal(calls[1].recoverFromCache,fault==="network"?true:undefined,fault);
+  }
+});
+test("a successful retry starts without waiting for the local probe, and a hanging probe is bounded and reused on the next error",async()=>{
+  const track={...song(1),duration:180},local=deferred(),calls=[];
+  const p=player(async(cmd,args)=>{calls.push(cmd);return cmd==="music_recovery_allowed"?false:{url:args.automatic?"recovered-A":"primary"};},[track]);
+  const schedule=p.ctx.setTimeout;let deadline=null,scans=0;
+  p.ctx.setTimeout=(fn,ms)=>{if(ms===1500)deadline=fn;return schedule(fn,ms);};
+  p.ctx.findLocalRecording=()=>{scans++;return local.promise;};
+  await p.playAt(0);const a=p.ctx.audio;a.currentTime=26;a.error={code:2};p.emit("error");await settle();
+  assert.equal(a.paused,false);assert.equal(a.src,"recovered-A");assert.equal(a.currentTime,26);assert.equal(scans,1);
+  a.currentTime=45;p.emit("error");await settle();assert.equal(scans,1);
+  deadline();await settle();
+  assert.deepEqual(calls,["music_stream","music_stream","music_recovery_allowed"]);
+  assert.equal(p.ctx.streamLoading,false);assert.equal(p.ctx.retryPosition,45);
+  local.resolve({url:"too-late",offline:true});await settle();assert.equal(a.paused,true);assert.equal(a.src,"recovered-A");
+});
+test("the losing recovery cannot dispatch a new native stream after its asynchronous offline lookup returns",async()=>{
+  const track={...song(1),duration:180},offline=deferred(),calls=[];let lookups=0;
+  const p=player(async(cmd,args)=>{
+    calls.push(cmd);
+    if(cmd==="music_offline_source")return ++lookups===1?null:offline.promise;
+    return {url:args.id};
+  },[track]);
+  p.ctx.window={__TAURI__:{core:{convertFileSrc:x=>x}}};
+  p.ctx.findLocalRecording=async()=>({url:"local",offline:true});
+  await p.playAt(0);p.ctx.audio.currentTime=23;p.ctx.audio.error={code:2};p.emit("error");await settle();
+  assert.equal(p.ctx.audio.src,"local");offline.resolve(null);await settle();
+  assert.equal(calls.filter(cmd=>cmd==="music_stream").length,1);
+  assert.equal(p.ctx.audio.src,"local");assert.equal(p.ctx.audio.currentTime,23);
+});
+test("pause or skip during parallel local verification discards both old results",async()=>{
+  for(const action of ["pause","skip"]){
+    const track={...song(1),duration:180},remote=deferred(),local=deferred();
+    const p=player(async(_cmd,args)=>args.automatic?remote.promise:{url:args.id},[track,song(2)]);
+    p.ctx.findLocalRecording=()=>local.promise;
+    await p.playAt(0);const a=p.ctx.audio;a.currentTime=21;a.error={code:2};p.emit("error");await settle();
+    if(action==="pause")await p.togglePlay();else await p.playAt(1);
+    local.resolve({url:"old-file",offline:true});remote.resolve({url:"old-stream"});await settle();
+    assert.equal(a.src,action==="pause"?"":song(2).id);assert.equal(a.paused,action==="pause");
+    assert.equal(p.ctx.current.id,action==="pause"?track.id:song(2).id);
+  }
+});
+test("only one distinct high catalog match can recover; near versions, ambiguous answers and absence all stop",async()=>{
+  const original={...song(1),duration:180},copy={...original,id:song(3).id};
+  assert.equal(singleCatalogMatch(original,[original,copy,copy]).id,copy.id);
+  assert.equal(singleCatalogMatch(original,[{...copy,title:copy.title+" (Official Music Video)"}]),null);
+  assert.equal(singleCatalogMatch({...original,explicit:true},[{...copy,explicit:false}]),null);
+  assert.equal(singleCatalogMatch({...original,albumId:"album1"},[{...copy,albumId:"album2"}]),null);
+  assert.equal(singleCatalogMatch({...original,album:"edition one"},[{...copy,album:"edition two"}]),null);
+  for(const items of [[],[copy,{...copy,id:song(4).id}],[{...copy,title:copy.title+" (Live)"}],[{...copy,duration:192}],[{...copy,unavailable:true}]]){
+    const calls=[],p=player(async(cmd,args)=>{
+      calls.push(cmd);if(cmd==="music_recovery_allowed")return true;
+      if(cmd==="music_catalog")return {sections:[{items}]};
+      if(args.id!==original.id)throw Error("Incorrect substitute");
+      throw Error("Requested format is not available");
+    },[original]);
+    await p.playAt(0);
+    assert.deepEqual(calls,["music_stream","music_stream","music_recovery_allowed","music_catalog"]);
+    assert.equal(p.ctx.resolvedTrack,null);
+  }
+});
+test("an equivalent whose decoder cannot reach the checkpoint does not rewind or consume more retries",async()=>{
+  const original={...song(1),duration:180},alternate={...original,id:song(3).id},calls=[];
+  const p=player(async(cmd,args)=>{
+    if(cmd==="music_recovery_allowed")return true;
+    if(cmd==="music_catalog")return {sections:[{items:[alternate]}]};
+    calls.push(args.id);
+    if(args.id===original.id)throw Error("Network unavailable");
+    p.ctx.audio.duration=18;return {url:"short-alternate"};
+  },[original]);
+  await p.playAt(0,{resume:42.5});await settle();
+  assert.deepEqual(calls,[original.id,original.id,alternate.id]);
+  assert.equal(p.ctx.retryPosition,42.5);assert.equal(p.ctx.current.id,original.id);
+  assert.equal(p.ctx.resolvedTrack,null);assert.equal(p.ctx.audio.paused,true);assert.equal(p.ctx.streamLoading,false);
+});
+test("provider terminal results never search online, and a negative native guard blocks search after a generic transport failure",async()=>{
+  const original={...song(1),duration:180};
+  for(const failure of ["HTTP 403","429 rate limited","Playback verification is pending","attestation rejected","invalid music engine response","Cancelled","Network unavailable"]){
+    const calls=[],p=player(async(cmd)=>{
+      calls.push(cmd);if(cmd==="music_recovery_allowed")return false;throw Error(failure);
+    },[original]);let localLookups=0;p.ctx.findLocalRecording=async()=>{localLookups++;return null;};
+    await p.playAt(0);
+    assert.equal(localLookups,failure==="Cancelled"?0:1);
+    assert.deepEqual(calls,failure==="Network unavailable"?["music_stream","music_stream","music_recovery_allowed"]:["music_stream"]);
+  }
+});
+test("automatic approved local audio can resume at a provider denial without any catalog or alternate stream call",async()=>{
+  const original={...song(1),duration:180},calls=[],p=player(async(cmd)=>{calls.push(cmd);throw Error("HTTP 403");},[original]);
+  p.ctx.findLocalRecording=async item=>{assert.equal(item.id,original.id);return {url:"fixture-local",offline:true};};
+  await p.playAt(0,{resume:23.5});assert.equal(p.ctx.audio.src,"fixture-local");assert.equal(p.ctx.audio.currentTime,23.5);
+  assert.equal(p.ctx.resolvedOffline,true);assert.deepEqual(calls,["music_stream"]);
+  p.ctx.audio.error={code:3};p.emit("error");await settle();
+  assert.deepEqual(calls,["music_stream"]);assert.deepEqual(p.ctx.saved.sourceBindings,[]);
+});
+test("pause and a new queue selection discard a late catalog match; an explicit source or room never triggers search",async()=>{
+  const original={...song(1),duration:180},alternate={...original,id:song(3).id};
+  for(const action of ["pause","next","timeout","bound","room"]){
+    const pending=deferred(),calls=[];
+    const p=player(async(cmd,args)=>{
+      calls.push([cmd,args]);
+      if(cmd==="music_recovery_allowed")return true;
+      if(cmd==="music_catalog")return pending.promise;
+      if(args.id===song(2).id)return {url:"second"};
+      throw Error("network failure");
+    },[original,song(2)]);
+    if(action==="bound")p.ctx.saved.sourceBindings=[{trackId:original.id,source:alternate}];
+    const loading=p.playAt(0,{origin:action==="room"?"room":"manual"});await settle();
+    if(action==="bound"||action==="room"){await loading;assert.ok(!calls.some(([cmd])=>cmd==="music_catalog"));continue;}
+    assert.equal(calls.at(-1)[0],"music_catalog");
+    if(action==="pause")await p.togglePlay();else if(action==="timeout"){p.expire();await loading;}else await p.playAt(1);
+    pending.resolve({sections:[{items:[alternate]}]});await loading;
+    assert.equal(calls.some(([cmd,args])=>cmd==="music_stream"&&args.id===alternate.id),false);
+    assert.equal(p.ctx.streamLoading,false);assert.equal(p.ctx.audio.paused,action!=="next");
+  }
+});
+test("a denied song at zero offers a new publication and keeps the logical song in the queue, history, and favorites",async()=>{
+  const original={...song(1),id:"s_uxuGmhq1Q",title:"Gimme! Gimme! Gimme! (Sgt Slick's Melbourne Recut)",artists:["Sgt Slick"]};
+  const alternate={...original,id:"kAnQgluWpkc",duration:187};
+  const calls=[],p=player(async(command,args)=>{
+    calls.push([args.id,args.refresh]);
+    if(args.id===original.id)throw Error("Audio HTTP 403");
+    return {url:"working-publication"};
+  },[original,song(2)]);
+  p.ctx.saved.favorites=[original];
+  await p.playAt(0);
+  assert.deepEqual(calls,[[original.id,false]]);
+  assert.equal(p.ctx.changeSource.hidden,false);
+  p.chooseRecording(original);
+  assert.equal(p.ctx.picker.save(alternate),true);
+  await settle();
+  assert.deepEqual(calls,[[original.id,false],[alternate.id,false]]);
+  assert.equal(p.ctx.audio.paused,false);
+  assert.equal(p.ctx.changeSource.hidden,true);
+  assert.equal(p.ctx.current.id,original.id);
+  assert.deepEqual(p.ctx.queue.map(item=>item.id),[original.id,song(2).id]);
+  assert.equal(p.ctx.saved.recent[0].id,original.id);
+  assert.equal(p.ctx.saved.favorites[0].id,original.id);
+});
+test("a selected stream that fails before its first timeupdate gets one recovery at zero",async()=>{
+  const calls=[],p=player(async(_,args)=>{calls.push(args);return {url:args.refresh?"recovered":"initial"};});
+  await p.playAt(0);p.ctx.audio.error={code:2};p.emit("error");await settle();
+  assert.deepEqual(calls.map(call=>call.refresh),[false,true]);
+  assert.equal(p.ctx.audio.src,"recovered");assert.equal(p.ctx.audio.paused,false);
+  p.emit("error");await settle();assert.equal(calls.length,2);
 });
 test("a stalled first start reopens the same song once through the fresh source",async()=>{
  const calls=[];let p;
@@ -299,9 +735,112 @@ test("queue churn has a bounded preload budget and repeat wraps to the first son
   const calls=[];const p=player(async(_,args)=>{calls.push(args.id);return {url:args.id};},[song(1),song(2)]);
   await p.playAt(0);p.ctx.audio.currentTime=150;
   for(let i=2;i<=8;i++){p.ctx.queue=[song(1),song(i)];p.emit("timeupdate");await settle();}
-  assert.equal(calls.length,2);
+  assert.equal(calls.length,4); // Foreground + at most three preparations per 30 seconds.
   p.ctx.queue=[song(1),song(2)];p.ctx.repeat="all";await p.playAt(1);p.ctx.audio.currentTime=150;p.emit("timeupdate");await settle();
   assert.equal(calls.at(-1),song(1).id);await p.advance();await settle();assert.equal(p.ctx.current.id,song(1).id);
+});
+
+test('a changed queue replaces pending preparation without a stale completion clearing the new job',async()=>{
+ const pending=new Map(),warmed=[];
+ const p=player(async(_,args)=>{if(!args.preload)return {url:args.id};const d=deferred();pending.set(args.id,d);return d.promise;},[song(1),song(2),song(3)]);
+ p.ctx.decks.warm=(id)=>warmed.push(id);
+ await p.playAt(0);p.ctx.audio.currentTime=20;p.emit('timeupdate');await settle();
+ p.ctx.queue=[song(1),song(3),song(2)];p.emit('timeupdate');await settle();
+ assert(pending.has(song(3).id));
+ pending.get(song(2).id).resolve({url:song(2).id});await settle();
+ assert.equal(p.ctx.preloadPending.id,song(3).id);assert.equal(warmed.length,0);
+ pending.get(song(3).id).resolve({url:song(3).id});await settle();
+ assert.deepEqual(warmed,[song(3).id]);assert.equal(p.ctx.preloadPending,false);
+});
+
+test('a weak current buffer defers preparation until it has recovered',async()=>{
+ const calls=[];const p=player(async(_,args)=>{calls.push(args);return {url:args.id};},[song(1),song(2)]);
+ await p.playAt(0);p.ctx.audio.currentTime=20;p.ctx.audio.buffered.end=()=>23;
+ p.emit('timeupdate');await settle();assert.equal(calls.length,1);
+ p.ctx.audio.buffered.end=()=>32;p.emit('timeupdate');await settle();assert.equal(calls.length,2);
+});
+
+test('repeated stall events share one recovery deadline and preserve playback position',async()=>{
+ const calls=[];const p=player(async(cmd,args)=>{if(cmd==='music_recovery_allowed')return true;calls.push(args);return {url:args.id};});
+ await p.playAt(0);p.ctx.audio.currentTime=42;p.ctx.audio.readyState=2;
+ p.emit('waiting');const timer=p.ctx.bufferingTimer;p.emit('waiting');p.emit('stalled');assert.equal(p.ctx.bufferingTimer,timer);
+ p.expire();await settle();assert.equal(calls.length,2);assert.equal(p.ctx.audio.currentTime,42);assert.equal(p.ctx.bufferingTimer,null);
+ p.ctx.navigator.onLine=false;p.emit('waiting');p.expire();await settle();
+ assert.equal(calls.length,2);assert.equal(p.ctx.audio.currentTime,42);assert.equal(p.ctx.audio.paused,false);
+});
+
+test('temporary source lookup failures recover once and keep the requested position',async()=>{
+ const calls=[];const p=player(async(_,args)=>{calls.push(args);if(calls.length===1)throw Error('Network connection reset');return {url:'fresh'};});
+ await p.playAt(0,{resume:63});assert.equal(calls.length,2);assert.equal(calls[1].refresh,true);
+ assert.equal(p.ctx.audio.src,'fresh');assert.equal(p.ctx.audio.currentTime,63);assert.equal(p.ctx.audio.paused,false);
+ const outage=[];const q=player(async(_,args)=>{outage.push(args);throw Error('Network unavailable');});
+ await q.playAt(0,{resume:63});assert.equal(outage.length,2);assert.equal(q.ctx.retryPosition,63);assert.equal(q.ctx.streamLoading,false);
+});
+
+test('an empty mid-track buffer recovers promptly but fresh bytes or a seek keep the original source',async()=>{
+  for(const state of ['empty','refilled','seek']){
+    const calls=[],p=player(async(cmd,args)=>{calls.push(cmd);return cmd==='music_recovery_allowed'?true:{url:'track'};});
+    await p.playAt(0);const a=p.ctx.audio;a.currentTime=31;a.readyState=2;
+    let end=31, delay, fire;
+    a.buffered.end=()=>end;
+    p.ctx.setTimeout=(fn,ms)=>{delay=ms;fire=fn;return 1;};
+    p.emit('waiting');assert.equal(delay,2500);p.emit('stalled');
+    if(state==='refilled'){end=34;a.readyState=4;}
+    if(state==='seek')a.seeking=true;
+    fire();await settle();
+    assert.equal(calls.filter(c=>c==='music_stream').length,state==='empty'?2:1);
+    assert.equal(a.currentTime,31);
+  }
+});
+
+test('source recovery never retries restrictions, verification, cancellation or offline playback',async()=>{
+ for(const message of ['HTTP 403','YouTube rate limit 429','Playback verification is pending','Cancelled']){
+  let calls=0;const p=player(async()=>{calls++;throw Error(message);});await p.playAt(0);assert.equal(calls,1,message);
+ }
+ let calls=0;const p=player(async()=>{calls++;throw Error('Network unavailable');});p.ctx.navigator.onLine=false;
+ await p.playAt(0);assert.equal(calls,0);assert.equal(p.ctx.recoveryUsed,false);
+});
+
+test('a recovered decoder is not restarted by an obsolete buffering deadline',async()=>{
+ const calls=[];const p=player(async(cmd,args)=>{if(cmd==='music_recovery_allowed')return true;calls.push(args);return {url:'audio'};});
+ await p.playAt(0);p.ctx.audio.currentTime=42;p.ctx.audio.readyState=2;p.emit('waiting');
+ p.ctx.audio.currentTime=46;p.ctx.audio.readyState=4;p.expire();await settle();
+ assert.equal(calls.length,1);assert.equal(p.ctx.audio.paused,false);assert.equal(p.ctx.audio.currentTime,46);
+ p.ctx.audio.readyState=2;p.emit('waiting');p.expire();await settle();
+ assert.equal(calls.length,2);assert.equal(p.ctx.audio.currentTime,46);
+});
+
+test('a temporary stall keeps the decoder when the installed worker cannot recover or the buffer refills during the check',async()=>{
+ for(const resumed of [false,true]){
+  const guard=deferred(),calls=[];
+  const p=player(async(cmd)=>{calls.push(cmd);return cmd==='music_recovery_allowed'?guard.promise:{url:'original'};});
+  await p.playAt(0);
+  const a=p.ctx.audio;a.currentTime=32;a.readyState=2;a.buffered.end=()=>32;
+  p.emit('waiting');p.expire();await settle();
+  if(resumed){a.currentTime=33;a.readyState=4;p.emit('playing');}
+  guard.resolve(resumed);await settle();
+  assert.deepEqual(calls,['music_stream','music_recovery_allowed']);assert.equal(a.src,'original');assert.equal(a.paused,false);
+  if(!resumed){a.currentTime=33;a.readyState=4;p.emit('playing');}
+  assert.equal(a.currentTime,33);assert.equal(p.ctx.bufferingTimer,null);
+ }
+});
+
+test('transient preparation retries after a cooldown at most once per candidate',async()=>{
+ let now=10000,attempts=0;const p=player(async(_,args)=>{if(args.preload){attempts++;throw Error('Network connection reset');}return {url:'audio'};},[song(1),song(2)]);
+ p.ctx.Date=class extends Date{static now(){return now;}};
+ await p.playAt(0);p.ctx.audio.currentTime=20;p.preloadNext();await settle();assert.equal(attempts,1);
+ now+=4999;p.preloadNext();await settle();assert.equal(attempts,1);
+ now++;p.preloadNext();await settle();assert.equal(attempts,2);
+ now+=60000;for(let i=0;i<20;i++)p.preloadNext();await settle();assert.equal(attempts,2);
+ assert.equal(p.ctx.audio.paused,false);assert.equal(p.ctx.message,'');
+});
+
+test('pausing during preparation does not prevent warming after resume',async()=>{
+ const pending=deferred();let attempts=0,warmed=0;
+ const p=player(async(_,args)=>{if(args.preload){attempts++;return attempts===1?pending.promise:{url:'next'};}return {url:'audio'};},[song(1),song(2)]);
+ p.ctx.decks.warm=()=>{warmed++;};await p.playAt(0);p.ctx.audio.currentTime=20;p.preloadNext();await settle();
+ p.ctx.audio.pause();pending.resolve({url:'next'});await settle();assert.equal(warmed,0);
+ await p.ctx.audio.play();p.preloadNext();await settle();assert.equal(warmed,1);assert.equal(attempts,2);
 });
 
 test("repeat one repeats on natural completion but a manual skip advances",async()=>{
@@ -351,7 +890,7 @@ test("manual navigation is neutral while recommendation Next creates only tempor
   const captureCode=source.slice(source.indexOf("  function captureListening("),source.indexOf("  function plannedNext("));
   for(const automatic of [false,true]){
     const p=player(async(_,args)=>({url:args.id}),[song(1),song(2)]);await p.playAt(0);
-    Object.assign(p.ctx,{statsSession:null,statsSeconds:0,statsCounted:false,weekly:{record(){}}});
+    Object.assign(p.ctx,{librarySidebar:null,statsSession:null,statsSeconds:0,statsCounted:false,weekly:{record(){}}});
     p.ctx.captureListening=runInNewContext(`(()=>{${captureCode};return captureListening;})()`,p.ctx);
     p.ctx.playbackOrigin=automatic?"recommendation":"manual";p.ctx.clock.seconds=5;
     await p.advance(true);await settle();
@@ -449,7 +988,7 @@ test("a failed offline lookup falls back online only when connected and retains 
     const calls=[],p=player(async command=>{calls.push(command);if(command==="music_offline_source")throw Error("Local lookup failed");throw Error("Network unavailable");});
     p.ctx.window.__TAURI__={core:{convertFileSrc:path=>`asset:${path}`}};p.ctx.navigator.onLine=online;
     await p.playAt(0);
-    assert.deepEqual(calls,online?["music_offline_source","music_stream"]:["music_offline_source"]);
+    assert.deepEqual(calls,online?["music_offline_source","music_stream","music_offline_source","music_stream"]:["music_offline_source"]);
     assert.equal(p.ctx.audio.paused,true);assert.equal(p.ctx.current.id,song(1).id);
     if(online)assert.equal(p.ctx.message,"Music could not connect. Check your connection and proxy settings, then retry.");
   }
@@ -528,6 +1067,47 @@ test("the source picker never treats a chosen slowed recording's longer duration
   await p.playAt(0);p.ctx.audio.duration=260;p.chooseRecording(logical);
   assert.equal(p.ctx.picker.item.duration,200);assert.equal(p.ctx.picker.save(replacement),true);await settle();
   assert.equal(p.ctx.saved.sourceBindings[0].track.duration,200);assert.equal(p.ctx.saved.sourceBindings[0].source.duration,205);assert.equal(logical.duration,200);
+});
+
+test("choosing an online recording with matching credits, version and duration resumes the same queue item",async()=>{
+  const item={...song(1),duration:180},alternate={...item,id:song(99).id};
+  const p=player(async(_,args)=>({url:args.id}),[item,song(2)]);
+  await p.playAt(0);
+  p.ctx.audio.duration=47; // The decoder saw only the opening fragment.
+  p.ctx.retryPosition=42.25;p.ctx.needsRefresh=true;p.ctx.resolvedTrack=null;
+  p.ctx.audio.pause();p.ctx.audio.removeAttribute("src");p.ctx.audio.load();
+  p.chooseRecording(item);
+  assert.equal(p.ctx.picker.item.duration,180);
+  assert.equal(p.ctx.picker.save(alternate),true);await settle();
+  assert.equal(p.ctx.audio.src,alternate.id);assert.equal(p.ctx.audio.currentTime,42.25);
+  assert.equal(p.ctx.audio.paused,false);assert.equal(p.ctx.current.id,item.id);assert.equal(p.ctx.queue.length,2);
+  p.chooseRecording(item);
+  p.ctx.endSource.duration=260;
+  p.ctx.recoveryUsed=true;
+  assert.equal(p.ctx.picker.save({...alternate,id:song(98).id,title:item.title+" (Slowed)"}),true);await settle();
+  assert.equal(p.ctx.audio.currentTime,0);
+  assert.notEqual(p.ctx.endSource.duration,260);
+  assert.equal(p.ctx.recoveryUsed,false);
+});
+
+test("confirming an exact local copy in the picker resumes the failed song without contacting the catalog",async()=>{
+  const song1={...song(1),duration:180},calls=[];
+  const p=player(async(command,args)=>{
+    calls.push([command,args]);
+    if(command==="music_local_exact")return "D:/test/owned.flac";
+    if(command==="music_offline_source")return null;
+    if(command==="music_stream")throw Error("Playback restricted: YouTube denied access to the audio.");
+    throw Error("Unexpected command "+command);
+  },[song1,song(2)]);
+  p.ctx.window={__TAURI__:{core:{convertFileSrc:path=>"asset:"+path}}};
+  await p.playAt(0,{resume:43});calls.length=0;
+  p.chooseRecording(song1);
+  const copy={...song1,id:"local:"+"b".repeat(64),contentHash:"a".repeat(64)};
+  assert.equal(await p.ctx.picker.local.save(copy),true);await settle();
+  assert.equal(p.ctx.audio.src,"asset:D:/test/owned.flac");assert.equal(p.ctx.audio.currentTime,43);
+  assert.equal(p.ctx.audio.paused,false);assert.equal(p.ctx.current.id,song1.id);assert.equal(p.ctx.queue.length,2);
+  assert.deepEqual(calls.map(([command])=>command),["music_local_exact","music_local_exact"]);
+  assert.equal(p.ctx.picker.local.choice().hash,copy.contentHash);
 });
 
 test("restoring a different source while extraction is pending rejects the old result without changing the manual queue",async()=>{
@@ -610,4 +1190,25 @@ test("a deleted interest or cleared privacy context cannot be resurrected by an 
     if(reset==="deleted")p.ctx.saved.interestMixes=[];else{p.clearRecommendationContext();assert.equal(snapshot.sourceContext,undefined);assert.equal(snapshot.contextItems,undefined);}
     await p.resumeListening(snapshot);assert.equal(p.ctx.current.id,seed.id);assert.equal(p.ctx.playbackSourceContext.kind,"resume",reset);assert.equal(p.ctx.playbackSourceContext.id,"");
   }
+});
+
+ test('preparing a paused source is not reported as playing, and a real pause preserves its buffer',async()=>{
+ const p=player(async()=>({url:'fixture'}));
+ await p.playAt(0,{autoplay:false});
+ assert.equal(p.ctx.audio.paused,true);
+ assert(!p.ctx.diagnostics.snapshot().some(event=>event.stage==='playing'));
+ await p.togglePlay();
+ assert(p.ctx.diagnostics.snapshot().some(event=>event.stage==='playing'&&event.code==='success'));
+ await p.togglePlay();assert.equal(p.ctx.audio.paused,true);
+ assert.equal(p.ctx.lastCancellation.preserve,true);
+ });
+
+test('Cinema handoff releases music and resume resolves a fresh source at the saved position',async()=>{
+ let count=0;const p=player(async()=>({url:'source-'+(++count)}));
+ await p.playAt(0);p.ctx.audio.currentTime=42;
+ p.yieldToOtherMedia();assert.equal(p.ctx.audio.paused,true);
+ assert.equal(p.ctx.resolvedTrack,null);assert.equal(p.ctx.retryPosition,42);
+ assert.equal(p.ctx.lastCancellation.preserve,false);
+ await p.togglePlay();assert.equal(count,2);assert.equal(p.ctx.audio.src,'source-2');
+ assert.equal(p.ctx.audio.currentTime,42);assert.equal(p.ctx.audio.paused,false);
 });

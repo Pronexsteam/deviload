@@ -4,6 +4,7 @@ import {playlistCover} from "./music-library-model.js";
 import {musicGain} from "./music-volume.js";
 import {sanitizeInterestMixes} from "./music-interest-mixes.js";
 import {safeArtworkUrl} from "./music-artwork.js";
+import {isMusicTrackId,isLocalMusicId} from './music-track-id.js';
 
 export const PROFILE_KEY="deviload-music-profile-v1";
 const encoder=new TextEncoder(),idPattern=/^[\w-]{11}$/;
@@ -12,24 +13,34 @@ const bytes=text=>encoder.encode(text).length;
 const fail=()=>{throw Error("Invalid music profile.");};
 // Bound serialized text, including JSON escapes, rather than trusting metadata length.
 function text(value,limit){
+  const clean=String(value||"").replace(/[\u0000-\u001f\u007f]/g,"").trim();
+  // Most library metadata already fits. Measure the complete JSON string once,
+  // instead of allocating an encoder buffer for every character on each save.
+  // The length guard keeps oversized input on the bounded truncation path.
+  if(clean.length<=limit&&bytes(JSON.stringify(clean))-2<=limit)return clean;
   let result="",size=0;
-  for(const char of String(value||"").replace(/[\u0000-\u001f\u007f]/g,"").trim()){
+  for(const char of clean){
     size+=bytes(JSON.stringify(char))-2;if(size>limit)break;result+=char;
   }
   return result;
 }
-function item(value){
-  if(!object(value)||value.kind!=="song"||typeof value.id!=="string"||!idPattern.test(value.id)||typeof value.title!=="string"||!value.title.trim())fail();
-  const image=safeArtworkUrl(value.image);
-  return {id:value.id,kind:"song",title:text(value.title,240),subtitle:text(value.subtitle,180),
+function metadata(value){
+  if(typeof value.title!=="string"||!value.title.trim())fail();
+  const image=!value.image&&value.kind==="song"&&idPattern.test(value.id)
+    ? `https://i.ytimg.com/vi/${value.id}/hqdefault.jpg` : safeArtworkUrl(value.image);
+  return {id:value.id,kind:value.kind,title:text(value.title,240),subtitle:text(value.subtitle,180),
     artists:[...new Set((Array.isArray(value.artists)?value.artists:[]).filter(name=>typeof name==="string").map(name=>text(name,80)).filter(Boolean))].slice(0,4),image,
+    ...(isLocalMusicId(value.id)&&value.album?{album:text(value.album,240)}:{}),
     ...(Number.isFinite(value.duration)&&value.duration>0&&value.duration<=86400?{duration:value.duration}:{})};
+}
+function item(value){
+  if(!object(value)||value.kind!=="song"||!isMusicTrackId(value.id))fail();
+  return metadata(value);
 }
 export const sanitizeMusicTrack=item;
 export function sanitizeMusicCollection(value){
   if(!object(value)||!['album','artist','playlist'].includes(value.kind)||typeof value.id!=="string"||! /^(MPRE|UC|VL)[\w-]{1,156}$/.test(value.id))fail();
-  const track=item({...value,kind:"song",id:"___________"});
-  return {...track,id:value.id,kind:value.kind};
+  return metadata(value);
 }
 function collections(values=[]){
   if(!Array.isArray(values)||values.length>200)fail();
@@ -56,7 +67,7 @@ function sourceBindings(values=[],strict=false){
   const seen=new Set();return values.map(value=>{
     if(!object(value)||typeof value.trackId!=="string"||!idPattern.test(value.trackId)||seen.has(value.trackId))fail();
     seen.add(value.trackId);const source=item(value.source);
-    if(source.id===value.trackId)fail();
+    if(source.id===value.trackId||!idPattern.test(source.id))fail();
     const track=value.track===undefined?null:item(value.track);if(track&&track.id!==value.trackId)fail();
     return {trackId:value.trackId,source,...(track?{track}:{})};
   });
@@ -76,7 +87,7 @@ function normalize(saved,taste,strict=false){
   }
   if(!Array.isArray(taste.hiddenSongs)||!Array.isArray(taste.blockedArtists)||
     (strict&&(taste.hiddenSongs.length>500||taste.blockedArtists.length>300)))fail();
-  const hiddenSongs=[...new Set(taste.hiddenSongs.filter(id=>typeof id==="string"&&idPattern.test(id)))].slice(0,500);
+  const hiddenSongs=[...new Set(taste.hiddenSongs.filter(isMusicTrackId))].slice(0,500);
   const blockedArtists=[...new Set(taste.blockedArtists.filter(name=>typeof name==="string").map(name=>text(name,160).toLocaleLowerCase()).filter(Boolean))].slice(0,300);
   if(!["balanced","familiar","discovery"].includes(taste.mode))fail();
   const lists=playlists(saved.playlists,strict);
@@ -87,14 +98,14 @@ function normalize(saved,taste,strict=false){
 }
 export function exportMusicProfile(saved,taste){
   const profile=normalize(saved,taste);
-  const result=JSON.stringify({format:"devil-music-profile",version:2,...profile});
+  const result=JSON.stringify({format:"devil-music-profile",version:3,...profile});
   return result;
 }
 export function importMusicProfile(source){
   if(typeof source!=="string")fail();
   let raw;try{raw=JSON.parse(source);}catch{fail();}
   if(!object(raw)||raw.format!=="devil-music-profile")fail();
-  if(![1,2].includes(raw.version))throw Error("This music profile version is not supported.");
+  if(![1,2,3].includes(raw.version))throw Error("This music profile version is not supported.");
   return normalize(raw.saved,raw.taste,true);
 }
 export function saveMusicProfile(storage,saved,taste){

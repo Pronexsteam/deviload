@@ -15,8 +15,11 @@ body .active .music-equalizer.picture-disc,body .music-now-info .music-equalizer
 body .music-equalizer.picture-disc .picture-disc-rotor::after{opacity:.16}
 /* The rim needs its own gutter; the workspace clips horizontal overflow. */
 :root body #devil-music #music-home-hero.music-listening-hero{padding:26px 14px 30px;gap:22px;box-sizing:border-box}
-body .picture-disc::before{background:conic-gradient(from 20deg,transparent 0deg,#edfdf518 30deg,#f4fff35c 55deg,transparent 84deg,transparent 188deg,#d9eee935 231deg,transparent 270deg);box-shadow:inset 0 0 0 1px #d4e4da55,inset 0 0 10px #0004}
-body .picture-disc::after{background:radial-gradient(circle,#030707 0 48%,#6e817a 53%,#c9d7cc 62%,#263a32 72%,#080d0d 80%);box-shadow:inset 0 1px 2px #000,0 0 0 1px #d3dcd580,0 0 9px #d3eddf40}
+/* Match the native player's neutral studio material: restrained fixed reflection,
+   pressed centre and depth instead of a glowing spindle or coloured chrome. */
+body .picture-disc{background:#111316;box-shadow:0 0 0 1px #79838a60,0 0 0 3px #111316,0 5px 12px #0006}
+body .picture-disc::before{background:conic-gradient(from 20deg,transparent 0deg,#d9e2e70b 30deg,#d9e2e723 55deg,transparent 84deg,transparent 188deg,#d9e2e716 231deg,transparent 270deg),radial-gradient(circle,transparent 0 15%,#6d778027 15.5%,transparent 17%);box-shadow:inset 0 0 0 1px #a6afb52b,inset 0 0 10px #0004}
+body .picture-disc::after{background:radial-gradient(circle,#08090c 0 58%,#a7adb1 62%,#30363b 70%,#08090c 80%);box-shadow:inset 0 1px 2px #000,0 0 0 1px #a7adb140}
 body .music-dock .music-now-art[role="button"]{width:56px;height:56px;margin:3px 5px;overflow:visible;border-radius:50%;flex:none}
 body .music-dock .music-now-art>.music-art{display:none}
 body .music-dock-disc{display:none}

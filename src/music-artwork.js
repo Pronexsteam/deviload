@@ -1,4 +1,6 @@
+import {localArtworkUrl} from './music-track-id.js';
 export function safeArtworkUrl(raw){
+ if(localArtworkUrl(raw))return raw;
  if(typeof raw!=='string'||raw.length>2048||/[\u0000-\u0020\u007f]/.test(raw))return '';
  let url;try{url=new URL(raw);}catch{return '';}
  if(url.protocol!=='https:'||url.username||url.password||url.port||!['i.ytimg.com','lh3.googleusercontent.com','yt3.googleusercontent.com'].includes(url.hostname))return '';
@@ -15,6 +17,7 @@ export function applyBrowseArtwork(item,sections,artwork,id){
 }
 export function artworkCandidates(raw,size=320){
  if(!safeArtworkUrl(raw))return [];
+ if(localArtworkUrl(raw))return [globalThis.window?.__TAURI__?.core?.convertFileSrc?.(raw.split('/').at(-1),'music-art')||raw];
  const url=new URL(raw);
  const target=Math.max(64,Math.min(1024,Number.isFinite(size)?Math.ceil(size):320));
  let preferred=raw;
@@ -31,12 +34,26 @@ export function artworkCandidates(raw,size=320){
 
 // Configure lazy decoding before assigning src, so an offscreen shelf cannot
 // start eager requests merely while its image nodes are being constructed.
+// Remember successful fallback choices briefly, not decoded images. Returning
+// to a virtualized row need not retry a missing large cover, while a temporary
+// provider error can never permanently lower artwork quality.
+const fallbackChoices=new Map(),fallbackLifetime=60_000,fallbackLimit=256;
 export function loadArtwork(img,raw,size=320){
- const urls=artworkCandidates(raw,size);if(!urls.length)return false;
+ let urls=artworkCandidates(raw,size);if(!urls.length)return false;
+ const preferred=urls[0],cached=fallbackChoices.get(preferred);
+ if(cached&&cached.until>Date.now()&&urls.includes(cached.url))urls=[cached.url,...urls.filter(url=>url!==cached.url)];
+ else fallbackChoices.delete(preferred);
  let index=0;
  img.alt='';img.loading='lazy';img.decoding='async';
- const fallback=()=>{if(index+1<urls.length)img.src=urls[++index];else img.remove();};
+ const fallback=()=>{if(index+1<urls.length)img.src=urls[++index];else {fallbackChoices.delete(preferred);img.remove();}};
  img.addEventListener('error',fallback);
- img.addEventListener('load',()=>{if(size>480&&index+1<urls.length&&img.naturalWidth<=120)fallback();});
+ img.addEventListener('load',()=>{
+  if(size>480&&index+1<urls.length&&img.naturalWidth<=120){fallback();return;}
+  fallbackChoices.delete(preferred);
+  if(urls[index]!==preferred){
+   fallbackChoices.set(preferred,{url:urls[index],until:cached?.url===urls[index]&&cached.until>Date.now()?cached.until:Date.now()+fallbackLifetime});
+   if(fallbackChoices.size>fallbackLimit)fallbackChoices.delete(fallbackChoices.keys().next().value);
+  }
+ });
  img.src=urls[0];return true;
 }

@@ -1,3 +1,4 @@
+import {artworkCandidates} from './music-artwork.js';
 // The main window and mini-player render the same bounded audio envelope.
 export function paintAmbient(lights,levels){
   lights.forEach((light,i)=>{
@@ -7,6 +8,6 @@ export function paintAmbient(lights,levels){
   });
 }
 export function ambientArtwork(source){
-  try{const url=new URL(source);if(url.protocol==='https:'&&!url.username&&!url.password&&['i.ytimg.com','lh3.googleusercontent.com','yt3.googleusercontent.com'].includes(url.hostname))return `url(${JSON.stringify(url.href)})`;}catch{}
+  const url=artworkCandidates(source,640)[0];if(url)return `url(${JSON.stringify(url)})`;
   return 'none';
 }

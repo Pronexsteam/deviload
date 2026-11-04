@@ -1,6 +1,7 @@
 import {t} from "./i18n.js";
 import {tracks,reorderTrack} from "./music-state.js";
 import {movePlaylistTracks,transferPlaylistTracks,duplicateGroups} from "./music-library-model.js";
+import {playlistArtwork} from "./music-playlist-art.js";
 
 export function createMusicLibrary({saved,commit,onOpen,notify,button,cover}){
   saved.playlists??=[];
@@ -31,7 +32,7 @@ export function createMusicLibrary({saved,commit,onOpen,notify,button,cover}){
       const descriptionLabel=el("label","",t("Description")),description=el("textarea","");description.maxLength=300;description.rows=3;description.value=existing?.description||"";descriptionLabel.append(description);
       let artwork=existing?.cover||"";
       const image=el("input","");image.type="file";image.accept="image/png,image/jpeg,image/webp";image.hidden=true;
-      const preview=el("div","music-playlist-edit-art");const redraw=()=>{preview.replaceChildren();if(artwork){const img=el("img","");img.src=artwork;img.alt="";preview.append(img);}else preview.append(cover(existing?.items[0]));};redraw();
+      const preview=el("div","music-playlist-edit-art");const redraw=()=>{preview.replaceChildren(playlistArtwork({name:existing?.name||"",items:existing?.items,cover:artwork},cover,160));};redraw();
       const upload=button(t("Choose cover"),null,()=>image.click(),"outline small"),reset=button(t("Use track artwork"),null,()=>{artwork="";redraw();},"quiet small"),imageStatus=el("p","");imageStatus.setAttribute("role","status");
       image.addEventListener("change",async()=>{const file=image.files[0];image.value="";if(!file)return;upload.disabled=true;submit.disabled=true;try{if(file.size>8*1024*1024||!/^image\/(png|jpeg|webp)$/.test(file.type))throw Error(t("Choose a PNG, JPEG or WebP image up to 8 MB."));const bitmap=await createImageBitmap(file);try{const canvas=document.createElement("canvas");canvas.width=canvas.height=320;const size=Math.min(bitmap.width,bitmap.height);canvas.getContext("2d").drawImage(bitmap,(bitmap.width-size)/2,(bitmap.height-size)/2,size,size,0,0,320,320);const value=canvas.toDataURL("image/webp",.75);if(value.length>110000)throw Error(t("This cover is too detailed. Choose a smaller image."));artwork=value;redraw();imageStatus.textContent="";}finally{bitmap.close();}}catch(error){imageStatus.textContent=error.message;}finally{upload.disabled=false;submit.disabled=false;}});
       const artworkActions=el("div","setting-actions");artworkActions.append(upload,reset,image);form.append(preview,artworkActions,imageStatus);
@@ -76,7 +77,7 @@ export function createMusicLibrary({saved,commit,onOpen,notify,button,cover}){
       const actions=el("div","music-library-actions");actions.append(button(t("Cancel"),null,close,"quiet small"),button(t("Delete playlist"),null,()=>{if(update(saved.playlists.filter(value=>value.id!==id))){close();onOpen(null);}},"music-primary"));body.append(actions);
     });
   }
-  function artwork(list){const art=el("div","music-playlist-art");if(list.cover){const img=el("img","");img.src=list.cover;img.alt="";art.append(img);}else{for(const item of list.items.slice(0,4))art.append(cover(item));if(!list.items.length)art.append(el("span","music-typographic-cover",list.name));}return art;}
+  function artwork(list){return playlistArtwork(list,cover);}
   function removeTracks(id,ids){const chosen=new Set(ids);if(update(saved.playlists.map(list=>list.id===id?{...list,items:list.items.filter(item=>!chosen.has(item.id))}:list))){onOpen(id);notify(t("Tracks removed. You can undo this change."));return true;}return false;}
   function transfer(id,ids,move){dialog(move?t("Move to playlist"):t("Copy to playlist"),(body,close)=>{const targets=saved.playlists.filter(list=>list.id!==id);if(!targets.length)body.append(el("p","",t("Create another playlist first.")));for(const list of targets)body.append(button(list.name,null,()=>{if(update(transferPlaylistTracks(saved.playlists,id,list.id,ids,move))){close();onOpen(id);notify(t("Playlist updated."));}},"music-playlist-choice"));});}
   function duplicates(id){const groups=duplicateGroups(find(id)?.items||[]);dialog(t("Review similar tracks"),(body,close)=>{if(!groups.length){body.append(el("p","",t("No similar duplicates found.")));return;}body.append(el("p","",t("Tracks with matching titles and artists may be different versions. Select only the copies you want to remove.")));const selected=new Set();for(const group of groups){const section=el("div","music-duplicate-group");section.append(el("strong","",group[0].title));for(const item of group){const label=el("label","");const box=el("input","");box.type="checkbox";box.addEventListener("change",()=>box.checked?selected.add(item.id):selected.delete(item.id));label.append(box,el("span","",item.subtitle||item.title),cover(item));section.append(label);}body.append(section);}body.append(button(t("Remove selected"),null,()=>{if(selected.size){if(removeTracks(id,[...selected]))close();}},"music-primary"));});}

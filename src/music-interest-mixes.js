@@ -1,10 +1,11 @@
 import {tracks} from "./music-state.js";
+import {isMusicTrackId} from './music-track-id.js';
 import {canonicalArtistKey,tasteArtistKeys,recommendWithReasons,familiarArtistKeys} from "./music-taste.js";
 
 export const MAX_INTEREST_MIXES=8,MAX_INTEREST_PLAYLISTS=8;
 const MAX_BASE_MEMBERS=500,MAX_LEARNED=100,MAX_MEMBERS=MAX_BASE_MEMBERS+MAX_LEARNED,MAX_ENTRIES=1000,MAX_CANDIDATES=5000,NAME_BYTES=160,CLOCK_SKEW=5*60000;
 const id=value=>typeof value==="string"&&/^[-\w]{1,64}$/.test(value);
-const songId=value=>typeof value==="string"&&/^[\w-]{11}$/.test(value);
+const songId=isMusicTrackId;
 const object=value=>value!==null&&typeof value==="object"&&!Array.isArray(value);
 const finite=value=>Number.isFinite(value)?value:0;
 const clean=items=>tracks(Array.isArray(items)?items.slice(0,MAX_MEMBERS):[]);

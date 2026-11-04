@@ -34,14 +34,14 @@ test("an older home personalization cannot replace a newer taste choice",async()
   const code=source.slice(source.indexOf("  function resetPublicDiscovery("),source.indexOf("  function recommendationOptions("))+
     source.slice(source.indexOf("  async function personalize("),source.indexOf("  function prepareHomeSelection("));
   const old=deferred(),fresh=deferred(),rendered=[],ctx={
-    personalization:0,request:1,queue:[],saved:{favorites:[song(1)],recent:[],collections:[],playlists:[],sourceBindings:[],interestMixes:[]},taste:readTaste(),
+    personalization:0,recommendationRevision:0,homeRefreshRevision:-1,homeSeedRotation:0,request:1,queue:[],saved:{favorites:[song(1)],recent:[],collections:[],playlists:[],sourceBindings:[],interestMixes:[]},taste:readTaste(),
     current:null,playbackContext:[],playbackSourceContext:{kind:"manual"},followedCursor:0,privateSession:false,discoveryCandidates:[],sections:[],recommendationSession:createRecommendationSession(),
     recommendationReasons:new Map(),captureListening(){},tasteSeeds,tracks,canonicalArtistKey,createRecordingView,
     radio:seed=>seed.id===song(1).id?old.promise:fresh.promise,invoke(){throw Error("no artist request expected");},
     mergeRecommendationPools,recommendWithReasons,rankMusicRecommendations,recommendationOptions:()=>({random:()=>.5}),homeSections:(_,items)=>items,
     render(){rendered.push(ctx.sections.map(item=>item.id));},prepareHomeSelection(){},language:()=>"en",t:s=>s
   };
-  Object.assign(ctx,{publicDiscovery:{candidates:async()=>[],clear(){}},publicGeneration:0,sourceRevision:0,navigator:{},resolveRecordingSource,view:"home",lastQuery:{kind:"home"}});
+  Object.assign(ctx,{publicDiscovery:{candidates:async()=>[],clear(){}},nextHomeCandidates:[],publicGeneration:0,sourceRevision:0,navigator:{},resolveRecordingSource,view:"home",lastQuery:{kind:"home"}});
   const personalize=runInNewContext(`(()=>{${code};return personalize;})()`,ctx);
   const first=personalize(1,[]);await settle();ctx.saved.favorites=[song(2)];
   const second=personalize(1,[]);await settle();fresh.resolve([song(4)]);await second;

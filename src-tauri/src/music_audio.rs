@@ -1,6 +1,6 @@
 use rand::RngCore;
 use reqwest::{blocking::Client, header::{HeaderMap, HeaderValue, USER_AGENT}};
-use std::{collections::HashMap, io::{Read, Write}, net::{TcpListener, TcpStream}, sync::{Arc, Mutex, OnceLock, atomic::{AtomicBool, AtomicUsize, Ordering}}, thread, time::{Duration, Instant}};
+use std::{collections::HashMap, io::{Read, Write}, net::{TcpListener, TcpStream}, sync::{Arc, Mutex, OnceLock, atomic::{AtomicBool, AtomicUsize, Ordering}}, thread, time::{Duration, Instant, SystemTime}};
 
 const CHUNK: u64 = 512 * 1024;
 // Verify a small opening buffer; keep later transfers large for efficiency.
@@ -15,13 +15,26 @@ const STREAM_LIFETIME: Duration = Duration::from_secs(3600);
 pub enum SourceError { Limited, Denied, Network, Invalid }
 impl std::fmt::Display for SourceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(if *self == Self::Limited { "YouTube is temporarily limiting playback. Try again later." } else { "Could not open this track" })
+        f.write_str(match self {
+            Self::Limited => "YouTube is temporarily limiting playback. Try again later.",
+            Self::Denied => "Playback restricted: YouTube denied access to the audio. Try another track.",
+            Self::Network => "Audio network request failed",
+            Self::Invalid => "Unsupported audio response",
+        })
     }
 }
 impl std::error::Error for SourceError {}
 
 #[derive(Default)]
 pub struct PlaybackLimit { until: Mutex<Option<Instant>> }
+pub(crate) fn retry_after_seconds(value:&str, now:SystemTime) -> Option<u64> {
+    let value=value.trim();
+    if !value.is_empty() && value.bytes().all(|c|c.is_ascii_digit()) {
+        return Some(value.parse().unwrap_or(u64::MAX));
+    }
+    let delay=httpdate::parse_http_date(value).ok()?.duration_since(now).unwrap_or_default();
+    Some(delay.as_secs()+u64::from(delay.subsec_nanos()!=0))
+}
 impl PlaybackLimit {
     pub fn active(&self) -> bool { self.until.lock().unwrap().is_some_and(|until| Instant::now() < until) }
     pub fn note(&self, seconds: Option<u64>) {
@@ -40,6 +53,7 @@ pub struct Source {
     chunks: Mutex<Vec<(u64, Vec<u8>)>>,
     fetch_lock: Mutex<()>,
     failed: Mutex<Option<SourceError>>,
+    music_id:Option<String>,
     limit: Arc<PlaybackLimit>,
     available_at: Option<Instant>,
     cancelled: AtomicBool,
@@ -88,7 +102,7 @@ impl Source {
         let client = builder.build().map_err(|_| "Could not open this track")?;
         let mut headers = HeaderMap::new();
         headers.insert(USER_AGENT, HeaderValue::from_str(agent).map_err(|_| "Could not open this track")?);
-        Ok(Self { url, size, mime, client, headers, chunks: Mutex::new(Vec::new()), fetch_lock: Mutex::new(()), failed: Mutex::new(None), limit, available_at: None, cancelled:AtomicBool::new(false) })
+        Ok(Self { url, size, mime, client, headers, chunks: Mutex::new(Vec::new()), fetch_lock: Mutex::new(()), failed: Mutex::new(None),music_id:None,limit, available_at: None, cancelled:AtomicBool::new(false) })
     }
 
     pub fn with_availability(mut self, timestamp: Option<u64>) -> Self {
@@ -99,7 +113,18 @@ impl Source {
         self
     }
 
+    pub fn with_music_id(mut self,id:&str)->Self{self.music_id=Some(id.to_owned());self}
     pub fn failed(&self) -> bool { self.failed.lock().unwrap().is_some() }
+    pub fn fully_buffered(&self) -> bool {
+        if self.size==0 || self.cancelled.load(Ordering::Relaxed) {return false;}
+        let chunks=self.chunks.lock().unwrap();
+        let mut next=0;
+        while next<self.size {
+            let Some((_,bytes))=chunks.iter().find(|(offset,bytes)|*offset==next && !bytes.is_empty()) else{return false;};
+            next+=bytes.len() as u64;
+        }
+        next==self.size
+    }
 
     pub fn reusable(&self, age: Duration) -> bool {
         if self.failed() || age>=Duration::from_secs(3600) { return false; }
@@ -140,9 +165,20 @@ impl Source {
         let length=if start==0 { FIRST_CHUNK } else { CHUNK };
         let end = (start + length - 1).min(self.size - 1);
         let url = ranged_url(&self.url, start, end);
+        // If the extractor explicitly announces that the source is about to
+        // become ready, wait before making its first request, not after a 403.
+        if start==0 && self.mime!="video/mp4" {
+            if let Some(at)=self.available_at.filter(|at|at.saturating_duration_since(Instant::now())<=Duration::from_secs(3)){
+                while Instant::now()<at {
+                    if cancelled()||Instant::now()>=deadline{return Err(SourceError::Network);}
+                    thread::sleep(at.saturating_duration_since(Instant::now()).min(Duration::from_millis(25)));
+                }
+            }
+        }
         let mut last = SourceError::Network;
         for attempt in 0..2 {
             if cancelled() { return Err(SourceError::Network); }
+            if self.limit.active() { return Err(SourceError::Limited); }
             let remaining = deadline.saturating_duration_since(Instant::now());
             if remaining.is_zero() { break; }
             let fetched = (|| {
@@ -153,7 +189,7 @@ impl Source {
                     if self.mime=="video/mp4" {eprintln!("Cinema upstream status: {}",status.as_u16());}
                     else {#[cfg(debug_assertions)] eprintln!("Guest audio upstream status: {status}");}
                     if status.as_u16() == 429 {
-                        self.limit.note(response.headers().get("Retry-After").and_then(|h| h.to_str().ok()).and_then(|s| s.parse().ok()));
+                        self.limit.note(response.headers().get("Retry-After").and_then(|h| h.to_str().ok()).and_then(|s| retry_after_seconds(s,SystemTime::now())));
                     }
                     return Err(match status.as_u16() { 429 => SourceError::Limited, 401 | 403 => SourceError::Denied,
                         408 | 500..=599 => SourceError::Network, _ => SourceError::Invalid });
@@ -174,14 +210,9 @@ impl Source {
                 }
                 Err(error) => {
                     last = error;
-                    // Fresh signed URLs can briefly return 403 before becoming usable.
-                    // Retry those exact bytes once after a pause, without extracting
-                    // another URL. A 429 never retries and also stops other sources.
-                    if error == SourceError::Limited || error == SourceError::Invalid || (self.mime=="video/mp4" && error==SourceError::Denied) { break; }
+                    if error != SourceError::Network { break; }
                     if attempt == 0 {
-                        let delay = if error == SourceError::Denied {
-                            self.available_at.map(|at|at.saturating_duration_since(Instant::now())+Duration::from_millis(150)).unwrap_or(Duration::from_secs(3))
-                        } else { Duration::from_millis(100) };
+                        let delay = Duration::from_millis(100);
                         if deadline.saturating_duration_since(Instant::now()) <= delay { break; }
                         let retry_at = Instant::now() + delay;
                         while Instant::now() < retry_at {
@@ -192,7 +223,10 @@ impl Source {
                 }
             }
         }
-        if matches!(last, SourceError::Denied | SourceError::Limited) { *self.failed.lock().unwrap() = Some(last); }
+        if matches!(last, SourceError::Denied | SourceError::Limited) {
+            *self.failed.lock().unwrap() = Some(last);
+            if last==SourceError::Denied{if let Some(id)=&self.music_id{crate::music_engine::note_reserve_denial(id);}}
+        }
         Err(last)
     }
 
@@ -405,12 +439,13 @@ mod tests {
                 loop {line.clear();if input.read_line(&mut line).unwrap_or(0)==0 || line=="\r\n" {break;}}
                 let index=seen.fetch_add(1,Ordering::Relaxed);let status=statuses[index];
                 let length=if status==200||status==206 {100}else{0};
-                let _=write!(stream,"HTTP/1.1 {status} Test\r\nContent-Length: {length}\r\nConnection: close\r\n\r\n");
+                let cooldown=if status==429{format!("Retry-After: {}\r\n",httpdate::fmt_http_date(SystemTime::now()+Duration::from_secs(900)))}else{String::new()};
+                let _=write!(stream,"HTTP/1.1 {status} Test\r\nContent-Length: {length}\r\n{cooldown}Connection: close\r\n\r\n");
                 if length>0 {let _=stream.write_all(&vec![42;if truncated&&index==0 {50}else{100}]);}
             }
         });
         // Tests inject loopback directly; production Source::new still rejects it.
-        (Source {url,size:100,mime:"audio/mp4",client:Client::builder().no_proxy().build().unwrap(),headers:HeaderMap::new(),chunks:Mutex::new(vec![]),fetch_lock:Mutex::new(()),failed:Mutex::new(None),limit:Arc::default(),available_at:None,cancelled:AtomicBool::new(false)},count,thread)
+        (Source {url,size:100,mime:"audio/mp4",client:Client::builder().no_proxy().build().unwrap(),headers:HeaderMap::new(),chunks:Mutex::new(vec![]),fetch_lock:Mutex::new(()),failed:Mutex::new(None),music_id:None,limit:Arc::default(),available_at:None,cancelled:AtomicBool::new(false)},count,thread)
     }
 
     #[test]
@@ -421,6 +456,19 @@ mod tests {
             assert_eq!(source.fetch_chunk(0).unwrap(),vec![42;100]);
             worker.join().unwrap();assert_eq!(count.load(Ordering::Relaxed),2);
         }
+    }
+
+    #[test]
+    fn replay_requires_full_contiguous_audio_even_when_ranges_arrive_out_of_order(){
+        let(source,_,worker)=fixture(vec![],false);worker.join().unwrap();
+        assert!(!source.fully_buffered());
+        source.chunks.lock().unwrap().push((50,vec![2;50]));
+        assert!(!source.fully_buffered());
+        source.chunks.lock().unwrap().push((0,vec![1;49]));
+        assert!(!source.fully_buffered());
+        source.chunks.lock().unwrap()[1].1.push(1);
+        assert!(source.fully_buffered());
+        source.cancelled.store(true,Ordering::Relaxed);assert!(!source.fully_buffered());
     }
 
     #[test]
@@ -456,8 +504,22 @@ mod tests {
     }
 
     #[test]
-    fn denied_audio_has_one_delayed_retry_but_limited_audio_never_retries() {
-        for (statuses,expected) in [(vec![403,403],SourceError::Denied),(vec![429],SourceError::Limited)] {
+    fn automatic_refresh_reports_a_late_403_as_denial_instead_of_cancellation(){
+        let id="lateHttp403";
+        let (source,count,worker)=fixture(vec![403],false);
+        let source=source.with_music_id(id);
+        let cancelled=||crate::music_engine::recovery_error(id).is_some();
+        assert!(!cancelled());
+        let error=crate::music::verify_reserve_source(&source,Instant::now()+Duration::from_secs(2),&cancelled).unwrap_err();
+        worker.join().unwrap();
+        assert!(cancelled());
+        assert_eq!(error,SourceError::Denied.to_string());
+        assert_eq!(count.load(Ordering::Relaxed),1);
+    }
+
+    #[test]
+    fn explicit_denials_and_rate_limits_never_retry_audio() {
+        for (statuses,expected) in [(vec![401],SourceError::Denied),(vec![403],SourceError::Denied),(vec![429],SourceError::Limited)] {
             let requests=statuses.len();
             let (source,count,worker)=fixture(statuses,false);
             assert_eq!(source.fetch_chunk(0),Err(expected));worker.join().unwrap();assert_eq!(count.load(Ordering::Relaxed),requests);
@@ -468,19 +530,18 @@ mod tests {
     }
 
     #[test]
-    fn fresh_url_can_become_available_without_resolving_again() {
-        let (source,count,worker)=fixture(vec![403,200],false);
-        let started=Instant::now();
-        assert_eq!(source.fetch_chunk(0).unwrap(),vec![42;100]);
-        assert!(started.elapsed() >= Duration::from_secs(3));
-        assert!(!source.failed());worker.join().unwrap();assert_eq!(count.load(Ordering::Relaxed),2);
+    fn audio_failure_reasons_survive_the_relay() {
+        use crate::music_engine::diagnostics::{classify,Code};
+        for (error,code) in [(SourceError::Denied,Code::Restricted),(SourceError::Limited,Code::Limited),(SourceError::Network,Code::Network),(SourceError::Invalid,Code::Unsupported)]{
+            assert_eq!(classify(&error.to_string()),code);
+        }
     }
     #[test]
     fn known_audio_availability_avoids_the_fixed_three_second_retry() {
-        let (mut source,count,worker)=fixture(vec![403,200],false);
+        let (mut source,count,worker)=fixture(vec![200],false);
         source.available_at=Some(Instant::now()+Duration::from_millis(100));
         let began=Instant::now();assert_eq!(source.fetch_chunk(0).unwrap(),vec![42;100]);
-        assert!(began.elapsed()<Duration::from_secs(2));worker.join().unwrap();assert_eq!(count.load(Ordering::Relaxed),2);
+        assert!(began.elapsed()>=Duration::from_millis(75)&&began.elapsed()<Duration::from_secs(2));worker.join().unwrap();assert_eq!(count.load(Ordering::Relaxed),1);
         let (mut source,count,worker)=fixture(vec![200],false);
         source.available_at=Some(Instant::now()+Duration::from_secs(30));
         let began=Instant::now();assert!(source.fetch_chunk(0).is_ok());assert!(began.elapsed()<Duration::from_secs(2));
@@ -488,13 +549,14 @@ mod tests {
     }
 
     #[test]
-    fn changing_selection_cancels_the_denied_source_wait_without_retrying() {
-        let (source,count,worker)=fixture(vec![403],false);
+    fn changing_selection_cancels_the_announced_availability_wait_before_requesting_audio() {
+        let (mut source,count,worker)=fixture(vec![],false);
+        source.available_at=Some(Instant::now()+Duration::from_secs(2));
         let started=Instant::now();
         let result=source.verify_cancellable(Instant::now()+Duration::from_secs(10),&||started.elapsed()>Duration::from_millis(150));
         assert_eq!(result,Err(SourceError::Network));
         assert!(started.elapsed()<Duration::from_secs(1));
-        worker.join().unwrap();assert_eq!(count.load(Ordering::Relaxed),1);
+        worker.join().unwrap();assert_eq!(count.load(Ordering::Relaxed),0);
         assert!(!source.failed());
     }
 
@@ -517,6 +579,8 @@ mod tests {
     fn media_rate_limit_stops_other_sources_but_keeps_cached_bytes_available() {
         let (source,count,worker)=fixture(vec![429],false);
         assert_eq!(source.fetch_chunk(0),Err(SourceError::Limited));worker.join().unwrap();
+        let wait=source.limit.until.lock().unwrap().unwrap().saturating_duration_since(Instant::now());
+        assert!(wait>Duration::from_secs(890)&&wait<=Duration::from_secs(900));
         let (mut other,other_count,other_worker)=fixture(vec![],false);other.limit=source.limit.clone();
         assert_eq!(other.fetch_chunk(0),Err(SourceError::Limited));
         other.chunks.lock().unwrap().push((0,vec![42;100]));
@@ -524,6 +588,17 @@ mod tests {
         other_worker.join().unwrap();assert_eq!(other_count.load(Ordering::Relaxed),0);assert_eq!(count.load(Ordering::Relaxed),1);
         source.limit.note(Some(120));let until=source.limit.until.lock().unwrap().unwrap();source.limit.note(Some(60));
         assert_eq!(source.limit.until.lock().unwrap().unwrap(),until);
+    }
+
+    #[test]
+    fn retry_after_accepts_seconds_and_http_dates() {
+        let now=httpdate::parse_http_date("Sun, 06 Nov 1994 08:34:37 GMT").unwrap();
+        for value in ["900","Sun, 06 Nov 1994 08:49:37 GMT","Sunday, 06-Nov-94 08:49:37 GMT","Sun Nov  6 08:49:37 1994"] {
+            assert_eq!(retry_after_seconds(value,now),Some(900));
+        }
+        assert_eq!(retry_after_seconds("Sun, 06 Nov 1994 08:00:00 GMT",now),Some(0));
+        assert_eq!(retry_after_seconds("1e3",now),None);
+        assert_eq!(retry_after_seconds(&"9".repeat(400),now),Some(u64::MAX));
     }
 
     #[test]
@@ -565,7 +640,7 @@ mod tests {
     #[test]
     fn relay_serves_seek_ranges_and_head_without_an_upstream_request() {
         let _ = rustls::crypto::ring::default_provider().install_default();
-        let source=Arc::new(Source {url:url::Url::parse("https://rr1.googlevideo.com/a").unwrap(),size:100,mime:"audio/mp4",client:Client::new(),headers:HeaderMap::new(),chunks:Mutex::new(vec![(0,(0..100).collect())]),fetch_lock:Mutex::new(()),failed:Mutex::new(None),limit:Arc::default(),available_at:None,cancelled:AtomicBool::new(false)});
+        let source=Arc::new(Source {url:url::Url::parse("https://rr1.googlevideo.com/a").unwrap(),size:100,mime:"audio/mp4",client:Client::new(),headers:HeaderMap::new(),chunks:Mutex::new(vec![(0,(0..100).collect())]),fetch_lock:Mutex::new(()),failed:Mutex::new(None),music_id:None,limit:Arc::default(),available_at:None,cancelled:AtomicBool::new(false)});
         let relay=Relay::start().unwrap();let address=relay.insert(source);
         let client=Client::builder().no_proxy().build().unwrap();
         let response=client.get(&address).header("Range","bytes=20-29").send().unwrap();

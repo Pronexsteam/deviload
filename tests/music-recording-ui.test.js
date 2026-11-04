@@ -2,13 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {runInNewContext} from "node:vm";
-import {recordingAlternatives,recordingDescriptor,resolveRecordingSource} from "../src/music-recordings.js";
+import {recordingAlternatives,recordingDescriptor,resolveRecordingSource,videoRecordingCandidates} from "../src/music-recordings.js";
+import {localRecordingCandidates,localDurationDiffers} from "../src/music-local-model.js";
 
 const source=readFileSync(new URL("../src/music-recording-ui.js",import.meta.url),"utf8").replace(/^import .*;\r?\n/gm,"").replace("export function openRecordingPicker","function openRecordingPicker");
 const song=(n,extra={})=>({kind:"song",id:String(n).padStart(11,"0"),title:"Night Drive",artists:["Artist"],duration:200,...extra});
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
-function fixture({item=song(1),bindings=[],invoke=async()=>({sections:[{items:[song(2)]}]}),save=()=>true}={}){
+function fixture({item=song(1),bindings=[],invoke=async()=>({sections:[{items:[song(2)]}]}),save=()=>true,local}={}){
   let document;
   class Element{
     constructor(tag){this.tagName=tag;this.children=[];this.style={};this.attributes=new Map();this.listeners=new Map();this.disabled=false;this.value="";this.ownText="";this.open=false;}
@@ -27,17 +28,38 @@ function fixture({item=song(1),bindings=[],invoke=async()=>({sections:[{items:[s
   const previous=new Element("button");document.body.append(previous);previous.focus();
   const button=(label,glyph,action,cls="")=>{const node=document.createElement("button");node.textContent=label;node.className=cls;node.type="button";node.addEventListener("click",action);return node;};
   const cover=item=>{const node=document.createElement("span");node.track=item;return node;};
-  const ctx={document,t:value=>value,language:()=>"en",errorText:error=>error.message||String(error),recordingAlternatives,recordingDescriptor,resolveRecordingSource};
+  const ctx={document,t:value=>value,language:()=>"en",errorText:error=>error.message||String(error),recordingAlternatives,recordingDescriptor,resolveRecordingSource,videoRecordingCandidates,localRecordingCandidates,localDurationDiffers};
   const open=runInNewContext(`(()=>{${source};return openRecordingPicker;})()`,ctx),calls=[],saves=[];
-  const modal=open({item,button,cover,bindings:()=>bindings,invoke:(command,args)=>{calls.push({command,args});return invoke(command,args);},save:value=>{saves.push(value);return save(value);}});
+  const modal=open({item,button,cover,local,bindings:()=>bindings,invoke:(command,args)=>{calls.push({command,args});return invoke(command,args);},save:value=>{saves.push(value);return save(value);}});
   const walk=(root=modal)=>[root,...root.children.flatMap(node=>walk(node))];
   const buttonNamed=name=>walk().find(node=>node.tagName==="button"&&node.textContent===name);
   return {document,modal,previous,calls,saves,walk,buttonNamed,input:walk().find(node=>node.tagName==="input"),form:walk().find(node=>node.tagName==="form")};
 }
 
-test("opening source selection makes one bounded search and never selects a result automatically",async()=>{
+test("explicit local choice works before remote search resolves, retries a library error and rejects a different duration",async()=>{
+  const pending=deferred(),rows=Array.from({length:1420},(_,i)=>({...song(i,{duration:i===0?280:201}),id:'local:'+i.toString(16).padStart(64,'0'),contentHash:'a'.repeat(64)}));
+  let reads=0,chosen=[];
+  const h=fixture({invoke:()=>pending.promise,local:{choice:()=>null,items:async()=>{if(++reads===1)throw Error('scan failed');return rows;},save:async row=>{chosen.push(row);return true;}}});
+  assert.equal(reads,0);
+  await h.buttonNamed("Search local music").click();assert.match(h.modal.textContent,/scan failed/);
+  await h.buttonNamed("Search local music").click();
+  const buttons=h.walk().filter(node=>node.tagName==="button"&&node.textContent==="Use this exact local copy");
+  assert.equal(buttons.length,16);assert.equal(buttons[0].disabled,true);assert.equal(chosen.length,0);
+  await buttons[1].click();assert.equal(h.modal.open,false);assert.deepEqual(chosen,[rows[1]]);
+  pending.resolve({sections:[]});await settle();assert.equal(h.saves.length,0);
+});
+test("a missing local copy can be removed even when the library and online searches are unavailable",async()=>{
+  const pending=deferred(),removed=[];
+  const h=fixture({invoke:()=>pending.promise,local:{choice:()=>({localId:'local:'+'a'.repeat(64),hash:'a'.repeat(64)}),
+    items:async()=>{throw Error('library unavailable');},save:async row=>{removed.push(row);return true;}}});
+  await h.buttonNamed("Search local music").click();assert.match(h.modal.textContent,/library unavailable/);
+  await h.buttonNamed("Remove local copy choice").click();assert.deepEqual(removed,[null]);assert.equal(h.modal.open,false);
+  assert.equal(h.saves.length,0);pending.resolve({sections:[]});await settle();
+});
+
+test("opening source selection searches songs and video publications once and never selects a result automatically",async()=>{
   const h=fixture({invoke:async()=>({sections:[{items:[song(1),song(2),song(3,{title:"Night Drive (Slowed)"})]}]})});await settle();
-  assert.equal(h.calls.length,1);assert.deepEqual({command:h.calls[0].command,args:{...h.calls[0].args}},{command:"music_catalog",args:{kind:"search",value:"Artist Night Drive",filter:"songs",language:"en"}});
+  assert.deepEqual(h.calls.map(call=>call.command),["music_catalog","search_media"]);assert.deepEqual({command:h.calls[0].command,args:{...h.calls[0].args}},{command:"music_catalog",args:{kind:"search",value:"Artist Night Drive",filter:"songs",language:"en"}});
   assert.equal(h.saves.length,0);assert.equal(h.modal.open,true);assert.equal(h.input.maxLength,180);
   assert.match(h.modal.textContent,/Matching metadata/);assert.match(h.modal.textContent,/Night Drive \(Slowed\)/);
   assert.match(h.modal.textContent,/This is a different version/);assert.ok(h.buttonNamed("Choose this different version"));
@@ -86,7 +108,7 @@ test("closing during a search discards late success and failure without reopenin
 
 test("search input is bounded, repeated pending submit is coalesced and metadata mismatch needs an explicit warning action",async()=>{
   const pending=deferred(),h=fixture({item:song(1,{title:"Night Drive ".repeat(35)}),invoke:()=>pending.promise});
-  assert.equal(h.calls[0].args.value.length,180);await h.form.dispatch("submit");assert.equal(h.calls.length,1);
+  assert.equal(h.calls[0].args.value.length,180);await h.form.dispatch("submit");assert.equal(h.calls.length,2);assert.equal(h.calls[1].args.query.length,120);
   pending.resolve({sections:[]});await settle();assert.match(h.modal.textContent,/No alternative recordings found/);
   const mismatched=fixture({invoke:async()=>({sections:[{items:[song(2,{artists:["Other artist"],duration:240})]}]})});await settle();
   assert.match(mismatched.modal.textContent,/The artist credits differ/);assert.match(mismatched.modal.textContent,/The duration differs/);

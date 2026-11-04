@@ -41,13 +41,14 @@ export function createRecommendationSession(){
     now=time(now);prune(now);
     return listens.size?[...listens.values()].reverse().map(row=>row.item):contextItems();
   }
-  function seeds(current,globalSeeds,{limit=2,now=Date.now()}={}){
+  function seeds(current,globalSeeds,{limit=2,now=Date.now(),broaden=false}={}){
     limit=bounded(limit);if(!limit)return [];
     now=time(now);prune(now);
     const selected=clean(current?[current]:[]),seen=new Set(selected.flatMap(tasteArtistKeys));
     const contextual=context.filter(item=>!selected.some(row=>row.id===item.id));
     const rotated=contextual.length?[...contextual.slice(cursor%contextual.length),...contextual.slice(0,cursor%contextual.length)]:[];
-    const live=[...listens.values()].reverse().map(row=>row.item),pools=[live,rotated,clean(globalSeeds)];
+    const live=[...listens.values()].reverse().map(row=>row.item),global=clean(globalSeeds);
+    const pools=broaden?[(live.length?live:rotated).slice(0,1),global,live,rotated]:[live,rotated,global];
     // Search every pool for distinct artists before filling same-artist slots.
     // A run of qualified songs by one artist must not consume every seed.
     for(const diverse of [true,false]){

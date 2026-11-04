@@ -86,5 +86,6 @@ export function createWeeklyStats(storage,{now=Date.now}={}){
     const ranking=[...artists.values()].map(artist=>({name:artist.name,seconds:[...artist.days.values()].reduce((sum,value)=>sum+value,0)})).sort((a,b)=>b.seconds-a.seconds||a.name.localeCompare(b.name));
     return {totalSeconds,totalMinutes:Math.floor(totalSeconds/60),totalQualifiedPlays,uniqueTracks:tracks.size,uniqueTracksCapped:cappedOn!==null,topArtist:ranking[0]?.name||null,topArtistSeconds:ranking[0]?.seconds||0};
   }
-  return {record,summary};
+  const daily=()=>{prune();return weekKeys(now()).reverse().map(date=>({date,seconds:days.get(date)?.[0]||0}));};
+  return {record,summary,daily};
 }

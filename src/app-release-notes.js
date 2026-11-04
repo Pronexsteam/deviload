@@ -15,7 +15,7 @@ export function wireReleaseNotes(workspace){
   const done=make("button","app-release-done");done.type="button";card.append(header,sections,done);document.body.append(card);actions.prepend(button);
   let version=null,returnFocus=null,autoPending=false,storage;try{storage=localStorage;}catch{/* Optional persistence. */}
   const translate=()=>{
-    button.textContent=title.textContent=t("What's new");eyebrow.textContent=version?"Deviload "+version:"Deviload";
+    button.textContent=t("What's new");title.textContent=version?t("Deviload {version} is out",{version}):button.textContent;eyebrow.textContent=button.textContent;
     intro.textContent=t("A closer look at what changed and what was fixed.");close.ariaLabel=t("Dismiss release notes");done.textContent=t("Got it");
     cinemaNotice.hidden=version!=="2.7.9";
     cinemaNotice.textContent=t("TEMPORARY: Devil Cinema uses the official YouTube player for online videos. Our own player is planned for the next update.");
@@ -27,6 +27,13 @@ export function wireReleaseNotes(workspace){
     fixItems[0].textContent=t("Large liked-song lists render only visible rows, keeping scrolling and navigation responsive.");
     fixItems[1].textContent=t("Large covers use higher resolution when available; small list thumbnails stay lightweight.");
     fixItems[2].textContent=t("Import progress is separate from your music profile. Imported listening history is optional.");
+    if(version==="2.8.0"){
+      changeItems[0].textContent=t("Keep browsing the same For you picks until your next visit or refresh.");
+      changeItems[1].textContent=t("Choose another recording from the player if a source fails.");
+      changeItems[2].textContent=t("Open lyrics from the artwork or the full player.");
+      changeItems[3].textContent=t("Transfer music from a public Spotify playlist or album link, or import a JSON or CSV export.");
+      fixItems[2].textContent=t("Artist pages can show previously loaded results or songs from search.");
+    }
   };
   const open=()=>{if(card.open)return;returnFocus=document.activeElement;card.showModal();button.setAttribute("aria-expanded","true");markReleaseNotesSeen(storage,version);autoPending=false;done.focus();};
   const tryAutomatic=()=>{if(!autoPending||document.hidden||document.querySelector('dialog[open]'))return;open();};

@@ -1,6 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {artworkCandidates,loadArtwork,applyBrowseArtwork} from '../src/music-artwork.js';
+function image(){const events={},requests=[];return {events,requests,naturalWidth:640,addEventListener:(name,fn)=>events[name]=fn,remove(){this.removed=true;},set src(url){requests.push(url);}};}
+
+test('successful fallbacks avoid repeated failed cover requests but retry high quality after a fixed minute',t=>{
+ let now=1000;t.mock.method(Date,'now',()=>now);
+ const raw='https://i.ytimg.com/vi/cachetest01/hqdefault.jpg',first=image();
+ loadArtwork(first,raw,1024);first.events.error();first.events.load();
+ assert.equal(first.requests.length,2);
+ now+=30000;const second=image();loadArtwork(second,raw,1024);assert.equal(second.requests[0],raw);second.events.load();
+ now+=30001;const third=image();loadArtwork(third,raw,1024);assert.ok(third.requests[0].endsWith('/maxresdefault.jpg'));
+ third.events.load();const fourth=image();loadArtwork(fourth,raw,1024);assert.equal(fourth.requests[0],third.requests[0]);
+});
+test('a cached fallback failure can recover to high quality and does not affect smaller list images',()=>{
+ const raw='https://i.ytimg.com/vi/cachetest02/hqdefault.jpg',first=image();loadArtwork(first,raw,1024);first.events.error();first.events.load();
+ const small=image();loadArtwork(small,raw,96);assert.ok(small.requests[0].endsWith('/mqdefault.jpg'));
+ const next=image();loadArtwork(next,raw,1024);assert.equal(next.requests[0],raw);next.events.error();next.events.load();
+ assert.ok(next.requests[1].endsWith('/maxresdefault.jpg'));
+});
+test('fallback bookkeeping is bounded even while scrolling through many unique covers',()=>{
+ const raw=n=>`https://i.ytimg.com/vi/bounded${n}/hqdefault.jpg`;
+ for(let n=0;n<257;n++){const img=image();loadArtwork(img,raw(n),1024);img.events.error();img.events.load();}
+ const oldest=image(),newest=image();loadArtwork(oldest,raw(0),1024);loadArtwork(newest,raw(256),1024);
+ assert.ok(oldest.requests[0].endsWith('/maxresdefault.jpg'));assert.equal(newest.requests[0],raw(256));
+});
 test('contextual artwork restores album header and missing track covers without contaminating artists or recommendations',()=>{
  const image='https://lh3.googleusercontent.com/album=w600-h600',own='https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg';
  const album={kind:'album',id:'MPREalbum',title:'Album',image:''};
