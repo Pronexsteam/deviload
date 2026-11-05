@@ -18,7 +18,7 @@ export function createMusicLibrarySidebar({workspace,saved,onPlaylist,onFavorite
   const toggle=makeButton("music-library-panel-toggle","sidebar-simple",()=>setOpen(!opened,true,true)),toggleText=el("span","");toggle.append(toggleText);toggle.setAttribute("aria-controls",aside.id);
   const toolbar=content.querySelector(".music-toolbar");if(toolbar)toolbar.prepend(toggle);else content.prepend(toggle);
   const create=makeButton("music-icon-button","plus",()=>{if(!media.matches)setOpen(false,true,false);onCreate();});
-  const close=makeButton("music-icon-button","x-circle",()=>setOpen(false,true,true));
+  const close=makeButton("music-icon-button","sidebar-simple",()=>setOpen(false,true,true));
   headActions.append(create,close);header.append(title,headActions);
   const searchWrap=el("div","music-library-sidebar-search"),search=el("input","");search.type="search";search.maxLength=60;search.autocomplete="off";search.spellcheck=false;searchWrap.append(glyph("magnifying-glass"),search);
   const list=el("nav","music-library-sidebar-list"),empty=el("p","music-library-sidebar-empty");empty.setAttribute("role","status");
@@ -72,7 +72,7 @@ export function createMusicLibrarySidebar({workspace,saved,onPlaylist,onFavorite
     empty.hidden=query?matchingPlaylists>0:playlists.length>0;
   }
   function translate(){
-    if(destroyed)return;title.textContent=t("Your library");list.setAttribute("aria-label",t("Your library"));toggleText.textContent=t("Your library");toggle.title=t("Show or hide your music library");toggle.setAttribute("aria-label",t("Show or hide your music library"));
+    if(destroyed)return;title.textContent=t("Playlists");list.setAttribute("aria-label",t("Your library"));toggleText.textContent=t("Your library");toggle.title=t("Show or hide your music library");toggle.setAttribute("aria-label",t("Show or hide your music library"));
     homeLabel.textContent=t('Music home');primary.setAttribute('aria-label',t('Devil Music'));toggleText.textContent=t('Library');
     create.title=t("Create playlist");create.setAttribute("aria-label",t("Create playlist"));close.title=t("Close library panel");close.setAttribute("aria-label",t("Close library panel"));
     search.placeholder=t("Search your playlists");search.setAttribute("aria-label",t("Search your playlists"));refresh();refreshStats();

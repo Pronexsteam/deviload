@@ -3,6 +3,7 @@ import {timedLyrics,lyricFrame,parseLyrics} from "./music-lyrics-timing.js";
 import {isLocalMusicId} from './music-track-id.js';
 import {clampLyricsOffset,readLyricsOffsets,saveLyricsOffset} from './music-lyrics-preferences.js';
 import {parseTtml,richerLyricsFit} from './music-ttml.js';
+import {songAlbum} from './music-ui-model.js';
 export {parseLyrics} from "./music-lyrics-timing.js";
 export function createMusicLyrics({invoke,button,getTrack,getAudio}){
   const dialog=document.createElement("dialog");dialog.className="music-lyrics-dialog";dialog.setAttribute("aria-label",t("Lyrics"));
@@ -40,7 +41,7 @@ export function createMusicLyrics({invoke,button,getTrack,getAudio}){
       const duration=getAudio().duration;if(!Number.isFinite(duration)||duration<=0){body.textContent=t("Start playback to load lyrics.");id=null;return;}
       offset=offsets[track.id]||0;timingLabel();
       const args={title:track.title,artist:track.artists?.join(", ")||track.subtitle?.split(' · ')[0]||"",duration};
-      const album=typeof track.album==='string'?track.album:track.album?.title||track.album?.name||'';
+      const album=songAlbum(track);
       const key=JSON.stringify([track.id,args.title,args.artist,album,Math.round(duration)]);
       const wordKey='words:'+key;
       if(!cache.has(wordKey)&&!loading.has(wordKey)){
@@ -64,7 +65,7 @@ export function createMusicLyrics({invoke,button,getTrack,getAudio}){
       function render(result){
       body.replaceChildren();active=-1;lines=result?.instrumental?[]:timedLyrics(result?.lines);if(!lines.length&&!result?.instrumental)lines=parseLyrics(result?.synced);activeRows=new Set();
       body.dataset.lyricsState=result?.instrumental?"instrumental":lines.length?"synced":result?.plain?"plain":"missing";
-      if(lines.length){for(const [lineIndex,line] of lines.entries()){const row=button(line.text||(lineIndex===lines.length-1?t("End of available lyrics"):"♪"),null,()=>{const audio=getAudio();if(getTrack()?.id!==id||!Number.isFinite(audio.duration))return;manualUntil=0;followPending=true;audio.currentTime=Math.max(0,Math.min(line.at-offset,audio.duration));update();},"music-lyric-line");if(line.words?.length){row.classList.add("has-word-sync");row.replaceChildren();for(const word of line.words){const span=document.createElement("span");span.className="music-lyric-word";span.textContent=word.text;span.setAttribute("aria-hidden","true");row.append(span);}row.setAttribute("aria-label",line.text);}body.append(row);}}
+      if(lines.length){for(const [lineIndex,line] of lines.entries()){const row=button(line.text||(lineIndex===lines.length-1?t("End of available lyrics"):"♪"),null,()=>{const audio=getAudio();if(getTrack()?.id!==id||!Number.isFinite(audio.duration))return;manualUntil=0;followPending=true;audio.currentTime=Math.max(0,Math.min(line.at-offset,audio.duration));update();},"music-lyric-line");if(line.words?.length){row.classList.add("has-word-sync");row.replaceChildren();const wordSpan=word=>{const span=document.createElement("span");span.className="music-lyric-word";span.textContent=word.text;span.setAttribute("aria-hidden","true");return span;};row.append(...line.words.map(wordSpan));if(line.background?.length){const backing=document.createElement("span");backing.className="music-lyric-background";backing.append(...line.background.map(wordSpan));row.append(backing);}row.setAttribute("aria-label",[line.text,line.backgroundText].filter(Boolean).join(" "));}else if(line.backgroundText){const backing=document.createElement("span");backing.className="music-lyric-background";backing.textContent=line.backgroundText;row.append(backing);}body.append(row);}}
       else{const text=document.createElement("p");text.className="music-lyrics-plain";text.textContent=result?.instrumental?t("Instrumental"):(result?.plain||t("No matching lyrics found."));body.append(text);}
       hasWords=lines.some(line=>line.words?.length);
       syncLabel=hasWords?"words":lines.length?"lines":"";updateCredit();
@@ -96,7 +97,7 @@ export function createMusicLyrics({invoke,button,getTrack,getAudio}){
     if(!visible()){if(frame)cancelAnimationFrame(frame);frame=0;return;}if(getTrack()?.id!==id){load();return;}
     const audio=getAudio(), states=lyricFrame(lines,audio.currentTime+offset,Number.isFinite(audio.duration)?audio.duration+offset:Infinity),nextRows=new Set(states.map(state=>state.index));
     for(const index of activeRows)if(!nextRows.has(index)){const row=body.children[index];row?.classList.remove("active");row?.removeAttribute("aria-current");}
-    for(const state of states){const row=body.children[state.index];if(!row)continue;if(!activeRows.has(state.index)){row.classList.add("active");row.setAttribute("aria-current","true");}for(let i=0;i<state.words.length;i++){const span=row.children[i],word=state.words[i];if(span.dataset.state!==word.state)span.dataset.state=word.state;const progress=(word.progress*100).toFixed(1)+"%";if(span.style.getPropertyValue("--word-progress")!==progress)span.style.setProperty("--word-progress",progress);}}
+    for(const state of states){const row=body.children[state.index];if(!row)continue;if(!activeRows.has(state.index)){row.classList.add("active");row.setAttribute("aria-current","true");}const paint=(span,word)=>{if(!span)return;if(span.dataset.state!==word.state)span.dataset.state=word.state;const progress=(word.progress*100).toFixed(1)+"%";if(span.style.getPropertyValue("--word-progress")!==progress)span.style.setProperty("--word-progress",progress);};state.words.forEach((word,i)=>paint(row.children[i],word));const backing=row.querySelector(".music-lyric-background");state.background.forEach((word,i)=>paint(backing?.children[i],word));}
     activeRows=nextRows;const index=states.at(-1)?.index??-1;if(index!==active){active=index;followPending=index>=0;for(const i of nearRows)body.children[i]?.classList.remove("lyric-near");nearRows=new Set(index<0?[]:[index-1,index+1]);for(const i of nearRows)body.children[i]?.classList.add("lyric-near");}
     if(followPending&&Date.now()>=manualUntil)follow(body.children[active]);
     if(!audio.paused&&!audio.ended&&hasWords&&!frame){const tick=now=>{frame=0;if(now-lastFrameAt<16){frame=requestAnimationFrame(tick);return;}lastFrameAt=now;update();};frame=requestAnimationFrame(tick);}

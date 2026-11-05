@@ -1927,6 +1927,8 @@ export default {
   "What was fixed": "Что исправлено",
   "Added by you": "Добавлено тобой",
   "Playing next": "Дальше",
+  "Playlists": "Плейлисты",
+  "Now playing panel": "Панель трека",
   "Top result": "Лучший результат",
   "Duration": "Длительность",
   "Resize library": "Изменить ширину библиотеки",

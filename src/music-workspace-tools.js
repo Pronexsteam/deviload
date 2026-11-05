@@ -1,6 +1,7 @@
 import {mountPictureDisc,setPictureDiscArtwork} from "./music-picture-disc.js";
 import {t,onLanguageChange} from './i18n.js';
 import {panelLayout} from './music-ui-model.js';
+import {musicPreviewOpen} from './music-dock-menu.js';
 export {wireMusicSuggestions} from './music-search-dropdown.js';
 
 export function wireMusicConnectionShortcuts(button,stats){
@@ -40,10 +41,10 @@ export function wireMusicConnectionShortcuts(button,stats){
 }
 
 export function wireMusicPanels(workspace){
- let sizes={library:240,playing:340};try{Object.assign(sizes,JSON.parse(localStorage.getItem('deviload-music-panel-sizes')||'{}'));}catch{}
+ workspace.classList.toggle('music-preview-open',musicPreviewOpen());let sizes={library:240,playing:340};try{Object.assign(sizes,JSON.parse(localStorage.getItem('deviload-music-panel-sizes')||'{}'));}catch{}
  const initial=panelLayout(2000,Number(sizes.library),Number(sizes.playing));sizes={library:initial.library,playing:initial.playing};const handles=[];
  const save=()=>{try{localStorage.setItem('deviload-music-panel-sizes',JSON.stringify(sizes));}catch{}};
- function layout(){const value=panelLayout(workspace.clientWidth,sizes.library,sizes.playing,workspace.classList.contains('library-panel-open'));workspace.classList.toggle('music-preview-fits',value.preview);workspace.classList.toggle('music-library-overlay',value.overlay);workspace.style.setProperty('--music-library-width',value.library+'px');workspace.style.setProperty('--music-playing-width',value.playing+'px');const box=workspace.getBoundingClientRect();for(const {key,panel,handle}of handles){handle.hidden=panel.hidden||value.overlay||getComputedStyle(panel).display==='none';const rect=panel.getBoundingClientRect();handle.style.left=((key==='library'?rect.right:rect.left)-box.left-4)+'px';}}
+ function layout(){const value=panelLayout(workspace.clientWidth,sizes.library,sizes.playing,workspace.classList.contains('library-panel-open'));workspace.classList.toggle('music-preview-fits',value.preview&&workspace.classList.contains('music-preview-open'));workspace.classList.toggle('music-library-overlay',value.overlay);workspace.style.setProperty('--music-library-width',value.library+'px');workspace.style.setProperty('--music-playing-width',value.playing+'px');const box=workspace.getBoundingClientRect();for(const {key,panel,handle}of handles){handle.hidden=panel.hidden||value.overlay||getComputedStyle(panel).display==='none';const rect=panel.getBoundingClientRect();handle.style.left=((key==='library'?rect.right:rect.left)-box.left-4)+'px';}}
  for(const [key,selector,sign]of [['library','.music-library-sidebar',1],['playing','.music-playing-preview',-1]]){
   const panel=workspace.querySelector(selector);if(!panel)continue;const handle=document.createElement('div');handle.className='music-panel-resizer music-panel-resizer-'+key;handle.tabIndex=0;handle.setAttribute('role','separator');handle.setAttribute('aria-orientation','vertical');
   const labels=()=>handle.ariaLabel=key==='library'?t('Resize library'):t('Resize now playing');labels();onLanguageChange(labels);workspace.append(handle);handles.push({key,panel,handle});

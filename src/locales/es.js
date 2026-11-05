@@ -1877,6 +1877,8 @@ export default {
   "What was fixed": "Qué se corrigió",
   "Added by you": "Añadido por ti",
   "Playing next": "A continuación",
+  "Playlists": "Listas",
+  "Now playing panel": "Panel de la pista",
   "Top result": "Mejor resultado",
   "Duration": "Duración",
   "Resize library": "Cambiar el ancho de la biblioteca",

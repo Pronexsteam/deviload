@@ -53,3 +53,10 @@ test('simultaneous vocal lines remain visible and playback end clears focus',()=
  assert.deepEqual(lyricFrame(lines,NaN),[]);
  assert.deepEqual(lyricFrame(lines,2).map(s=>s.index),[0,1]);
 });
+test('background vocals keep their own word timing beside the lead line',()=>{
+ const [line]=timedLyrics([{text:'Lead',at:1,end:5,words:[{text:'Lead',at:1,end:4}],background:[{text:'(echo)',at:2,end:3}],backgroundText:'(echo)'}]);
+ assert.equal(line.words.length,1);assert.equal(line.background.length,1);
+ const [state]=lyricFrame([line],2.5);
+ assert.equal(state.words[0].state,'current');assert.equal(state.background[0].state,'current');assert.equal(state.background[0].progress,.5);
+ assert.deepEqual(timedLyrics([{text:'Lead',at:1,end:5,background:[{text:'late',at:6,end:7}]}])[0].background,[]);
+});

@@ -22,18 +22,24 @@ export function parseTtml(raw,duration,Parser=globalThis.DOMParser,verifiedDurat
   for(const p of paragraphs){
     const at=ttmlTime(p.getAttribute('begin')),end=ttmlTime(p.getAttribute('end'));
     if(!Number.isFinite(at)||!Number.isFinite(end)||at<0||end<=at||end>duration+1)continue;
-    let text='',words=[],valid=true;
-    for(const child of p.childNodes){
-      if(child.nodeType===3){const whitespace=child.textContent;if(whitespace.trim())valid=false;text+=whitespace;if(words.length)words.at(-1).text+=whitespace;else if(whitespace)valid=false;}
-      else if(child.nodeType===1){
-        const value=child.textContent||'';text+=value;
-        const start=ttmlTime(child.getAttribute('begin')),stop=ttmlTime(child.getAttribute('end'));
-        if(child.localName!=='span'||child.children.length||!value||!Number.isFinite(start)||!Number.isFinite(stop)||stop<=start||start<at||stop>end)valid=false;
-        words.push({text:value,at:start,end:stop});
+    const vocals=node=>{
+      let text='',words=[],valid=true;
+      for(const child of node.childNodes){
+        if(child.nodeType===3){const whitespace=child.textContent;if(whitespace.trim())valid=false;text+=whitespace;if(words.length)words.at(-1).text+=whitespace;else if(whitespace)valid=false;}
+        else if(child.nodeType===1&&child.getAttribute('ttm:role')!=='x-bg'){
+          const value=child.textContent||'';text+=value;
+          const start=ttmlTime(child.getAttribute('begin')),stop=ttmlTime(child.getAttribute('end'));
+          if(child.localName!=='span'||child.children.length||!value||!Number.isFinite(start)||!Number.isFinite(stop)||stop<=start||start<at||stop>end)valid=false;
+          words.push({text:value,at:start,end:stop});
+        }
       }
-    }
-    if(text.length>8000||!text.trim())continue;
-    lines.push({text,at,end,words:valid?words:[]});
+      return {text,words:valid?words:[]};
+    };
+    const lead=vocals(p),backing=[...p.children].filter(child=>child.getAttribute('ttm:role')==='x-bg').map(vocals);
+    const backgroundText=backing.map(part=>part.text).join(' ').trim(),background=backing.every(part=>part.words.length)?backing.flatMap(part=>part.words):[];
+    const main=lead.text.trim()?lead:{text:background.map(word=>word.text).join('')||backgroundText,words:background};
+    if(main.text.length>8000||!main.text.trim())continue;
+    lines.push({text:main.text,at,end,words:main.words,...(main===lead&&backgroundText?{backgroundText,background}:{})});
   }
   const result=timedLyrics(lines);
   // Reject providers claiming word timing but assigning every word the same time.
@@ -45,7 +51,7 @@ export function richerLyricsFit(candidate,original) {
   if(!candidate?.length)return false;
   const wanted=wordsOf(original?.plain||original?.lines?.map(l=>l.text).join(' ')||'');
   if(!wanted.length)return true;
-  const available=wordsOf(candidate.map(l=>l.text).join(' ')),counts=new Map();
+  const available=wordsOf(candidate.map(l=>[l.text,l.backgroundText].filter(Boolean).join(' ')).join(' ')),counts=new Map();
   for(const word of available)counts.set(word,(counts.get(word)||0)+1);
   let shared=0;for(const word of wanted){if(counts.get(word)>0){shared++;counts.set(word,counts.get(word)-1);}}
   return shared>=wanted.length*.8&&available.length>=wanted.length*.8;

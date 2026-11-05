@@ -2032,6 +2032,9 @@ if (invoke && (navigator.userAgent.includes("Windows") || macWindow)) {
   };
   document.querySelector(".window-drag-strip")?.addEventListener("mousedown", dragWindow);
   document.querySelector(".window-drag-strip")?.addEventListener("dblclick", () => invoke("window_action", {action:"toggle_maximize"}).catch(() => {}));
+  const dragBar = document.querySelector(".topbar");
+  dragBar?.addEventListener("mousedown", event => { if (event.target === dragBar) dragWindow(event); });
+  dragBar?.addEventListener("dblclick", event => { if (event.target === dragBar) invoke("window_action", {action:"toggle_maximize"}).catch(() => {}); });
   const topbar = document.querySelector(".topbar");
   topbar.addEventListener("mousedown", event => {
     if (event.target === topbar) dragWindow(event);
