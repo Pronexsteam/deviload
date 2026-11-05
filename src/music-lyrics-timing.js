@@ -47,6 +47,12 @@ export function timedLyrics(value) {
   }).sort((a,b) => a.at-b.at);
 }
 
+export function leadSinger(lines) {
+  const counts = new Map();
+  for (const {agent} of lines) if (agent) counts.set(agent, (counts.get(agent) || 0) + 1);
+  return [...counts].sort((a,b) => b[1]-a[1])[0]?.[0] || '';
+}
+
 export function lyricFrame(lines, time, duration = Infinity) {
   if (!Number.isFinite(time) || time < 0 || time >= duration) return [];
   const active=[];let next=0;

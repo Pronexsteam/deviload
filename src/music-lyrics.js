@@ -1,5 +1,5 @@
 import {t,errorText,onLanguageChange} from "./i18n.js";
-import {timedLyrics,lyricFrame,parseLyrics} from "./music-lyrics-timing.js";
+import {timedLyrics,lyricFrame,parseLyrics,leadSinger} from "./music-lyrics-timing.js";
 import {isLocalMusicId} from './music-track-id.js';
 import {clampLyricsOffset,readLyricsOffsets,saveLyricsOffset} from './music-lyrics-preferences.js';
 import {parseTtml,richerLyricsFit} from './music-ttml.js';
@@ -26,14 +26,18 @@ export function createMusicLyrics({invoke,button,getTrack,getAudio}){
   let syncLabel="",source="LRCLIB";
   const updateCredit=()=>{credit.textContent=source+(syncLabel?" · "+(syncLabel==="words"?t("Word timing"):t("Line timing · word timing unavailable")):"");};
   const visible=()=>!document.hidden&&(dialog.open||Boolean(host&&!host.hidden&&host.getClientRects().length&&(!host.closest("dialog")||host.closest("dialog").open)));
-  const manualScroll=()=>{manualUntil=Date.now()+8000;followPending=true;resume.hidden=!lines.length;};
+  let scrollFrame=0,scrollAt=0,scrollGoal=0,scrollTick=0;
+  const glide=now=>{const step=Math.min(48,now-scrollTick||16);scrollTick=now;scrollAt+=(scrollGoal-scrollAt)*(1-Math.exp(-step/130));if(Math.abs(scrollGoal-scrollAt)<.5){body.scrollTop=scrollGoal;scrollFrame=0;return;}body.scrollTop=scrollAt;scrollFrame=requestAnimationFrame(glide);};
+  const manualScroll=()=>{cancelAnimationFrame(scrollFrame);scrollFrame=0;body.classList.add("is-browsing");manualUntil=Date.now()+8000;followPending=true;resume.hidden=!lines.length;};
   body.addEventListener("wheel",manualScroll,{passive:true});body.addEventListener("touchmove",manualScroll,{passive:true});body.addEventListener("pointerdown",event=>{if(event.target===body)manualScroll();});
   body.addEventListener("keydown",event=>{if(["ArrowUp","ArrowDown","PageUp","PageDown","Home","End"].includes(event.key))manualScroll();});
   function follow(row){
     if(!row)return;
     // Scroll only the lyrics pane; never move the surrounding modal/page.
-    const target=body.scrollTop+row.getBoundingClientRect().top-body.getBoundingClientRect().top-(body.clientHeight-row.offsetHeight)/2;
-    body.scrollTo({top:Math.max(0,target),behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"instant":"smooth"});followPending=false;resume.hidden=true;
+    const target=Math.max(0,body.scrollTop+row.getBoundingClientRect().top-body.getBoundingClientRect().top-body.clientHeight*.3);
+    body.classList.remove("is-browsing");followPending=false;resume.hidden=true;
+    if(matchMedia("(prefers-reduced-motion: reduce)").matches){body.scrollTop=target;return;}
+    scrollGoal=target;if(!scrollFrame){scrollAt=body.scrollTop;scrollTick=0;scrollFrame=requestAnimationFrame(glide);}
   }
   async function load(){if(frame)cancelAnimationFrame(frame);frame=0;hasWords=false;syncLabel="";source="LRCLIB";updateCredit();const track=getTrack();if(!track){++request;id=null;lines=[];active=-1;heading.textContent=t("Lyrics");body.textContent=t("Start playback to load lyrics.");return;}const token=++request;id=track.id;heading.textContent=host?t("Lyrics"):track.title;body.textContent=t("Finding lyrics…");lines=[];active=-1;manualUntil=0;followPending=false;body.scrollTop=0;
     try{
@@ -65,7 +69,7 @@ export function createMusicLyrics({invoke,button,getTrack,getAudio}){
       function render(result){
       body.replaceChildren();active=-1;lines=result?.instrumental?[]:timedLyrics(result?.lines);if(!lines.length&&!result?.instrumental)lines=parseLyrics(result?.synced);activeRows=new Set();
       body.dataset.lyricsState=result?.instrumental?"instrumental":lines.length?"synced":result?.plain?"plain":"missing";
-      if(lines.length){for(const [lineIndex,line] of lines.entries()){const row=button(line.text||(lineIndex===lines.length-1?t("End of available lyrics"):"♪"),null,()=>{const audio=getAudio();if(getTrack()?.id!==id||!Number.isFinite(audio.duration))return;manualUntil=0;followPending=true;audio.currentTime=Math.max(0,Math.min(line.at-offset,audio.duration));update();},"music-lyric-line");if(line.words?.length){row.classList.add("has-word-sync");row.replaceChildren();const wordSpan=word=>{const span=document.createElement("span");span.className="music-lyric-word";span.textContent=word.text;span.setAttribute("aria-hidden","true");return span;};row.append(...line.words.map(wordSpan));if(line.background?.length){const backing=document.createElement("span");backing.className="music-lyric-background";backing.append(...line.background.map(wordSpan));row.append(backing);}row.setAttribute("aria-label",[line.text,line.backgroundText].filter(Boolean).join(" "));}else if(line.backgroundText){const backing=document.createElement("span");backing.className="music-lyric-background";backing.textContent=line.backgroundText;row.append(backing);}body.append(row);}}
+      const lead=leadSinger(lines);if(lines.length){for(const [lineIndex,line] of lines.entries()){const row=button(line.text||(lineIndex===lines.length-1?t("End of available lyrics"):"♪"),null,()=>{const audio=getAudio();if(getTrack()?.id!==id||!Number.isFinite(audio.duration))return;manualUntil=0;followPending=true;audio.currentTime=Math.max(0,Math.min(line.at-offset,audio.duration));update();},"music-lyric-line");if(line.agent&&line.agent!==lead&&line.agent!=="v1000")row.dataset.singer="right";if(line.words?.length){row.classList.add("has-word-sync");row.replaceChildren();const wordSpan=word=>{const span=document.createElement("span");span.className="music-lyric-word";span.textContent=word.text;span.setAttribute("aria-hidden","true");return span;};row.append(...line.words.map(wordSpan));if(line.background?.length){const backing=document.createElement("span");backing.className="music-lyric-background";backing.append(...line.background.map(wordSpan));row.append(backing);}row.setAttribute("aria-label",[line.text,line.backgroundText].filter(Boolean).join(" "));}else if(line.backgroundText){const backing=document.createElement("span");backing.className="music-lyric-background";backing.textContent=line.backgroundText;row.append(backing);}body.append(row);}}
       else{const text=document.createElement("p");text.className="music-lyrics-plain";text.textContent=result?.instrumental?t("Instrumental"):(result?.plain||t("No matching lyrics found."));body.append(text);}
       hasWords=lines.some(line=>line.words?.length);
       syncLabel=hasWords?"words":lines.length?"lines":"";updateCredit();
@@ -98,7 +102,7 @@ export function createMusicLyrics({invoke,button,getTrack,getAudio}){
     const audio=getAudio(), states=lyricFrame(lines,audio.currentTime+offset,Number.isFinite(audio.duration)?audio.duration+offset:Infinity),nextRows=new Set(states.map(state=>state.index));
     for(const index of activeRows)if(!nextRows.has(index)){const row=body.children[index];row?.classList.remove("active");row?.removeAttribute("aria-current");}
     for(const state of states){const row=body.children[state.index];if(!row)continue;if(!activeRows.has(state.index)){row.classList.add("active");row.setAttribute("aria-current","true");}const paint=(span,word)=>{if(!span)return;if(span.dataset.state!==word.state)span.dataset.state=word.state;const progress=(word.progress*100).toFixed(1)+"%";if(span.style.getPropertyValue("--word-progress")!==progress)span.style.setProperty("--word-progress",progress);};state.words.forEach((word,i)=>paint(row.children[i],word));const backing=row.querySelector(".music-lyric-background");state.background.forEach((word,i)=>paint(backing?.children[i],word));}
-    activeRows=nextRows;const index=states.at(-1)?.index??-1;if(index!==active){active=index;followPending=index>=0;for(const i of nearRows)body.children[i]?.classList.remove("lyric-near");nearRows=new Set(index<0?[]:[index-1,index+1]);for(const i of nearRows)body.children[i]?.classList.add("lyric-near");}
+    activeRows=nextRows;const index=states.at(-1)?.index??-1;if(index!==active){active=index;followPending=index>=0;for(const i of nearRows){const row=body.children[i];row?.classList.remove("lyric-near");if(row)delete row.dataset.distance;}nearRows=new Set(index<0?[]:[-4,-3,-2,-1,1,2,3,4].map(step=>index+step));for(const i of nearRows){const row=body.children[i];if(!row)continue;const distance=Math.abs(i-index);row.dataset.distance=String(distance);row.classList.toggle("lyric-near",distance===1);}}
     if(followPending&&Date.now()>=manualUntil)follow(body.children[active]);
     if(!audio.paused&&!audio.ended&&hasWords&&!frame){const tick=now=>{frame=0;if(now-lastFrameAt<16){frame=requestAnimationFrame(tick);return;}lastFrameAt=now;update();};frame=requestAnimationFrame(tick);}
   }

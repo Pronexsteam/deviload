@@ -39,7 +39,7 @@ export function parseTtml(raw,duration,Parser=globalThis.DOMParser,verifiedDurat
     const backgroundText=backing.map(part=>part.text).join(' ').trim(),background=backing.every(part=>part.words.length)?backing.flatMap(part=>part.words):[];
     const main=lead.text.trim()?lead:{text:background.map(word=>word.text).join('')||backgroundText,words:background};
     if(main.text.length>8000||!main.text.trim())continue;
-    lines.push({text:main.text,at,end,words:main.words,...(main===lead&&backgroundText?{backgroundText,background}:{})});
+    lines.push({text:main.text,at,end,words:main.words,agent:p.getAttribute('ttm:agent')||'',...(main===lead&&backgroundText?{backgroundText,background}:{})});
   }
   const result=timedLyrics(lines);
   // Reject providers claiming word timing but assigning every word the same time.
