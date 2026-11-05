@@ -10,6 +10,7 @@ import {loadArtwork,applyBrowseArtwork,safeArtworkUrl} from "./music-artwork.js"
 import {playbackCandidates as eligiblePlaybackCandidates} from "./music-playback-candidates.js";
 import {wireMusicPanels,wireMusicSuggestions,createMusicHero,wireMusicConnectionShortcuts} from "./music-workspace-tools.js";
 import {wireMusicDockMenu} from "./music-dock-menu.js";
+import {createMusicHomeTiles} from "./music-home-tiles.js";
 import {collectionFacts,creditAlbumArtist,creditAlbumTracks,creditArtistCards} from "./music-ui-model.js";
 import {createMusicMiniPlayer} from "./music-mini-controller.js";
 import {createMusicRoom} from "./music-room-controller.js";
@@ -100,7 +101,7 @@ export function createMusic({invoke,onDownload,storage}) {
   let lastQuery={kind:"home",value:""}, homeCache=null, activeMood="", queueOpen=false, streamLoading=false;
   let resolvedTrack=null,resolvedOffline=false,autoplay=restored.autoplay;
   const virtualLists=[];const clearVirtualLists=()=>{virtualLists.splice(0).forEach(list=>list.destroy());};
-  let librarySidebar=null,homeHero=null,miniPlayer=null,musicRoom=null,roomReturn=null;
+  let librarySidebar=null,homeHero=null,homeTiles=null,miniPlayer=null,musicRoom=null,roomReturn=null;
   let selectedTracks=new Set(),selectionAnchor=null,visibleTrackIds=[],discoveryCandidates=[];
   let personalization=0,recommendationRevision=0,playbackContext=[],playbackOrigin="manual",contextRevision=0,followedCursor=0,playbackSourceContext={kind:"restored"};
   const recommendationSession=createRecommendationSession(),automaticQueueIds=new Set();
@@ -239,7 +240,7 @@ export function createMusic({invoke,onDownload,storage}) {
   function chooseArtists(){openArtistPicker({invoke,button,cover,collections:()=>saved.collections,save:items=>{const collections=[...saved.collections,...items.filter(item=>!saved.collections.some(x=>x.id===item.id))];saveMusicProfile(storage,{...saved,collections},taste);saved.collections=collections;homeCache=null;load("home");}});}
   $("music-choose-artists").addEventListener("click",chooseArtists);
   $("music-private-session").addEventListener("change",()=>{captureListening();if(statsSession!==session)statsCounted=false;privateSession=$("music-private-session").checked;clearRecommendationContext();discordPresence.sync(true);clock.reset();session++;statsSession=session;statsSeconds=0;checkpoint=0;historyAdded=false;if(view==="home"&&homeCache){sections=homeSections(homeCache.sections);render();personalize(request,homeCache.sections);}else if(view==="interest")showInterestMix(interestViewId);});
-  function renderWeekly(root){const value=weekly.summary(),card=el("section","music-weekly-card");card.append(el("span","music-eyebrow",t("YOUR LAST 7 DAYS")),el("h4","",t("{minutes} minutes · {plays} listens",{minutes:value.totalMinutes,plays:value.totalQualifiedPlays})),el("p","",value.totalSeconds?t("{tracks} tracks · Top artist: {artist}",{tracks:String(value.uniqueTracks)+(value.uniqueTracksCapped?"+":""),artist:value.topArtist||t("Unknown artist")}):t("Your listening summary will appear here. Only this device is counted.")));root.append(card);}
+  function renderWeekly(root){const value=weekly.summary();if(!value.totalMinutes)return;const card=el("section","music-weekly-card");card.append(el("span","music-eyebrow",t("YOUR LAST 7 DAYS")),el("h4","",t("{minutes} minutes · {plays} listens",{minutes:value.totalMinutes,plays:value.totalQualifiedPlays})),el("p","",value.totalSeconds?t("{tracks} tracks · Top artist: {artist}",{tracks:String(value.uniqueTracks)+(value.uniqueTracksCapped?"+":""),artist:value.topArtist||t("Unknown artist")}):t("Your listening summary will appear here. Only this device is counted.")));root.append(card);}
   function persist() {
     try {
       saveMusicProfile(storage,saved,taste);
@@ -1158,11 +1159,11 @@ export function createMusic({invoke,onDownload,storage}) {
   function selectView(next) {
     filters.hidden=next!=="search";offlineTab.setAttribute("aria-current",next==="offline"?"page":"false");
     filters.querySelectorAll("button").forEach(node=>node.setAttribute("aria-pressed",String(node.dataset.filter===searchFilter)));
-    view=next;musicSearch?.sync(next==="search"&&!activeMood?lastQuery.value:"");$("music-home-hero").hidden=next!=="home";$("music-moods").hidden=!["home","search"].includes(next);
+    view=next;musicSearch?.sync(next==="search"&&!activeMood?lastQuery.value:"");$("music-home-hero").hidden=next!=="home";$("music-moods").hidden=next!=="home"&&!(next==="search"&&activeMood);
     document.querySelectorAll("[data-music-view]").forEach(b=>{const selected=b.dataset.musicView===(["playlist","interest"].includes(next)?"library":next);b.classList.toggle("selected",selected);b.setAttribute("aria-current",selected?"page":"false");});
     document.querySelectorAll("[data-music-mood]").forEach(b=>{b.classList.toggle("selected",b.dataset.musicMood===activeMood);b.setAttribute("aria-pressed",String(b.dataset.musicMood===activeMood));});
     $("devil-music").dataset.view=next;
-    $("music-library-tools").hidden=next==="home"||next==="library"||next==="browse"&&browseItem?.kind==="album";
+    $("music-library-tools").hidden=next==="home"||next==="library"||next==="search"||next==="browse"&&browseItem?.kind==="album";
     $("music-library-filter").value=listFilter;
   }
   function card(item,items,personal=false,contextItems=items) {
@@ -1201,13 +1202,13 @@ export function createMusic({invoke,onDownload,storage}) {
     if(view==="home")homeHero?.update(current||saved.recent[0]||saved.favorites[0]||sections.flatMap(s=>s.items).find(x=>x.kind==="song"),!!current,!!current&&!audio.paused);
     root.classList.toggle("music-results",view!=="home");
     if(view==="library"){
-      renderWeekly(root);interestUI.render(root);renderSmartLibrary(root);library.overview(root);if(library.canUndo())root.append(button(t("Undo library change"),null,()=>library.undo(null),"music-filter-chip"));
+      library.overview(root);renderSmartLibrary(root);interestUI.render(root);renderWeekly(root);if(library.canUndo())root.append(button(t("Undo library change"),null,()=>library.undo(null),"music-filter-chip"));
       for(const [kind,label]of [["artist",t("Followed artists")],["album",t("Saved albums")],["playlist",t("Saved playlists")]]){
         const items=saved.collections.filter(item=>item.kind===kind);if(!items.length)continue;
         const shelf=el("section","music-shelf"),grid=el("div","music-card-grid");shelf.append(el("h4","",label),grid);items.forEach(item=>grid.append(card(item,items)));root.append(shelf);
       }return;
     }
-    if(view==="home")interestUI.render(root,{compact:true});
+    if(view==="home"){homeTiles?.render();interestUI.render(root,{compact:true});}
     if(view==="interest"){
       const mix=saved.interestMixes.find(value=>value.id===interestViewId);
       if(!mix){showPlaylist(null);return;}
@@ -1551,6 +1552,7 @@ export function createMusic({invoke,onDownload,storage}) {
   });
   wireMusicConnectionShortcuts(button,librarySidebar.stats);
   wireMusicDockMenu({extras,button,workspace:$("devil-music"),items:[saveToPlaylist,soundButton,downloadButton,...["music-expand","music-mini-open","music-remote-open","music-room-open"].map($)]});
+  homeTiles=createMusicHomeTiles({hero:$("music-home-hero"),button,cover,getPlaylists:()=>saved.playlists,onView:target=>target==="offline"?showOffline():showLocal(target),onPlaylist:showPlaylist});
   index=queue.findIndex(item=>item.id===restored.id);current=queue[index]||null;order.restore(restored.order,queue,current?.id);
   if(current){retryPosition=restored.position;title.textContent=current.title;artist.textContent=displaySubtitle(current);updateDockArt(current);elapsed.textContent=time(retryPosition);duration.textContent=time(knownDuration);seek.value=knownDuration?String(retryPosition/knownDuration*1000):"0";}
   window.__TAURI__?.event?.listen("music-control",({payload})=>{

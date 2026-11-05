@@ -30,7 +30,7 @@ export function createMusicLibrarySidebar({workspace,saved,onPlaylist,onFavorite
   function refreshStats(){
     if(!summary||destroyed)return;const value=summary();
     statsLabel.textContent=t('Your last 7 days');statsValue.textContent=t('{minutes} min',{minutes:value.totalMinutes});
-    statsDetail.textContent=value.totalSeconds?t('{plays} listens · On this device',{plays:value.totalQualifiedPlays}):t('Your next song starts the story.');
+    stats.hidden=!value.totalMinutes;statsDetail.textContent=value.totalSeconds?t('{plays} listens · On this device',{plays:value.totalQualifiedPlays}):t('Your next song starts the story.');
     stats.setAttribute('aria-label',t('Your last 7 days'));stats.title=statsDetail.textContent+' · '+t('Only listening on this device is counted. Private sessions are excluded.');
     const days=value.days||[],maximum=Math.max(1,...days.map(day=>day.seconds));
     chart.replaceChildren(...days.map(day=>{const bar=el('span','');bar.style.height=day.seconds?`${Math.max(12,day.seconds/maximum*100)}%`:'2px';bar.classList.toggle('is-empty',!day.seconds);return bar;}));
