@@ -1926,6 +1926,7 @@ export default {
   "What changed": "Что изменилось",
   "What was fixed": "Что исправлено",
   "Added by you": "Добавлено тобой",
+  "Playing next": "Дальше",
   "Top result": "Лучший результат",
   "Duration": "Длительность",
   "Resize library": "Изменить ширину библиотеки",

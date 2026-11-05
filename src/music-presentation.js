@@ -96,7 +96,7 @@ export function createNowPlaying({invoke,convertFileSrc,dock,identity,artwork,in
     if(playing!==meta.playing){playing=!!meta.playing;wake();}
     const duration=Number(meta.duration)||0;facts.textContent=[duration?`${Math.floor(duration/60)}:${String(Math.floor(duration%60)).padStart(2,"0")}`:"",meta.offline?t("Downloaded music"):""].filter(Boolean).join(" · ");facts.hidden=!facts.textContent;
     reason.textContent=meta.reason||"";reason.hidden=!meta.reason;
-    preview.hidden=!item;preview.parentElement?.classList.toggle("has-playing-preview",!!item);previewTitle.textContent=item?.title||"";previewArtist.textContent=item?.artists?.join(", ")||"";artwork.setAttribute("aria-disabled",String(!item));
+    preview.hidden=!item;preview.parentElement?.classList.toggle("has-playing-preview",!!item);previewTitle.textContent=item?.title||"";previewArtist.textContent=item?.artists?.join(", ")||"";previewArtist.hidden=!previewArtist.textContent;artwork.setAttribute("aria-disabled",String(!item));
     current=item;motion.update(item);expand.disabled=!item;download.disabled=!item||downloading;dislike.disabled=!item;block.disabled=!item?.artists?.length;
     if(!item&&stage.open)stage.close();
   },notify(text,undo){const message=make("span","");message.textContent=text;notice.replaceChildren(message);if(undo)notice.append(button(t("Undo"),"arrow-clockwise",()=>{undo();notice.hidden=true;}));notice.hidden=false;},close(){if(stage.open)stage.close();}};

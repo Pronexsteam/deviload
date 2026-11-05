@@ -9,7 +9,7 @@ import {openArtistPage} from "./music-artist-page.js";
 import {loadArtwork,applyBrowseArtwork,safeArtworkUrl} from "./music-artwork.js";
 import {playbackCandidates as eligiblePlaybackCandidates} from "./music-playback-candidates.js";
 import {wireMusicPanels,wireMusicSuggestions,createMusicHero,wireMusicConnectionShortcuts} from "./music-workspace-tools.js";
-import {collectionFacts} from "./music-ui-model.js";
+import {collectionFacts,creditArtistCards} from "./music-ui-model.js";
 import {createMusicMiniPlayer} from "./music-mini-controller.js";
 import {createMusicRoom} from "./music-room-controller.js";
 import {createMusicRemote} from "./music-remote-controller.js";
@@ -546,10 +546,10 @@ export function createMusic({invoke,onDownload,storage}) {
       const row=el("div","music-queue-track");row.dataset.trackId=item.id;row.draggable=true;row.classList.toggle("active",item.id===current?.id);row.classList.toggle("up-next",item.id===upcoming);
       const select=button(item.title,null,()=>playAt(queue.findIndex(track=>track.id===item.id)),"music-queue-select");const copy=el("span","music-queue-copy");copy.append(el("strong","",item.title),el("small","",displaySubtitle(item)));select.replaceChildren(cover(item,"",96),copy);
       if(item.id===current?.id)row.setAttribute("aria-current","true");
-      if(item.id===upcoming)row.dataset.next=t("Up next");
+      if(item.id===upcoming)row.dataset.next=t("Playing next");
       const category=item.id===current?.id?t("Now playing"):automaticQueueIds.has(item.id)?t("Recommendations"):t("Added by you");
       row.dataset.category=category;row.setAttribute("aria-label",category+": "+item.title);
-      const provenance=el("small","music-queue-provenance",item.id===upcoming?t("Up next"):category);provenance.title=category;copy.append(provenance);
+      const note=item.id===upcoming?t("Playing next"):item.id===current?.id||automaticQueueIds.has(item.id)?category:"";if(note){const provenance=el("small","music-queue-provenance",note);provenance.title=category;copy.append(provenance);}
       const actions=el("div","music-queue-actions");
       const handle=button(t("Drag to reorder. Alt + ↑/↓ to move."),null,()=>{},"music-queue-handle"),remove=button(t("Remove from queue"),"x-circle",()=>removeTrack(item.id));
       handle.textContent="⠿";handle.draggable=true;handle.setAttribute("aria-keyshortcuts","Alt+ArrowUp Alt+ArrowDown");
@@ -1337,7 +1337,7 @@ export function createMusic({invoke,onDownload,storage}) {
       }
       options.append(button(t("Remove from playlist"),"x-circle",()=>library.removeTrack(playlistId,item.id)));
     }
-    const durationLabel=el("span","music-track-duration",item.duration?time(item.duration):"—");durationLabel.setAttribute("aria-label",t("Duration"));row.append(entry,durationLabel,actions);return row;
+    const durationLabel=el("span","music-track-duration",item.duration?time(item.duration):"");durationLabel.setAttribute("aria-label",t("Duration"));row.append(entry,durationLabel,actions);return row;
   }
   function skeleton() {clearVirtualLists();const grid=el("div","music-card-grid");for(let i=0;i<6;i++)grid.append(el("div","music-skeleton"));$("music-shelves").replaceChildren(grid);}
   async function load(kind,value="",heading="",refresh=false,params="") {
@@ -1358,7 +1358,7 @@ export function createMusic({invoke,onDownload,storage}) {
       if(token!==request)return;
       if(kind==="home")homeCache=result;
       continuation=result.continuation||null;
-      if(!retainHome)sections=kind==="home"?homeSections(result.sections):result.sections;
+      if(!retainHome)sections=kind==="home"?homeSections(result.sections):kind==="search"?creditArtistCards(result.sections):result.sections;
       if(kind==="browse")({item:browseItem,sections}=applyBrowseArtwork(browseItem,sections,result.artwork,value));
       const notice=result.notice==="cached"?t("Showing the last available artist page."):result.notice==="songs"?t("Showing songs while the full artist page is unavailable."):"";
       status(notice);if(!retainHome)render();loaded=true;

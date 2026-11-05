@@ -22,22 +22,8 @@
  :root[data-theme] body #music-now-playing.is-immersive .music-stage-lyrics{width:100%;height:48vh;flex:auto}
  :root[data-theme] body #music-now-playing.is-immersive .music-stage-details{width:100%}
 }
-:root body :is(.music-dock,.music-stage){--music-control-size:36px;--music-control-radius:10px}
-:root body :is(.music-dock,.music-stage) .music-transport-buttons{gap:8px;min-height:44px}
-:root body :is(.music-dock,.music-stage) .music-transport-buttons>.music-icon-button,
-:root body :is(.music-dock,.music-stage) .music-dock-extras>.music-icon-button{
-  width:var(--music-control-size);height:var(--music-control-size);min-width:var(--music-control-size);flex-shrink:0;padding:8px;
-  border-radius:var(--music-control-radius);display:inline-flex;align-items:center;justify-content:center;
-  transition:background-color .14s,color .14s;transform:none;
-}
-:root body :is(.music-dock,.music-stage) .music-play-button{width:44px;height:44px;min-width:44px;flex-shrink:0;box-shadow:0 2px 8px #0002}
-:root body :is(.music-dock,.music-stage) .music-play-button .icon{width:20px;height:20px}
-:root body :is(.music-dock,.music-stage) .music-transport-buttons>button{position:relative}
-:root body :is(.music-dock,.music-stage) .music-transport-buttons>.music-icon-button[aria-pressed="true"]::before{
-  content:"";position:absolute;bottom:3px;left:calc(50% - 2px);width:4px;height:4px;border-radius:50%;background:currentColor;
-}
-:root body :is(.music-dock,.music-stage) .music-progress{margin-top:2px;gap:10px;min-height:24px}
-:root body :is(.music-dock,.music-stage) input[type="range"]{height:24px;min-height:24px}
+:root body :is(.music-dock,.music-stage) .music-progress{margin-top:0;gap:10px;min-height:22px}
+:root body :is(.music-dock,.music-stage) input[type="range"]{height:22px;min-height:22px}
 :root body :is(.music-dock,.music-stage,.music-queue-panel) :is(button,[role="button"],input):focus-visible{
   outline:2px solid var(--player-ink,var(--workspace-ink,#efefef));outline-offset:2px;
 }
@@ -68,7 +54,7 @@
  :root body .music-queue-panel{bottom:218px;max-height:calc(100dvh - 244px)}
 }
 @media(pointer:coarse){
- :root body :is(.music-dock,.music-stage){--music-control-size:44px}
+ :root body :is(.music-dock,.music-stage){--ctl-size:44px}
  :root body .music-queue-panel .music-icon-button{min-width:44px;min-height:44px}
  :root body :is(.music-dock,.music-stage) input[type="range"]{min-height:28px}
 }
@@ -255,7 +241,7 @@
 :root body #devil-music .music-primary-nav>.music-icon-button:hover{background:var(--workspace-hover,#ffffff0c)}
 :root body main[data-page="music"] #devil-music .music-sidebar-navigation button{min-height:33px;padding-block:6px}
 :root body #devil-music .music-library-body .music-tabs{scrollbar-width:none!important;overflow:visible!important}
-:root body main[data-page="music"] #devil-music[data-view] .music-toolbar{grid-template-columns:auto minmax(0,1fr) 36px;background:transparent!important;backdrop-filter:none!important}
+:root body main[data-page="music"] #devil-music[data-view] .music-toolbar{grid-template-columns:auto minmax(0,1fr) 36px}
 :root body main[data-page="music"] #devil-music .music-toolbar>.music-library-panel-toggle{display:flex;width:auto;min-height:36px;height:36px;gap:8px;padding:8px 11px;border:1px solid var(--workspace-line,#ffffff24);border-radius:9px;background:var(--workspace-hover,#ffffff0c);font-size:12px;color:var(--workspace-ink)}
 :root body #devil-music .music-toolbar>.music-library-panel-toggle>span:last-child{display:inline}
 :root body main[data-page="music"] #devil-music.library-panel-open .music-toolbar>.music-library-panel-toggle{display:none}
@@ -289,9 +275,7 @@
 :root[data-theme] body #devil-music .music-preview-tools>:is(.music-preview-toggle,.music-preview-open){display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;min-width:36px;padding:8px;border:1px solid var(--workspace-line);border-radius:10px;background:color-mix(in srgb,var(--workspace-ink) 5%,transparent);color:var(--workspace-ink);box-shadow:none;transform:none}
 :root[data-theme] body #devil-music .music-preview-tools>:is(.music-preview-toggle,.music-preview-open):hover{background:color-mix(in srgb,var(--workspace-ink) 12%,transparent);border-color:color-mix(in srgb,var(--workspace-ink) 30%,transparent)}
 :root[data-theme] body #devil-music .music-preview-tools>button[aria-pressed="true"]{background:color-mix(in srgb,var(--workspace-ink) 18%,transparent);border-color:color-mix(in srgb,var(--workspace-ink) 50%,transparent)}
-:root[data-theme] body :is(.music-dock,.music-stage) .music-icon-button[aria-pressed="true"]{color:var(--player-primary);background:color-mix(in srgb,var(--player-primary) 14%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--player-primary) 28%,transparent)}
 :root[data-theme] body #devil-music .music-sidebar-controls .music-heading-actions>button[aria-pressed="true"]{color:var(--workspace-ink);background:var(--workspace-hover);box-shadow:inset 3px 0 var(--workspace-ink)}
-:root[data-theme] body :is(.music-dock,.music-stage) .music-icon-button:not(:disabled):hover{color:var(--player-ink);background:color-mix(in srgb,var(--player-ink) 10%,transparent);transform:none}
 :root[data-theme] body #devil-music .music-preview-tools>button:focus-visible{outline:2px solid var(--workspace-ink);outline-offset:2px}
 :root[data-theme] body #devil-music :is(.music-sidebar-navigation button.selected,.music-primary-nav-link[aria-current="page"]){color:var(--workspace-ink);background:var(--workspace-hover);box-shadow:inset 3px 0 var(--workspace-ink)}
 /* Legible desktop density and stable, discoverable player destinations. */

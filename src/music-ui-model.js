@@ -16,4 +16,5 @@ export function searchSuggestions(query,history=[],items=[]){
   for(const value of history)add(value,'recent');return out.slice(0,6);
 }
 export function rememberSearch(history,query){const value=String(query||'').trim().slice(0,120);if(!value)return history;return [value,...history.filter(item=>typeof item==='string'&&item.toLocaleLowerCase()!==value.toLocaleLowerCase())].slice(0,8);}
+export function creditArtistCards(sections){return sections.map(section=>{let artist='';return {...section,items:section.items.map(item=>{if(item?.kind==='artist'){artist=item.title||'';return item;}if(item?.kind!=='song'||item.artists?.length){artist='';return item;}return artist?{...item,artists:[artist]}:item;})};});}
 export function collectionFacts(items){const songs=items.filter(x=>x.kind==='song'),known=songs.filter(x=>Number.isFinite(x.duration)&&x.duration>0);return {count:songs.length,seconds:known.reduce((sum,x)=>sum+x.duration,0),complete:known.length===songs.length};}

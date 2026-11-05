@@ -1,3 +1,4 @@
+import {creditArtistCards} from '../src/music-ui-model.js';
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
@@ -14,7 +15,7 @@ const local=song(1,"Regional release"),personal=song(2,"Related to liked artist"
 const base=[{title:"New releases",items:[local]}];
 
 test("home never fetches regional shelves, while explicit search remains available",async()=>{
- const calls=[],node={querySelector:()=>null},ctx={window:{scrollTo(){}},$:()=>node,
+ const calls=[],node={querySelector:()=>null},ctx={creditArtistCards,window:{scrollTo(){}},$:()=>node,
   rememberNavigation(){},searchFilter:'songs',activeMood:'all',browseItem:null,request:0,
   selectView(){},t:s=>s,status(){},skeleton(){},render(){},homeSections:()=>[],personalize(){},
   language:()=> 'ru',audio:{paused:false},invoke:async(command,args)=>{calls.push({command,...args});return {sections:base};},
@@ -24,7 +25,7 @@ test("home never fetches regional shelves, while explicit search remains availab
  await load('home');await load('home','','',true);assert.equal(calls.length,0);
  await load('search','Any artist');assert.equal(calls.length,1);
  assert.equal(calls[0].kind,'search');assert.equal(calls[0].value,'Any artist');
- assert.equal(ctx.sections,base);
+ assert.deepEqual(ctx.sections,base);
 });
 function home(showRegional){
   const ctx={saved:{favorites:[],recent:[recent],showRegional,sourceBindings:[],interestMixes:[],playlists:[],collections:[]},taste:{},queue:[],request:1,personalization:0,playbackContext:[],playbackSourceContext:{kind:"manual"},followedCursor:0,privateSession:false,recommendationReasons:new Map(),current:null,sections:[],audio:{paused:true},prepared:[],tracks:items=>items,intent:{enter:id=>ctx.prepared.push(id)},captureListening(){},tasteSeeds:()=>[liked],radio:async()=>[personal],createRecordingView,recommendationSession:{seeds:(_,seeds)=>seeds,contextItems:()=>[],preferenceItems:()=>[],mergePools:pools=>({items:pools.flatMap(pool=>pool.items),scores:new Map()}),allowed:items=>items},recommendationOptions:()=>({}),rankMusicRecommendations:items=>items.map(item=>({item,reason:{code:"catalog"}})),t:s=>s,render(){}};

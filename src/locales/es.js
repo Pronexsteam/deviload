@@ -1876,6 +1876,7 @@ export default {
   "What changed": "Qué cambió",
   "What was fixed": "Qué se corrigió",
   "Added by you": "Añadido por ti",
+  "Playing next": "A continuación",
   "Top result": "Mejor resultado",
   "Duration": "Duración",
   "Resize library": "Cambiar el ancho de la biblioteca",
