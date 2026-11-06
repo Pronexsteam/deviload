@@ -1925,6 +1925,7 @@ export default {
   "What was fixed": "Что исправлено",
   "Added by you": "Добавлено тобой",
   "Playing next": "Дальше",
+  "Song": "Трек",
   "Keyboard shortcuts": "Горячие клавиши",
   "Play or pause": "Пуск и пауза",
   "Space": "Пробел",

@@ -1,9 +1,9 @@
 import {t,language} from './i18n.js';
-import {searchSuggestions,rememberSearch} from './music-ui-model.js';
+import {searchSuggestions,rememberSearch,suggestionRows,creditArtistCards} from './music-ui-model.js';
 
 // One in-flight catalog request, latest draft wins, and a small session cache.
 // Typing never changes the active queue or recommendation profile.
-export function wireMusicSuggestions({input,form,getItems,invoke,onPick,isPrivate=()=>false}){
+export function wireMusicSuggestions({input,form,getItems,getRecent=()=>[],cover,invoke,onPick,isPrivate=()=>false}){
  let history=[];try{const raw=JSON.parse(localStorage.getItem('deviload-music-searches')||'[]');if(Array.isArray(raw))history=raw.filter(x=>typeof x==='string').slice(0,8);}catch{}
  const panel=document.createElement('div'),list=document.createElement('div');
  panel.className='music-search-suggestions music-text-suggestions';panel.hidden=true;list.id='music-search-suggestions';list.role='listbox';panel.append(list);form.append(panel);
@@ -12,32 +12,41 @@ export function wireMusicSuggestions({input,form,getItems,invoke,onPick,isPrivat
  const cache=new Map();
  const hide=()=>{clearTimeout(timer);revision++;queued=null;panel.hidden=true;active=-1;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');};
  const remember=()=>{if(isPrivate())return;history=rememberSearch(history,input.value);try{localStorage.setItem('deviload-music-searches',JSON.stringify(history));}catch{}};
- function pick(row){hide();input.value=row.text;form.requestSubmit();}
+ function pick(row){if(row.item&&onPick){remember();hide();onPick(row.item);return;}hide();input.value=row.text;form.requestSubmit();}
+ const kindLabel=kind=>({artist:t('Artist'),album:t('Album'),playlist:t('Playlist'),song:t('Song'),recent:t('Recent search')})[kind]||'';
  function render(values){
   rows=values.slice(0,8);list.replaceChildren();active=-1;input.removeAttribute('aria-activedescendant');
   rows.forEach((row,index)=>{
    const node=document.createElement('button');node.type='button';node.id='music-suggestion-'+index;node.role='option';node.setAttribute('aria-selected','false');node.className='music-suggestion-result';
-   const icon=document.createElement('span');icon.className='icon';icon.dataset.icon='magnifying-glass';icon.setAttribute('aria-hidden','true');
-   const copy=document.createElement('span');copy.className='music-suggestion-copy';copy.textContent=row.text;node.title=row.kind==='recent'?t('Recent search')+': '+row.text:row.text;node.append(icon,copy);
+   node.dataset.kind=row.kind;
+   let lead;if(row.item&&cover){lead=cover(row.item,'',96);}else{lead=document.createElement('span');lead.className='icon';lead.dataset.icon=row.kind==='recent'?'clock':'magnifying-glass';lead.setAttribute('aria-hidden','true');}
+   const copy=document.createElement('span'),name=document.createElement('strong');copy.className='music-suggestion-copy';name.textContent=row.text;copy.append(name);
+   const detail=[kindLabel(row.kind),row.kind==='artist'?'':row.item?.artists?.join(', ')].filter(Boolean).join(' · ');if(detail){const note=document.createElement('small');note.textContent=detail;copy.append(note);}
+   node.title=detail?detail+': '+row.text:row.text;node.append(lead,copy);
    node.addEventListener('mousedown',e=>e.preventDefault());node.addEventListener('click',()=>pick(row));list.append(node);
   });
   panel.hidden=!rows.length;input.setAttribute('aria-expanded',String(!!rows.length));
  }
  async function request(job){
   if(inFlight){queued=job;return;}inFlight=true;
-  try{const result=await invoke('music_suggestions',{value:job.query,language:job.language});
-   const items=(Array.isArray(result)?result:[]).filter(value=>typeof value==='string'&&value.trim()&&value.length<=240).slice(0,8).map(text=>({text,kind:'query'}));
-   cache.set(job.key,{at:Date.now(),items});while(cache.size>8)cache.delete(cache.keys().next().value);
-   if(job.revision===revision&&document.activeElement===input&&items.length)render(items);
+  try{const [words,catalog]=await Promise.allSettled([invoke('music_suggestions',{value:job.query,language:job.language}),invoke('music_catalog',{kind:'search',value:job.query,filter:'all',language:job.language})]);
+   const result=words.status==='fulfilled'?words.value:[],texts=(Array.isArray(result)?result:[]).filter(value=>typeof value==='string'&&value.trim()&&value.length<=240).slice(0,8).map(text=>({text,kind:'query'}));
+   const rich=catalog.status==='fulfilled'?creditArtistCards(catalog.value?.sections||[]).flatMap(section=>section.items||[]).slice(0,6):[];
+   cache.set(job.key,{at:Date.now(),texts,rich});while(cache.size>8)cache.delete(cache.keys().next().value);
+   if(job.revision===revision&&document.activeElement===input)render(rowsFor(job.query,texts,rich));
   }catch{/* Keep local suggestions usable when offline. */}
   finally{inFlight=false;if(queued){const next=queued;queued=null;if(next.revision===revision)request(next);}}
  }
+ function rowsFor(query,remote=[],rich=[]){
+  const words=isPrivate()?[]:history,local=getItems();
+  return suggestionRows(query,{history:words,local,rich,recent:isPrivate()?[]:getRecent(),texts:[...remote,...searchSuggestions(query,words,local)]});
+ }
  function refresh(){
   clearTimeout(timer);const current=++revision;queued=null;const query=input.value.trim().slice(0,120);
-  const local=searchSuggestions(query,isPrivate()?[]:history,getItems());render(local);
+  render(rowsFor(query));
   if(query.length<2||composing||typeof invoke!=='function')return;
   const lang=language(),key=JSON.stringify([query.toLocaleLowerCase(),filter,lang]),hit=cache.get(key);
-  if(hit&&Date.now()-hit.at<60000){if(hit.items.length)render(hit.items);return;}
+  if(hit&&Date.now()-hit.at<60000){render(rowsFor(query,hit.texts,hit.rich));return;}
   timer=setTimeout(()=>request({query,filter,language:lang,key,revision:current}),350);
  }
  input.addEventListener('focus',refresh);input.addEventListener('input',refresh);

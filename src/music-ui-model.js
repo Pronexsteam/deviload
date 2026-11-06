@@ -15,6 +15,16 @@ export function searchSuggestions(query,history=[],items=[]){
   if(key)for(const item of items){if(item.kind==='artist')add(item.title,'artist',item);for(const name of item.artists||[])add(name,'artist');}
   for(const value of history)add(value,'recent');return out.slice(0,6);
 }
+export function suggestionRows(query,{history=[],local=[],rich=[],texts=[],recent=[]}={}){
+  const key=String(query||'').trim().toLocaleLowerCase(),seen=new Set(),titles=new Set(),items=[];
+  const kinds=['artist','album','song','playlist'],named=item=>[item?.title,...(item?.artists||[])].some(name=>typeof name==='string'&&name.toLocaleLowerCase().includes(key));
+  const add=item=>{if(!item?.id||!item.title||!kinds.includes(item.kind)||seen.has(item.id))return;seen.add(item.id);titles.add(item.title.toLocaleLowerCase());items.push({text:item.title,kind:item.kind,item});};
+  if(!key){recent.slice(0,4).forEach(add);return [...history.slice(0,4).map(text=>({text,kind:'recent'})),...items];}
+  rich.forEach(add);local.filter(named).forEach(add);
+  const top=items.sort((a,b)=>Number(b.kind==='artist')-Number(a.kind==='artist')).slice(0,4),rows=[];
+  for(const row of texts){const id=row.text.toLocaleLowerCase();if(!titles.has(id)&&!rows.some(value=>value.text.toLocaleLowerCase()===id))rows.push(row);}
+  return [...top,...rows].slice(0,8);
+}
 export function rememberSearch(history,query){const value=String(query||'').trim().slice(0,120);if(!value)return history;return [value,...history.filter(item=>typeof item==='string'&&item.toLocaleLowerCase()!==value.toLocaleLowerCase())].slice(0,8);}
 export function creditArtistCards(sections){return sections.map(section=>{let artist='';return {...section,items:section.items.map(item=>{if(item?.kind==='artist'){artist=item.title||'';return item;}if(item?.kind!=='song'||item.artists?.length){artist='';return item;}return artist?{...item,artists:[artist]}:item;})};});}
 export function creditAlbumArtist(item,parent){return item?.kind==='album'&&!item.artists?.length&&parent?.kind==='artist'&&parent.title?{...item,artists:[parent.title]}:item;}

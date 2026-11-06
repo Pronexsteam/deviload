@@ -160,3 +160,11 @@
 .music-shortcuts dt{font-size:13px;color:var(--workspace-ink)}
 .music-shortcuts dd{margin:0;text-align:right}
 .music-shortcuts kbd{display:inline-block;padding:3px 9px;border:1px solid var(--surf-line);border-radius:8px;background:var(--surf-fill);font:600 12px/1.4 inherit;color:var(--workspace-ink)}
+:root[data-theme] body .topbar #music-search .music-search-suggestions{right:auto;width:min(560px,100%);padding:8px;border:1px solid var(--surf-line);border-radius:22px;box-shadow:0 24px 50px -24px #000c}
+:root[data-theme] body :is(#devil-music,.topbar) #music-search .music-suggestion-result{justify-content:flex-start;gap:12px;min-height:56px;padding:6px 10px;border-radius:14px;font-size:13px}
+:root[data-theme] body .topbar #music-search .music-suggestion-result>.icon{flex:none;width:44px;height:20px;margin:0;color:var(--workspace-muted)}
+:root[data-theme] body .topbar #music-search .music-suggestion-result>.music-art{flex:none;width:44px;height:44px;border-radius:10px;overflow:hidden}
+:root[data-theme] body .topbar #music-search .music-suggestion-result[data-kind="artist"]>.music-art{border-radius:50%}
+:root[data-theme] body .topbar #music-search .music-suggestion-copy{display:grid;flex:1;gap:1px;min-width:0}
+:root[data-theme] body .topbar #music-search .music-suggestion-copy strong{display:block;overflow:hidden;font-weight:600;text-overflow:ellipsis;white-space:nowrap}
+:root[data-theme] body .topbar #music-search .music-suggestion-copy small{display:block;overflow:hidden;text-overflow:ellipsis}

@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {panelLayout,searchSuggestions,rememberSearch,collectionFacts,creditAlbumArtist,creditAlbumTracks,creditArtistCards,songAlbum} from '../src/music-ui-model.js';
+import {panelLayout,searchSuggestions,rememberSearch,collectionFacts,creditAlbumArtist,creditAlbumTracks,creditArtistCards,songAlbum,suggestionRows} from '../src/music-ui-model.js';
 test('panels protect content when app navigation reduces the actual workspace width',()=>{
  for(const width of [540,720,766,800,880,1000,1002,1120,1440]){const p=panelLayout(width,330,380,true);if(p.preview)assert.ok(width-p.library-p.playing-32>=560);else if(!p.overlay)assert.ok(width-p.library-16>=560);assert.equal(p.overlay,width<766);}
  assert.equal(panelLayout(880,240,280,false).preview,true);assert.equal(panelLayout(880,240,280,true).preview,false);
@@ -32,4 +32,15 @@ test('the album of a song comes from its own field or a catalog byline with a cl
  assert.equal(songAlbum({album:'Hot Space'}),'Hot Space');assert.equal(songAlbum({album:{title:'Legacy'}}),'Legacy');
  assert.equal(songAlbum({subtitle:'Queen • Hot Space • 4:09 · 366M plays'}),'Hot Space');
  assert.equal(songAlbum({subtitle:'Song • 3:59 · 2M plays'}),'');assert.equal(songAlbum({}),'');
+});
+test('search suggestions lead with artists and covers, without repeating them as text',()=>{
+ const song={id:'a',kind:'song',title:'Muse Song',artists:['Band']},artist={id:'b',kind:'artist',title:'Muse'},other={id:'c',kind:'song',title:'Other',artists:['Band']};
+ const rows=suggestionRows('mu',{rich:[song,artist],local:[song,other],texts:[{text:'MUSE',kind:'query'},{text:'music',kind:'query'}]});
+ assert.deepEqual(rows.map(row=>row.text),['Muse','Muse Song','music']);assert.equal(rows[0].item,artist);
+ assert.deepEqual(suggestionRows('band',{local:[other]}).map(row=>row.text),['Other']);
+ assert.ok(suggestionRows('x',{texts:Array.from({length:12},(_,n)=>({text:'x'+n,kind:'query'}))}).length<=8);
+});
+test('an empty search offers recent queries and recently played tracks',()=>{
+ const rows=suggestionRows('',{history:['one','two'],recent:[{id:'a',kind:'song',title:'Song'}],local:[{id:'b',kind:'song',title:'Hidden'}]});
+ assert.deepEqual(rows.map(row=>[row.kind,row.text]),[['recent','one'],['recent','two'],['song','Song']]);
 });

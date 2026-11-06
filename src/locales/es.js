@@ -1875,6 +1875,7 @@ export default {
   "What was fixed": "Qué se corrigió",
   "Added by you": "Añadido por ti",
   "Playing next": "A continuación",
+  "Song": "Canción",
   "Keyboard shortcuts": "Atajos de teclado",
   "Play or pause": "Reproducir o pausar",
   "Space": "Espacio",
