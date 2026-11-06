@@ -152,4 +152,11 @@
 .icon[data-icon="push-pin"]{--glyph:url("assets/icons/push-pin.svg")}
 :root[data-theme] body #music-preferences.music-preferences-dialog .music-catalog-context{background:transparent!important}
 :root[data-theme] body #devil-music .music-playlist-feature{margin-bottom:8px;padding-bottom:12px}
-:root[data-theme] body #devil-music .music-undo-chip{display:block;margin:0 0 10px}
+:root[data-theme] body #devil-music .music-undo-chip{display:block;width:fit-content;margin:0 0 10px}
+.icon[data-icon="keyboard"]{--glyph:url("assets/icons/keyboard.svg")}
+.music-context-menu{width:256px;max-height:calc(100dvh - 16px);overflow:auto}
+.music-context-menu hr,.music-track-options hr{width:calc(100% - 20px);height:1px;margin:4px 10px;border:0;background:var(--surf-line)}
+.music-shortcuts{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 20px;align-items:center;margin:0}
+.music-shortcuts dt{font-size:13px;color:var(--workspace-ink)}
+.music-shortcuts dd{margin:0;text-align:right}
+.music-shortcuts kbd{display:inline-block;padding:3px 9px;border:1px solid var(--surf-line);border-radius:8px;background:var(--surf-fill);font:600 12px/1.4 inherit;color:var(--workspace-ink)}

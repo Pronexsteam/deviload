@@ -65,7 +65,7 @@ export function createMusicLibrary({saved,commit,onOpen,notify,button,cover}){
     if(!saved.playlists.length){const empty=el("div","music-empty");empty.append(el("h4","",t("Make room for your favorites")),el("p","",t("Create a playlist, then add songs from search or your liked songs.")));root.append(empty);return;}
     const grid=el("div","music-playlists-grid");
     for(const list of [...saved.playlists].sort((a,b)=>Number(!!b.pinned)-Number(!!a.pinned))){
-      const card=button(list.name,null,()=>onOpen(list.id),"music-playlist-tile"),art=artwork(list);
+      const card=button(list.name,null,()=>onOpen(list.id),"music-playlist-tile"),art=artwork(list);card.dataset.playlistId=list.id;
       card.replaceChildren(art,el("strong","",(list.pinned?"★ ":"")+list.name),el("span","",t("{count} tracks",{count:list.items.length})));grid.append(card);
     }
     root.append(grid);
