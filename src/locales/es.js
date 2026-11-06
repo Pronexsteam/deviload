@@ -238,8 +238,6 @@ export default {
   "Vocals": "Voces",
   "Night": "Noche",
   "Volume smoothing": "Suavizar volumen",
-  "Off": "Desactivado",
-  "On": "Activado",
   "Track transition": "Transición entre canciones",
   "No overlap": "Sin superposición",
   "2 seconds": "2 segundos",

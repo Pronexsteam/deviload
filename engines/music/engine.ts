@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { AudioCache, TRACK_LIMIT, byteRange, readBytes, writeBytes, same, validId } from './storage.ts';
 import { pendingOpening } from './opening.ts';
 import { idleRelease } from './idle.ts';
+import { stallClock } from './stall.ts';
 
 const emit = (message: unknown) => console.log(JSON.stringify(message));
 const cache = new AudioCache('./audio');
@@ -63,10 +64,10 @@ class Track {
   constructor(readonly id:string,readonly size:number){}
   async read(offset:number,length:number) {
     if(offset<this.prefix.length)return this.prefix.slice(offset,Math.min(this.prefix.length,offset+length));
-    const deadline=Date.now()+65000;
+    const stalled=stallClock(65000);
     while(this.available<Math.min(this.size,offset+length)){
       if(this.error)throw Error(this.error);if(this.control.signal.aborted)throw Error('Cancelled');
-      if(Date.now()>deadline)throw Error('Audio continuation timed out');await new Promise(r=>setTimeout(r,20));
+      if(stalled(this.available))throw Error('Audio continuation timed out');await new Promise(r=>setTimeout(r,20));
     }
     return readBytes(cache.path(this.file),offset,Math.min(length,this.size-offset));
   }

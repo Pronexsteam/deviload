@@ -109,3 +109,11 @@ test('a full history retains old learned evidence when a new archive is imported
   assert.ok(result.saved.playlists[0].items.some(item=>item.id===song(2000).id));
   assert.ok(result.saved.favorites.some(item=>item.id===song(2001).id));
 });
+test('uploads of one recording match when every duration agrees, and stay reviewable otherwise',()=>{
+ const entry={title:'Night Drive',artists:['Artist'],durationMs:175400},timed=(n,duration)=>({...song(n),duration});
+ const same=selectImportMatch(entry,[timed(1,176),timed(2,175)]);
+ assert.equal(same.confidence,'exact');assert.equal(same.item.id,song(2).id);
+ assert.equal(selectImportMatch(entry,[timed(1,176),timed(2,178)]).confidence,'review');
+ assert.equal(selectImportMatch(entry,[timed(1,176),song(2)]).confidence,'review');
+ assert.equal(selectImportMatch({title:'Night Drive',artists:['Artist']},[timed(1,176),timed(2,176)]).confidence,'review');
+});

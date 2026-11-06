@@ -36,10 +36,10 @@ export function selectImportMatch(entry,candidates){
     const expected=Number(entry.durationMs)/1000,actual=Number(item.duration),hasDuration=expected>0&&actual>0,delta=hasDuration?Math.abs(expected-actual):0;
     const durationMatches=!hasDuration||delta<=Math.max(3,expected*.02),versionMatches=equal(variants(title),variants(candidateTitle));
     const sameTitle=title===candidateTitle||hasDuration&&matchingTitle(entry)===matchingTitle(item);
-    return {item,titleScore,score:titleScore*.6+artistScore*.4+(hasDuration?Math.max(-.35,.15-delta/expected):0)-(versionMatches?0:.4),exact:sameTitle&&artists.length>0&&equal(artists,candidateArtists)&&versionMatches&&durationMatches};
+    return {item,titleScore,timed:hasDuration&&delta<=1.5,score:titleScore*.6+artistScore*.4+(hasDuration?Math.max(-.35,.15-delta/expected):0)-(versionMatches?0:.4),exact:sameTitle&&artists.length>0&&equal(artists,candidateArtists)&&versionMatches&&durationMatches};
   }).filter(value=>value.titleScore>=.5).sort((a,b)=>b.score-a.score);
   const exact=ranked.filter(value=>value.exact);
-  if(exact.length===1)return {item:exact[0].item,confidence:'exact'};
+  if(exact.length===1||exact.length>1&&exact.every(value=>value.timed))return {item:exact[0].item,confidence:'exact'};
   return ranked.length?{item:(exact[0]||ranked[0]).item,confidence:'review'}:{item:null,confidence:'none'};
 }
 

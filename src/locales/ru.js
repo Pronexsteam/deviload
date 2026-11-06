@@ -238,8 +238,6 @@ export default {
   "Vocals": "Вокал",
   "Night": "Ночной",
   "Volume smoothing": "Сглаживание громкости",
-  "Off": "Выкл.",
-  "On": "Вкл.",
   "Track transition": "Переход между треками",
   "No overlap": "Без наложения",
   "2 seconds": "2 секунды",

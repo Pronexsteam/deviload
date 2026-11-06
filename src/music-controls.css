@@ -86,3 +86,31 @@ body.music-mini-page #mini-play:hover{background:var(--player-primary);color:var
   body.music-mini-page button:is(:hover,:active){transform:none}
   :root[data-theme] body :is(.music-dock,.music-stage) .music-play-button .icon[data-icon="play"]{transform:translateX(1px)}
 }
+.music-navigation-toggle::before,.topbar>.music-navigation button:first-child::before{content:"";width:19px;height:19px;background:currentColor;-webkit-mask:var(--nav-glyph) center/contain no-repeat;mask:var(--nav-glyph) center/contain no-repeat}
+.music-navigation-toggle{--nav-glyph:url("assets/icons/list.svg")}
+.topbar>.music-navigation button:first-child{--nav-glyph:url("assets/icons/arrow-left.svg")}
+:root[data-theme] body .topbar :is(.music-navigation-toggle,.music-navigation button,.topbar-actions #notice-button){transition:background-color var(--ctl-quick) linear,border-color var(--ctl-quick) linear,transform var(--ctl-settle) var(--ctl-ease)}
+:root[data-theme] body .topbar :is(.music-navigation-toggle,.music-navigation button,.topbar-actions #notice-button):not(:disabled):hover{border-color:color-mix(in srgb,var(--workspace-ink) 22%,transparent);background:var(--surf-hover)}
+:root[data-theme] body .topbar :is(.music-navigation-toggle,.music-navigation button,.topbar-actions #notice-button):not(:disabled):active{transform:scale(var(--ctl-press));transition-duration:var(--ctl-quick),var(--ctl-quick),60ms}
+
+:root[data-theme] body :is(.music-dock,.music-stage,#devil-music) .music-like{font-size:0;color:var(--player-muted,var(--workspace-muted))}
+:root[data-theme] body :is(.music-dock,.music-stage,#devil-music) .music-like::before{content:"";width:20px;height:20px;background:currentColor;-webkit-mask:url("assets/icons/heart.svg") center/contain no-repeat;mask:url("assets/icons/heart.svg") center/contain no-repeat;transition:transform var(--ctl-settle) var(--ctl-ease)}
+:root[data-theme] body :is(.music-dock,.music-stage,#devil-music) .music-like[aria-pressed="true"]{background:transparent;color:#ff5a6e}
+:root[data-theme] body :is(.music-dock,.music-stage,#devil-music) .music-like[aria-pressed="true"]::before{-webkit-mask-image:url("assets/icons/heart-fill.svg");mask-image:url("assets/icons/heart-fill.svg")}
+:root[data-theme] body :is(.music-dock,.music-stage,#devil-music) .music-like:not(:disabled):active::before{transform:scale(.78)}
+
+:root[data-theme] body :is(.music-dock,.music-stage) .music-play-button{background:linear-gradient(180deg,color-mix(in srgb,var(--player-primary) 88%,#fff),var(--player-primary) 62%);box-shadow:inset 0 1px 0 #ffffff80,inset 0 -1px 0 #0000001f,0 10px 24px -10px color-mix(in srgb,var(--player-primary) 70%,transparent),0 2px 6px #0000004d}
+:root[data-theme] body :is(.music-dock,.music-stage) .music-play-button:not(:disabled):hover{transform:scale(1.06);box-shadow:inset 0 1px 0 #ffffff99,inset 0 -1px 0 #0000001f,0 14px 30px -10px color-mix(in srgb,var(--player-primary) 85%,transparent),0 3px 8px #00000059}
+:root[data-theme] body :is(.music-dock,.music-stage) .music-play-button:disabled{background:transparent}
+:root[data-theme] body :is(.music-dock,.music-stage) .music-transport-buttons>.music-icon-button:has(.icon:is([data-icon="skip-back"],[data-icon="skip-forward"])):not(:disabled):hover{background:transparent;transform:scale(1.1)}
+:root[data-theme] body :is(.music-dock,.music-stage) .music-transport-buttons>.music-icon-button:has(.icon:is([data-icon="skip-back"],[data-icon="skip-forward"])):not(:disabled):active{transform:scale(.88)}
+
+.music-primary .icon[data-icon="play"]{--glyph:url("assets/icons/play-fill.svg")}
+:root[data-theme] body #devil-music .music-primary{box-shadow:inset 0 1px 0 #ffffff66,0 8px 20px -12px #000c}
+:root[data-theme] body .topbar #music-search .music-search-submit{display:inline-grid;place-items:center;width:38px;min-width:38px;height:38px;min-height:38px;padding:0;border-radius:50%;font-size:0}
+:root[data-theme] body .topbar #music-search .music-search-submit span:not(.icon){display:none}
+:root[data-theme] body .topbar #music-search:has(#music-query:placeholder-shown) .music-search-submit{display:none}
+@media(prefers-reduced-motion:reduce){
+  :root[data-theme] body .topbar :is(.music-navigation-toggle,.music-navigation button,.topbar-actions #notice-button):not(:disabled):is(:hover,:active),:root[data-theme] body :is(.music-dock,.music-stage) .music-transport-buttons>.music-icon-button:not(:disabled):is(:hover,:active){transform:none}
+}
+:root[data-theme] body main[data-page="music"]>.topbar>.music-navigation button{display:inline-flex;align-items:center;justify-content:center}
