@@ -1,5 +1,6 @@
 import {createMotionCover} from './music-motion.js';
 import {t,onLanguageChange} from "./i18n.js";
+import {flyFrom,fadeIn} from "./music-transitions.js";
 
 // Move the existing controls into a modal, so both views share one audio player.
 export function createNowPlaying({invoke,convertFileSrc,dock,identity,artwork,info,like,transport,extras,queuePanel,button,cover,renderDockArtwork,onDownload,onHideSong,onHideArtist,onArtist,onDismissQueue}) {
@@ -67,10 +68,11 @@ export function createNowPlaying({invoke,convertFileSrc,dock,identity,artwork,in
   function open(){
     if(!current||stage.open)return;
     returnFocus=document.activeElement;
+    const origin=artwork.getBoundingClientRect();
     artwork.replaceChildren(cover(current,"",1024));
     background.replaceChildren(cover(current,"",320));
     art.append(artwork);details.insertBefore(info,controls);controls.append(transport);actions.prepend(like);details.append(extras);
-    layout.append(queuePanel);document.body.classList.add("music-stage-open");stage.showModal();if(previewLyricsOn&&!queuePanel.hidden)lyrics?.unmount();showLyrics(true);close.focus();motion.update(current);wake();
+    layout.append(queuePanel);document.body.classList.add("music-stage-open");stage.showModal();if(previewLyricsOn&&!queuePanel.hidden)lyrics?.unmount();showLyrics(true);close.focus();motion.update(current);wake();fadeIn(stage);flyFrom(artwork,origin,{radius:'50%'});
   }
   stage.addEventListener("close",()=>{
     clearTimeout(idleTimer);stage.classList.remove("music-stage-idle");
@@ -78,7 +80,7 @@ export function createNowPlaying({invoke,convertFileSrc,dock,identity,artwork,in
     showLyrics(false);if(previewLyricsOn)lyrics?.mount(inlineLyrics);lyricsTrigger?.removeAttribute("aria-pressed");
     identity.append(artwork,info,like);dock.append(identity,transport,extras);document.body.append(queuePanel);
     if(renderDockArtwork)renderDockArtwork(current);else artwork.replaceChildren(cover(current,"",128));
-    document.body.classList.remove("music-stage-open");motion.update(current);returnFocus?.focus();
+    document.body.classList.remove("music-stage-open");motion.update(current);returnFocus?.focus();fadeIn(dock,200);
   });
   function labels(){
     stage.setAttribute("aria-label",t("Now playing"));heading.textContent=t("NOW PLAYING");caption.textContent=t("YOUR OWN FREQUENCY");lyricsPanel.setAttribute("aria-label",t("Lyrics"));
@@ -90,7 +92,7 @@ export function createNowPlaying({invoke,convertFileSrc,dock,identity,artwork,in
   return {open,syncQueueVisibility(){if(stage.open)syncRail();},attachPreview(workspace){workspace.append(scene,preview);},attachLyrics(controller,trigger){lyrics=controller;lyricsTrigger=trigger;},toggleLyrics(){if(!stage.open)return false;if(!queuePanel.hidden){lyricsWanted=true;onDismissQueue?.();}else showLyrics(lyricsPanel.hidden);wake();return true;},update(item,downloading=false,meta={}){
     const trackChanged=current?.id!==item?.id,imageChanged=currentImage!==(item?.image||'');
     if(trackChanged||imageChanged){if(stage.open)background.replaceChildren(cover(item,"",320));previewArt.replaceChildren(cover(item,"",640));ambient.replaceChildren(cover(item,"",320));scene.replaceChildren(cover(item,"",320));}scene.hidden=!item;
-    if(trackChanged){notice.hidden=true;for(const node of [previewArt,info]){node.classList.remove("music-track-arriving");requestAnimationFrame(()=>node.classList.add("music-track-arriving"));}}
+    if(trackChanged){notice.hidden=true;for(const node of [previewArt,info,artwork]){node.classList.remove("music-track-arriving");requestAnimationFrame(()=>node.classList.add("music-track-arriving"));}}
     if(stage.open&&(trackChanged||imageChanged))artwork.replaceChildren(cover(item,"",1024));
     currentImage=item?.image||'';
     if(playing!==meta.playing){playing=!!meta.playing;wake();}

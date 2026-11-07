@@ -124,3 +124,15 @@ body:not(:has(#devil-music.music-preview-room)) .music-panel-toggle,body:not(:ha
 @media(min-width:900px) and (max-width:1040px){
   :root[data-theme] body:has(main[data-page="music"]) .music-dock{grid-template-columns:minmax(150px,1fr) minmax(260px,1.3fr) auto}
 }
+:root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body :is(.music-dock,.music-stage){--player-primary:var(--cover-lyric-light,#f3f5fa)}
+:root[data-theme="glass-light"] body :is(.music-dock,.music-stage){--player-primary:var(--cover-lyric-dark,#405b80)}
+#devil-music .music-track-row.active.is-playing .music-track-number{font-size:0}
+#devil-music .music-track-row.active.is-playing .music-track-number::before{content:"";display:inline-block;width:14px;height:12px;color:var(--player-primary);background:linear-gradient(currentColor 0 0) 0 100%/3px 40% no-repeat,linear-gradient(currentColor 0 0) 50% 100%/3px 90% no-repeat,linear-gradient(currentColor 0 0) 100% 100%/3px 60% no-repeat}
+@media(prefers-reduced-motion:no-preference){
+  #devil-music .music-track-row.active.is-playing .music-track-number::before{animation:music-row-bars .8s ease-in-out infinite alternate}
+  :is(.music-dock,.music-stage) .music-like[aria-pressed="true"]::before{animation:music-like-pop .34s var(--ctl-ease)}
+  .music-track-arriving{animation:music-track-settle .28s var(--ctl-ease)}
+}
+@keyframes music-row-bars{to{background-size:3px 95%,3px 35%,3px 80%}}
+@keyframes music-like-pop{0%{transform:scale(.6)}55%{transform:scale(1.22)}100%{transform:scale(1)}}
+@keyframes music-track-settle{from{opacity:.25;transform:scale(.96)}to{opacity:1;transform:none}}

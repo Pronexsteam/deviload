@@ -11,6 +11,7 @@ import {playbackCandidates as eligiblePlaybackCandidates} from "./music-playback
 import {wireMusicPanels,wireMusicSuggestions,createMusicHero,wireMusicConnectionShortcuts} from "./music-workspace-tools.js";
 import {wireMusicDockMenu} from "./music-dock-menu.js";
 import {createMusicHomeTiles} from "./music-home-tiles.js";
+import {revealView} from "./music-transitions.js";
 import {musicShortcut} from "./music-shortcuts.js";
 import {createShortcutHelp} from "./music-shortcut-help.js";
 import {collectionFacts,creditAlbumArtist,creditAlbumTracks,creditArtistCards} from "./music-ui-model.js";
@@ -1162,7 +1163,7 @@ export function createMusic({invoke,onDownload,storage}) {
   function selectView(next) {
     filters.hidden=next!=="search";offlineTab.setAttribute("aria-current",next==="offline"?"page":"false");
     filters.querySelectorAll("button").forEach(node=>node.setAttribute("aria-pressed",String(node.dataset.filter===searchFilter)));
-    view=next;musicSearch?.sync(next==="search"&&!activeMood?lastQuery.value:"");$("music-home-hero").hidden=next!=="home";$("music-moods").hidden=next!=="home"&&!(next==="search"&&activeMood);
+    if(view!==next)revealView($("music-shelves"));view=next;musicSearch?.sync(next==="search"&&!activeMood?lastQuery.value:"");$("music-home-hero").hidden=next!=="home";$("music-moods").hidden=next!=="home"&&!(next==="search"&&activeMood);
     document.querySelectorAll("[data-music-view]").forEach(b=>{const selected=b.dataset.musicView===(["playlist","interest"].includes(next)?"library":next);b.classList.toggle("selected",selected);b.setAttribute("aria-current",selected?"page":"false");});
     document.querySelectorAll("[data-music-mood]").forEach(b=>{b.classList.toggle("selected",b.dataset.musicMood===activeMood);b.setAttribute("aria-pressed",String(b.dataset.musicMood===activeMood));});
     $("devil-music").dataset.view=next;
