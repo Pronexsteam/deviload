@@ -85,7 +85,7 @@ impl Worker {
     fn request(&self,mut value:Value,timeout:Duration,cancelled:&dyn Fn()->bool)->Reply{
         if !self.alive.load(Ordering::Relaxed){return Err("Music engine stopped".into());}
         let key=SERIAL.fetch_add(1,Ordering::Relaxed);value["key"]=json!(key);let(tx,rx)=mpsc::channel();
-        let stage=match value["action"].as_str(){Some("recovery_check"|"completed_playback")=>None,Some("play") if value["preload"]==true=>Some(DiagnosticStage::Preload),Some("cache")=>Some(DiagnosticStage::Cache),_=>Some(DiagnosticStage::Resolve)};
+        let stage=match value["action"].as_str(){Some("recovery_check"|"completed_playback"|"clip")=>None,Some("play") if value["preload"]==true=>Some(DiagnosticStage::Preload),Some("cache")=>Some(DiagnosticStage::Cache),_=>Some(DiagnosticStage::Resolve)};
         {let mut pending=self.pending.lock().unwrap();if pending.len()>=16{return Err("Music engine is busy".into());}pending.insert(key,tx);}
         if let Err(e)=self.send(value){self.pending.lock().unwrap().remove(&key);return Err(e);}
         let started=Instant::now();if let Some(stage)=stage{diagnostics::record(stage,DiagnosticCode::Requested,None);}
@@ -178,6 +178,22 @@ pub fn completed_playback(id:&str,generation:u64,cancelled:&dyn Fn()->bool)->Res
     let data=worker.request(json!({"action":"completed_playback","id":id,"generation":generation}),Duration::from_millis(400),cancelled)?;
     if data.is_null(){return Ok(None);}
     relay_url(&worker,&data).map(Some)
+}
+// A song's music video, muted, from the same engine as the audio. No id stops the current one, or only warms up.
+#[tauri::command]
+pub async fn music_clip_stream(id:Option<String>,height:Option<u32>,warm:Option<bool>)->Result<Option<Value>,String>{
+    let id=id.unwrap_or_default();
+    if !id.is_empty()&&!(id.len()==11&&id.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'_'||b==b'-')){return Err("Unavailable video".into());}
+    let height=height.filter(|value|(144..=2160).contains(value)).unwrap_or(720);
+    let warm=id.is_empty()&&warm.unwrap_or(false);
+    tauri::async_runtime::spawn_blocking(move||{
+        let worker=worker()?;
+        let data=worker.request(json!({"action":"clip","id":id,"height":height,"warm":warm}),Duration::from_secs(16),&||false)?;
+        if data.is_null(){return Ok(None);}
+        let url=relay_url(&worker,&data)?;
+        let heights:Vec<u64>=data["heights"].as_array().map(|list|list.iter().filter_map(Value::as_u64).filter(|h|(144..=2160).contains(h)).take(12).collect()).unwrap_or_default();
+        Ok(Some(json!({"url":url,"height":data["height"].as_u64().filter(|h|(144..=2160).contains(h)),"heights":heights})))
+    }).await.map_err(|_|"Music video unavailable".to_owned())?
 }
 #[tauri::command]
 pub async fn music_cache(clear:Option<bool>,limit:Option<u64>)->Reply{

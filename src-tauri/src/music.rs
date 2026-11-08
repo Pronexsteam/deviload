@@ -336,7 +336,7 @@ pub fn catalog_page_for_recovery(kind:&str,value:&str,language:&str,proxy:&str,f
     if params.len()>8192 || params.chars().any(char::is_control) || (!params.is_empty() && kind!="browse") {return Err("Invalid music request".into());}
     if !params.is_empty(){body["params"]=json!(params);}
     if kind == "search" {
-        let code = match filter { "all" => None, "songs" => Some("II"), "albums" => Some("IY"), "artists" => Some("Ig"), _ => return Err("Invalid music request".into()) };
+        let code = match filter { "all" => None, "songs" => Some("II"), "albums" => Some("IY"), "artists" => Some("Ig"), "videos" => Some("IQ"), _ => return Err("Invalid music request".into()) };
         if let Some(code) = code { body["params"] = json!(format!("EgWKAQ{code}AWoMEA4QChADEAQQCRAF")); }
     }
     let client = client(proxy)?;
