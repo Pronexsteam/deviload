@@ -26,9 +26,11 @@ function timestamp(value,now) {return Number.isFinite(value)&&value>0&&value<=no
 function age(value,now) {const at=timestamp(value,now);return at===null?Infinity:Math.max(0,now-at);}
 const decay=(entry,now)=>Math.exp(-Math.LN2*age(entry.at,now)/HALF_LIFE);
 const qualified=entry=>Boolean(entry&&(finite(entry.plays)>0||finite(entry.score)>=1));
-function exclusions(profile) {
-  const hidden=new Set((Array.isArray(profile?.hiddenSongs)?profile.hiddenSongs:[]).filter(validId).slice(0,500));
-  const blocked=new Set(names(profile?.blockedArtists).slice(0,300));
+// Hiding is a deliberate choice; keep enough room that old choices do not quietly expire.
+export const HIDDEN_LIMIT=2000,BLOCKED_LIMIT=1000;
+export function recommendationAllowed(profile) {
+  const hidden=new Set((Array.isArray(profile?.hiddenSongs)?profile.hiddenSongs:[]).filter(validId).slice(0,HIDDEN_LIMIT));
+  const blocked=new Set(names(profile?.blockedArtists).slice(0,BLOCKED_LIMIT));
   return item=>!hidden.has(item.id)&&!tasteArtistKeys(item).some(key=>blocked.has(key));
 }
 
@@ -40,15 +42,15 @@ export function readTaste(storage) {
     entries[entry.item.id]={item:entry.item,score:clamp(finite(entry.score),-8,8),at:clamp(finite(entry.at),0,Number.MAX_SAFE_INTEGER),lastPlayed:clamp(finite(entry.lastPlayed),0,Number.MAX_SAFE_INTEGER),plays:Math.floor(clamp(finite(entry.plays),0,10000))};
   }
   return {version:1,entries,
-    hiddenSongs:[...new Set((Array.isArray(raw?.hiddenSongs)?raw.hiddenSongs:[]).filter(validId))].slice(0,500),
-    blockedArtists:names(raw?.blockedArtists).slice(0,300),
+    hiddenSongs:[...new Set((Array.isArray(raw?.hiddenSongs)?raw.hiddenSongs:[]).filter(validId))].slice(0,HIDDEN_LIMIT),
+    blockedArtists:names(raw?.blockedArtists).slice(0,BLOCKED_LIMIT),
     mode:["balanced","familiar","discovery"].includes(raw?.mode)?raw.mode:"balanced"};
 }
 
 export function hideRecommendation(profile,item,artist=false) {
   if(!validSong(item)||!profile||typeof profile!=="object")return;
-  if(artist)profile.blockedArtists=[...new Set([...tasteArtistKeys(item),...names(profile.blockedArtists)])].slice(0,300);
-  else profile.hiddenSongs=[...new Set([item.id,...(Array.isArray(profile.hiddenSongs)?profile.hiddenSongs:[]).filter(validId)])].slice(0,500);
+  if(artist)profile.blockedArtists=[...new Set([...tasteArtistKeys(item),...names(profile.blockedArtists)])].slice(0,BLOCKED_LIMIT);
+  else profile.hiddenSongs=[...new Set([item.id,...(Array.isArray(profile.hiddenSongs)?profile.hiddenSongs:[]).filter(validId)])].slice(0,HIDDEN_LIMIT);
 }
 
 // Short passive exposure has zero reward and zero qualified plays. Navigation and
@@ -96,7 +98,7 @@ function meanEvidence(values=[]) {
   return weight?values.reduce((sum,row)=>sum+row.value*Math.abs(row.value),0)/weight:0;
 }
 function affinities(profile,favorites,now,followedArtists=[]) {
-  const allowed=exclusions(profile),entries=new Map(),songScores=new Map(),history=new Map(),likes=new Map(),knownArtists=new Set(),recentArtists=new Map();
+  const allowed=recommendationAllowed(profile),entries=new Map(),songScores=new Map(),history=new Map(),likes=new Map(),knownArtists=new Set(),recentArtists=new Map();
   const favoriteSongs=songs(favorites),liked=new Set(favoriteSongs.map(item=>item.id)),followed=new Set(names(followedArtists));
   for(const entry of entryList(profile)) {
     if(!allowed(entry.item))continue;

@@ -35,14 +35,22 @@ export function timedLyrics(value) {
   const time = v => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 86400;
   return value.filter(line => line && typeof line.text === "string" && time(line.at)
     && (line.end == null || time(line.end) && line.end >= line.at)).map(line => {
-    const words = Array.isArray(line.words) && line.words.length <= 500 ? line.words : [];
-    const valid = words.length && words.every((word, i) => word && typeof word.text === "string" && time(word.at)
-      && word.at >= line.at && (line.end == null || word.at <= line.end)
-      && (!i || word.at >= words[i-1].at)
-      && (word.end == null || time(word.end) && word.end >= word.at && (line.end == null || word.end <= line.end)))
-      && words.map(word => word.text).join("") === line.text;
-    return {...line, words: valid ? words : []};
+    const timed = value => {
+      const words = Array.isArray(value) && value.length <= 500 ? value : [];
+      return words.length && words.every((word, i) => word && typeof word.text === "string" && time(word.at)
+        && word.at >= line.at && (line.end == null || word.at <= line.end)
+        && (!i || word.at >= words[i-1].at)
+        && (word.end == null || time(word.end) && word.end >= word.at && (line.end == null || word.end <= line.end))) ? words : [];
+    };
+    const words = timed(line.words), background = timed(line.background);
+    return {...line, words: words.map(word => word.text).join("") === line.text ? words : [], ...(line.background ? {background} : {})};
   }).sort((a,b) => a.at-b.at);
+}
+
+export function leadSinger(lines) {
+  const counts = new Map();
+  for (const {agent} of lines) if (agent) counts.set(agent, (counts.get(agent) || 0) + 1);
+  return [...counts].sort((a,b) => b[1]-a[1])[0]?.[0] || '';
 }
 
 export function lyricFrame(lines, time, duration = Infinity) {
@@ -55,13 +63,14 @@ export function lyricFrame(lines, time, duration = Infinity) {
     if(next<=i){next=i+1;while(next<lines.length && lines[next].at===line.at)next++;}
     const end=Math.min(line.end ?? lines[next]?.at ?? duration,duration);
     if(time>=end)continue;
-    active.push({index:i,words:(line.words||[]).map((word,index,words)=>{
+    const state=(word,index,words)=>{
       if(time<word.at)return {state:"upcoming",progress:0};
       const end=word.end ?? words[index+1]?.at ?? line.end;
       if(end != null && time>=end)return {state:"sung",progress:1};
       // A missing end allows an active word, but no fabricated fill animation.
       return {state:"current",progress:word.end>word.at?Math.min(1,(time-word.at)/(word.end-word.at)):1};
-    })});
+    };
+    active.push({index:i,words:(line.words||[]).map(state),background:(line.background||[]).map(state)});
   }
   return active;
 }

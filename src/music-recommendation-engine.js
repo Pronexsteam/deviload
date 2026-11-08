@@ -55,3 +55,10 @@ export function recommendationFamiliarity(item,saved,taste,{now=Date.now()}={}){
   const familiar=new Set(familiarArtistKeys(recording.taste,recording.saved.favorites,{now,followedArtists:followed}));
   return keys.some(key=>familiar.has(key));
 }
+
+// Different uploads of one song share a title and lead artist; show only one of them.
+const songKey=item=>[item?.title,item?.artists?.[0]].map(value=>String(value||'').normalize('NFKC').toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu,'')).join('|');
+export function distinctSongs(items,avoid=[]){
+  const seen=new Set(avoid.filter(Boolean).map(songKey));
+  return items.filter(item=>{if(item?.kind!=='song'||!item.title)return true;const key=songKey(item);if(seen.has(key))return false;seen.add(key);return true;});
+}

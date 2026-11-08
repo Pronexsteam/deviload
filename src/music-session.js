@@ -27,6 +27,15 @@ export function saveMusicSession(storage,value){
   storage?.setItem(KEY,JSON.stringify({...value,queue}));sessionTracks=nextCache;
 }
 
+const artistOf=item=>String(item?.artists?.[0]||String(item?.subtitle||"").split(/ [\u00b7\u2022] /)[0]||"").trim().toLocaleLowerCase();
+// Prefer a song by another artist than the previous one when the pool allows it.
+function spreadDraw(pool,previous,random){
+  const draw=()=>{const value=Number(random());return Number.isFinite(value)?Math.max(0,Math.min(pool.length-1,Math.floor(value*pool.length))):0;};
+  let offset=draw();const artist=artistOf(previous);
+  for(let attempt=0;attempt<4&&artist&&pool.length>1&&artistOf(pool[offset])===artist;attempt++)offset=draw();
+  return offset;
+}
+
 // Peeking does not consume a song: preloading and Next use the same choice.
 export function createPlaybackOrder(random=Math.random,sourceKey=item=>item.id){
   let seen=new Set(),history=[],cursor=-1,choice=null,planned=[],priority=[],overrideHistory=false;
@@ -59,7 +68,7 @@ export function createPlaybackOrder(random=Math.random,sourceKey=item=>item.id){
       const rest=candidates.filter(item=>!used.has(key(item)));
       // Partial Fisher-Yates: drawing a full queue stays linear instead of
       // shifting thousands of remaining entries after every random selection.
-      while(rest.length&&result.length<limit){const draw=Number(random()),offset=Number.isFinite(draw)?Math.max(0,Math.min(rest.length-1,Math.floor(draw*rest.length))):0;result.push(rest[offset]);rest[offset]=rest[rest.length-1];rest.pop();}
+      while(rest.length&&result.length<limit){const offset=spreadDraw(rest,result.at(-1),random);result.push(rest[offset]);rest[offset]=rest[rest.length-1];rest.pop();}
       const visible=result.map(item=>item.id),visibleIds=new Set(visible);
       planned=[...visible,...planned.filter(id=>!visibleIds.has(id)&&byId.has(id))];return result;
     },
@@ -93,10 +102,13 @@ export function createPlaybackOrder(random=Math.random,sourceKey=item=>item.id){
       const unique=[...new Map(queue.map(item=>[key(item),item])).values()];
       let candidates=unique.filter(item=>!seen.has(key(item))&&key(item)!==currentKey),cycle=false;
       if(!candidates.length&&repeat){candidates=unique.filter(item=>key(item)!==currentKey);cycle=true;}
+      // A new round should not open with songs that just closed the previous one.
+      const span=Math.min(10,Math.floor(unique.length/3)),recent=new Set(span?history.slice(-span-1):[]),fresh=candidates.filter(item=>!recent.has(item.id));
+      if(fresh.length)candidates=fresh;
       if(!candidates.length)return repeat&&queue.length===1?0:-1;
       const signature=JSON.stringify([currentKey,repeat,candidates.map(item=>[item.id,key(item)])]);
       if(choice?.signature!==signature){
-        const draw=Number(random()),offset=Number.isFinite(draw)?Math.max(0,Math.min(candidates.length-1,Math.floor(draw*candidates.length))):0;
+        const offset=spreadDraw(candidates,current,random);
         const candidateIds=new Set(candidates.map(item=>item.id));
         const reserved=planned.find(id=>candidateIds.has(id));
         choice={signature,id:reserved||candidates[offset].id,cycle};

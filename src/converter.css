@@ -11,7 +11,7 @@ body.convert-page {
 body.convert-page main.convert-window {display:flex;flex-direction:column;height:auto;min-height:100vh;gap:18px;padding:24px 24px 0;box-sizing:border-box}
 .convert-page .convert-head {flex:none}
 .convert-page .convert-head p {color:var(--convert-muted);max-width:760px}
-.convert-page .convert-drop {min-height:86px;flex:none}
+.convert-page .convert-drop {flex:none}
 .convert-page .convert-options {min-width:0;flex:none}
 .convert-page .convert-presets {gap:10px}
 .convert-page .convert-presets button {min-height:68px;line-height:1.35}
@@ -22,7 +22,7 @@ body.convert-page main.convert-window {display:flex;flex-direction:column;height
 .convert-page .convert-fields {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:14px}
 .convert-page .convert-fields label {display:grid;gap:7px;font-size:12px;color:var(--convert-muted);min-width:0}
 .convert-page .convert-fields select {width:100%;min-height:38px;margin:0}
-.convert-page .convert-save {gap:12px;flex-wrap:wrap}
+.convert-page .convert-save {flex-wrap:wrap}
 .convert-page .export-folder {min-width:0;max-width:100%}
 .convert-page .export-folder-name {overflow-wrap:anywhere;min-width:0}
 .convert-page .convert-list-wrap {overflow:visible;flex:1;min-height:90px}

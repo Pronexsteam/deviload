@@ -1,5 +1,5 @@
 .completion-scene{position:fixed;inset:0;width:100vw;height:100vh;z-index:95;pointer-events:none;contain:strict}
-.completion-seal{display:none!important}
+
 body[data-reaction="success"]::after{display:none}
 .reaction-overlay[data-kind="success"]{left:auto;right:24px;top:auto;bottom:32px;width:min(350px,calc(100vw - 48px));min-height:0;box-sizing:border-box;padding:15px 20px 15px 24px;align-items:flex-start;gap:5px;text-align:left;border:1px solid #ffffff12;border-radius:10px;background:#15191ff5;box-shadow:0 12px 40px #0007;transform:none;overflow:hidden}
 .reaction-overlay[data-kind="success"]::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;background:#ff995e;box-shadow:0 0 16px #ff731a80}

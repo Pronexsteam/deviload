@@ -1,8 +1,8 @@
 /* Shared desktop proportions: one music library, one content column, one player. */
 body.music-focus:not(.cut-page):not(.convert-page){grid-template-columns:minmax(0,1fr)}
 /* Menu actions are full rows, never the small icon buttons used by their parent. */
-body .music-track-options button.music-menu-action{display:flex;width:100%;height:auto;min-height:38px;flex:none;padding:9px 10px;font-size:13px;line-height:1.4;border:0;background:transparent;color:#d5c2b8;border-radius:6px;justify-content:flex-start;gap:10px}
-body .music-track-options button.music-menu-action:hover{background:#ffffff0b;color:white}
+body .music-track-options button.music-menu-action{display:flex;width:100%;height:auto;flex:none;padding:9px 10px;line-height:1.4;border:0;background:transparent;border-radius:6px;justify-content:flex-start;gap:10px}
+body .music-track-options button.music-menu-action:hover{color:white}
 .music-track-options .music-menu-label{display:block;flex:1;min-width:0;white-space:normal;overflow-wrap:normal;text-align:left}
 .music-dock{grid-template-columns:minmax(150px,1fr) minmax(200px,1.15fr) auto}
 .music-dock-extras{gap:4px}

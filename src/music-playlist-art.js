@@ -15,7 +15,7 @@ export function playlistArtwork(list,cover,size=320){
     if(seen.size===4)break;
   }
   if(!seen.size){
-    const label=document.createElement("span");label.className="music-typographic-cover";label.textContent=list.name;art.append(label);
+    const label=document.createElement("span");label.className="music-typographic-cover";label.textContent=[...String(list.name||"")][0]?.toLocaleUpperCase()||"";art.append(label);
   }
   return art;
 }

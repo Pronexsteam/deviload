@@ -1,3 +1,4 @@
+import {distinctSongs} from "../src/music-recommendation-engine.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
@@ -34,7 +35,7 @@ test("an older home personalization cannot replace a newer taste choice",async()
   const code=source.slice(source.indexOf("  function resetPublicDiscovery("),source.indexOf("  function recommendationOptions("))+
     source.slice(source.indexOf("  async function personalize("),source.indexOf("  function prepareHomeSelection("));
   const old=deferred(),fresh=deferred(),rendered=[],ctx={
-    personalization:0,recommendationRevision:0,homeRefreshRevision:-1,homeSeedRotation:0,request:1,queue:[],saved:{favorites:[song(1)],recent:[],collections:[],playlists:[],sourceBindings:[],interestMixes:[]},taste:readTaste(),
+    personalization:0,recommendationRevision:0,listeningRevision:0,homeListeningRevision:0,homeBuiltAt:0,distinctSongs,homeRefreshRevision:-1,homeSeedRotation:0,request:1,queue:[],saved:{favorites:[song(1)],recent:[],collections:[],playlists:[],sourceBindings:[],interestMixes:[]},taste:readTaste(),
     current:null,playbackContext:[],playbackSourceContext:{kind:"manual"},followedCursor:0,privateSession:false,discoveryCandidates:[],sections:[],recommendationSession:createRecommendationSession(),
     recommendationReasons:new Map(),captureListening(){},tasteSeeds,tracks,canonicalArtistKey,createRecordingView,
     radio:seed=>seed.id===song(1).id?old.promise:fresh.promise,invoke(){throw Error("no artist request expected");},

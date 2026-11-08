@@ -255,7 +255,7 @@ fn run(cmd:&mut Command, timeout:Duration, cancelled:&dyn Fn()->bool, pid:&dyn F
     cmd.stdin(Stdio::null()).stdout(output_file.reopen().map_err(|_| "Could not start gallery-dl.")?)
         .stderr(error_file.reopen().map_err(|_| "Could not start gallery-dl.")?);
     #[cfg(unix)] {use std::os::unix::process::CommandExt;cmd.process_group(0);}
-    let mut child=cmd.spawn().map_err(|_| "Gallery-dl could not start. Check that its optional engine is installed.")?;pid(child.id());
+    let mut child=cmd.spawn().map_err(|_| "Gallery-dl could not start. Check that its optional engine is installed.")?;crate::child_job::bind(&child);pid(child.id());
     let started=Instant::now();let mut bytes=Vec::new();let mut offset=0;let mut urls=0;let mut truncated=false;
     let outcome=(||->Result<_,String>{loop {
         if cancelled() {return Err("Gallery download cancelled.".into());}

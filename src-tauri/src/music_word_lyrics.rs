@@ -25,12 +25,19 @@ fn fetch_unison(video_id:&str,duration:f64,proxy:&str)->Option<Value>{
     unison_result(&serde_json::from_slice(&bytes).ok()?,video_id,duration)
 }
 
+fn altered_version(title:&str)->bool{
+    let lower=title.to_lowercase();
+    let Some(start)=lower.find(['(','[']).or_else(||lower.find(" - ")) else {return false};
+    let words:Vec<&str>=lower[start..].split(|c:char|!c.is_alphanumeric()).filter(|word|!word.is_empty()).collect();
+    words.iter().any(|word|["slowed","remix","live","acoustic","instrumental","nightcore"].contains(word))
+        ||words.windows(2).any(|pair|pair[1]=="up"&&(pair[0]=="sped"||pair[0]=="speed"))
+}
+
 pub fn fetch(title: &str, artist: &str, album: &str, duration: f64, proxy: &str) -> Option<Value> {
     if title.trim().is_empty() || artist.trim().is_empty() || title.len()>1000 || artist.len()>500 || album.len()>1000 || !duration.is_finite() || !(1.0..=86400.0).contains(&duration) { return None; }
     // The provider does not return recording IDs. Do not attach album timing to
     // edits whose speed or arrangement differs, even if its fuzzy matcher does.
-    let lower=title.to_lowercase();
-    if ["slowed","sped up","speed up","remix","live","acoustic","instrumental","nightcore"].iter().any(|v| lower.split(|c:char| !c.is_alphanumeric()).collect::<Vec<_>>().join(" ").contains(v)) { return None; }
+    if altered_version(title) { return None; }
     let _=rustls::crypto::ring::default_provider().install_default();
     let mut builder=reqwest::blocking::Client::builder().timeout(Duration::from_secs(6)).connect_timeout(Duration::from_secs(3))
         .redirect(reqwest::redirect::Policy::none()).user_agent(concat!("Deviload/",env!("CARGO_PKG_VERSION")));
@@ -63,6 +70,10 @@ pub async fn music_word_lyrics(title:String,artist:String,album:Option<String>,d
         assert!(fetch("","Artist","",200.0,"").is_none());
         assert!(fetch("Song (Slowed)","Artist","",200.0,"").is_none());
         assert!(fetch("Song","Artist","",f64::NAN,"").is_none());
+    }
+    #[test] fn only_version_markers_count_as_altered_recordings(){
+        for title in ["Song (Live)","Song - Live at Wembley","Song [Sped Up]","Song (Acoustic Version)","Song (Remix)"]{assert!(altered_version(title),"{title}");}
+        for title in ["Alive","Live Forever","Deliver Us","Remix to Ignition","Song (feat. Olive)"]{assert!(!altered_version(title),"{title}");}
     }
     #[test] fn community_lyrics_require_the_same_recording_and_duration(){
         let mut value=json!({"success":true,"data":{"videoId":"abcdefghijk","duration":200,"format":"ttml","syncType":"richsync","lyrics":"<tt/>"}});

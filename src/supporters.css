@@ -21,7 +21,7 @@ body.music-focus .supporters-board{margin-top:10px;margin-bottom:20px}
 /* A quiet, readable thank-you strip in the material themes. Keep its
    local backplate opaque enough that wallpaper cannot obscure donor names. */
 :root[data-theme="glass-light"] .supporters-board{--supporters-backplate:rgba(252,253,255,.95);--supporters-ink:#202630;--supporters-muted:#535d6b;--supporters-line:rgba(43,54,72,.2);--supporters-chip:rgba(35,45,61,.055);--supporters-hover:rgba(35,45,61,.1)}
-:root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) .supporters-board{--supporters-backplate:rgba(25,28,33,.96);--supporters-ink:#f0f2f5;--supporters-muted:#bac2cc;--supporters-line:rgba(218,227,239,.22);--supporters-chip:rgba(232,239,248,.06);--supporters-hover:rgba(232,239,248,.12)}
+:root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) .supporters-board{--supporters-ink:#f0f2f5;--supporters-muted:#bac2cc;--supporters-line:rgba(218,227,239,.22);--supporters-chip:rgba(232,239,248,.06);--supporters-hover:rgba(232,239,248,.12)}
 :root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) .supporters-board{--supporters-backplate:#191c21}
 :root:is([data-theme="glass-light"],[data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) .supporters-board{
   box-sizing:border-box;grid-template-columns:minmax(210px,1fr) minmax(0,1.15fr) auto;

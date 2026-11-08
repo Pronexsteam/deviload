@@ -1,3 +1,4 @@
+import {TRANSITIONS} from './music-transition-model.js';
 export const frequencies=[60,170,350,1000,3500,10000];
 export const presets={flat:[0,0,0,0,0,0],bass:[5,3,0,-1,0,1],voice:[-3,-2,1,3,2,0],night:[-2,-1,0,1,-1,-3]};
 const gains=value=>frequencies.map((_,i)=>Number.isFinite(value?.[i])?Math.max(-12,Math.min(12,value[i])):0);
@@ -6,7 +7,7 @@ export function soundSettings(raw={}){
   const custom=Array.isArray(raw.custom)?raw.custom.filter(p=>p&&typeof p.name==='string'&&p.name.trim()).slice(0,50).map(p=>({name:p.name.trim().slice(0,48),bands:gains(p.bands)})):[];
   const preset=Object.hasOwn(presets,raw.preset)?raw.preset:'custom';
   return {preset:preset==='custom'&&!Array.isArray(raw.bands)?'flat':preset,bands:gains(raw.bands||presets[preset]),custom,selected:custom.some(p=>p.name===raw.selected)?raw.selected:'',bypass:raw.bypass===true,
-    soft:raw.soft===true,transition:[0,2,4].includes(raw.transition)?raw.transition:0,rate:Number.isFinite(raw.rate)?Math.round(Math.max(.5,Math.min(2,raw.rate))*20)/20:1};
+    soft:raw.soft===true,transition:TRANSITIONS.includes(raw.transition)?raw.transition:0,seamless:raw.seamless!==false,rate:Number.isFinite(raw.rate)?Math.round(Math.max(.5,Math.min(2,raw.rate))*20)/20:1};
 }
 // RBJ peaking response for the same Q and frequencies as the Web Audio graph.
 // Include overlapping boosts; using only the largest slider gain underestimates them.

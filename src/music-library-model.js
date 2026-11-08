@@ -9,7 +9,9 @@ export function smartPlaylists(saved,taste,candidates=[],now=Date.now()){
  const entries=Object.values(taste.entries),blocked=new Set(taste.blockedArtists.map(name=>canonicalArtistKey(name)).filter(Boolean)),hidden=new Set(taste.hiddenSongs);
  const allowed=item=>!hidden.has(item.id)&&!tasteArtistKeys(item).some(key=>blocked.has(key));
  const pool=tracks([...saved.favorites,...saved.recent,...entries.map(e=>e.item)]).filter(allowed);
- const frequent=entries.filter(e=>e.plays>=2&&e.score>0&&allowed(e.item)).sort((a,b)=>b.plays-a.plays||b.lastPlayed-a.lastPlayed).map(e=>e.item);
+ // Recent repeats matter more than an old habit; songs not heard for two months drop out.
+ const recency=e=>Math.exp(-Math.LN2*Math.max(0,now-e.lastPlayed)/(14*86400000));
+ const frequent=entries.filter(e=>e.plays>=2&&e.score>0&&e.lastPlayed>0&&now-e.lastPlayed<=60*86400000&&allowed(e.item)).sort((a,b)=>b.plays*recency(b)-a.plays*recency(a)||b.lastPlayed-a.lastPlayed).map(e=>e.item);
  const rediscover=pool.filter(x=>taste.entries[x.id]?.lastPlayed>0&&now-taste.entries[x.id].lastPlayed>=14*86400000&&(taste.entries[x.id].score>0||saved.favorites.some(f=>f.id===x.id))).sort((a,b)=>taste.entries[a.id].lastPlayed-taste.entries[b.id].lastPlayed);
  const unheard=tracks(candidates).filter(x=>allowed(x)&&!taste.entries[x.id]?.lastPlayed&&!saved.favorites.some(f=>f.id===x.id));
  return {frequent:frequent.slice(0,100),rediscover:rediscover.slice(0,100),liked:saved.favorites.filter(allowed).slice(0,100),discover:unheard.slice(0,100)};

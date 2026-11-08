@@ -9,10 +9,10 @@
 :root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body .sidebar,
 :root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body .topbar::before,
 :root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) #devil-music .music-library-sidebar{background:#0d0e13b5;border-color:#ffffff14;backdrop-filter:blur(24px)}
-:root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body .sidebar{background:#0d0e1399}
+
 :root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body .topbar::before{background:#0d0e1385}
 :root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body #music-now-playing.has-lyrics .music-stage-background .music-art{opacity:.18}
-:root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body main[data-page="music"] #devil-music .music-toolbar{background:#0d0e13ba;backdrop-filter:blur(24px);border-radius:12px}
+:root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body main[data-page="music"] #devil-music .music-toolbar{backdrop-filter:blur(24px);border-radius:12px}
 :root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body :is(.music-playing-preview,.quick-theme-menu,.music-track-options,.music-queue-panel,.music-search-suggestions){backdrop-filter:blur(24px);border-color:#ffffff1a}
 :root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body #music-now-playing.has-lyrics{background:linear-gradient(#08090ce0,#08090cf2),var(--ambient-art,none) center/cover}
 .music-ambient-glow{display:none}

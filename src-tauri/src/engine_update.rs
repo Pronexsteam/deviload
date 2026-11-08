@@ -29,7 +29,7 @@ fn run(command: &mut Command, timeout: Duration, stdout_limit: u64, tail: bool, 
         use std::os::unix::process::CommandExt;
         command.process_group(0);
     }
-    let mut child = command.spawn().map_err(|e| e.to_string())?;
+    let mut child = command.spawn().map_err(|e| e.to_string())?;crate::child_job::bind(&child);
     let started = Instant::now();
     let status = loop {
         if cancelled() {

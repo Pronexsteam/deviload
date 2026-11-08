@@ -43,7 +43,7 @@ fn fingerprint(path: &Path) -> Result<String,String> {
 // Spool bounded output to a temporary file so a damaged file cannot fill a pipe or memory.
 fn capture(cmd: &mut std::process::Command, limit: u64) -> Result<Vec<u8>,String> {
     let mut temp=tempfile::tempfile().map_err(|e|e.to_string())?;
-    let mut child=cmd.stdin(Stdio::null()).stdout(Stdio::from(temp.try_clone().map_err(|e|e.to_string())?)).stderr(Stdio::null()).spawn().map_err(|e|e.to_string())?;
+    let mut child=cmd.stdin(Stdio::null()).stdout(Stdio::from(temp.try_clone().map_err(|e|e.to_string())?)).stderr(Stdio::null()).spawn().map_err(|e|e.to_string())?;crate::child_job::bind(&child);
     let start=Instant::now();let status=loop{
         if CANCEL.load(Ordering::Relaxed)||start.elapsed()>Duration::from_secs(15)||temp.metadata().map_err(|e|e.to_string())?.len()>limit {let _=child.kill();let _=child.wait();return Err("Local music metadata could not be read.".into());}
         if let Some(status)=child.try_wait().map_err(|e|e.to_string())?{break status;}

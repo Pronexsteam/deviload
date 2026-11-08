@@ -1,3 +1,4 @@
+import {distinctSongs} from "../src/music-recommendation-engine.js";
 import {isLocalMusicId} from '../src/music-track-id.js';
 import {localPlaybackSource} from '../src/music-local-model.js';
 import test from "node:test";
@@ -28,7 +29,7 @@ function music({discovery=async()=>response([song(11)]),extra=[song(11)],radioIt
   const calls=[],renders=[],controls=new Map(),ctx={isLocalMusicId,localPlaybackSource,
     saved:{favorites:[song(1)],recent:[],collections:[],playlists:[],sourceBindings:[],interestMixes:[],publicDiscovery:true,showRegional:false},
     taste:readTaste(),queue:[],current:null,privateSession:false,navigator:{onLine:true},publicGeneration:0,sourceRevision:0,
-    request:1,personalization:0,recommendationRevision:0,playRequest:1,contextRevision:0,homeSeedRotation:0,homeRefreshRevision:-1,nextHomeCandidates:[],
+    request:1,personalization:0,recommendationRevision:0,listeningRevision:0,homeListeningRevision:0,homeBuiltAt:0,distinctSongs,playRequest:1,contextRevision:0,homeSeedRotation:0,homeRefreshRevision:-1,nextHomeCandidates:[],
     view:"home",lastQuery:{kind:"home"},followedCursor:0,playbackContext:[],playbackSourceContext:{kind:"manual"},
     recommendationSession:createRecommendationSession(),recommendationReasons:new Map(),radioCache:new Map(),discoveryCandidates:[],sections:[],
     interestViewId:null,interestPool:null,interestRotations:new Map(),activeMood:"",browseItem:null,continuation:null,morePending:false,listFilter:"",listSort:"original",loading:false,loaded:true,

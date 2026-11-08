@@ -102,7 +102,7 @@ impl Worker {
         command.current_dir(root).args(["run","--no-config","--no-npm","--no-remote","--no-prompt","--unstable-worker-options","--allow-env","--allow-net"])
             .arg(format!("--allow-read={},{}",folder.display(),root.display())).arg(format!("--allow-write={}",root.display()))
             .arg(folder.join("engine.mjs")).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-        let mut child=command.spawn().map_err(|_|"Could not start music engine")?;
+        let mut child=command.spawn().map_err(|_|"Could not start music engine")?;crate::child_job::bind(&child);
         let output=child.stdout.take().ok_or("No music engine output")?;let input=child.stdin.take().ok_or("No music engine input")?;
         if let Some(stderr)=child.stderr.take(){thread::spawn(move||diagnostics::drain_stderr(stderr));}
         let version=folder.file_name().and_then(|name|name.to_str()).and_then(|name|name.strip_prefix("engine-")).and_then(|number|number.parse::<u64>().ok()).unwrap_or(VERSION);

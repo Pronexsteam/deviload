@@ -97,7 +97,7 @@ fn start_host(dir:&Path,state:RoomState)->Result<String,String>{
   if generation!=GENERATION.load(Ordering::SeqCst){return Err(FAILURE.into());}
   let listener=TcpListener::bind("127.0.0.1:0").map_err(|_|FAILURE)?;listener.set_nonblocking(true).map_err(|_|FAILURE)?;let address=listener.local_addr().map_err(|_|FAILURE)?;
   let mut random=[0;32];rand::rng().fill_bytes(&mut random);let token:String=random.iter().map(|b|format!("{b:02x}")).collect();
-  let mut child=crate::command(&exe).args(["tunnel","--no-autoupdate","--url",&format!("http://{address}"),"--protocol","http2"]).stdout(Stdio::null()).stderr(Stdio::piped()).stdin(Stdio::null()).spawn().map_err(|_|FAILURE)?;
+  let mut child=crate::command(&exe).args(["tunnel","--no-autoupdate","--url",&format!("http://{address}"),"--protocol","http2"]).stdout(Stdio::null()).stderr(Stdio::piped()).stdin(Stdio::null()).spawn().map_err(|_|FAILURE)?;crate::child_job::bind(&child);
   let stderr=child.stderr.take().ok_or(FAILURE)?;let (tx,rx)=std::sync::mpsc::channel();
   thread::spawn(move||{for line in BufReader::new(stderr).lines().map_while(Result::ok){for word in line.split_whitespace(){let candidate=word.trim_matches(|c:char|!c.is_ascii_alphanumeric()&&c!=':'&&c!='/'&&c!='.'&&c!='-');if candidate.starts_with("https://")&&candidate.ends_with(".trycloudflare.com"){let _=tx.send(candidate.to_string());}}}});
   let host=Arc::new(Host{clock:Mutex::new(Clock{state,updated:Instant::now(),guest:None}),token,stopped:AtomicBool::new(false),child:Mutex::new(Some(child))});

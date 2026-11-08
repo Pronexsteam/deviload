@@ -8,7 +8,7 @@ export function wireMiniQueue({invoke}){
  const toggle=document.createElement('button');toggle.type='button';toggle.id='mini-queue-toggle';toggle.textContent='≡';toggle.setAttribute('aria-expanded','false');header.insertBefore(toggle,document.getElementById('mini-pin'));
  const moved=['mini-play','mini-mute','mini-volume'].map(id=>{const node=document.getElementById(id),slot=document.createComment(id);node.before(slot);return{node,slot};});
  let open=false,signature='',items=[],dragged=null,busy=false,pending=null;
- const labels=()=>{toggle.title=toggle.ariaLabel=open?t('Back to player'):t('Play queue');back.ariaLabel=t('Up next');};labels();onLanguageChange(labels);
+ const labels=()=>{toggle.title=toggle.ariaLabel=open?t('Back to player'):t('Play queue');back.ariaLabel=t('Playing next');};labels();onLanguageChange(labels);
  toggle.addEventListener('click',()=>{
   open=!open;document.body.classList.toggle('mini-queue-open',open);toggle.setAttribute('aria-expanded',String(open));front.inert=open;back.inert=!open;labels();
   if(open){timeline.prepend(moved[0].node);timeline.append(moved[1].node,moved[2].node);}

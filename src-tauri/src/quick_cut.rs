@@ -52,7 +52,7 @@ fn container(path: &Path) -> Result<String, String> {
 fn execute(state: &QuickCut, mut command: Command, timeout: Duration, progress: Option<(&dyn Fn(f64), f64)>) -> Result<Vec<u8>, String> {
     state.check()?;
     command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    let mut child = command.spawn().map_err(|e| format!("Could not start the lossless trim tool: {e}"))?;
+    let mut child = command.spawn().map_err(|e| format!("Could not start the lossless trim tool: {e}"))?;crate::child_job::bind(&child);
     *state.inner.pid.lock().unwrap() = Some(child.id());
     let overflow = Arc::new(AtomicBool::new(false));
     let output_overflow = overflow.clone();

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {timedLyrics,lyricFrame,parseLyrics} from '../src/music-lyrics-timing.js';
+import {timedLyrics,lyricFrame,parseLyrics,leadSinger} from '../src/music-lyrics-timing.js';
 const sample=()=>timedLyrics([{text:'Hello world',at:1,end:5,words:[{text:'Hello ',at:1,end:2},{text:'world',at:3,end:5}]}]);
 test('enhanced LRC keeps genuine word times while ordinary lines have no invented words',()=>{
  const lines=parseLyrics('[00:01.00]<00:01.00>Hello <00:02.50>world<00:04.00>\n[00:05.00]Next line');
@@ -52,4 +52,15 @@ test('simultaneous vocal lines remain visible and playback end clears focus',()=
  assert.deepEqual(lyricFrame(lines,10,10),[]);
  assert.deepEqual(lyricFrame(lines,NaN),[]);
  assert.deepEqual(lyricFrame(lines,2).map(s=>s.index),[0,1]);
+});
+test('background vocals keep their own word timing beside the lead line',()=>{
+ const [line]=timedLyrics([{text:'Lead',at:1,end:5,words:[{text:'Lead',at:1,end:4}],background:[{text:'(echo)',at:2,end:3}],backgroundText:'(echo)'}]);
+ assert.equal(line.words.length,1);assert.equal(line.background.length,1);
+ const [state]=lyricFrame([line],2.5);
+ assert.equal(state.words[0].state,'current');assert.equal(state.background[0].state,'current');assert.equal(state.background[0].progress,.5);
+ assert.deepEqual(timedLyrics([{text:'Lead',at:1,end:5,background:[{text:'late',at:6,end:7}]}])[0].background,[]);
+});
+test('the singer with the most lines leads, and unattributed lyrics have no lead',()=>{
+ assert.equal(leadSinger([{agent:'v1'},{agent:'v2'},{agent:'v2'}]),'v2');
+ assert.equal(leadSinger([{text:'a'},{agent:''}]),'');
 });
