@@ -1,5 +1,7 @@
 const decorativeMedia=new WeakSet();
 export const isMotionCover=node=>!!node&&decorativeMedia.has(node)&&node.muted;
+// Muted picture beside the song (a moving cover or a music video) never takes over from the music.
+export const markDecorative=node=>{decorativeMedia.add(node);return node;};
 export function createMotionCover({invoke,convertFileSrc,host,getHost=()=>host,isVisible,isPlaying,onAvailable=()=>{}}){
   const cache=new Map(),pending=new Map(),reduced=matchMedia('(prefers-reduced-motion: reduce)');
   let track=null,key='',serial=0,video=null,enabled=true,disposed=false;

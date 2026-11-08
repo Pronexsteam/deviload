@@ -17,7 +17,7 @@ const lights=Array.from({length:3},()=>{const node=document.createElement('span'
 const reduced=matchMedia('(prefers-reduced-motion: reduce)');let lightTimeout=0;
 const resetLight=()=>{clearTimeout(lightTimeout);paintAmbient(lights,[0,0,0]);};
 reduced.addEventListener('change',resetLight);
-function render(value){state=value||{};receivedAt=performance.now();document.documentElement.dataset.theme=['ambient','glass-light','aurora','prism'].includes(state.theme)?state.theme:'ambient';$('mini-title').textContent=state.title||t('Pick your first track');$('mini-artist').textContent=state.artist||'';
+function render(value){state=value||{};receivedAt=performance.now();document.documentElement.dataset.theme=['ambient','glass-light','aurora','prism'].includes(state.theme)?state.theme:'ambient';const variants=['noir','vinyl','paper'];if(variants.includes(state.variant))document.documentElement.dataset.variant=state.variant;else delete document.documentElement.dataset.variant;$('mini-title').textContent=state.title||t('Pick your first track');$('mini-artist').textContent=state.artist||'';
  document.documentElement.style.setProperty('--ambient-art',ambientArtwork(state.image));
  if(!state.playing||!['ambient','aurora','prism'].includes(state.theme)||reduced.matches)resetLight();
  document.querySelector('.mini-art').classList.toggle('is-playing',!!state.playing);

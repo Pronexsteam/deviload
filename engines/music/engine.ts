@@ -10,9 +10,12 @@ import { idleRelease } from './idle.ts';
 import { stallClock } from './stall.ts';
 import { Ranges } from './ranges.ts';
 import { segmentIndex, segmentAt, type SegmentIndex } from './segments.ts';
+import { clipFormat, clipHeights } from './clip.ts';
 import { onSegment, snapshot, resumeState, type Snapshot } from './resume.ts';
 
 const SEEK_AHEAD = 524288, SEEK_SPACING = 300, SEEK_LIMIT = 24;
+// A music video is fetched about a minute ahead of what is watched, not to the end; the last two stay for a reopen.
+const CLIP_AHEAD_S = 75, CLIP_RESUME_S = 40, CLIPS_KEPT = 2;
 const emit = (message: unknown) => console.log(JSON.stringify(message));
 const cache = new AudioCache('./audio');
 await cache.open();
@@ -20,6 +23,9 @@ let stopped = false, serial = 0, selection = 0, selected = '', limitedUntil = 0;
 let prepared = '', readerSerial = 0;
 let foregroundGeneration = 0;
 const sessions = new Map<string, Track>();
+// A song's music video plays muted beside the audio; only one is kept at a time.
+let clip: Track | undefined;
+const keptClips: Track[] = [];
 const pending = new Map<number,{resolve:(data:any)=>void;reject:(error:Error)=>void;timer:ReturnType<typeof setTimeout>}>();
 const inflight = new Map<string,Promise<Track>>();
 const resolving = new Map<string,AbortController>();
@@ -31,7 +37,7 @@ async function network(input: RequestInfo | URL, init?: RequestInit) {
   const url = new URL(input instanceof Request ? input.url : String(input));
   let selectionSignal: AbortSignal | undefined;
   if(url.pathname.endsWith('/player')){
-    try{const payload=JSON.parse(typeof init?.body==='string'?init.body:input instanceof Request?await input.clone().text():'{}');selectionSignal=openingDeadlines.get(payload.videoId)||sessions.get(payload.videoId)?.control.signal;}catch{}
+    try{const payload=JSON.parse(typeof init?.body==='string'?init.body:input instanceof Request?await input.clone().text():'{}');selectionSignal=openingDeadlines.get(payload.videoId)||sessions.get(payload.videoId)?.control.signal||(clip?.id===payload.videoId?clip?.control.signal:undefined);}catch{}
   }
   const response = await fetch(input, { ...init, signal: AbortSignal.any([...(init?.signal?[init.signal]:[]),...(selectionSignal?[selectionSignal]:[]),AbortSignal.timeout(url.hostname.endsWith('.googlevideo.com')?60000:12000)]) });
   if (response.status === 429) { limitedUntil=Date.now()+Math.max(60,Math.min(86400,Number(response.headers.get('retry-after'))||60))*1000; await response.body?.cancel(); throw Error('429 Playback temporarily limited'); }
@@ -65,9 +71,11 @@ function protectedFiles() {return new Set([...sessions.values()].filter(t=>t.id=
 class Track {
   token=crypto.randomUUID();file=crypto.randomUUID()+'.audio';prefix=new Uint8Array();ranges=new Ranges();complete=false;error='';readers=0;
   control=new AbortController();started=false;at=Date.now();epoch=cache.epoch;
+  readAt=0;parked=false;choice={height:0,wanted:0,heights:[] as number[]};
   index:SegmentIndex|undefined;resume:Snapshot|undefined;want:number|undefined;claim=0;sessionAt=0;starts=0;session:{from:number;control:AbortController}|undefined;
-  constructor(readonly id:string,readonly size:number){}
+  constructor(readonly id:string,readonly size:number,readonly itag=140,readonly video=false){}
   async read(offset:number,length:number,reader=0,gone=()=>false) {
+    if(this.video)this.readAt=offset;
     if(offset<this.prefix.length)return this.prefix.slice(offset,Math.min(this.prefix.length,offset+length));
     const end=Math.min(this.size,offset+length),stalled=stallClock(65000);
     while(!this.ranges.covers(offset,end)){
@@ -117,7 +125,7 @@ class Track {
       if(this.prefix.length)await this.place(file,0,this.prefix);
       this.index=segmentIndex(this.prefix);if(this.index?.end!==this.size)this.index=undefined;
       try{await this.stream(file);}catch(error){
-        if(this.control.signal.aborted||aborted(error)||restricted(error)||/streams differ|size mismatch/.test(safe(error)))throw error;
+        if(this.video||this.control.signal.aborted||aborted(error)||restricted(error)||/streams differ|size mismatch/.test(safe(error)))throw error;
         const source=await fallback(this.id);if(this.control.signal.aborted)throw Error('Cancelled');
         const url=new URL(source.url);if(url.hostname!=='127.0.0.1'||url.protocol!=='http:'||url.username||url.password)throw Error('Invalid reserve source');
         const response=await fetch(url,{signal:AbortSignal.any([this.control.signal,AbortSignal.timeout(40000)])});
@@ -127,6 +135,7 @@ class Track {
       if(!this.ranges.covers(0,this.size))throw Error('Incomplete audio stream');await file.sync();
     }finally{file.close();}
     this.complete=true;this.prefix=new Uint8Array();
+    if(this.video)return;
     await cache.commit({id:this.id,file:this.file,size:this.size,at:Date.now()},this.epoch);
   }
   async stream(file:Deno.FsFile){
@@ -135,7 +144,7 @@ class Track {
     const client=await fullSession();
     const info=await client.getBasicInfo(this.id,{client:'WEB'});
     if(info.playability_status?.status!=='OK')throw Error(info.playability_status?.status||'Unplayable');
-    const format=info.streaming_data?.adaptive_formats.find(f=>f.itag===140&&!f.is_drc);
+    const format=info.streaming_data?.adaptive_formats.find(f=>f.itag===this.itag&&!f.is_drc);
     if(!format||Number(format.content_length)!==this.size)throw Error('Audio streams differ');
     const config=info.player_config?.media_common_config.media_ustreamer_request_config?.video_playback_ustreamer_config;
     const url=await client.session.player!.decipher(info.streaming_data!.server_abr_streaming_url);
@@ -144,27 +153,29 @@ class Track {
     const clientInfo={clientName:Number(Constants.CLIENT_NAME_IDS[client.session.context.client.clientName as keyof typeof Constants.CLIENT_NAME_IDS]),clientVersion:client.session.context.client.clientVersion};
     for(let from=this.next();from!==undefined;from=this.next()){
       if(this.control.signal.aborted)throw Error('Cancelled');
+      if(this.video){await this.pace(from);from=this.next();if(from===undefined)break;}
       const segment=this.index&&this.resume?segmentAt(this.index,from):-1;
-      const state=segment>0?resumeState(this.resume!,this.index!,segment):undefined;
+      const state=segment>0?resumeState(this.resume!,this.index!,segment,this.itag):undefined;
       const control=new AbortController(),signal=AbortSignal.any([this.control.signal,control.signal]);
       const sabr=new SabrStream({fetch:(input,init)=>network(input,{...init,signal:AbortSignal.any([signal,...(init?.signal?[init.signal]:[])])}),poToken,formats,serverAbrStreamingUrl:url,videoPlaybackUstreamerConfig:config!,clientInfo});
       const session={from:state?this.index!.starts[segment]:0,control};this.session=session;this.sessionAt=Date.now();this.starts++;
       let fresh=false,added=false,failure:unknown,writing=Promise.resolve();
       onSegment(sabr,(header,bytes)=>{
+        const itag=header.itag??header.formatId?.itag;if(itag!==undefined&&itag!==this.itag)return;
         this.resume=snapshot(sabr)??this.resume;
         writing=writing.then(async()=>{
           if(signal.aborted)return;
           const offset=header.startRange!==undefined?Number(header.startRange):header.isInitSeg?0:this.index?.starts[(header.sequenceNumber||0)-1];
           if(offset===undefined||!Number.isSafeInteger(offset))throw Error('Unplaced audio segment');
-          if(await this.place(file,offset,bytes)){fresh=added=true;}
+          if(await this.place(file,offset,bytes)){fresh=added=true;if(this.video&&offset-this.readAt>this.byteRate()*CLIP_AHEAD_S)control.abort();}
           // Stop once this session reaches audio another session already wrote.
           else if(fresh&&this.index)control.abort();
         }).catch(error=>{failure=error;control.abort();});
       });
       const stop=()=>sabr.abort();signal.addEventListener('abort',stop,{once:true});
       try{
-        const {audioStream}=await sabr.start({enabledTrackTypes:EnabledTrackTypes.AUDIO_ONLY,audioFormat:140,preferMP4:true,maxRetries:state?2:0,stallDetectionMs:5000,...(state?{state}:{})});
-        const reader=audioStream.getReader();
+        const streams=await sabr.start({...(this.video?{enabledTrackTypes:EnabledTrackTypes.VIDEO_ONLY,videoFormat:this.itag,audioFormat:140}:{enabledTrackTypes:EnabledTrackTypes.AUDIO_ONLY,audioFormat:140}),preferMP4:true,maxRetries:state?2:0,stallDetectionMs:5000,...(state?{state}:{})});
+        const reader=(this.video?streams.videoStream:streams.audioStream).getReader();
         try{while(!(await reader.read()).done);}catch(error){if(!signal.aborted)throw error;}
         await writing;
       }finally{signal.removeEventListener('abort',stop);sabr.abort();if(this.session===session)this.session=undefined;}
@@ -173,7 +184,54 @@ class Track {
       if(!added&&!control.signal.aborted)throw Error('Incomplete audio stream');
     }
   }
-  async remove(){if(!cache.entries.some(e=>e.file===this.file))await Deno.remove(cache.path(this.file)).catch(()=>{});}
+  byteRate(){const seconds=(this.index?.times.at(-1)||0)/1000;return seconds>0?this.size/seconds:Infinity;}
+  // A video waits while it is far enough ahead of the viewer, or while it is put aside.
+  async pace(from:number){
+    while(!this.control.signal.aborted&&(this.parked||from-this.readAt>this.byteRate()*CLIP_RESUME_S)){
+      await new Promise(resolve=>setTimeout(resolve,200));from=this.next()??from;
+    }
+  }
+  async remove(){if(this.video||!cache.entries.some(e=>e.file===this.file))await Deno.remove(cache.path(this.file)).catch(()=>{});}
+}
+// The first megabyte comes from a direct URL, so playback starts before a SABR session exists.
+async function openingBytes(url:URL,cpn:string,size:number,signal:AbortSignal){
+  url.searchParams.set('cpn',cpn);url.searchParams.set('range',`0-${Math.min(size,1048576)-1}`);
+  const response=await network(url,{signal});
+  if(!response.ok){await response.body?.cancel();throw Error('Audio HTTP '+response.status);}
+  const pieces:Uint8Array[]=[];let received=0;
+  const reader=response.body!.getReader();
+  try{while(true){const {value,done}=await reader.read();if(done)break;received+=value.length;if(received>Math.min(size,1048576))throw Error('Opening audio too large');pieces.push(value);}}finally{await reader.cancel().catch(()=>{});}
+  const prefix=new Uint8Array(received);let position=0;for(const bytes of pieces){prefix.set(bytes,position);position+=bytes.length;}
+  if(prefix.length!==Math.min(size,1048576))throw Error('Incomplete opening audio');
+  return prefix;
+}
+function dropClip(track:Track){track.cancel();void track.remove();}
+// The current video is put aside rather than thrown away, so going back to it costs nothing.
+function stopClip(){
+  if(!clip)return;const old=clip;clip=undefined;
+  if(old.error||!old.size||old.control.signal.aborted){dropClip(old);return;}
+  old.parked=true;old.session?.control.abort();keptClips.unshift(old);
+  while(keptClips.length>CLIPS_KEPT)dropClip(keptClips.pop()!);
+}
+async function openClip(id:string,height:number){
+  if(clip?.id===id&&clip.choice.wanted===height&&!clip.error&&!clip.control.signal.aborted)return clip;
+  stopClip();
+  const kept=keptClips.findIndex(track=>track.id===id&&track.choice.wanted===height&&!track.error);
+  if(kept>=0){const track=keptClips.splice(kept,1)[0];track.parked=false;clip=track;return track;}
+  // The video continues through a full session; it warms up while the opening fragment loads.
+  void guest()?.catch(()=>{});void fullSession().catch(()=>{});
+  const control=new AbortController(),signal=AbortSignal.any([control.signal,AbortSignal.timeout(12000)]);
+  const holder=new Track(id,0,0,true);holder.control=control;clip=holder;
+  const info=await client.getBasicInfo(id,{client:'IOS'});
+  if(info.playability_status?.status!=='OK')throw Error(info.playability_status?.status||'Unplayable');
+  const formats=info.streaming_data?.adaptive_formats||[],format=clipFormat(formats,height);
+  if(!format)throw Error('Unsupported video format');
+  const url=new URL(await format.decipher(client.session.player));
+  if(url.protocol!=='https:'||!url.hostname.endsWith('.googlevideo.com'))throw Error('Invalid video source');
+  const prefix=await openingBytes(url,info.cpn,Number(format.content_length),signal);
+  if(clip!==holder)throw Error('Cancelled');
+  const track=new Track(id,Number(format.content_length),format.itag,true);track.prefix=prefix;
+  track.choice={height:Number(format.height),wanted:height,heights:clipHeights(formats)};clip=track;track.start();return track;
 }
 async function getTrack(id:string,preload:boolean,refresh:boolean,generation:number):Promise<Track>{
   let track=sessions.get(id);
@@ -200,15 +258,7 @@ async function getTrack(id:string,preload:boolean,refresh:boolean,generation:num
       await cache.makeSpace(reserved,protectedFiles());
       const url=new URL(await format.decipher(client.session.player));
       if(url.protocol!=='https:'||!url.hostname.endsWith('.googlevideo.com'))throw Error('Invalid audio source');
-      url.searchParams.set('cpn',info.cpn);url.searchParams.set('range',`0-${Math.min(size,1048576)-1}`);
-      const response=await network(url,{signal:openingSignal});
-      if(!response.ok){await response.body?.cancel();throw Error('Audio HTTP '+response.status);}
-      track=new Track(id,size);
-      const pieces:Uint8Array[]=[];let received=0;
-      const reader=response.body!.getReader();
-      try{while(true){const {value,done}=await reader.read();if(done)break;received+=value.length;if(received>Math.min(size,1048576))throw Error('Opening audio too large');pieces.push(value);}}finally{await reader.cancel().catch(()=>{});}
-      track.prefix=new Uint8Array(received);let position=0;for(const bytes of pieces){track.prefix.set(bytes,position);position+=bytes.length;}
-      if(track.prefix.length!==Math.min(size,1048576))throw Error('Incomplete opening audio');
+      track=new Track(id,size);track.prefix=await openingBytes(url,info.cpn,size,openingSignal);
     }
     if(control.signal.aborted||(generation!==selection&&selected!==id))throw Error('Cancelled');
     sessions.get(id)?.cancel();sessions.set(id,track!);
@@ -231,14 +281,14 @@ const server=Deno.serve({hostname:'127.0.0.1',port:0,onListen:()=>{}},request=>{
   const url=new URL(request.url);
   if(url.hostname!=='127.0.0.1'||url.port!==String(server.addr.port))return new Response(null,{status:403});
   if(!['GET','HEAD'].includes(request.method))return new Response(null,{status:405});
-  const track=[...sessions.values()].find(t=>'/'+t.token===url.pathname);
+  const track=[...sessions.values(),...(clip?[clip]:[])].find(t=>'/'+t.token===url.pathname);
   if(!track)return new Response(null,{status:404});
   let start:number,end:number;try{[start,end]=byteRange(request.headers.get('range'),track.size);}catch{return new Response(null,{status:416,headers:{'Content-Range':`bytes */${track.size}`}});}
-  const headers:HeadersInit={'Content-Type':'audio/mp4','Content-Length':String(end-start+1),'Accept-Ranges':'bytes','Cache-Control':'no-store','Access-Control-Allow-Origin':'*'};
+  const headers:HeadersInit={'Content-Type':track.video?'video/mp4':'audio/mp4','Content-Length':String(end-start+1),'Accept-Ranges':'bytes','Cache-Control':'no-store','Access-Control-Allow-Origin':'*'};
   if(request.headers.has('range'))headers['Content-Range']=`bytes ${start}-${end}/${track.size}`;
   if(request.method==='HEAD')return new Response(null,{status:request.headers.has('range')?206:200,headers});
-  if(track.readers>=6)return new Response(null,{status:503});track.readers++;let closed=false;const reader=++readerSerial;
-  const finish=()=>{if(!closed){closed=true;track.readers--;if(track.id!==selected&&track.readers===0)void track.remove();}};
+  if(track.readers>=(track.video?16:6))return new Response(null,{status:503});track.readers++;let closed=false;const reader=++readerSerial;
+  const finish=()=>{if(!closed){closed=true;track.readers--;if(!track.video&&track.id!==selected&&track.readers===0)void track.remove();}};
   const body=new ReadableStream<Uint8Array>({async pull(controller){try{if(closed)return;const bytes=await track.read(start,Math.min(65536,end-start+1),reader,()=>closed);if(closed)return;start+=bytes.length;controller.enqueue(bytes);if(start>end){finish();controller.close();}}catch(e){finish();controller.error(e);}},cancel(){finish();}});
   return new Response(body,{status:request.headers.has('range')?206:200,headers});
 });
@@ -262,6 +312,13 @@ async function command(cmd:any){
       if(cmd.clear){await cache.clear(protectedFiles());for(const [id,track]of sessions)if(id!==selected&&track.readers===0){track.cancel();sessions.delete(id);void track.remove();}}
       emit({key:cmd.key,data:{bytes:cache.entries.reduce((n,e)=>n+e.size,0),limit:cache.limit}});return;
     }
+    if(cmd.action==='clip'){
+      // No video: stop the current one, or only warm the session up for a music video soon.
+      if(!cmd.id){if(cmd.warm){void guest()?.catch(()=>{});void fullSession().catch(()=>{});}else stopClip();emit({key:cmd.key,data:null});return;}
+      if(!validId(cmd.id))throw Error('Invalid music request');
+      const track=await openClip(cmd.id,Math.max(144,Math.min(2160,Number(cmd.height)||720)));
+      emit({key:cmd.key,data:{url:`http://127.0.0.1:${server.addr.port}/${track.token}`,height:track.choice.height,heights:track.choice.heights}});return;
+    }
     if(cmd.action!=='play'||!validId(cmd.id))throw Error('Invalid music request');
     if(Number(cmd.generation)<foregroundGeneration)throw Error('Cancelled');
     if(!cmd.preload)foregroundGeneration=Number(cmd.generation)||foregroundGeneration;
@@ -281,4 +338,4 @@ for await(const chunk of Deno.stdin.readable.pipeThrough(new TextDecoderStream()
   buffer+=chunk;if(buffer.length>65536)break;
   let index;while((index=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,index);buffer=buffer.slice(index+1);try{void command(JSON.parse(line));}catch{}}
 }
-stopped=true;guestIdle.hold();for(const track of sessions.values())track.cancel();po?.terminate();await server.shutdown();
+stopped=true;guestIdle.hold();for(const track of sessions.values())track.cancel();stopClip();for(const track of keptClips)track.cancel();po?.terminate();await server.shutdown();

@@ -1,9 +1,11 @@
 import {createMotionCover} from './music-motion.js';
 import {t,onLanguageChange} from "./i18n.js";
 import {flyFrom,fadeIn} from "./music-transitions.js";
+import {createMusicClip} from "./music-clip.js";
+import {createClipView} from "./music-clip-view.js";
 
 // Move the existing controls into a modal, so both views share one audio player.
-export function createNowPlaying({invoke,convertFileSrc,dock,identity,artwork,info,like,transport,extras,queuePanel,button,cover,renderDockArtwork,onDownload,onHideSong,onHideArtist,onArtist,onDismissQueue}) {
+export function createNowPlaying({invoke,language=()=>'en',getAudio=()=>null,audios=[],convertFileSrc,dock,identity,artwork,info,like,transport,extras,queuePanel,button,cover,renderDockArtwork,onDownload,onHideSong,onHideArtist,onArtist,onDismissQueue}) {
   const make=(tag,cls)=>{const node=document.createElement(tag);node.className=cls;return node;};
   const stage=make("dialog","music-stage is-immersive"),background=make("div","music-stage-background"),header=make("header","music-stage-header");
   stage.id="music-now-playing";background.setAttribute("aria-hidden","true");
@@ -19,7 +21,10 @@ export function createNowPlaying({invoke,convertFileSrc,dock,identity,artwork,in
   actions.append(download,dislike,block);details.append(caption,controls,actions,notice);layout.append(art,details);
   const lyricsPanel=make("aside","music-stage-lyrics");lyricsPanel.hidden=true;lyricsPanel.setAttribute("aria-label",t("Lyrics"));layout.append(lyricsPanel);
   art.inert=true;stage.append(background,header,layout);document.body.append(stage);
-  const expand=button(t("Now playing"),"arrows-out",()=>open());expand.id="music-expand";extras.append(expand);
+  const expand=button(t("Now playing"),"arrows-out",()=>open());expand.id="music-expand";
+  // The music video rises out of the player's cover into its own stage above the dock.
+  const dockClip=button(t('Music video'),'video-camera',()=>setClip(!clip.enabled));dockClip.id='music-clip-open';for(const name of ['pointerenter','focus'])dockClip.addEventListener(name,()=>{if(!clipView.isOpen)clip.prepare(current);});dockClip.classList.add('music-clip-toggle');
+  extras.append(expand,dockClip);
   const preview=make("aside","music-playing-preview is-immersive-preview"),previewArt=button(t("Now playing"),null,()=>open(),"music-preview-art"),previewTitle=make("strong",""),previewArtist=make("span",""),previewOpen=button(t("Lyrics"),"arrows-out",()=>open(),"music-preview-open");
   const previewHeading=make("span","music-eyebrow"),previewLabel=make("span","");previewOpen.append(previewLabel);preview.hidden=true;
   previewOpen.setAttribute('aria-haspopup','dialog');previewArt.setAttribute('aria-haspopup','dialog');expand.setAttribute('aria-haspopup','dialog');
@@ -37,7 +42,7 @@ export function createNowPlaying({invoke,convertFileSrc,dock,identity,artwork,in
   let current=null,currentImage='',returnFocus=null,lyrics=null,lyricsTrigger=null,previewLyricsOn=false,flipCleanup=0;
   function setPreviewLyrics(value){
     clearTimeout(flipCleanup);previewLyricsOn=value;preview.classList.toggle('showing-lyrics',value);faces.classList.toggle('is-flipped',value);previewArt.inert=value;inlineLyrics.inert=!value;
-    motion.update(current);
+    showMedia(current);
     flipButton.setAttribute('aria-pressed',String(value));flipButton.title=flipButton.ariaLabel=value?t('Show cover'):t('Show lyrics');
     const glyph=flipButton.querySelector('.icon');if(glyph)glyph.dataset.icon=value?'image':'music-notes';
     if(value){inlineLyrics.hidden=false;if(lyrics&&!stage.open)lyrics.mount(inlineLyrics);}
@@ -51,7 +56,21 @@ export function createNowPlaying({invoke,convertFileSrc,dock,identity,artwork,in
   let idleTimer=null,playing=false;
   const motion=createMotionCover({invoke,convertFileSrc,getHost:()=>stage.open?artwork:previewArt,isVisible:()=>stage.open||(!preview.hidden&&!previewLyricsOn&&preview.getClientRects().length>0),isPlaying:()=>playing});
 
-  const previewVisibility=new ResizeObserver(()=>motion.update(current));previewVisibility.observe(preview);
+  const clipView=createClipView({dock,origin:()=>artwork,button,onClose:()=>setClip(false),onQuality:height=>clip.setQuality(height),onFullscreen:on=>invoke("window_action",{action:on?"enter_fullscreen":"exit_fullscreen"}).catch(()=>{})});
+  function setClip(on){
+    if(on===clipView.isOpen)return;
+    // The picture stays while the stage sinks back; the video is let go once it is gone.
+    if(!on){dockClip.setAttribute('aria-pressed','false');void clipView.hide().then(()=>{if(!clipView.isOpen&&clip.enabled)clip.toggle();});return;}
+    // The full player borrows the cover; it returns to the dock before the video rises from it.
+    if(stage.open){stage.close();requestAnimationFrame(()=>setClip(true));return;}
+    clipView.setItem(current);clipView.show();if(clip.enabled)clip.update(current);else clip.toggle();
+  }
+  const clip=createMusicClip({invoke,language,getAudio,audios,getItem:()=>current,getHost:()=>clipView.frame,
+    isVisible:()=>clipView.isOpen&&!stage.open,
+    onBuffering:on=>clipView.setBuffering(on),
+    onState:state=>{dockClip.setAttribute('aria-pressed',String(state.enabled));dockClip.classList.toggle('is-loading',!!state.loading);clipView.setState(state);}});
+  function showMedia(item){motion.update(item);if(clipView.isOpen)clipView.setItem(item);clip.update(item);}
+  const previewVisibility=new ResizeObserver(()=>showMedia(current));previewVisibility.observe(preview);
   function wake(){stage.classList.remove("music-stage-idle");clearTimeout(idleTimer);if(stage.open&&playing)idleTimer=setTimeout(()=>{if(!stage.contains(document.activeElement)||document.activeElement===close)stage.classList.add("music-stage-idle");},3500);}
   stage.addEventListener("pointermove",wake);stage.addEventListener("pointerdown",wake);stage.addEventListener("keydown",wake);
   let lyricsWanted=false;
@@ -72,24 +91,25 @@ export function createNowPlaying({invoke,convertFileSrc,dock,identity,artwork,in
     artwork.replaceChildren(cover(current,"",1024));
     background.replaceChildren(cover(current,"",320));
     art.append(artwork);details.insertBefore(info,controls);controls.append(transport);actions.prepend(like);details.append(extras);
-    layout.append(queuePanel);document.body.classList.add("music-stage-open");stage.showModal();if(previewLyricsOn&&!queuePanel.hidden)lyrics?.unmount();showLyrics(true);close.focus();motion.update(current);wake();fadeIn(stage);flyFrom(artwork,origin,{radius:'50%'});
+    layout.append(queuePanel);document.body.classList.add("music-stage-open");stage.showModal();if(previewLyricsOn&&!queuePanel.hidden)lyrics?.unmount();showLyrics(true);close.focus();showMedia(current);wake();fadeIn(stage);flyFrom(artwork,origin,{radius:'50%'});
   }
   stage.addEventListener("close",()=>{
     clearTimeout(idleTimer);stage.classList.remove("music-stage-idle");
-    motion.update(current);background.replaceChildren();
+    showMedia(current);background.replaceChildren();
     showLyrics(false);if(previewLyricsOn)lyrics?.mount(inlineLyrics);lyricsTrigger?.removeAttribute("aria-pressed");
     identity.append(artwork,info,like);dock.append(identity,transport,extras);document.body.append(queuePanel);
     if(renderDockArtwork)renderDockArtwork(current);else artwork.replaceChildren(cover(current,"",128));
-    document.body.classList.remove("music-stage-open");motion.update(current);returnFocus?.focus();fadeIn(dock,200);
+    document.body.classList.remove("music-stage-open");showMedia(current);returnFocus?.focus();fadeIn(dock,200);
   });
   function labels(){
     stage.setAttribute("aria-label",t("Now playing"));heading.textContent=t("NOW PLAYING");caption.textContent=t("YOUR OWN FREQUENCY");lyricsPanel.setAttribute("aria-label",t("Lyrics"));
     for(const [node,label]of [[expand,t("Now playing")],[close,t("Back to browsing")],[download,t("Download MP3")],[dislike,t("Do not recommend this song")],[block,t("Do not recommend this artist")]])node.title=node.ariaLabel=label;
     previewHeading.textContent=t("NOW PLAYING");previewLabel.textContent=t("Open player and lyrics");previewOpen.title=previewOpen.ariaLabel=t("Open player and lyrics");previewArt.title=previewArt.ariaLabel=artwork.title=artwork.ariaLabel=t("Open player and lyrics");
-    flipButton.title=flipButton.ariaLabel=previewLyricsOn?t('Show cover'):t('Show lyrics');flipButton.setAttribute('aria-pressed',String(previewLyricsOn));
+    flipButton.title=flipButton.ariaLabel=previewLyricsOn?t('Show cover'):t('Show lyrics');
+    dockClip.title=dockClip.ariaLabel=t('Music video');flipButton.setAttribute('aria-pressed',String(previewLyricsOn));
   }
   labels();onLanguageChange(labels);
-  return {open,syncQueueVisibility(){if(stage.open)syncRail();},attachPreview(workspace){workspace.append(scene,preview);},attachLyrics(controller,trigger){lyrics=controller;lyricsTrigger=trigger;},toggleLyrics(){if(!stage.open)return false;if(!queuePanel.hidden){lyricsWanted=true;onDismissQueue?.();}else showLyrics(lyricsPanel.hidden);wake();return true;},update(item,downloading=false,meta={}){
+  const api={open,syncQueueVisibility(){if(stage.open)syncRail();},attachPreview(workspace){workspace.append(scene,preview);},attachLyrics(controller,trigger){lyrics=controller;lyricsTrigger=trigger;},toggleLyrics(){if(!stage.open)return false;if(!queuePanel.hidden){lyricsWanted=true;onDismissQueue?.();}else showLyrics(lyricsPanel.hidden);wake();return true;},update(item,downloading=false,meta={}){
     const trackChanged=current?.id!==item?.id,imageChanged=currentImage!==(item?.image||'');
     if(trackChanged||imageChanged){if(stage.open)background.replaceChildren(cover(item,"",320));previewArt.replaceChildren(cover(item,"",640));ambient.replaceChildren(cover(item,"",320));scene.replaceChildren(cover(item,"",320));}scene.hidden=!item;
     if(trackChanged){notice.hidden=true;for(const node of [previewArt,info,artwork]){node.classList.remove("music-track-arriving");requestAnimationFrame(()=>node.classList.add("music-track-arriving"));}}
@@ -99,7 +119,8 @@ export function createNowPlaying({invoke,convertFileSrc,dock,identity,artwork,in
     const duration=Number(meta.duration)||0;facts.textContent=[duration?`${Math.floor(duration/60)}:${String(Math.floor(duration%60)).padStart(2,"0")}`:"",meta.offline?t("Downloaded music"):""].filter(Boolean).join(" · ");facts.hidden=!facts.textContent;
     reason.textContent=meta.reason||"";reason.hidden=!meta.reason;
     preview.hidden=!item;preview.parentElement?.classList.toggle("has-playing-preview",!!item);previewTitle.textContent=item?.title||"";previewArtist.textContent=item?.artists?.join(", ")||"";previewArtist.hidden=!previewArtist.textContent;artwork.setAttribute("aria-disabled",String(!item));
-    current=item;motion.update(item);expand.disabled=!item;download.disabled=!item||downloading;dislike.disabled=!item;block.disabled=!item?.artists?.length;
+    current=item;showMedia(item);expand.disabled=!item;download.disabled=!item||downloading;dislike.disabled=!item;block.disabled=!item?.artists?.length;
     if(!item&&stage.open)stage.close();
   },notify(text,undo){const message=make("span","");message.textContent=text;notice.replaceChildren(message);if(undo)notice.append(button(t("Undo"),"arrow-clockwise",()=>{undo();notice.hidden=true;}));notice.hidden=false;},close(){if(stage.open)stage.close();}};
+  return api;
 }

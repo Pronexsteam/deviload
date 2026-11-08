@@ -1,6 +1,7 @@
 // Apply the new collection before first paint. The Ambient reset happens once.
 (() => {
-  const themes = ["ambient", "glass-light", "aurora", "prism"];
+  const themes = ["ambient", "glass-light", "aurora", "prism", "noir", "vinyl", "paper"];
+  const bases = {noir: "prism", vinyl: "prism", paper: "glass-light"};
   let theme = "ambient";
   try {
     if (localStorage.getItem("deviload-theme-collection") !== "ambient-aurora-prism-v1") {
@@ -12,9 +13,10 @@
     }
   } catch { /* The theme can still be changed for this session. */ }
   const root = document.documentElement;
-  root.dataset.theme = theme;
+  root.dataset.theme = bases[theme] || theme;
+  if (bases[theme]) root.dataset.variant = theme;
   const visibility = () => { root.dataset.atmospherePaused = String(document.hidden === true); };
   document.addEventListener?.("visibilitychange", visibility); visibility();
   root.dataset.motion = "reduced";
-  root.style.colorScheme = theme === "glass-light" ? "light" : "dark";
+  root.style.colorScheme = (bases[theme] || theme) === "glass-light" ? "light" : "dark";
 })();

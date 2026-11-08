@@ -4,7 +4,7 @@ import {readFileSync} from "node:fs";
 import {runInNewContext} from "node:vm";
 
 globalThis.document = {documentElement:{}};
-const {THEMES, THEME_KEY, THEME_COLLECTION_KEY, THEME_COLLECTION, normalizeTheme, readTheme, applyTheme, wireAppearance} = await import("../src/appearance.js");
+const {THEMES, THEME_KEY, THEME_COLLECTION_KEY, THEME_COLLECTION, normalizeTheme, readTheme, applyTheme, wireAppearance, themeBase} = await import("../src/appearance.js");
 const {t} = await import("../src/i18n.js");
 const bootstrap = readFileSync(new URL("../src/theme-init.js", import.meta.url), "utf8");
 
@@ -51,9 +51,11 @@ test("first-paint bootstrap and runtime default to Ambient and preserve every ex
   for (const value of [...THEMES,null,"classic","glass-light ","GLASS-LIGHT","__proto__","<script>"]) {
     const root = {dataset:{},style:{}};
     runInNewContext(bootstrap, {document:{documentElement:root},localStorage:{getItem:key=>key===THEME_COLLECTION_KEY?THEME_COLLECTION:value}});
-    assert.equal(root.dataset.theme,normalizeTheme(value));
+    const chosen=normalizeTheme(value);
+    assert.equal(root.dataset.theme,themeBase(chosen));
+    assert.equal(root.dataset.variant,themeBase(chosen)===chosen?undefined:chosen);
     assert.equal(root.dataset.motion,"reduced");
-    assert.equal(root.style.colorScheme,value==="glass-light"?"light":"dark");
+    assert.equal(root.style.colorScheme,themeBase(chosen)==="glass-light"?"light":"dark");
   }
   const root = {dataset:{},style:{}};
   runInNewContext(bootstrap,{document:{documentElement:root},get localStorage(){throw Error("blocked");}});
@@ -172,10 +174,10 @@ test("collection migration forces Ambient exactly once and leaves unrelated sett
    values.set(THEME_KEY,selected);
    const root={dataset:{},style:{}};
    runInNewContext(bootstrap,{document:{documentElement:root},localStorage:storage});
-   assert.equal(root.dataset.theme,selected);assert.equal(readTheme(storage),selected);
+   assert.equal(root.dataset.theme,themeBase(selected));assert.equal(readTheme(storage),selected);
   }
  }
- assert.deepEqual(THEMES,["ambient","glass-light","aurora","prism"]);
+ assert.deepEqual(THEMES,["ambient","glass-light","aurora","prism","noir","vinyl","paper"]);
 });
 test("first paint performs the same migration before any runtime UI initializes",()=>{
  const values=new Map([[THEME_KEY,"glass-light"]]),writes=[];
@@ -185,4 +187,17 @@ test("first paint performs the same migration before any runtime UI initializes"
  assert.equal(root.dataset.theme,"ambient");assert.deepEqual(writes,[THEME_KEY,THEME_COLLECTION_KEY]);
  values.set(THEME_KEY,"prism");runInNewContext(bootstrap,{document:{documentElement:root},localStorage:storage});
  assert.equal(root.dataset.theme,"prism");assert.equal(writes.length,2);
+});
+
+test("palette themes keep their base theme rules and switch cleanly back",()=>{
+  const f=setup("ambient",false,{quick:true}),stop=wireAppearance(f.options),root=f.document.documentElement;
+  for(const [theme,base] of [["noir","prism"],["vinyl","prism"],["paper","glass-light"]]){
+    f.select.value=theme;f.select.dispatchEvent(new Event("change"));
+    assert.equal(root.dataset.theme,base);assert.equal(root.dataset.variant,theme);assert.equal(f.storage.getItem(THEME_KEY),theme);
+    assert.equal(root.style.colorScheme,base==="glass-light"?"light":"dark");
+  }
+  f.select.value="aurora";f.select.dispatchEvent(new Event("change"));
+  assert.equal(root.dataset.theme,"aurora");assert.equal(root.dataset.variant,undefined);
+  assert.equal(readTheme({getItem:key=>key===THEME_COLLECTION_KEY?THEME_COLLECTION:null}),"ambient");
+  stop();
 });

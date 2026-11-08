@@ -7,7 +7,7 @@ export function createMusicMiniPlayer({invoke,button,extras,getState,getQueue=()
   lightPending=true;
   try{await window.__TAURI__.event.emitTo('music-mini','music-mini-ambient',{levels,image:getState().image||''});}catch{/* A closing mini window needs no further frames. */}finally{lightPending=false;}
  }
- const state=()=>({...getState(),queue:getQueue(),theme:document.documentElement.dataset.theme||'ambient'});
+ const state=()=>({...getState(),queue:getQueue(),theme:document.documentElement.dataset.theme||'ambient',variant:document.documentElement.dataset.variant||''});
  async function sync(){if(!opened||pending)return;const value=state(),signature=JSON.stringify({...value,position:Math.floor(value.position)});if(signature===last)return;pending=true;try{await invoke('music_mini_update',{state:value});last=signature;}catch{/* The main player keeps running. */}finally{pending=false;}}
  const open=button(t('Mini player'),'arrows-in',async()=>{
   if(opening)return;
