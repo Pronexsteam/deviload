@@ -37,7 +37,7 @@
 :root[data-theme] body main[data-page="music"] #devil-music :is(.music-primary-nav-link,.music-sidebar-navigation button,.music-sidebar-controls .music-heading-actions>button){gap:10px;padding-inline:10px;font-size:13px;font-weight:500}
 :root[data-theme] body main[data-page="music"] #devil-music :is(.music-primary-nav-link,.music-sidebar-navigation button,.music-sidebar-controls .music-heading-actions>button) .icon{width:18px;height:18px;margin:0!important}
 :root[data-theme] body #devil-music .music-card .music-recommendation-reason{min-height:40px;max-height:40px}
-:root[data-theme] body #devil-music .music-track-row.music-album-track{min-height:52px}
+
 :root[data-theme] body #devil-music .music-album-track .music-track-select{align-items:center;min-height:40px}
 :root.custom-window[data-theme] body main[data-page="music"]{padding-top:10px}
 :root[data-theme] body main[data-page="music"]>#supporters{display:none}
@@ -49,7 +49,7 @@
 .topbar>.music-navigation{display:none;order:-1}
 :root[data-theme] body main[data-page="music"]>.topbar>.music-navigation{display:flex;gap:0}
 :root[data-theme] body main[data-page="music"]:has(#devil-music[data-view="home"])>.topbar>.music-navigation,.topbar>.music-navigation .music-navigation-home{display:none}
-:root[data-theme] body main[data-page="music"]>.topbar>.music-navigation button{display:inline-grid;place-items:center;width:42px;height:42px;min-width:42px;min-height:42px;padding:0;font-size:0;border:1px solid var(--surf-line);border-radius:50%;background:var(--surf-fill);color:var(--workspace-ink);box-shadow:none}
+:root[data-theme] body main[data-page="music"]>.topbar>.music-navigation button{place-items:center;width:42px;height:42px;min-width:42px;min-height:42px;padding:0;font-size:0;border:1px solid var(--surf-line);border-radius:50%;background:var(--surf-fill);color:var(--workspace-ink);box-shadow:none}
 :root[data-theme] body main[data-page="music"]>.topbar>.music-navigation button:hover:not(:disabled){background:var(--surf-hover)}
 :root[data-theme] body main[data-page="music"]>.topbar>.music-navigation button:disabled{opacity:.34}
 :root[data-theme] body main[data-page="music"] #devil-music[data-view] .music-toolbar{position:static;background:transparent;backdrop-filter:none}
@@ -185,7 +185,7 @@
 :root[data-theme] body #devil-music .music-library-tools>:is(input,select){margin:0}
 :root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body main[data-page="music"] #devil-music:is(.has-playing-preview,.music-preview-fits)>.music-playing-preview.music-playing-preview{background:var(--surf-fill)}
 :root[data-theme] body #devil-music .music-sidebar-stats-label{font-size:11px;letter-spacing:.01em}
-:root[data-theme] body #devil-music .music-sidebar-stats strong{font-size:19px;font-weight:700;letter-spacing:-.01em}
+:root[data-theme] body #devil-music .music-sidebar-stats strong{font-weight:700;letter-spacing:-.01em}
 :root[data-theme] body #devil-music .music-welcome .music-sidebar-stats{--stats-accent:var(--cover-lyric-light,var(--workspace-ink));align-self:center;grid-template-columns:minmax(0,auto) auto;grid-template-rows:auto auto auto;gap:2px 18px;max-width:340px;padding:11px 16px 10px;border:1px solid var(--surf-line);border-radius:18px;background:var(--surf-fill)}
 :root[data-theme] body #devil-music .music-sidebar-stats-label{grid-column:1;grid-row:1}
 :root[data-theme] body #devil-music .music-sidebar-stats strong{grid-column:1;grid-row:2;font-size:20px;line-height:1.1}

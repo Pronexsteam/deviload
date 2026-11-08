@@ -49,9 +49,7 @@
 :root[data-theme] body :is(.music-dock,.music-stage) .music-play-button:not(:disabled):active,body.music-mini-page #mini-play:active{
   transform:scale(var(--ctl-press));box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 20%,transparent);transition-duration:60ms,60ms,var(--ctl-quick),var(--ctl-quick);
 }
-:root[data-theme] body :is(.music-dock,.music-stage) .music-play-button:disabled{
-  background:transparent;color:var(--player-muted);opacity:1;box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--player-muted) 34%,transparent);
-}
+:root[data-theme] body :is(.music-dock,.music-stage) .music-play-button:disabled{color:var(--player-muted);opacity:1;box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--player-muted) 34%,transparent)}
 body.music-mini-page button{transition:background-color var(--ctl-quick) linear,color var(--ctl-quick) linear,transform var(--ctl-settle) var(--ctl-ease)}
 body.music-mini-page button:not(#mini-play):active{transform:scale(var(--ctl-press));transition-duration:var(--ctl-quick),var(--ctl-quick),60ms}
 body.music-mini-page #mini-play{border-radius:50%}
@@ -71,9 +69,7 @@ body.music-mini-page #mini-play:hover{background:var(--player-primary);color:var
 }
 :root[data-theme] body :is(#devil-music,.music-import-dialog) .music-primary:not(:disabled):hover{filter:brightness(1.07);transform:translateY(-1px)}
 :root[data-theme] body :is(#devil-music,.music-import-dialog) .music-primary:not(:disabled):active{filter:brightness(.96);transform:scale(.97);transition-duration:60ms,var(--ctl-quick)}
-:root[data-theme] body .topbar #music-search .music-search-submit{
-  border-radius:var(--ctl-capsule);padding-inline:16px;font-weight:650;transition:transform var(--ctl-settle) var(--ctl-ease),filter var(--ctl-quick) linear;
-}
+:root[data-theme] body .topbar #music-search .music-search-submit{padding-inline:16px;font-weight:650;transition:transform var(--ctl-settle) var(--ctl-ease),filter var(--ctl-quick) linear}
 :root[data-theme] body .topbar #music-search .music-search-submit:not(:disabled):hover{filter:brightness(1.07)}
 :root[data-theme] body .topbar #music-search .music-search-submit:not(:disabled):active{transform:scale(.96);transition-duration:60ms,var(--ctl-quick)}
 :root[data-theme] body #devil-music .music-moods button{

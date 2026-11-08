@@ -24,7 +24,7 @@ main, .custom-window main { padding-top: 0; }
 }
 .is-scrolled .topbar::before { border-bottom-color: #2a3139; box-shadow: 0 12px 26px #0008; }
 @media (max-width: 760px) { .topbar::before { inset: 0 -12px; } }
-.custom-window .window-drag-strip { z-index: 65; height: 12px; }
+
 .live-download { top: 88px; }
 
 /* Link field */
@@ -76,7 +76,7 @@ main, .custom-window main { padding-top: 0; }
 }
 
 /* Window controls */
-.custom-window .window-chrome { top: 20px; }
+
 .window-chrome button { transition: background .15s, color .15s, border-color .15s; }
 .window-chrome button svg { stroke-width: 1.7; }
 .window-chrome .window-close:hover { background: #c42b1c; border-color: #c42b1c; color: #fff; }
@@ -131,7 +131,7 @@ main, .custom-window main { padding-top: 0; }
 .options-toggle[aria-expanded="true"] .options-caret { transform: rotate(180deg); }
 .download-drawer { margin-top: 10px; padding-top: 12px; border-top: 1px solid #2c343c; }
 .download-drawer[hidden] { display: none; }
-.drawer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
+.drawer-grid {display: grid;gap: 12px}
 .drawer-card { min-width: 0; padding: 12px 14px; border: 1px solid #2f3740; border-radius: 10px; background: #151a20; }
 .drawer-card h3 { margin: 0 0 10px; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #ff9b75; }
 .drawer-card label { display: grid; gap: 6px; font-size: 11px; color: #c4ccd2; }
@@ -181,22 +181,7 @@ main, .custom-window main { padding-top: 0; }
 
 /* Status strip above the queue; the art on the right shows the devil
    pulling media in from the services. */
-.hero.hero-slim {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 10px;
-  min-height: 0;
-  height: 130px;
-  margin: 0 0 14px;
-  padding: 0 22px;
-  background-color: #11161b;
-  background-image: linear-gradient(90deg, #11161b 0%, #11161b 30%, #11161b00 58%), url("assets/hero-embers-media.png");
-  background-size: cover, auto 206px;
-  background-position: center, right 0 top -18px;
-  background-repeat: no-repeat;
-}
+.hero.hero-slim {display: flex;flex-direction: column;align-items: flex-start;justify-content: center;min-height: 0;margin: 0 0 14px;padding: 0 22px;background-color: #11161b;background-image: linear-gradient(90deg, #11161b 0%, #11161b 30%, #11161b00 58%), url("assets/hero-embers-media.png");background-size: cover, auto 206px;background-position: center, right 0 top -18px;background-repeat: no-repeat}
 .hero-slim .overline { position: relative; z-index: 1; }
 .hero-row { position: relative; z-index: 1; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .hero-slim .hero-status { margin: 0; font-size: 12px; }
@@ -206,13 +191,13 @@ main, .custom-window main { padding-top: 0; }
 .hero-slim .stat:last-child { border-right: 0; border-radius: 0 8px 8px 0; }
 
 /* Queue card hints */
-.job-help { display: grid; gap: 2px; }
+
 .job-help strong { font-size: 12px; color: #ffb4a4; }
 .job-help span { font-size: 11px; line-height: 1.4; color: #d3c9c4; }
 .fix-action { border-color: #ff6d4799 !important; color: #ffd4c4 !important; }
 
 /* Toasts. As a popover the strip shows above open dialogs; the resets undo the browser's popover look. */
-.toasts[popover] { inset: auto 18px 18px auto; margin: 0; padding: 0; border: 0; background: transparent; color: inherit; overflow: visible; }
+.toasts[popover] {margin: 0;padding: 0;border: 0;background: transparent;color: inherit;overflow: visible}
 .toasts {
   position: fixed;
   right: 18px;
@@ -456,14 +441,14 @@ body.cut-page { display: block; min-width: 0; height: 100vh; margin: 0; padding:
 .cut-track-hint { align-self: center; padding-left: 8px; font-size: 11px; color: var(--muted); }
 .cut-playhead { position: absolute; top: 0; bottom: 0; z-index: 8; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 6px #fffa; pointer-events: none; }
 .cut-playhead::before { content: ""; position: absolute; top: 0; left: -6px; border: 7px solid transparent; border-top-color: #fff; }
-.cut-foot { display: flex; align-items: center; gap: 12px; min-height: 42px; padding: 6px 16px; border-top: 1px solid #2a3139; background: #13171c; }
+.cut-foot {gap: 12px;min-height: 42px;padding: 6px 16px;border-top: 1px solid #2a3139;background: #13171c}
 .cut-foot #edit-status { flex: 1; margin: 0; font-size: 12px; color: #a9d5b5; }
 .cut-foot #edit-status.error { color: #ffada3; }
 .cut-foot #edit-status .outline { margin-left: 6px; }
 .cut-progress { width: 220px; height: 8px; overflow: hidden; border-radius: 6px; background: #2a3037; }
 .cut-progress span { display: block; width: 0; height: 100%; background: linear-gradient(90deg, #ac2923, #fc9e3d); transition: width .2s; }
 .editor-home-project { display: flex; align-items: center; gap: 6px; }
-.editor-home-project .editor-home-item { flex: 1; }
+
 select:disabled, input:disabled { opacity: .5; }
 @media (max-width: 1100px) { .cut-body { grid-template-columns: 190px minmax(0, 1fr) 250px; } .cut-fit { display: none; } }
 .cut-full-toggle svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -538,13 +523,13 @@ select:disabled, input:disabled { opacity: .5; }
 .empty-mascot { --mascot: 96px; margin: 0 auto 8px; }
 .media-library-empty { display: grid; justify-items: center; gap: 4px; text-align: center; }
 .media-library-empty p { margin: 0; }
-.discover-mascot { --mascot: 64px; }
+
 .head-mascot { --mascot: 46px; margin-right: 10px; }
 .watch-dialog .dialog-head { display: flex; align-items: center; }
 .watch-dialog .dialog-head > div { flex: 1; }
 .tour-mascot { --mascot: 54px; position: absolute; top: -40px; right: 14px; }
 .tour-card { position: relative; }
-.inspect-mascot { --mascot: 34px; }
+
 .help-mascot { --mascot: 38px; }
 .job-help { display: flex; align-items: center; gap: 10px; }
 .job-help-text { display: grid; gap: 2px; min-width: 0; }
@@ -626,7 +611,7 @@ body.convert-page { display: block; min-width: 0; height: 100vh; margin: 0; padd
 /* Layout pass: the link field keeps its width, rows line up, narrow windows do not scroll sideways. */
 
 /* Linux has neither Segoe UI nor the Apple fonts; use the desktop's own font there. */
-body { font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Ubuntu, Cantarell, "Noto Sans", "Helvetica Neue", Arial, sans-serif; }
+
 
 /* Windows: the window buttons sit in a slim caption strip like a native title bar. */
 .custom-window .window-drag-strip { left: 264px; z-index: 59; height: 34px; background: #101318; cursor: default; }
@@ -646,10 +631,10 @@ body { font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Ub
 }
 
 /* The language switch is one small button showing the current language. */
-.lang-switch button[aria-pressed="false"] { display: none; }
-.lang-switch { padding: 0; border: 0; background: transparent; }
-.topbar-actions .lang-switch button, .topbar-actions .lang-switch button.active { width: 43px; min-height: 42px; border: 1px solid #47505b; border-radius: 8px; background: #20262d; color: #e9edf1; font-size: 12px; }
-.topbar-actions .lang-switch button:hover { border-color: #f37a55; background: #31373f; color: #fff; }
+
+
+
+
 
 /* The YouTube button shrinks to its logo where the top bar is tight. */
 @media (max-width: 1400px) {
@@ -679,10 +664,10 @@ body { font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Ub
 
 /* Devil Cut page: the new project button and the delete buttons stay inside their cards. */
 #open-editor { flex: none; }
-.editor-home-project .editor-home-item { flex: 1; width: auto; min-width: 0; }
+.editor-home-project .editor-home-item {flex: 1;width: auto}
 .editor-home-project > button:last-child { flex: none; }
 .library-more.up .library-more-actions { top: auto; bottom: calc(100% + 6px); }
-#library-sort { width: auto; margin: 0 0 0 auto; }
+#library-sort {width: auto}
 #media-library-size { color: var(--ink); }
 
 /* Library views: large tiles (the default), small tiles and a list. */
@@ -822,7 +807,7 @@ main { padding-bottom: 64px; }
 /* Format bar: types first, then quality, file type, settings and the hint flow after them.
    On wide windows the settings button moves up beside the types and the rest lines up below. */
 .download-options-row { row-gap: 8px; }
-.download-picks { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; }
+.download-picks {align-items: center;min-width: 0}
 .download-picks .quality-select,
 .download-picks .options-toggle { margin-left: 0; }
 .download-picks .download-format-hint { flex: 1 1 100%; margin: 0; }
@@ -916,7 +901,7 @@ select:not([multiple]) {
 [data-view="list"] .library-playlist-files { display: flex; flex-direction: column; }
 .destination-quick { display: inline-flex; align-items: center; gap: 5px; max-width: 165px; color: #b7c5cb; }
 .destination-quick span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hero, .hero-content { min-height: 76px; }
+.hero{ min-height: 76px; }
 .hero { border-color: #39424b; }
 .job[data-status="skipped"] { opacity: .8; }
 @media (max-width: 1100px) {

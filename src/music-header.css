@@ -1,5 +1,5 @@
 /* One persistent search in the app header; music tabs remain with the library. */
-:root body main[data-page="music"] #devil-music .music-toolbar>.music-heading-actions{grid-column:1/-1;grid-row:2;display:flex;justify-content:flex-start;align-items:center;flex-wrap:wrap;gap:8px;padding:5px 0 10px}
+:root body main[data-page="music"] #devil-music .music-toolbar>.music-heading-actions{grid-column:1/-1;grid-row:2;display:flex;align-items:center}
 :root body #devil-music .music-toolbar .music-heading-actions>button{min-height:34px;border:1px solid var(--theme-line);border-radius:10px;padding:7px 11px;color:var(--workspace-ink);background:var(--theme-input);font-size:12px;white-space:normal}
 :root body #devil-music .music-toolbar .music-heading-actions>.music-import-open{background:color-mix(in srgb,var(--theme-accent) 15%,var(--theme-input));border-color:color-mix(in srgb,var(--theme-accent) 35%,var(--theme-line));font-weight:600}
 :root body #devil-music .music-toolbar .music-heading-actions>#music-refresh{margin-left:auto;padding:7px;width:34px;flex:none}
@@ -53,7 +53,7 @@ main[data-page="music"] .workspace-breadcrumb>span{display:none}
 .topbar #music-search>.icon,.topbar #music-search kbd{color:var(--workspace-muted)}
 .topbar #music-search .music-search-submit{min-height:36px;height:36px;border-radius:8px;background:var(--workspace-accent);color:var(--workspace-accent-ink,var(--theme-accent-text));padding-inline:12px}
 .topbar #music-search-clear{width:28px;min-width:28px;height:28px;padding:4px;color:var(--workspace-muted)}
-:root body main[data-page="music"] #devil-music .music-toolbar{grid-template-columns:34px minmax(0,1fr) 66px;padding:0 6px;gap:6px;margin-bottom:12px;border-bottom:1px solid var(--workspace-line)}
+:root body main[data-page="music"] #devil-music .music-toolbar{gap:6px;border-bottom:1px solid var(--workspace-line)}
 :root body main[data-page="music"] #devil-music .music-toolbar>.music-tabs{grid-column:2;grid-row:1;border:0;flex-wrap:wrap;gap:0 18px;padding:0}
 :root body main[data-page="music"] #devil-music .music-toolbar>.music-navigation{grid-column:3;grid-row:1}
 :root body main[data-page="music"] #devil-music .music-toolbar>.music-library-panel-toggle{grid-column:1;grid-row:1}
