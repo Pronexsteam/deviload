@@ -32,7 +32,7 @@ Deviload is free. If it saves you time, a coffee helps me keep building it.
 
 </div>
 
-![Devil Music: your playlists, discovery, a weekly listening summary and Now Playing in one workspace](docs/screenshots/music-home-2.9.0.png)
+![Devil Music with the Your own theme: a silent looping video behind the workspace while the library folds into a rail of covers and opens again](docs/screenshots/music-video-background.gif)
 
 Deviload is a free, open-source desktop app for discovering music, keeping a local media collection and making clips. Listen in **Devil Music**, save video or audio with [yt-dlp](https://github.com/yt-dlp/yt-dlp), and send downloaded files to **Devil Cut** or **Devil Convert**.
 
@@ -55,7 +55,7 @@ Open the YouTube Music catalog and start listening without a Devil Music account
 - **Keep a copy:** queue an MP3 download from a song card or the player without interrupting playback. Supported completed audio downloads can play offline.
 - **Take your preferences with you:** export and restore a local music profile with likes, playlists and taste settings. The backup contains metadata, not music files or account credentials.
 
-![Devil Music with the Your own theme: a silent looping video behind the workspace while the library folds into a rail of covers and opens again](docs/screenshots/music-video-background.gif)
+![Devil Music: your playlists, discovery, a weekly listening summary and Now Playing in one workspace](docs/screenshots/music-home-2.9.0.png)
 
 Playback and catalog availability depend on YouTube, your region and your connection. Spotify imports match metadata to playable catalog tracks; they do not download Spotify audio. A Spotify preview may omit tracks, and a YouTube Mix import is a snapshot of up to 100 songs rather than a continuously synced playlist. See [data and privacy](#data-and-privacy) for the services contacted.
 
