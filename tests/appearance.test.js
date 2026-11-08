@@ -177,7 +177,7 @@ test("collection migration forces Ambient exactly once and leaves unrelated sett
    assert.equal(root.dataset.theme,themeBase(selected));assert.equal(readTheme(storage),selected);
   }
  }
- assert.deepEqual(THEMES,["ambient","glass-light","aurora","prism","noir","vinyl","paper"]);
+ assert.deepEqual(THEMES,["ambient","glass-light","aurora","prism","noir","vinyl","paper","custom"]);
 });
 test("first paint performs the same migration before any runtime UI initializes",()=>{
  const values=new Map([[THEME_KEY,"glass-light"]]),writes=[];
@@ -191,7 +191,7 @@ test("first paint performs the same migration before any runtime UI initializes"
 
 test("palette themes keep their base theme rules and switch cleanly back",()=>{
   const f=setup("ambient",false,{quick:true}),stop=wireAppearance(f.options),root=f.document.documentElement;
-  for(const [theme,base] of [["noir","prism"],["vinyl","prism"],["paper","glass-light"]]){
+  for(const [theme,base] of [["noir","prism"],["vinyl","prism"],["paper","glass-light"],["custom","ambient"]]){
     f.select.value=theme;f.select.dispatchEvent(new Event("change"));
     assert.equal(root.dataset.theme,base);assert.equal(root.dataset.variant,theme);assert.equal(f.storage.getItem(THEME_KEY),theme);
     assert.equal(root.style.colorScheme,base==="glass-light"?"light":"dark");

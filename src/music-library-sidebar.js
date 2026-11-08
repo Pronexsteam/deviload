@@ -12,13 +12,13 @@ export function createMusicLibrarySidebar({workspace,saved,onPlaylist,onFavorite
   content.append(...workspace.childNodes);workspace.append(aside,content);workspace.classList.add("has-library-sidebar");
   const makeButton=(cls,icon,action)=>{const node=el("button",cls);node.type="button";if(icon)node.append(glyph(icon));node.addEventListener("click",action);return node;};
   const media=window.matchMedia("(min-width:960px)");
-  let preference=null,active=null,destroyed=false;
+  let preference=null,active=null,destroyed=false,animation=0;
   try{const value=localStorage.getItem(STORAGE_KEY);if(value==="open"||value==="closed")preference=value;}catch{/* Local preferences are optional. */}
   let opened=preference?preference==="open":media.matches;
   const toggle=makeButton("music-library-panel-toggle","sidebar-simple",()=>setOpen(!opened,true,true)),toggleText=el("span","");toggle.append(toggleText);toggle.setAttribute("aria-controls",aside.id);
   const toolbar=content.querySelector(".music-toolbar");if(toolbar)toolbar.prepend(toggle);else content.prepend(toggle);
   const create=makeButton("music-icon-button","plus",()=>{if(!media.matches)setOpen(false,true,false);onCreate();});
-  const close=makeButton("music-icon-button","sidebar-simple",()=>setOpen(false,true,true));
+  const close=makeButton("music-icon-button","sidebar-simple",()=>setOpen(!opened,true,true));
   headActions.append(create,close);header.append(title,headActions);
   const searchWrap=el("div","music-library-sidebar-search"),search=el("input","");search.type="search";search.maxLength=60;search.autocomplete="off";search.spellcheck=false;searchWrap.append(glyph("magnifying-glass"),search);
   const list=el("nav","music-library-sidebar-list"),empty=el("p","music-library-sidebar-empty");empty.setAttribute("role","status");
@@ -45,10 +45,15 @@ export function createMusicLibrarySidebar({workspace,saved,onPlaylist,onFavorite
     }));
   }
   function setOpen(value,remember=false,focus=false){
-    opened=value;aside.hidden=!value;workspace.classList.toggle("library-panel-open",value);toggle.setAttribute("aria-expanded",String(value));
+    // On a wide window a closed library folds into a rail of icons and covers instead of disappearing.
+    const rail=!value&&media.matches;
+    // Folding and unfolding glide; window resizes stay immediate.
+    if(value!==opened&&workspace.isConnected){workspace.classList.add("music-library-animating");clearTimeout(animation);animation=setTimeout(()=>workspace.classList.remove("music-library-animating"),420);}
+    opened=value;aside.hidden=!value&&!rail;workspace.classList.toggle("library-panel-open",value);workspace.classList.toggle("music-library-rail",rail);toggle.setAttribute("aria-expanded",String(value));closeLabel();
     if(remember){preference=value?"open":"closed";try{localStorage.setItem(STORAGE_KEY,preference);}catch{/* Remain usable with denied storage. */}}
     if(focus){if(value&&!media.matches)home.focus();else if(!value)toggle.focus();}
   }
+  function closeLabel(){const label=opened?t("Collapse library"):t("Expand library");close.title=label;close.setAttribute("aria-label",label);close.setAttribute("aria-expanded",String(opened));}
   function navigate(callback){if(!media.matches)setOpen(false,true,false);callback();}
   function row(name,count,art,action,id,pinned=false,description=null){
     const node=makeButton("music-library-nav-item",null,()=>navigate(action)),copy=el("span","music-library-nav-copy"),label=el("strong","",name),meta=el("small","",description??t("{count} tracks",{count}));
@@ -83,10 +88,10 @@ export function createMusicLibrarySidebar({workspace,saved,onPlaylist,onFavorite
   function translate(){
     if(destroyed)return;title.textContent=t("Playlists");list.setAttribute("aria-label",t("Your library"));toggleText.textContent=t("Your library");toggle.title=t("Show or hide your music library");toggle.setAttribute("aria-label",t("Show or hide your music library"));
     homeLabel.textContent=t('Music home');primary.setAttribute('aria-label',t('Devil Music'));toggleText.textContent=t('Library');
-    create.title=t("Create playlist");create.setAttribute("aria-label",t("Create playlist"));close.title=t("Close library panel");close.setAttribute("aria-label",t("Close library panel"));
+    create.title=t("Create playlist");create.setAttribute("aria-label",t("Create playlist"));closeLabel();
     search.placeholder=t("Search your playlists");search.setAttribute("aria-label",t("Search your playlists"));refresh();refreshStats();
   }
-  const onResize=()=>{if(preference===null)setOpen(media.matches);};
+  const onResize=()=>{setOpen(preference===null?media.matches:opened);};
   const onEscape=event=>{if(event.key==="Escape"&&opened){event.preventDefault();event.stopPropagation();setOpen(false,true,true);}};
   search.addEventListener("input",()=>refresh());aside.addEventListener("keydown",onEscape);media.addEventListener("change",onResize);onLanguageChange(translate);
   translate();setOpen(opened);

@@ -1,0 +1,55 @@
+/* Swapped panels: the grid runs right to left, its contents stay left to right. */
+:root body main[data-page="music"] #devil-music.music-panels-swapped{direction:rtl}
+:root body main[data-page="music"] #devil-music.music-panels-swapped>*{direction:ltr}
+:root body main[data-page="music"] #devil-music.music-panels-swapped.music-library-overlay>.music-library-sidebar{inset:0 0 0 auto;box-shadow:-12px 0 40px #0007}
+
+/* The listening summary also fits at the top or bottom of the library panel. */
+:root body #devil-music .music-library-body>.music-sidebar-stats{--stats-accent:var(--cover-lyric-light,var(--workspace-ink));position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto auto;align-items:center;gap:2px 10px;min-width:0;margin:2px 3px 12px;padding:11px 12px 10px;border:1px solid var(--surf-line,#ffffff14);border-radius:16px;background:var(--surf-fill,#ffffff08);color:var(--workspace-ink);line-height:1.15}
+:root[data-theme="glass-light"] body #devil-music .music-library-body>.music-sidebar-stats{--stats-accent:var(--cover-lyric-dark,var(--workspace-ink))}
+:root body #devil-music .music-library-body>.music-sidebar-stats .music-sidebar-stats-note{max-width:none}
+:root body #devil-music .music-library-body>.music-sidebar-stats{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto auto}
+:root body #devil-music .music-library-body>.music-sidebar-stats .music-sidebar-stats-note{grid-row:3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+:root body #devil-music .music-library-body>.music-sidebar-stats .music-sidebar-stats-chart{grid-column:1;grid-row:4;justify-content:space-between;gap:4px;margin-top:8px}
+
+/* Edit layout. */
+.icon[data-icon="eye"]{--glyph:url("assets/icons/eye.svg")}
+:root body .is-layout-hidden{display:none!important}
+.music-layout-editing [data-layout-item].is-layout-off{opacity:.32;outline-style:dashed}
+.music-layout-toggle{position:fixed;z-index:2147482003;display:grid;place-items:center;width:26px;height:26px;margin:0;padding:0;border:1px solid var(--surf-line,#ffffff26);border-radius:50%;background:var(--theme-surface-strong,#1b1d22);color:var(--theme-text,#f2f2f2);box-shadow:0 6px 18px #0008;cursor:pointer}
+.music-layout-toggle[hidden]{display:none}
+.music-layout-toggle .icon{width:14px;height:14px}
+.music-layout-toggle:hover{background:var(--player-primary,#f2f2f2);color:#111}
+.music-layout-toggle.is-off{background:var(--player-primary,#f2f2f2);color:#111}
+.music-layout-toggle:focus-visible{outline:2px solid var(--player-primary,#9ad0ff);outline-offset:2px}
+.music-layout-bar{position:fixed;z-index:2147482000;top:14px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;max-width:calc(100vw - 32px);padding:8px 8px 8px 16px;border:1px solid var(--surf-line,#ffffff1f);border-radius:18px;background:color-mix(in srgb,var(--theme-surface-strong,#1b1d22) 88%,transparent);color:var(--theme-text,#f2f2f2);box-shadow:0 18px 50px #0008;backdrop-filter:blur(24px) saturate(1.4);-webkit-backdrop-filter:blur(24px) saturate(1.4);animation:music-layout-in .22s cubic-bezier(.2,.8,.2,1)}
+.music-layout-bar[hidden]{display:none}
+.music-layout-copy{display:flex;flex-direction:column;gap:2px;min-width:0;margin-right:6px}
+.music-layout-copy strong{font-size:13px;font-weight:650}
+.music-layout-copy span{font-size:11px;opacity:.68;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.music-layout-bar button{display:inline-flex;align-items:center;gap:6px;flex:none;height:32px;margin:0;padding:0 13px;border:1px solid var(--surf-line,#ffffff1f);border-radius:999px;background:#ffffff0d;color:inherit;font:inherit;font-size:12px;font-weight:550;cursor:pointer;box-shadow:none}
+.music-layout-bar button .icon{width:15px;height:15px}
+.music-layout-bar button:hover:not(:disabled){background:#ffffff1c}
+.music-layout-bar button:disabled{opacity:.4;cursor:default}
+.music-layout-bar button:focus-visible{outline:2px solid var(--player-primary,#9ad0ff);outline-offset:2px}
+.music-layout-bar .music-layout-done{background:var(--player-primary,#f2f2f2);border-color:transparent;color:#111}
+.music-layout-bar .music-layout-done:hover:not(:disabled){background:var(--player-primary,#fff);filter:brightness(1.08)}
+.music-layout-live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media(max-width:900px){.music-layout-copy span{display:none}}
+
+.music-layout-editing [data-layout-zone]{outline:1px dashed #ffffff26;outline-offset:4px;border-radius:14px;transition:outline-color .15s,background-color .15s}
+.music-layout-editing [data-layout-zone].is-layout-target{outline:2px dashed color-mix(in srgb,var(--player-primary,#9ad0ff) 75%,transparent);background-color:color-mix(in srgb,var(--player-primary,#9ad0ff) 6%,transparent)}
+.music-layout-editing [data-layout-item]{cursor:grab;outline:1px solid color-mix(in srgb,var(--player-primary,#9ad0ff) 45%,transparent);outline-offset:2px;border-radius:12px;user-select:none;-webkit-user-select:none;transition:opacity .15s,outline-color .15s}
+.music-layout-editing [data-layout-item]:hover,.music-layout-editing [data-layout-item]:focus-visible{outline:2px solid var(--player-primary,#9ad0ff)}
+.music-layout-editing [data-layout-item] *{pointer-events:none}
+.music-layout-editing [data-layout-item] [data-layout-item]{pointer-events:auto}
+.music-layout-editing [data-layout-item].is-layout-dragging{opacity:.3}
+.music-layout-dragging,.music-layout-dragging *{cursor:grabbing!important}
+.music-layout-editing #devil-music input,.music-layout-editing .music-dock input{pointer-events:none}
+.music-layout-editing .music-dock{z-index:2147481000}
+
+.music-layout-marker{position:fixed;z-index:2147482001;border-radius:3px;background:var(--player-primary,#9ad0ff);box-shadow:0 0 0 3px color-mix(in srgb,var(--player-primary,#9ad0ff) 30%,transparent),0 0 18px var(--player-primary,#9ad0ff);pointer-events:none}
+.music-layout-marker[hidden],.music-layout-ghost[hidden]{display:none}
+.music-layout-ghost{position:fixed;z-index:2147482002;top:0;left:0;padding:7px 12px;border-radius:999px;background:var(--player-primary,#f2f2f2);color:#111;font-size:12px;font-weight:650;white-space:nowrap;box-shadow:0 10px 30px #0007;pointer-events:none}
+
+@keyframes music-layout-in{from{opacity:0;transform:translate(-50%,-8px)}}
+@media(prefers-reduced-motion:reduce){.music-layout-bar{animation:none}}

@@ -11,6 +11,7 @@ const OTHER_TAKE=phrase(['cover','acoustic','unplugged','live','en vivo','ao viv
 // The picture follows the song's own clock, so the video must be the same recording: an end card may add a
 // little, but a much longer video has an intro or another edit and would run out of step.
 const LONGER_BY=20,SHORTER_BY=5,QUALITY_KEY='deviload-music-clip-quality',USED_KEY='deviload-music-clip-used';
+const FOUND_KEY='deviload-music-clip-ids',FOUND_LIMIT=300,CLIP_ID=/^[A-Za-z0-9_-]{11}$/;
 const channelOf=name=>compact(name).replace(/(vevo|official|oficial|officiel|music|tv|channel)$/,'').replace(/^official/,'');
 const secondsIn=text=>{const m=String(text||'').match(/(?:^|\D)(?:(\d+):)?(\d{1,2}):(\d{2})(?:\D|$)/);return m?Number(m[1]||0)*3600+Number(m[2])*60+Number(m[3]):0;};
 
@@ -101,12 +102,20 @@ export function createMusicClip({invoke,language,getItem=()=>null,getHost,isVisi
     video.playbackRate=Math.abs(drift)>.06?rate*(drift>0?.95:1.05):rate;
     if(video.paused)video.play().catch(()=>{});
   }
+  // Found videos are shared with the mini player's window and kept across restarts; misses stay in this window only.
+  const shared=()=>{try{const value=JSON.parse(storage?.getItem(FOUND_KEY)||'{}');return value&&typeof value==='object'&&!Array.isArray(value)?value:{};}catch{return {};}};
+  function remember(song,id){
+    if(!CLIP_ID.test(id||''))return;
+    try{const map=shared();delete map[song];map[song]=id;const keys=Object.keys(map);for(const key of keys.slice(0,Math.max(0,keys.length-FOUND_LIMIT)))delete map[key];storage?.setItem(FOUND_KEY,JSON.stringify(map));}catch{}
+  }
   async function lookup(item){
     if(found.has(item.id))return found.get(item.id);
+    const known=shared()[item.id];
+    if(CLIP_ID.test(known||'')){found.set(item.id,known);return known;}
     const query=[item.artists?.[0]||'',item.title].join(' ').trim();
     const result=await invoke('music_catalog',{kind:'search',value:query,filter:'videos',language:language()});
     const id=pickClip(item,(result?.sections||[]).flatMap(section=>section.items||[]))?.id||null;
-    found.set(item.id,id);if(found.size>100)found.delete(found.keys().next().value);
+    found.set(item.id,id);if(found.size>100)found.delete(found.keys().next().value);remember(item.id,id);
     return id;
   }
   async function update(item){

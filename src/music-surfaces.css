@@ -67,7 +67,7 @@
 :root[data-theme] body :is(.music-dock,.music-stage) #music-dock-menu>:is(button,#music-mini-open) span:not(.icon){display:none}
 #music-dock-menu>button::after{content:attr(aria-label)}
 @media(min-width:900px){
-  :root[data-theme] body:has(main[data-page="music"]) .music-dock{height:var(--dock-height);grid-template-columns:minmax(180px,1fr) minmax(280px,1.3fr) minmax(0,1fr);grid-template-rows:auto;gap:16px;padding:8px 14px 8px 10px}
+  :root[data-theme] body:has(main[data-page="music"]) .music-dock{height:var(--dock-height);grid-template-columns:minmax(180px,1fr) minmax(280px,1.3fr) minmax(max-content,1fr);grid-template-rows:auto;gap:16px;padding:8px 14px 8px 10px}
   :root[data-theme] body:has(main[data-page="music"]) .music-dock>.music-now{grid-column:1;grid-row:1}
   :root[data-theme] body:has(main[data-page="music"]) .music-dock>.music-transport{grid-column:2;grid-row:1}
   :root[data-theme] body:has(main[data-page="music"]) .music-dock>.music-dock-extras{grid-column:3;grid-row:1;justify-content:flex-end;gap:2px}
@@ -75,7 +75,7 @@
   :root[data-theme] body:has(main[data-page="music"]) .music-queue-panel{bottom:calc(var(--dock-height) + var(--dock-gap)*2);max-height:calc(100dvh - 140px)}
 }
 @media(min-width:1180px){
-  :root[data-theme] body .music-dock{height:var(--dock-height);grid-template-columns:minmax(180px,1fr) minmax(280px,1.3fr) minmax(0,1fr);grid-template-rows:auto;gap:16px;padding:8px 14px 8px 10px}
+  :root[data-theme] body .music-dock{height:var(--dock-height);grid-template-columns:minmax(180px,1fr) minmax(280px,1.3fr) minmax(max-content,1fr);grid-template-rows:auto;gap:16px;padding:8px 14px 8px 10px}
   :root[data-theme] body .music-dock>.music-now{grid-column:1;grid-row:1}
   :root[data-theme] body .music-dock>.music-transport{grid-column:2;grid-row:1}
   :root[data-theme] body .music-dock>.music-dock-extras{grid-column:3;grid-row:1;justify-content:flex-end;gap:2px}
@@ -277,3 +277,10 @@
 :root[data-theme] body main[data-page="music"] #devil-music .music-sidebar-controls .music-heading-actions>button{width:34px;height:34px;min-height:34px;color:var(--workspace-ink);opacity:.78;transition:opacity .18s ease,background-color .18s ease}
 :root[data-theme] body main[data-page="music"] #devil-music .music-sidebar-controls .music-heading-actions>button:is(:hover,:focus-visible){opacity:1;background:var(--surf-hover)}
 :root[data-theme] body main[data-page="music"] #devil-music .music-sidebar-controls .music-heading-actions>button .icon{width:17px;height:17px}
+/* The lyrics switch in Now Playing carries a word, not only a note. */
+:root[data-theme] body #devil-music .music-preview-tools>.music-preview-toggle{width:auto!important;gap:6px;padding:0 12px 0 10px;border-radius:999px}
+#devil-music .music-preview-toggle-label{font-size:12px;font-weight:600;white-space:nowrap}
+:root[data-theme] body #devil-music .music-preview-top>.music-eyebrow{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#devil-music>.music-playing-preview{container:music-playing / inline-size}
+@container music-playing (max-width:290px){:root[data-theme] body #devil-music .music-preview-top>.music-eyebrow{display:none}:root[data-theme] body #devil-music .music-preview-top{justify-content:flex-end}}
+:root[data-theme] body #devil-music .music-preview-top>.music-preview-tools{flex:none}

@@ -3,12 +3,13 @@ import {t,onLanguageChange} from './i18n.js';
 import {paintAmbient,ambientArtwork} from './music-ambient-light.js';
 import {registerPlaybackRange,isRangeDragging} from './player-controls.js';
 import {wireMiniQueue} from './music-mini-queue.js';
+import {createMusicClip} from './music-clip.js';
 const $=id=>document.getElementById(id),invoke=window.__TAURI__.core.invoke;
 const time=n=>`${Math.floor((Number(n)||0)/60)}:${String(Math.floor((Number(n)||0)%60)).padStart(2,'0')}`;
 const glyphs={play:'play',pause:'pause',previous:'skip-back',next:'skip-forward',repeat:'repeat',shuffle:'shuffle',volume:'speaker-high',muted:'speaker-high'};
 function icon(id,name,one=false){const button=$(id);if(button.dataset.icon===name+one)return;button.dataset.icon=name+one;const glyph=document.createElement('span');glyph.className='mini-glyph';glyph.setAttribute('aria-hidden','true');glyph.style.setProperty('--mini-glyph',`url('./assets/icons/${glyphs[name]}.svg')`);button.replaceChildren(glyph);if(id==='mini-repeat')button.dataset.repeat=one?'one':'all';if(id==='mini-mute')button.dataset.muted=String(name==='muted');}
 const record=mountPictureDisc(document.querySelector(".mini-art"));
-let state={},pinned=false,receivedAt=0;
+let state={},pinned=false,receivedAt=0,videoOn=false;
 const queueView=wireMiniQueue({invoke});
 registerPlaybackRange($('mini-progress'),()=>state.duration?Math.min(state.duration,state.position+(state.playing?Math.min(1.1,(performance.now()-receivedAt)/1000)*(state.rate||1):0))/state.duration:0);
 $('mini-progress').step='any';
@@ -28,7 +29,7 @@ function render(value){state=value||{};receivedAt=performance.now();document.doc
  $('mini-position').textContent=time(state.position);$('mini-duration').textContent=time(state.duration);$('mini-progress').disabled=!state.duration;
  if(!isRangeDragging($('mini-volume')))$('mini-volume').value=state.volume||0;labels();queueView.update(state);
 }
-function labels(){for(const [id,label]of [['mini-pin',t('Always on top')],['mini-show',t('Open Devil Music')],['mini-close',t('Close')],['mini-play',state.playing?t('Pause'):t('Play')],['mini-previous',t('Previous track')],['mini-next',t('Next track')],['mini-repeat',state.repeat==='one'?t('Repeat one song'):state.repeat==='all'?t('Repeat queue'):t('Repeat off')],['mini-shuffle',t('Shuffle')],['mini-mute',state.volume>0?t('Mute'):t('Unmute')],['mini-volume',t('Volume')],['mini-progress',t('Playback position')]])$(id).title=$(id).ariaLabel=label;$('mini-pin').setAttribute('aria-pressed',String(pinned));$('mini-volume').setAttribute('aria-valuetext',Math.round(Number($('mini-volume').value)*100)+'%');}
+function labels(){for(const [id,label]of [['mini-video',videoOn?t('Close music video'):t('Music video')],['mini-pin',t('Always on top')],['mini-show',t('Open Devil Music')],['mini-close',t('Close')],['mini-play',state.playing?t('Pause'):t('Play')],['mini-previous',t('Previous track')],['mini-next',t('Next track')],['mini-repeat',state.repeat==='one'?t('Repeat one song'):state.repeat==='all'?t('Repeat queue'):t('Repeat off')],['mini-shuffle',t('Shuffle')],['mini-mute',state.volume>0?t('Mute'):t('Unmute')],['mini-volume',t('Volume')],['mini-progress',t('Playback position')]])$(id).title=$(id).ariaLabel=label;$('mini-pin').setAttribute('aria-pressed',String(pinned));$('mini-volume').setAttribute('aria-valuetext',Math.round(Number($('mini-volume').value)*100)+'%');}
 async function action(action,value){try{const result=await invoke('music_mini_action',{action,value});if(action==='pin')pinned=result;labels();$('mini-status').textContent='';}catch{$('mini-status').textContent=t('Could not control playback.');}}
 for(const name of ['pin','show','previous','play','next','repeat','shuffle','mute','close'])$('mini-'+name).addEventListener('click',()=>action(name));
 $('mini-volume').addEventListener('input',()=>{labels();action('volume',Number($('mini-volume').value));});
@@ -40,3 +41,31 @@ await window.__TAURI__.event.listen('music-mini-ambient',({payload})=>{
  paintAmbient(lights,payload.levels);clearTimeout(lightTimeout);lightTimeout=setTimeout(resetLight,350);
 });
 await window.__TAURI__.event.listen('music-mini-state',({payload})=>render(payload));render(await invoke('music_mini_state'));onLanguageChange(()=>render(state));
+
+// Video mode: the window grows into a freely resizable picture of the song's music video, and the controls rest
+// out of sight until the pointer comes back. The song keeps playing in the main window; the picture follows it.
+let videoSong='';
+const stage=$('mini-stage');
+const clock={
+ get currentTime(){return state.duration?Math.min(state.duration,(state.position||0)+(state.playing?Math.min(1.1,(performance.now()-receivedAt)/1000)*(state.rate||1):0)):0;},
+ get paused(){return !state.playing;},
+ get playbackRate(){return state.rate||1;}
+};
+const song=()=>state.id?{id:state.id,title:state.title,artists:state.artists||[],duration:state.duration}:null;
+const clip=createMusicClip({invoke,language:()=>document.documentElement.lang||'en',getItem:song,getHost:()=>stage,isVisible:()=>videoOn&&!document.hidden,getAudio:()=>clock,
+ onState:value=>{document.body.classList.toggle('video-missing',!!value.enabled&&!!(value.missing||value.failed));},
+ onBuffering:on=>document.body.classList.toggle('video-buffering',on)});
+async function setVideo(on){
+ if(on===videoOn)return;
+ try{await invoke('music_mini_action',{action:'video',value:on?1:0});}catch{return;}
+ videoOn=on;videoSong='';document.body.classList.toggle('is-video',on);
+ if(on!==clip.enabled)clip.toggle();
+ labels();
+}
+$('mini-video').addEventListener('click',()=>setVideo(!videoOn));
+setInterval(()=>{
+ if(!videoOn)return;
+ const item=song();
+ if((item?.id||'')!==videoSong){videoSong=item?.id||'';clip.update(item);}
+ clip.align();
+},120);

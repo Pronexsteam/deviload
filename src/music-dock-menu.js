@@ -14,7 +14,7 @@ export function wireMusicDockMenu({extras,button,workspace,items,direct=[],short
  panel.setAttribute('aria-pressed',String(workspace.classList.contains('music-preview-open')));
  panel.classList.add('music-panel-toggle');menu.append(...items.filter(Boolean));extras.append(toggle,menu);// Wide docks also show frequent menu actions as icons; the menu keeps them for narrow windows.
  const quick=shortcuts.filter(entry=>entry?.source).map(({source,glyph})=>{
-  const node=button(source.ariaLabel||source.title||'',glyph,()=>source.click(),'music-icon-button music-dock-shortcut');
+  const node=button(source.ariaLabel||source.title||'',glyph,()=>source.click(),'music-icon-button music-dock-shortcut');if(source.id)node.dataset.mirror=source.id;
   const mirror=()=>{node.title=node.ariaLabel=source.ariaLabel||source.title||'';node.disabled=source.disabled;const pressed=source.getAttribute('aria-pressed');if(pressed)node.setAttribute('aria-pressed',pressed);else node.removeAttribute('aria-pressed');};
   mirror();new MutationObserver(mirror).observe(source,{attributes:true,attributeFilter:['aria-label','title','aria-pressed','disabled']});
   return node;
