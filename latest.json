@@ -1,23 +1,23 @@
 {
-  "version": "2.9.0",
-  "notes": "https://github.com/Pronexsteam/deviload/releases/tag/v2.9.0",
-  "pub_date": "2026-11-08T04:55:50Z",
+  "version": "2.10.0",
+  "notes": "https://github.com/Pronexsteam/deviload/releases/tag/v2.10.0",
+  "pub_date": "2026-11-08T20:02:16Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSV1QzWkRhOGwyOGQxd20wMkgySEFlSGg4cTBDemJJRXlqalgwVTFKc0ppRVBJSmVKa2cySG9pS09HQTlDQmNlUWNYek1xRUNvdmgrVGhZdXJQYlNNRmxDd0kvaEsrb2cwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MTEzNzUwCWZpbGU6RGV2aWxvYWRfMi45LjBfeDY0LXNldHVwLmV4ZQl2ZXJzaW9uOjIuOS4wCjRWZEVCVHBYUmRnd09DZzhNdlBrOVBKcVIxaHFuVjRQeUxLbHo2V3ZqTUNRQUxFNDRTSGJQQmhmOEVsSzFXdHFaMjZhSzROWkJ2c2M4dEhDclM0aEF3PT0K",
-      "url": "https://github.com/Pronexsteam/deviload/releases/download/v2.9.0/Deviload-2.9.0-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSV1QzWkRhOGwyOFY1elU3c0hnbzZuZndzeUdSL1BXdUFwYm5hVnBCRXd1RkYzRTFMWUt6SCtlMU8zTUJEUThBdGFuNGlIRGQvZzVuc0YyallJaHh6ekwzYWNKYWk3QWd3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MTY4MTM2CWZpbGU6RGV2aWxvYWRfMi4xMC4wX3g2NC1zZXR1cC5leGUJdmVyc2lvbjoyLjEwLjAKUGo3cTcvN2ZqVm5CcCtpVFdYT1d4VzFiSDNrbnJVbDlhek5GazVtK2I3eHdrSW43Vm9pQVZDeC9DWEZrOVFCR25uYVd6WCsrY3lWSnM5Zzc3ZlBZRFE9PQo=",
+      "url": "https://github.com/Pronexsteam/deviload/releases/download/v2.10.0/Deviload-2.10.0-setup.exe"
     },
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSV1QzWkRhOGwyOFNWak5UdEppdmZ2b1UyZGg1T0FmaEZQZXRyVFEzVTAxUjgrRzN5TWhjNHN0WmJlOUcya3lIUThQOEdYZkNybmZIZzBKQW1sWW5Vd1ltMGVSdDJjeGdVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MTE0MjA5CWZpbGU6RGV2aWxvYWQuYXBwLnRhci5negl2ZXJzaW9uOjIuOS4wCitaUmsxU0c4YXNCUStFcHk4OFRtWk9TSDJERHg2RjJlcnJjSkxlUnROazVxT1ZBNWFlamF6QVpzcTl4a0VIZWY2THROQUROdUFCRUNQZFF0MGo5ZUFBPT0K",
-      "url": "https://github.com/Pronexsteam/deviload/releases/download/v2.9.0/Deviload-2.9.0-macos.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSV1QzWkRhOGwyOFIwMnZwSHFEWk5hNzFwbnBOaDF4bURvVGdTTG1iSVZ4eEc5d0EvVE5Kd3BRNUh1eC9xRy9FUW5BNzI3bWR4RWI3clJsczVQeGhScGhaSVJpekhjY2dRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MTY4ODM4CWZpbGU6RGV2aWxvYWQuYXBwLnRhci5negl2ZXJzaW9uOjIuMTAuMApveitWR05wVlIrcW1LSnRmZ0ZaV09RcnB6WFErSktPSWpBdmdueEFHQ2oxc3RDalBXVm0wQ2RPRzBhT3FHaXNJMzRDb3FpYzdmUXhIaWFBTUdGTXFCdz09Cg==",
+      "url": "https://github.com/Pronexsteam/deviload/releases/download/v2.10.0/Deviload-2.10.0-macos.app.tar.gz"
     },
     "darwin-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSV1QzWkRhOGwyOFNWak5UdEppdmZ2b1UyZGg1T0FmaEZQZXRyVFEzVTAxUjgrRzN5TWhjNHN0WmJlOUcya3lIUThQOEdYZkNybmZIZzBKQW1sWW5Vd1ltMGVSdDJjeGdVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MTE0MjA5CWZpbGU6RGV2aWxvYWQuYXBwLnRhci5negl2ZXJzaW9uOjIuOS4wCitaUmsxU0c4YXNCUStFcHk4OFRtWk9TSDJERHg2RjJlcnJjSkxlUnROazVxT1ZBNWFlamF6QVpzcTl4a0VIZWY2THROQUROdUFCRUNQZFF0MGo5ZUFBPT0K",
-      "url": "https://github.com/Pronexsteam/deviload/releases/download/v2.9.0/Deviload-2.9.0-macos.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSV1QzWkRhOGwyOFIwMnZwSHFEWk5hNzFwbnBOaDF4bURvVGdTTG1iSVZ4eEc5d0EvVE5Kd3BRNUh1eC9xRy9FUW5BNzI3bWR4RWI3clJsczVQeGhScGhaSVJpekhjY2dRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MTY4ODM4CWZpbGU6RGV2aWxvYWQuYXBwLnRhci5negl2ZXJzaW9uOjIuMTAuMApveitWR05wVlIrcW1LSnRmZ0ZaV09RcnB6WFErSktPSWpBdmdueEFHQ2oxc3RDalBXVm0wQ2RPRzBhT3FHaXNJMzRDb3FpYzdmUXhIaWFBTUdGTXFCdz09Cg==",
+      "url": "https://github.com/Pronexsteam/deviload/releases/download/v2.10.0/Deviload-2.10.0-macos.app.tar.gz"
     },
     "linux-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSV1QzWkRhOGwyOFRnWjBLNE5OTjhIUkVwQmtHS2lCdzM4VVNubXpBVWRGcWJFUnlhZFcrY1FkYmVtZmRkeitYMXVVaW5xbGI5WmZzQUtWQ05MdWJSRE5SUElYa0dKZGc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MTE0NTE3CWZpbGU6RGV2aWxvYWRfMi45LjBfYW1kNjQuQXBwSW1hZ2UJdmVyc2lvbjoyLjkuMApPczJxUVd3VTYxdUdUd3g2YmZJUm9PSFhmQnZTQ1Z6UHdRaVJ6YzZvRk5VQ0oxNmxTV0hjcHViTUNFT3FvbFBBcHBUR3Y1SkExY2ZlMGJ2MTNoOS9CUT09Cg==",
-      "url": "https://github.com/Pronexsteam/deviload/releases/download/v2.9.0/Deviload-2.9.0-x86_64.AppImage"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSV1QzWkRhOGwyOGZibUFEQXNnWTBlWnp1SmRhdTZKZVJpSVQrZGhyek9OVHVHVVVMTzBhaXZ2c2tGTmp0dmRBRk5CUlV6WUpJWVB0Z09uK09rK3FISndRbVgwZWtYRVFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MTY4ODE0CWZpbGU6RGV2aWxvYWRfMi4xMC4wX2FtZDY0LkFwcEltYWdlCXZlcnNpb246Mi4xMC4wCitCYVR5aGZnaFVvUENpZ042T3ZwL2xyT2xmdjVvMWMvdDRrdmk4M2JsdlNTUGtjS2V5VVBqVzlDcEd1UXc3Z2JnRGNoM09tK0d2cUZsN0h5MHFESkRBPT0K",
+      "url": "https://github.com/Pronexsteam/deviload/releases/download/v2.10.0/Deviload-2.10.0-x86_64.AppImage"
     }
   }
 }
