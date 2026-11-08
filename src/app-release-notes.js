@@ -43,6 +43,15 @@ export function wireReleaseNotes(workspace){
       fixItems[1].textContent=t("Shuffle spreads out artists and avoids repeating the end of the last round.");
       fixItems[2].textContent=t("The music engine and download tools close together with Deviload.");
     }
+    if(version==="2.10.0"){
+      changeItems[0].textContent=t("Watch a song's music video on its own stage, in step with the music.");
+      changeItems[1].textContent=t("Choose video quality up to 1080p and open music videos in full screen.");
+      changeItems[2].textContent=t("New Noir, Vinyl and Paper themes. Ambient stays the default.");
+      changeItems[3].textContent=t("Mini-player and phone remote shortcuts on the player bar, and a refreshed library sidebar.");
+      fixItems[0].textContent=t("The window can be dragged from anywhere on the top bar.");
+      fixItems[1].textContent=t("Light themes keep a light Now Playing panel.");
+      fixItems[2].textContent=t("Player colours follow the theme.");
+    }
   };
   const open=()=>{if(card.open)return;returnFocus=document.activeElement;card.showModal();button.setAttribute("aria-expanded","true");markReleaseNotesSeen(storage,version);autoPending=false;done.focus();};
   const tryAutomatic=()=>{if(!autoPending||document.hidden||document.querySelector('dialog[open]'))return;open();};
