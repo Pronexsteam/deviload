@@ -10,12 +10,12 @@ Discover and listen with Devil Music. Save with yt-dlp. Create with Devil Cut an
 <br>
 Built with Rust and Tauri 2 · English, Russian and Spanish
 
-[![Windows download](docs/downloads/windows.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.10.0/Deviload-2.10.0-setup.exe)
-[![macOS download](docs/downloads/macos.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.10.0/Deviload-2.10.0-macos-test.zip)
+[![Windows download](docs/downloads/windows.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.11.0/Deviload-2.11.0-setup.exe)
+[![macOS download](docs/downloads/macos.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.11.0/Deviload-2.11.0-macos-test.zip)
 [![Linux download](docs/downloads/linux.svg)](#install-on-linux)
 [![Devil Music for Android](docs/downloads/android.svg)](https://github.com/Pronexsteam/DevilMusic/releases/download/v0.0.18/Devil-Music-0.0.18-android.apk)
 
-Desktop downloads: **2.10.0** · Android: **0.0.18 preview**
+Desktop downloads: **2.11.0** · Android: **0.0.18 preview**
 
 <p>
 <a href="https://github.com/Pronexsteam/deviload/releases/latest"><img src="https://img.shields.io/github/v/release/Pronexsteam/deviload?style=flat&amp;label=Release&amp;logo=github&amp;logoColor=d5e5df&amp;color=252d34&amp;labelColor=151b20" height="28" alt="Latest release"></a>
@@ -87,9 +87,9 @@ Add a live link to record from that moment, then stop when you have what you nee
 
 ## Latest update
 
-**Deviload 2.10.0 brings music videos to Devil Music.** Open the video of the song you are listening to from the camera button in the player: it rises out of the cover, plays in step with the music and can go full screen in up to 1080p. Three new themes, Noir, Vinyl and Paper, join Ambient.
+**Deviload 2.11.0 lets you make Devil Music your own.** Put a photo, a GIF or a silent looping video behind the app with the Your own theme, then tune blur, darkening, panel transparency, ambient light and the accent colour. Edit layout moves blocks and player buttons where you want them, hides the ones you do not need and swaps the side panels. A folded library stays as a rail of playlist covers, and music videos open in the mini-player.
 
-Read the [2.10.0 release notes](.github/release-notes/v2.10.0.md).
+Read the [2.11.0 release notes](.github/release-notes/v2.11.0.md).
 
 ## Installation
 
