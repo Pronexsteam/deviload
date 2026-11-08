@@ -45,7 +45,6 @@
 :root[data-theme] body main[data-page="music"]>.topbar::before{content:none}
 :root[data-theme] body main[data-page="music"]>.topbar>.workspace-breadcrumb{order:-2}
 :root[data-theme] body:has(main[data-page="music"]) #window-chrome{top:10px;height:56px}
-:root[data-theme] body:has(main[data-page="music"]) .window-drag-strip{height:10px}
 .topbar>.music-navigation{display:none;order:-1}
 :root[data-theme] body main[data-page="music"]>.topbar>.music-navigation{display:flex;gap:0}
 :root[data-theme] body main[data-page="music"]:has(#devil-music[data-view="home"])>.topbar>.music-navigation,.topbar>.music-navigation .music-navigation-home{display:none}
@@ -202,3 +201,11 @@
 .icon[data-icon="phone-remote"]{--glyph:url("assets/icons/phone-remote.svg")}
 #devil-music.library-panel-open .music-quick-grid>.music-quick-shortcut{display:none}
 #devil-music:not(.library-panel-open) .music-quick-grid>.music-quick-playlist:nth-child(n+7){display:none}
+/* Mini player and phone remote sit on wide docks; narrower windows keep them in the menu. */
+@media(max-width:1099px){:root[data-theme] body .music-dock .music-dock-extras>.music-dock-shortcut{display:none}}
+@media(min-width:1100px){#music-dock-menu>:is(#music-mini-open,#music-remote-open){display:none}}
+/* Light themes keep the Now Playing panel light instead of the dark cover stage. */
+:root[data-theme="glass-light"] body main[data-page="music"] #devil-music:is(.has-playing-preview,.music-preview-fits)>.music-playing-preview.music-playing-preview{--theme-text:#202934;--theme-muted:#526271;--workspace-ink:#202934;--workspace-muted:#526271;--ui-ink:#202934;--ui-muted:#526271;--player-ink:#202934;--player-muted:#526271;--theme-line:rgba(43,61,79,.18);--workspace-line:rgba(43,61,79,.18);--ui-line:rgba(43,61,79,.18);--theme-hover:rgba(255,255,255,.6);--workspace-hover:rgba(255,255,255,.6);--player-hover:rgba(255,255,255,.6);--workspace-accent:#202934;--theme-accent:#202934;--player-primary:var(--cover-lyric-dark,#202934);--player-on-primary:#fff;color:#202934;background:var(--surf-fill)}
+:root[data-theme="glass-light"][data-variant="paper"] body main[data-page="music"] #devil-music:is(.has-playing-preview,.music-preview-fits)>.music-playing-preview.music-playing-preview{--theme-text:#2b2621;--theme-muted:#6e655b;--workspace-ink:#2b2621;--workspace-muted:#6e655b;--ui-ink:#2b2621;--ui-muted:#6e655b;--player-ink:#2b2621;--player-muted:#6e655b;--theme-line:rgba(70,55,40,.16);--workspace-line:rgba(70,55,40,.16);--ui-line:rgba(70,55,40,.16);--theme-hover:rgba(255,250,242,.7);--workspace-hover:rgba(255,250,242,.7);--player-hover:rgba(255,250,242,.7);--workspace-accent:#2b2621;--theme-accent:#2b2621;--player-primary:var(--cover-lyric-dark,#2b2621);--player-on-primary:#fff;color:#2b2621;background:var(--surf-fill)}
+:root[data-theme="glass-light"] body main[data-page="music"] #devil-music:is(.has-playing-preview,.music-preview-fits)>.music-playing-preview.music-playing-preview>.music-preview-ambient{opacity:.12}
+:root[data-theme="glass-light"] body main[data-page="music"] #devil-music:is(.has-playing-preview,.music-preview-fits)>.music-playing-preview.music-playing-preview :is(.music-eyebrow,.music-preview-top){color:var(--workspace-muted)}

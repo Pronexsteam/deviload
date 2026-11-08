@@ -2054,4 +2054,7 @@ export default {
 "For you keeps its picks when you come back, and hiding a song leaves the rest in place.": "Para ti conserva sus elecciones al volver, y ocultar una canción no mueve las demás.",
 "Shuffle spreads out artists and avoids repeating the end of the last round.": "El modo aleatorio separa artistas y no repite el final de la ronda anterior.",
 "The music engine and download tools close together with Deviload.": "El motor de música y las herramientas de descarga se cierran junto con Deviload.",
+"Noir": "Noir",
+"Vinyl": "Vinilo",
+"Paper": "Papel",
 };

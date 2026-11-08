@@ -2104,4 +2104,7 @@ export default {
 "For you keeps its picks when you come back, and hiding a song leaves the rest in place.": "«Для вас» не меняется при каждом возвращении, а скрытая песня не перемешивает остальные.",
 "Shuffle spreads out artists and avoids repeating the end of the last round.": "Перемешивание разносит исполнителей и не повторяет конец прошлого круга.",
 "The music engine and download tools close together with Deviload.": "Движок музыки и загрузчики закрываются вместе с Deviload.",
+"Noir": "Нуар",
+"Vinyl": "Винил",
+"Paper": "Бумага",
 };

@@ -2032,16 +2032,13 @@ if (invoke && (navigator.userAgent.includes("Windows") || macWindow)) {
   };
   document.querySelector(".window-drag-strip")?.addEventListener("mousedown", dragWindow);
   document.querySelector(".window-drag-strip")?.addEventListener("dblclick", () => invoke("window_action", {action:"toggle_maximize"}).catch(() => {}));
-  const dragBar = document.querySelector(".topbar");
-  dragBar?.addEventListener("mousedown", event => { if (event.target === dragBar) dragWindow(event); });
-  dragBar?.addEventListener("dblclick", event => { if (event.target === dragBar) invoke("window_action", {action:"toggle_maximize"}).catch(() => {}); });
+  // Any empty part of the top bar moves the window, not just the bar element itself.
+  // Controls, the search field and menus that open from the bar keep their own clicks.
   const topbar = document.querySelector(".topbar");
-  topbar.addEventListener("mousedown", event => {
-    if (event.target === topbar) dragWindow(event);
-  });
-  topbar.addEventListener("dblclick", event => {
-    if (event.target === topbar) invoke("window_action", {action:"toggle_maximize"}).catch(() => {});
-  });
+  const interactive = "button,a,input,select,textarea,label,summary,form,[role=button],[role=menu],[role=menuitem],[role=menuitemradio],[popover],dialog,[contenteditable]";
+  const draggable = event => topbar.contains(event.target) && !event.target.closest(interactive);
+  topbar.addEventListener("mousedown", event => { if (draggable(event)) dragWindow(event); });
+  topbar.addEventListener("dblclick", event => { if (draggable(event)) invoke("window_action", {action:"toggle_maximize"}).catch(() => {}); });
   // An open dialog covers the top bar; its header and the dimmed area around it move the window.
   document.addEventListener("mousedown", event => {
     const dialog = event.button === 0 ? event.target.closest?.("dialog[open]") : null;

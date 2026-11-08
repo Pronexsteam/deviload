@@ -2,8 +2,11 @@ import {t, onLanguageChange} from "./i18n.js";
 import {wireGlassMaterial} from "./theme-glass.js";
 
 export const THEME_KEY = "deviload-theme";
-export const THEMES = Object.freeze(["ambient", "glass-light", "aurora", "prism"]);
-const themeLabels = {ambient:"Ambient", "glass-light":"Light Liquid Glass", aurora:"Aurora", prism:"Prism"};
+export const THEMES = Object.freeze(["ambient", "glass-light", "aurora", "prism", "noir", "vinyl", "paper"]);
+const themeLabels = {ambient:"Ambient", "glass-light":"Light Liquid Glass", aurora:"Aurora", prism:"Prism", noir:"Noir", vinyl:"Vinyl", paper:"Paper"};
+// Palette themes reuse a base theme's rules and only change its colours.
+export const THEME_BASE = Object.freeze({noir:"prism", vinyl:"prism", paper:"glass-light"});
+export const themeBase = theme => THEME_BASE[theme] || theme;
 export const THEME_COLLECTION_KEY = "deviload-theme-collection";
 export const THEME_COLLECTION = "ambient-aurora-prism-v1";
 const wired = new WeakMap();
@@ -31,13 +34,14 @@ export function applyTheme(value, {document = globalThis.document, window = glob
   storage = browserStorage(window), persist = false} = {}) {
   const theme = normalizeTheme(value), root = document.documentElement;
   const previous=applied.get(document);
-  const themeChanged=previous!==theme||root.dataset.theme!==theme;
+  const base=themeBase(theme),variant=THEME_BASE[theme]?theme:"";
+  const themeChanged=previous!==theme||root.dataset.theme!==base||(root.dataset.variant||"")!==variant;
   const motionChanged=previous===undefined||root.dataset.motion!=="reduced";
   let saved = !persist;
   if (persist) {
     try { if (storage) { storage.setItem(THEME_KEY, theme); storage.setItem(THEME_COLLECTION_KEY, THEME_COLLECTION); saved = true; } } catch { /* session only */ }
   }
-  if(themeChanged){root.dataset.theme=theme;root.style.colorScheme=theme==="glass-light"?"light":"dark";}
+  if(themeChanged){root.dataset.theme=base;if(variant)root.dataset.variant=variant;else delete root.dataset.variant;root.style.colorScheme=base==="glass-light"?"light":"dark";}
   if(motionChanged)root.dataset.motion="reduced";
   const select = document.getElementById("appearance-theme");
   if (select) select.value = theme;
@@ -83,7 +87,7 @@ export function wireAppearance({document = globalThis.document, window = globalT
   const stopGlass = glass({document, window});
   const choose = value => { sessionOnly = !apply(value, true).saved; updateStatus(); };
   const change = () => choose(select.value);
-  const selectedItem = () => quickItems.find(item => item.dataset.themeChoice === document.documentElement.dataset.theme) || quickItems[0];
+  const selectedItem = () => quickItems.find(item => item.dataset.themeChoice === (applied.get(document) || document.documentElement.dataset.theme)) || quickItems[0];
   const positionQuickMenu = () => {
     if (!quickButton || !quickMenu) return;
     const bounds = quickButton.getBoundingClientRect();
