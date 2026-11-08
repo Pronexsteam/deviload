@@ -6,7 +6,7 @@ const source=readFileSync(new URL('../src/music-presentation.js',import.meta.url
 const update=source.slice(source.indexOf('update(item,downloading=false,meta={}){'),source.indexOf('},notify(text,undo)'))+'}';
 test('upgraded artwork for the same recording refreshes the open player without replaying arrival animations',()=>{
  const node=()=>({renders:0,replaceChildren(value){this.renders++;this.content=value;},setAttribute(){},classList:{toggle(){},remove(){},add(){}}});
- const ctx={motion:{update(){}},current:null,currentImage:'',playing:false,stage:{open:true},cover:(item,_label,size)=>({image:item.image,size}),
+ const ctx={motion:{update(){}},showMedia(){},current:null,currentImage:'',playing:false,stage:{open:true},cover:(item,_label,size)=>({image:item.image,size}),
   t:s=>s,wake(){},requestAnimationFrame(){ctx.animations++;},animations:0};
  for(const name of ['background','previewArt','ambient','scene','notice','info','artwork','facts','reason','preview','previewTitle','previewArtist','expand','download','dislike','block'])ctx[name]=node();
  const run=runInNewContext(`({${update}}).update`,ctx),track={id:'same',image:'small',title:'Track',artists:['Artist']};

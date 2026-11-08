@@ -2107,4 +2107,11 @@ export default {
 "Noir": "Нуар",
 "Vinyl": "Винил",
 "Paper": "Бумага",
+"Music video": "Клип",
+"No music video found for this song.": "Клип к этой песне не найден.",
+"Close music video": "Закрыть клип",
+"Full screen": "Во весь экран",
+"Exit full screen": "Выйти из полноэкранного режима",
+"Video quality": "Качество видео",
+"The music video could not be played.": "Не удалось воспроизвести клип.",
 };

@@ -97,3 +97,30 @@ test("On repeat favours recent repeats and drops songs not heard for two months"
   const lists=smartPlaylists({favorites:[],recent:[]},{entries,blockedArtists:[],hiddenSongs:[]},[],now);
   assert.deepEqual(lists.frequent.map(x=>x.title),["fresh","fading"]);
 });
+
+import {pickClip} from "../src/music-clip.js";
+test("the music video is the result with the song's title and artist",()=>{
+  const song={kind:"song",id:"aaaaaaaaaaa",title:"Believer",artists:["Imagine Dragons"]};
+  const items=[
+    {kind:"song",id:"ccccccccccc",title:"Believer (Cover)",artists:["Someone Else"]},
+    {kind:"song",id:"bbbbbbbbbbb",title:"Imagine Dragons - Believer (Official Music Video)",subtitle:"Imagine Dragons • 3:37"},
+    {kind:"artist",id:"UCxxxxxxxxxxxxxxxxxxxxxx",title:"Imagine Dragons"}];
+  assert.equal(pickClip(song,items)?.id,"bbbbbbbbbbb");
+  assert.equal(pickClip(song,[items[0]]),null);
+  assert.equal(pickClip({title:"",artists:[]},items),null);
+});
+
+test("a music video is the artist's own upload of exactly this recording",()=>{
+  const song={kind:"song",id:"aaaaaaaaaaa",title:"Memories",artists:["Maroon 5"],duration:189};
+  const video=(id,title,channel,extra={})=>({kind:"song",id:id.padEnd(11,"x"),title,artists:[channel],subtitle:`${channel} • 1B views • 3:15`,...extra});
+  const pick=items=>pickClip(song,items)?.id.replace(/x+$/,"");
+  assert.equal(pick([video("lyric","Maroon 5 - Memories (Lyrics)","Maroon5VEVO"),video("main","Maroon 5 - Memories (Official Video)","Maroon5VEVO")]),"main");
+  assert.equal(pick([video("live","Maroon 5 - Memories (Live)","Maroon 5")]),undefined);
+  assert.equal(pick([video("reup","Maroon 5 - Memories","Hit Songs Daily")]),undefined);
+  assert.equal(pick([video("house","House of Memories","Maroon 5")]),undefined);
+  assert.equal(pick([video("long","Memories","Maroon 5",{duration:900})]),undefined);
+  assert.equal(pick([video("intro","Memories","Maroon 5",{duration:189+45})]),undefined);
+  assert.equal(pick([video("cut","Memories","Maroon 5",{duration:189-20})]),undefined);
+  assert.equal(pick([video("card","Memories","Maroon 5",{duration:189+13})]),"card");
+  assert.equal(pickClip({...song,title:"Memories (Live)"},[video("live","Maroon 5 - Memories (Live)","Maroon 5")])?.id.replace(/x+$/,""),"live");
+});

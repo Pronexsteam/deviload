@@ -2057,4 +2057,11 @@ export default {
 "Noir": "Noir",
 "Vinyl": "Vinilo",
 "Paper": "Papel",
+"Music video": "Videoclip",
+"No music video found for this song.": "No se encontró el videoclip de esta canción.",
+"Close music video": "Cerrar videoclip",
+"Full screen": "Pantalla completa",
+"Exit full screen": "Salir de pantalla completa",
+"Video quality": "Calidad de video",
+"The music video could not be played.": "No se pudo reproducir el videoclip.",
 };
