@@ -12,14 +12,16 @@ export function createMusicHomeTiles({hero,button,cover,getPlaylists,onView,onPl
  const shortcut=([view,label,glyph])=>{
   const art=document.createElement('span'),icon=document.createElement('span');
   art.className='music-quick-art';art.dataset.tile=view;icon.className='icon';icon.dataset.icon=glyph;icon.setAttribute('aria-hidden','true');art.append(icon);
-  return tile(t(label),art,()=>onView(view));
+  const node=tile(t(label),art,()=>onView(view));node.classList.add('music-quick-shortcut');return node;
  };
  const playlist=list=>{
   const art=document.createElement('span');art.className='music-quick-art';art.append(playlistArtwork(list,cover,96));
-  return tile(list.name,art,()=>onPlaylist(list.id));
+  const node=tile(list.name,art,()=>onPlaylist(list.id));node.classList.add('music-quick-playlist');return node;
  };
  function render(){
-  const lists=[...getPlaylists()].sort((a,b)=>Number(!!b.pinned)-Number(!!a.pinned)).slice(0,2);
+  // Shortcuts repeat the library panel, so they only appear while it is closed;
+  // with the panel open, the same space shows more playlists.
+  const lists=[...getPlaylists()].sort((a,b)=>Number(!!b.pinned)-Number(!!a.pinned)).slice(0,5);
   grid.replaceChildren(hero,...SHORTCUTS.map(shortcut),...lists.map(playlist));
  }
  onLanguageChange(render);render();

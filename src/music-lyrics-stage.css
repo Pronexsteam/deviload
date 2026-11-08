@@ -38,3 +38,7 @@
   :root[data-theme] body #music-now-playing.is-immersive .music-lyrics-scroll .music-lyric-line{filter:none!important;transform:none!important;transition:none!important}
   :root[data-theme] body #music-now-playing .music-lyric-line.active.has-word-sync .music-lyric-word[data-state="current"]{transform:none}
 }
+.music-lyric-line .music-lyric-extra{display:block;margin-top:.28em;font-size:max(12px,.5em);font-weight:500;letter-spacing:0;line-height:1.3;opacity:.72;white-space:normal}
+.music-lyric-line .music-lyric-extra.is-translation{font-style:italic}
+.music-lyric-line[data-singer="right"] .music-lyric-extra{text-align:right}
+.music-lyrics-tools .music-lyrics-extra-toggle[aria-pressed="true"]{background:color-mix(in srgb,var(--player-primary,currentColor) 22%,transparent);color:var(--player-primary,currentColor)}

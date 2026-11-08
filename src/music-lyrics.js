@@ -1,11 +1,12 @@
-import {t,errorText,onLanguageChange} from "./i18n.js";
+import {t,errorText,onLanguageChange,language} from "./i18n.js";
+import {lyricsExtras} from "./music-lyrics-extras.js";
 import {timedLyrics,lyricFrame,parseLyrics,leadSinger} from "./music-lyrics-timing.js";
 import {isLocalMusicId} from './music-track-id.js';
 import {clampLyricsOffset,readLyricsOffsets,saveLyricsOffset} from './music-lyrics-preferences.js';
 import {parseTtml,richerLyricsFit} from './music-ttml.js';
 import {songAlbum} from './music-ui-model.js';
 export {parseLyrics} from "./music-lyrics-timing.js";
-export function createMusicLyrics({invoke,button,getTrack,getAudio}){
+export function createMusicLyrics({invoke,button,getTrack,getAudio,isPrivate=()=>false}){
   const dialog=document.createElement("dialog");dialog.className="music-lyrics-dialog";dialog.setAttribute("aria-label",t("Lyrics"));
   const content=document.createElement("section"),heading=document.createElement("h2"),body=document.createElement("div"),credit=document.createElement("p");
   content.className="music-lyrics-content";body.className="music-lyrics-scroll";body.tabIndex=0;body.setAttribute("aria-label",t("Lyrics"));credit.className="music-lyrics-credit";credit.textContent="LRCLIB";
@@ -13,6 +14,7 @@ export function createMusicLyrics({invoke,button,getTrack,getAudio}){
   let fontSize=28;try{fontSize=Math.max(20,Math.min(40,Number(localStorage.getItem("deviload-lyrics-size"))||28));}catch{}
   const setSize=value=>{fontSize=Math.max(20,Math.min(40,value));content.style.setProperty("--lyrics-size",fontSize+"px");try{localStorage.setItem("deviload-lyrics-size",String(fontSize));}catch{}smaller.disabled=fontSize<=20;larger.disabled=fontSize>=40;};
   const smaller=button(t("Smaller lyrics"),null,()=>setSize(fontSize-2)),larger=button(t("Larger lyrics"),null,()=>setSize(fontSize+2)),resume=button(t("Follow current line"),null,()=>{manualUntil=0;followPending=true;resume.hidden=true;update();});smaller.textContent="A−";larger.textContent="A+";resume.hidden=true;toolbar.append(smaller,larger,resume);setSize(fontSize);
+  const extras=lyricsExtras({invoke,button,toolbar,storage:localStorage,language,isPrivate,onNote:note=>{extraNote=note;updateCredit();}});let extraNote="";
   let offsets=readLyricsOffsets(localStorage),offset=0;
   const timing=document.createElement('details'),timingTitle=document.createElement('summary'),timingControls=document.createElement('div');timing.className='music-lyrics-timing';timingTitle.textContent=t('Lyrics timing');
   const earlier=button(t('Show lyrics earlier'),null,()=>adjustOffset(offset+.2)),later=button(t('Show lyrics later'),null,()=>adjustOffset(offset-.2)),reset=button(t('Reset lyrics timing'),null,()=>adjustOffset(0));
@@ -24,7 +26,7 @@ export function createMusicLyrics({invoke,button,getTrack,getAudio}){
   let request=0,id=null,lines=[],active=-1,host=null,manualUntil=0,followPending=false,frame=0;const cache=new Map(),loading=new Map();
   let activeRows=new Set(),nearRows=new Set(),lastFrameAt=0,hasWords=false;
   let syncLabel="",source="LRCLIB";
-  const updateCredit=()=>{credit.textContent=source+(syncLabel?" · "+(syncLabel==="words"?t("Word timing"):t("Line timing · word timing unavailable")):"");};
+  const updateCredit=()=>{credit.textContent=source+(syncLabel?" · "+(syncLabel==="words"?t("Word timing"):t("Line timing · word timing unavailable")):"")+(extraNote?" · "+extraNote:"");};
   const visible=()=>!document.hidden&&(dialog.open||Boolean(host&&!host.hidden&&host.getClientRects().length&&(!host.closest("dialog")||host.closest("dialog").open)));
   let scrollFrame=0,scrollAt=0,scrollGoal=0,scrollTick=0;
   const glide=now=>{const step=Math.min(48,now-scrollTick||16);scrollTick=now;scrollAt+=(scrollGoal-scrollAt)*(1-Math.exp(-step/130));if(Math.abs(scrollGoal-scrollAt)<.5){body.scrollTop=scrollGoal;scrollFrame=0;return;}body.scrollTop=scrollAt;scrollFrame=requestAnimationFrame(glide);};
@@ -32,14 +34,15 @@ export function createMusicLyrics({invoke,button,getTrack,getAudio}){
   body.addEventListener("wheel",manualScroll,{passive:true});body.addEventListener("touchmove",manualScroll,{passive:true});body.addEventListener("pointerdown",event=>{if(event.target===body)manualScroll();});
   body.addEventListener("keydown",event=>{if(["ArrowUp","ArrowDown","PageUp","PageDown","Home","End"].includes(event.key))manualScroll();});
   function follow(row){
-    if(!row)return;
+    // A pane in transit between the sidebar and full player has no layout yet; retry on the next tick.
+    if(!row||!body.clientHeight||!row.getClientRects().length)return;
     // Scroll only the lyrics pane; never move the surrounding modal/page.
     const target=Math.max(0,body.scrollTop+row.getBoundingClientRect().top-body.getBoundingClientRect().top-body.clientHeight*.3);
     body.classList.remove("is-browsing");followPending=false;resume.hidden=true;
     if(matchMedia("(prefers-reduced-motion: reduce)").matches){body.scrollTop=target;return;}
-    scrollGoal=target;if(!scrollFrame){scrollAt=body.scrollTop;scrollTick=0;scrollFrame=requestAnimationFrame(glide);}
+    scrollGoal=target;cancelAnimationFrame(scrollFrame);scrollAt=body.scrollTop;scrollTick=0;scrollFrame=requestAnimationFrame(glide);
   }
-  async function load(){if(frame)cancelAnimationFrame(frame);frame=0;hasWords=false;syncLabel="";source="LRCLIB";updateCredit();const track=getTrack();if(!track){++request;id=null;lines=[];active=-1;heading.textContent=t("Lyrics");body.textContent=t("Start playback to load lyrics.");return;}const token=++request;id=track.id;heading.textContent=host?t("Lyrics"):track.title;body.textContent=t("Finding lyrics…");lines=[];active=-1;manualUntil=0;followPending=false;body.scrollTop=0;
+  async function load(){if(frame)cancelAnimationFrame(frame);frame=0;hasWords=false;extras.attach(null,[],null);syncLabel="";source="LRCLIB";updateCredit();const track=getTrack();if(!track){++request;id=null;lines=[];active=-1;heading.textContent=t("Lyrics");body.textContent=t("Start playback to load lyrics.");return;}const token=++request;id=track.id;heading.textContent=host?t("Lyrics"):track.title;body.textContent=t("Finding lyrics…");lines=[];active=-1;manualUntil=0;followPending=false;body.scrollTop=0;
     try{
       if(isLocalMusicId(track.id)){body.textContent=t('Online lyrics are not requested for local files.');body.dataset.lyricsState='missing';return;}
       const duration=getAudio().duration;if(!Number.isFinite(duration)||duration<=0){body.textContent=t("Start playback to load lyrics.");id=null;return;}
@@ -49,12 +52,12 @@ export function createMusicLyrics({invoke,button,getTrack,getAudio}){
       const key=JSON.stringify([track.id,args.title,args.artist,album,Math.round(duration)]);
       const wordKey='words:'+key;
       if(!cache.has(wordKey)&&!loading.has(wordKey)){
-        loading.set(wordKey,Promise.resolve().then(()=>invoke('music_word_lyrics',{...args,album})).catch(()=>null).then(value=>{
+        loading.set(wordKey,Promise.resolve().then(()=>invoke('music_word_lyrics',{...args,album})).then(value=>{
           if(cache.size>=60)cache.delete(cache.keys().next().value);cache.set(wordKey,value);return value;
-        }).finally(()=>loading.delete(wordKey)));
+        },()=>null).finally(()=>loading.delete(wordKey)));
       }
       const richer=cache.has(wordKey)?Promise.resolve(cache.get(wordKey)):loading.get(wordKey);
-      let result=cache.get(key);
+      let result=cache.get(key),failure=null;
       if(!cache.has(key)){
         // Moving the same controller between sidebar and full player must not
         // start duplicate requests, nor let an older song replace the new one.
@@ -63,7 +66,7 @@ export function createMusicLyrics({invoke,button,getTrack,getAudio}){
             if(cache.size>=60)cache.delete(cache.keys().next().value);cache.set(key,value);return value;
           }).finally(()=>loading.delete(key));loading.set(key,task);
         }
-        try{result=await loading.get(key);}catch{result=null;}
+        try{result=await loading.get(key);}catch(error){result=null;failure=error;}
       }
       if(token!==request)return;
       function render(result){
@@ -75,16 +78,20 @@ export function createMusicLyrics({invoke,button,getTrack,getAudio}){
       syncLabel=hasWords?"words":lines.length?"lines":"";updateCredit();
       body.dataset.lyricsSync=hasWords?"words":lines.length?"lines":"none";
       nearRows=new Set();lastFrameAt=0;update();
+      extras.attach(body,lines,id);
       }
       render(result);
-      let enriched=await richer;if(token!==request||result?.instrumental||hasWords)return;
+      let enriched=await richer;
+      // A lost connection is not "no lyrics": offer Retry unless word timing filled the gap.
+      const offerRetry=()=>{if(token!==request||!failure||lines.length)return;body.dataset.lyricsState="error";body.textContent=errorText(failure);body.append(button(t("Retry"),null,()=>load(),"music-lyrics-retry"));};
+      if(token!==request||result?.instrumental||hasWords)return;
       let candidate=parseTtml(enriched?.ttml,duration);
       if(!richerLyricsFit(candidate,result)){
         const communityKey='unison:'+key;
         if(!cache.has(communityKey)&&!loading.has(communityKey)){
-          loading.set(communityKey,Promise.resolve().then(()=>invoke('music_word_lyrics',{...args,album,provider:'unison',videoId:track.id})).catch(()=>null).then(value=>{
+          loading.set(communityKey,Promise.resolve().then(()=>invoke('music_word_lyrics',{...args,album,provider:'unison',videoId:track.id})).then(value=>{
             if(cache.size>=60)cache.delete(cache.keys().next().value);cache.set(communityKey,value);return value;
-          }).finally(()=>loading.delete(communityKey)));
+          },()=>null).finally(()=>loading.delete(communityKey)));
         }
         enriched=cache.has(communityKey)?cache.get(communityKey):await loading.get(communityKey);
         if(token!==request)return;
@@ -95,6 +102,7 @@ export function createMusicLyrics({invoke,button,getTrack,getAudio}){
         if(frame)cancelAnimationFrame(frame);frame=0;
         render({...result,lines:candidate});
       }
+      offerRetry();
     }catch(error){if(token===request){body.dataset.lyricsState="error";body.textContent=errorText(error);body.append(button(t("Retry"),null,()=>load(),"music-lyrics-retry"));}}
   }
   function update(){

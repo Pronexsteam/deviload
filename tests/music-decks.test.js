@@ -20,11 +20,12 @@ test("perceptual volume, mute and unmute apply to prepared decks and a running o
   let now=0,tick,cancelled=0;
   const decks=createMusicDecks({makeAudio:audio,now:()=>now,schedule:fn=>{tick=fn;return 1;},cancel:()=>cancelled++});
   const first=decks.current;first.paused=false;decks.setVolume(.7);decks.warm("next","next");
-  const next=decks.take("next",.7,4);now=2000;tick();assert.equal(first.volume,.35);assert.equal(next.volume,.7);
-  const quiet=gainFromVolumePosition(.1);decks.setVolume(quiet);assert.equal(next.volume,quiet);assert.equal(first.volume,quiet/2);assert.equal(cancelled,0);
+  const half=Math.SQRT1_2,close=(actual,expected)=>assert.ok(Math.abs(actual-expected)<1e-9,actual+" != "+expected);
+  const next=decks.take("next",.7,4);assert.equal(next.volume,0);now=2000;tick();close(first.volume,.7*half);close(next.volume,.7*half);
+  const quiet=gainFromVolumePosition(.1);decks.setVolume(quiet);close(next.volume,quiet*half);close(first.volume,quiet*half);assert.equal(cancelled,0);
   decks.setVolume(0);tick();assert.equal(next.volume,0);assert.equal(first.volume,0);
-  decks.setVolume(quiet);assert.equal(next.volume,quiet);assert.equal(first.volume,quiet/2);
-  now=4000;tick();assert.equal(first.paused,true);assert.equal(cancelled,1);
+  decks.setVolume(quiet);close(next.volume,quiet*half);close(first.volume,quiet*half);
+  now=4000;tick();assert.equal(first.paused,true);assert.equal(cancelled,1);assert.equal(next.volume,quiet);
   decks.warm("later","later");decks.setVolume(.25);assert.ok(decks.nodes.every(node=>node.volume===.25));
 });
 
@@ -41,4 +42,11 @@ test('repeated preparation keeps an already buffering decoder and its expiration
  now=240001;assert.equal(decks.ready('two'),false);
  decks.warm('two','two');assert.equal(loads,1);assert.equal(decks.ready('two'),true);
  decks.warm('two','replacement');assert.equal(loads,2);assert.equal(standby.src,'replacement');
+});
+
+test("an album join switches decoders without a fade and the sleep dim scales every deck",()=>{
+  let tick=null;const decks=createMusicDecks({makeAudio:audio,schedule:fn=>{tick=fn;return 1;}}),old=decks.current;old.paused=false;old.src="old";
+  decks.setVolume(.6);decks.warm("next","next");const next=decks.take("next",.6,.01);
+  assert.equal(tick,null);assert.equal(old.src,"");assert.equal(next.volume,.6);
+  decks.setDim(.5);assert.equal(next.volume,.3);decks.setDim(1);assert.equal(next.volume,.6);
 });

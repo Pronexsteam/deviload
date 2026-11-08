@@ -86,9 +86,9 @@ function normalize(saved,taste,strict=false){
       lastPlayed:Math.max(0,Math.min(now,entry.lastPlayed)),plays:Math.max(0,Math.min(10000,Math.floor(entry.plays)))};
   }
   if(!Array.isArray(taste.hiddenSongs)||!Array.isArray(taste.blockedArtists)||
-    (strict&&(taste.hiddenSongs.length>500||taste.blockedArtists.length>300)))fail();
-  const hiddenSongs=[...new Set(taste.hiddenSongs.filter(isMusicTrackId))].slice(0,500);
-  const blockedArtists=[...new Set(taste.blockedArtists.filter(name=>typeof name==="string").map(name=>text(name,160).toLocaleLowerCase()).filter(Boolean))].slice(0,300);
+    (strict&&(taste.hiddenSongs.length>2000||taste.blockedArtists.length>1000)))fail();
+  const hiddenSongs=[...new Set(taste.hiddenSongs.filter(isMusicTrackId))].slice(0,2000);
+  const blockedArtists=[...new Set(taste.blockedArtists.filter(name=>typeof name==="string").map(name=>text(name,160).toLocaleLowerCase()).filter(Boolean))].slice(0,1000);
   if(!["balanced","familiar","discovery"].includes(taste.mode))fail();
   const lists=playlists(saved.playlists,strict);
   return {saved:{favorites,recent,playlists:lists,collections:collections(saved.collections),showRegional:false,publicDiscovery:saved.publicDiscovery!==false,volume:musicGain(saved.volume),

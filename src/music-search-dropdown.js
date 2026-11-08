@@ -32,7 +32,8 @@ export function wireMusicSuggestions({input,form,getItems,getRecent=()=>[],cover
   try{const [words,catalog]=await Promise.allSettled([invoke('music_suggestions',{value:job.query,language:job.language}),invoke('music_catalog',{kind:'search',value:job.query,filter:'all',language:job.language})]);
    const result=words.status==='fulfilled'?words.value:[],texts=(Array.isArray(result)?result:[]).filter(value=>typeof value==='string'&&value.trim()&&value.length<=240).slice(0,8).map(text=>({text,kind:'query'}));
    const rich=catalog.status==='fulfilled'?creditArtistCards(catalog.value?.sections||[]).flatMap(section=>section.items||[]).slice(0,6):[];
-   cache.set(job.key,{at:Date.now(),texts,rich});while(cache.size>8)cache.delete(cache.keys().next().value);
+   // A failed lookup is not an empty answer: try again on the next keystroke.
+   if(words.status==='fulfilled'||catalog.status==='fulfilled'){cache.set(job.key,{at:Date.now(),texts,rich});while(cache.size>8)cache.delete(cache.keys().next().value);}
    if(job.revision===revision&&document.activeElement===input)render(rowsFor(job.query,texts,rich));
   }catch{/* Keep local suggestions usable when offline. */}
   finally{inFlight=false;if(queued){const next=queued;queued=null;if(next.revision===revision)request(next);}}

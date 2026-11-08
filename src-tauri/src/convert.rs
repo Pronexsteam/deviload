@@ -105,7 +105,7 @@ fn probe_process(state: Option<&Converter>, mut cmd: Command, timeout: Duration)
     if stopped() { return Err("The conversion was stopped".into()); }
     #[cfg(unix)] { use std::os::unix::process::CommandExt; cmd.process_group(0); }
     cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
-    let mut child = cmd.spawn().map_err(|_| "FFprobe could not read the file".to_string())?;
+    let mut child = cmd.spawn().map_err(|_| "FFprobe could not read the file".to_string())?;crate::child_job::bind(&child);
     if let Some(state) = state { started(state, child.id()); }
     let stdout = child.stdout.take().unwrap();
     let overflow = Arc::new(AtomicBool::new(false));
@@ -273,7 +273,7 @@ fn run(state: &Converter, mut cmd: Command, seconds: f64, output: Option<&Path>,
     #[cfg(unix)] { use std::os::unix::process::CommandExt; cmd.process_group(0); }
     let result = (|| -> Result<(), String> {
         cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
-        let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+        let mut child = cmd.spawn().map_err(|e| e.to_string())?;crate::child_job::bind(&child);
         started(state, child.id());
         let stdout = child.stdout.take().unwrap();
         let stderr = child.stderr.take().unwrap();

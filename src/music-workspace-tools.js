@@ -6,7 +6,7 @@ export {wireMusicSuggestions} from './music-search-dropdown.js';
 
 export function wireMusicConnectionShortcuts(button,stats){
  const tools=document.querySelector('.music-heading-actions');if(!tools)return;
- for(const [id,label,glyph]of [['music-remote-open','Connect remote','remote-control'],['music-room-open','Listen together','users']]){
+ for(const [id,label,glyph]of [['music-remote-open','Phone remote','phone-remote'],['music-room-open','Listen together','users']]){
   const target=document.getElementById(id);if(!target)continue;
   const shortcut=button(t(label),glyph,()=>{target.click();document.querySelector('dialog[open]')?.addEventListener('close',()=>shortcut.focus(),{once:true});},'music-connection-shortcut');
   shortcut.id=id.replace('-open','-shortcut');shortcut.setAttribute('aria-haspopup','dialog');
@@ -33,7 +33,7 @@ export function wireMusicConnectionShortcuts(button,stats){
   const navigation=document.createElement('div');navigation.className='music-sidebar-controls';navigation.append(tabs,tools);sidebar.prepend(navigation);tabs.classList.add('music-sidebar-navigation');
   const refresh=document.getElementById('music-refresh'),refreshLabel=document.createElement('span');refresh.append(refreshLabel);const translateRefresh=()=>{refreshLabel.textContent=t('Refresh music');};translateRefresh();onLanguageChange(translateRefresh);
   const icons={library:'playlist',favorites:'heart',recent:'clock'};
-  for(const node of tabs.querySelectorAll('button')){const icon=document.createElement('span');icon.className='icon';icon.dataset.icon=icons[node.dataset.musicView]||'download-simple';icon.setAttribute('aria-hidden','true');node.prepend(icon);}
+  for(const node of tabs.querySelectorAll('button')){node.classList.remove('music-filter-chip');const icon=document.createElement('span');icon.className='icon';icon.dataset.icon=icons[node.dataset.musicView]||'download-simple';icon.setAttribute('aria-hidden','true');node.prepend(icon);}
   // Restore icons after language labels are refreshed.
   onLanguageChange(()=>{for(const node of tabs.querySelectorAll('button')){if(node.querySelector('.icon'))continue;const icon=document.createElement('span');icon.className='icon';icon.dataset.icon=icons[node.dataset.musicView]||'download-simple';icon.setAttribute('aria-hidden','true');node.prepend(icon);}});
   tabs.addEventListener('click',event=>{if(event.target.closest('button')&&workspace.classList.contains('music-library-overlay'))document.querySelector('.music-library-panel-toggle')?.click();});

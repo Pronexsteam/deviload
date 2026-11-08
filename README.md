@@ -32,7 +32,7 @@ Deviload is free. If it saves you time, a coffee helps me keep building it.
 
 </div>
 
-![Devil Music in Ambient: your library, discovery and Now Playing in one workspace](docs/screenshots/music-ambient-2.7.8.png)
+![Devil Music: your playlists, discovery, a weekly listening summary and Now Playing in one workspace](docs/screenshots/music-home-2.8.0.png)
 
 Deviload is a free, open-source desktop app for discovering music, keeping a local media collection and making clips. Listen in **Devil Music**, save video or audio with [yt-dlp](https://github.com/yt-dlp/yt-dlp), and send downloaded files to **Devil Cut** or **Devil Convert**.
 
@@ -159,9 +159,9 @@ The screenshots below show the 2.7.8 interface with sample media, original demo 
 
 ### Browse and read lyrics
 
-![Devil Music: the Now Playing cover flips into synced lyrics without leaving your library](docs/screenshots/music-inline-lyrics-2.7.8.png)
+![Devil Music: the Now Playing cover flips into synced lyrics with an optional translation under each line](docs/screenshots/music-inline-lyrics-2.8.0.png)
 
-![Devil Music: full player with cover artwork, synced lyrics and playback controls](docs/screenshots/music-lyrics-2.7.8.png)
+![Devil Music: full player with word-synced lyrics and line-by-line translation](docs/screenshots/music-lyrics-2.8.0.png)
 
 ### Keep the controls close
 
@@ -173,9 +173,9 @@ The phone controls the desktop player over your local network; it does not strea
 
 ### Download and convert
 
-![Downloads: link entry, format choices and a readable queue](docs/screenshots/downloads-2.7.8.png)
+![Downloads: link entry, format choices and a readable queue](docs/screenshots/downloads-2.8.0.png)
 
-![Devil Convert: source preview, actions and output settings](docs/screenshots/convert-2.7.8.png)
+![Devil Convert: source preview, actions and output settings](docs/screenshots/convert-2.8.0.png)
 
 ## Install on Windows
 

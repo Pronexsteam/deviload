@@ -89,8 +89,8 @@ function scopeOf(members){
   return {ids,artists,includes:item=>ids.has(item?.id)||tasteArtistKeys(item).some(key=>artists.has(key))};
 }
 function exclusions(taste){
-  const hidden=new Set((Array.isArray(taste?.hiddenSongs)?taste.hiddenSongs:[]).filter(songId).slice(0,500));
-  const blocked=new Set((Array.isArray(taste?.blockedArtists)?taste.blockedArtists:[]).slice(0,300).map(canonicalArtistKey).filter(Boolean));
+  const hidden=new Set((Array.isArray(taste?.hiddenSongs)?taste.hiddenSongs:[]).filter(songId).slice(0,2000));
+  const blocked=new Set((Array.isArray(taste?.blockedArtists)?taste.blockedArtists:[]).slice(0,1000).map(canonicalArtistKey).filter(Boolean));
   return {hidden,blocked,allowed:item=>!hidden.has(item.id)&&!tasteArtistKeys(item).some(key=>blocked.has(key))};
 }
 const qualified=entry=>finite(entry?.plays)>0||finite(entry?.score)>=1;

@@ -1,4 +1,4 @@
-import {t,onLanguageChange} from "./i18n.js";
+import {t,onLanguageChange,locale} from "./i18n.js";
 import {playlistArtwork} from "./music-playlist-art.js";
 
 const STORAGE_KEY="deviload-music-library-panel";
@@ -25,15 +25,24 @@ export function createMusicLibrarySidebar({workspace,saved,onPlaylist,onFavorite
   const primary=el('nav','music-primary-nav'),home=makeButton('music-primary-nav-link','house-simple',()=>navigate(()=>onHome?.()));
   const homeLabel=el('span','');home.append(homeLabel);primary.append(home,close);
   const body=el('div','music-library-body');body.append(header,searchWrap,list,empty);aside.append(primary,body);
-  const stats=el('section','music-sidebar-stats'),statsLabel=el('span','music-sidebar-stats-label'),statsValue=el('strong',''),statsDetail=el('span','music-sidebar-stats-detail'),chart=el('div','music-sidebar-stats-chart');
-  chart.setAttribute('aria-hidden','true');stats.append(statsLabel,statsValue,chart,statsDetail);
+  const stats=el('section','music-sidebar-stats'),statsLabel=el('span','music-sidebar-stats-label'),statsValue=el('strong',''),statsDetail=el('span','music-sidebar-stats-detail'),statsNote=el('span','music-sidebar-stats-note'),chart=el('div','music-sidebar-stats-chart');
+  chart.setAttribute('aria-hidden','true');stats.append(statsLabel,statsValue,statsNote,chart,statsDetail);
   function refreshStats(){
     if(!summary||destroyed)return;const value=summary();
     statsLabel.textContent=t('Your last 7 days');statsValue.textContent=t('{minutes} min',{minutes:value.totalMinutes});
     stats.hidden=!value.totalMinutes;statsDetail.textContent=value.totalSeconds?t('{plays} listens · On this device',{plays:value.totalQualifiedPlays}):t('Your next song starts the story.');
     stats.setAttribute('aria-label',t('Your last 7 days'));stats.title=statsDetail.textContent+' · '+t('Only listening on this device is counted. Private sessions are excluded.');
     const days=value.days||[],maximum=Math.max(1,...days.map(day=>day.seconds));
-    chart.replaceChildren(...days.map(day=>{const bar=el('span','');bar.style.height=day.seconds?`${Math.max(12,day.seconds/maximum*100)}%`:'2px';bar.classList.toggle('is-empty',!day.seconds);return bar;}));
+    statsNote.textContent=value.topArtist?t('Mostly {artist}',{artist:value.topArtist}):t('{plays} listens',{plays:value.totalQualifiedPlays});
+    const letter=new Intl.DateTimeFormat(locale(),{weekday:'narrow'}),dateLabel=new Intl.DateTimeFormat(locale(),{weekday:'short',day:'numeric',month:'short'});
+    chart.replaceChildren(...days.map((day,index)=>{
+      const date=new Date(day.date+'T12:00:00'),column=el('span','music-stats-day'),track=el('span','music-stats-track'),fill=el('span','music-stats-fill');
+      fill.style.height=day.seconds?`${Math.max(14,day.seconds/maximum*100)}%`:'0';track.append(fill);
+      column.append(track,el('span','music-stats-weekday',letter.format(date)));
+      column.classList.toggle('is-today',index===days.length-1);column.classList.toggle('is-empty',!day.seconds);
+      column.title=`${dateLabel.format(date)} · ${t('{minutes} min',{minutes:Math.round(day.seconds/60)})}`;
+      return column;
+    }));
   }
   function setOpen(value,remember=false,focus=false){
     opened=value;aside.hidden=!value;workspace.classList.toggle("library-panel-open",value);toggle.setAttribute("aria-expanded",String(value));
