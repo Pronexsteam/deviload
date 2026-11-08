@@ -51,3 +51,38 @@
 /* The player keeps the cover's colour, warmed towards the palette so it sits in the theme. */
 :root[data-theme][data-variant="vinyl"] body :is(.music-dock,.music-stage){--player-primary:color-mix(in oklab,var(--cover-lyric-light,#f0c48a) 35%,#f0c48a)}
 :root[data-theme][data-variant="paper"] body :is(.music-dock,.music-stage){--player-primary:color-mix(in srgb,var(--cover-lyric-dark,#6b4f35) 60%,#6b4f35)}
+
+/* Your own theme: a chosen photo, GIF or video behind the whole app, blurred and darkened to taste,
+   over the Ambient base. Accent and ambient light can be turned to suit the picture. */
+#custom-backdrop{position:fixed;inset:0;z-index:-1;display:none;overflow:hidden;pointer-events:none;background:#06070a}
+:root[data-theme][data-variant="custom"] #custom-backdrop{display:block}
+#custom-backdrop>:is(img,video){position:absolute;top:calc(var(--custom-blur,24px)*-2);left:calc(var(--custom-blur,24px)*-2);width:calc(100% + var(--custom-blur,24px)*4);height:calc(100% + var(--custom-blur,24px)*4);object-fit:cover;filter:blur(var(--custom-blur,24px)) saturate(1.1)}
+#custom-backdrop::after{content:"";position:absolute;inset:0;background:rgb(0 0 0 / var(--custom-dim,.45))}
+:root[data-theme][data-variant="custom"] body{background-color:transparent}
+:root[data-theme][data-variant="custom"]{--theme-accent:var(--custom-accent,#f2f2f2);--theme-surface:rgb(12 13 18/calc(var(--custom-panel,.66)*.95));--theme-surface-strong:rgb(17 19 25/calc(var(--custom-panel,.66)*.5 + .45));--atmosphere-panel:rgb(11 12 17/calc(var(--custom-panel,.66)*.85));--atmosphere-dock:rgb(11 12 17/calc(var(--custom-panel,.66)*.8 + .15));--music-pane:rgb(12 13 18/calc(var(--custom-panel,.66)*.65));--music-field:rgb(16 18 26/calc(var(--custom-panel,.66)*.75));--surf-fill:rgb(255 255 255/calc(.02 + var(--custom-panel,.66)*.04))}
+:root[data-theme][data-variant="custom"] body :is(.music-ambient-glow,.music-preview-ambient,.mini-ambient-glow){opacity:var(--custom-ambient,.7)}
+:root[data-theme][data-variant="custom"] body :is(.music-dock,.music-stage){--player-primary:var(--custom-accent,var(--cover-lyric-light,#f2f2f2))}
+/* Translucent panels blur what scrolls beneath the player, so page text never shows through it. */
+:root[data-theme][data-variant="custom"] body .music-dock{-webkit-backdrop-filter:blur(28px) saturate(1.3);backdrop-filter:blur(28px) saturate(1.3)}
+[data-theme-choice="custom"] .quick-theme-swatch{background:conic-gradient(from 210deg,#ff8a7a,#ffd36e,#7be0b0,#7aa8ff,#c58cff,#ff8a7a)}
+.quick-theme-customize{display:block;width:calc(100% - 12px);margin:2px 6px 6px;padding:8px 12px;border:1px solid var(--theme-line,#ffffff1f);border-radius:999px;background:transparent;color:inherit;font:600 12px/1.2 inherit;text-align:center;cursor:pointer}
+.quick-theme-customize:hover{background:var(--theme-hover,#ffffff14)}
+.custom-theme-dialog{width:min(420px,calc(100vw - 32px));padding:0;border:1px solid var(--theme-line,#ffffff1f);border-radius:24px;background:var(--theme-surface-strong,#15161c);color:var(--theme-text,#f2f2f2);box-shadow:0 30px 80px #0008}
+.custom-theme-dialog::backdrop{background:#0006;backdrop-filter:blur(4px)}
+.custom-theme-form{display:grid;gap:14px;padding:22px}
+.custom-theme-form h2{margin:0;font-size:18px;font-weight:650}
+.custom-theme-preview{padding:12px 14px;border-radius:14px;background:var(--theme-hover,#ffffff10);font-size:13px;opacity:.85}
+.custom-theme-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.custom-theme-form button{padding:9px 16px;border:1px solid var(--theme-line,#ffffff24);border-radius:999px;background:transparent;color:inherit;font:600 13px/1.2 inherit;cursor:pointer}
+.custom-theme-form button:hover{background:var(--theme-hover,#ffffff14)}
+.custom-theme-form .custom-theme-done{border-color:transparent;background:var(--theme-accent,#f2f2f2);color:var(--theme-accent-text,#000)}
+.custom-theme-range{display:grid;grid-template-columns:110px 1fr 52px;align-items:center;gap:10px;font-size:13px}
+.custom-theme-range output{text-align:right;opacity:.7;font-variant-numeric:tabular-nums}
+.custom-theme-range input{accent-color:var(--theme-accent,#f2f2f2)}
+.custom-theme-accent{justify-content:space-between}
+.custom-theme-check{display:flex;align-items:center;gap:8px;font-size:13px}
+.custom-theme-accent input[type="color"]{width:44px;height:30px;padding:0;border:1px solid var(--theme-line,#ffffff24);border-radius:10px;background:none;cursor:pointer}
+.custom-theme-accent input[type="color"]:disabled{opacity:.35;cursor:default}
+.custom-theme-hint{margin:-6px 0 0;font-size:12px;line-height:1.45;opacity:.6}
+.custom-theme-status{min-height:1em;margin:0;font-size:12px;opacity:.75}
+.custom-theme-actions{display:flex;justify-content:space-between;gap:8px}

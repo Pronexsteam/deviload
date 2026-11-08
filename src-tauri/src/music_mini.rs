@@ -16,6 +16,9 @@ pub struct MiniState {
     #[serde(default)] repeat: String,
     #[serde(default)] shuffle: bool,
     #[serde(default)] queue: Vec<MiniQueueItem>,
+    // The song, so the mini player can find its music video.
+    #[serde(default)] id: String,
+    #[serde(default)] artists: Vec<String>,
 }
 static STATE: OnceLock<Mutex<MiniState>> = OnceLock::new();
 fn stored() -> &'static Mutex<MiniState> { STATE.get_or_init(|| Mutex::new(MiniState::default())) }
@@ -31,6 +34,22 @@ impl<'a> OpeningGuard<'a> {
 }
 impl Drop for OpeningGuard<'_> {
     fn drop(&mut self) { self.0.store(false, Ordering::Release); }
+}
+
+// In video mode the window is resized freely; a cut-out outline would also cut away its resize edges.
+static VIDEO: AtomicBool = AtomicBool::new(false);
+
+#[cfg(windows)]
+fn square_native_window(window: &tauri::WebviewWindow) -> Result<(), String> {
+    use windows::Win32::{Foundation::HWND, Graphics::{Dwm::{DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND}, Gdi::SetWindowRgn}};
+    let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+    unsafe {
+        SetWindowRgn(HWND(hwnd.0), None, true);
+        // Windows 11 rounds the corners itself without touching the edges; earlier versions keep square corners.
+        let preference = DWMWCP_ROUND;
+        let _ = DwmSetWindowAttribute(HWND(hwnd.0), DWMWA_WINDOW_CORNER_PREFERENCE, &preference as *const _ as *const core::ffi::c_void, std::mem::size_of_val(&preference) as u32);
+    }
+    Ok(())
 }
 
 #[cfg(windows)]
@@ -52,6 +71,8 @@ fn round_native_window(window: &tauri::WebviewWindow) -> Result<(), String> {
 }
 pub(super) fn sanitize(mut state: MiniState) -> MiniState {
     state.title = state.title.chars().filter(|c| !c.is_control()).take(240).collect();
+    if !(state.id.len() == 11 && state.id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')) { state.id.clear(); }
+    state.artists = state.artists.iter().take(6).map(|a| a.chars().filter(|c| !c.is_control()).take(120).collect()).collect();
     state.artist = state.artist.chars().filter(|c| !c.is_control()).take(320).collect();
     let allowed = url::Url::parse(&state.image).is_ok_and(|url| url.scheme() == "https" && matches!(url.host_str(), Some("i.ytimg.com" | "lh3.googleusercontent.com" | "yt3.googleusercontent.com")) && url.username().is_empty() && url.password().is_none());
     let local_art=state.image.strip_prefix("music-art://localhost/").and_then(|s|s.strip_suffix(".jpg")).is_some_and(|s|crate::music_local::local_id(&format!("local:{s}")));
@@ -89,6 +110,7 @@ pub async fn music_mini_open(app: tauri::AppHandle, window: tauri::WebviewWindow
     if window.label() != "main" { return Err("Unavailable window".into()); }
     let Some(_opening) = OpeningGuard::acquire(&OPENING) else { return Ok(()); };
     if let Some(mini) = app.get_webview_window("music-mini") { let _ = mini.unminimize(); mini.show().map_err(|e| e.to_string())?;mini.set_focus().map_err(|e| e.to_string())?;return window.hide().map_err(|e| e.to_string()); }
+    VIDEO.store(false, Ordering::Release);
     let builder = tauri::WebviewWindowBuilder::new(&app, "music-mini", tauri::WebviewUrl::App("music-mini.html".into()))
         .title("Devil Music").inner_size(380.0, 112.0)
         .resizable(false).decorations(false).shadow(false).center().visible(false).disable_drag_drop_handler()
@@ -102,8 +124,9 @@ pub async fn music_mini_open(app: tauri::AppHandle, window: tauri::WebviewWindow
         crate::music_controls::taskbar::install(&mini);
         let resized = mini.clone();
         mini.on_window_event(move |event| {
-            if matches!(event, tauri::WindowEvent::ScaleFactorChanged { .. }) {
-                let _ = round_native_window(&resized);
+            // The rounded outline is cut to the window's size, so a resize cuts it again.
+            if matches!(event, tauri::WindowEvent::ScaleFactorChanged { .. } | tauri::WindowEvent::Resized(_)) {
+                if !VIDEO.load(Ordering::Acquire) { let _ = round_native_window(&resized); }
             }
         });
     }
@@ -125,6 +148,17 @@ pub fn music_mini_action(app: tauri::AppHandle, window: tauri::WebviewWindow, ac
         "close" => { window.close().map_err(|e| e.to_string())?;Ok(false) },
         "drag" => { window.start_dragging().map_err(|e| e.to_string())?;Ok(false) },
         "show" => { if let Some(main) = app.get_webview_window("main") { let _ = main.unminimize();main.show().map_err(|e| e.to_string())?; main.set_focus().map_err(|e| e.to_string())?;app.emit_to("main", "music-mini-show", ()).map_err(|e| e.to_string())?;window.close().map_err(|e| e.to_string())?; } Ok(false) },
+        // Video mode: the window can be resized freely and shows the music video; it returns to its compact size after.
+        "video" => {
+            let on = value.is_some_and(|v| v > 0.5);
+            VIDEO.store(on, Ordering::Release);
+            #[cfg(windows)] { if on { square_native_window(&window)?; } }
+            window.set_resizable(on).map_err(|e| e.to_string())?;
+            window.set_min_size(on.then_some(tauri::LogicalSize::new(260.0, 160.0))).map_err(|e| e.to_string())?;
+            window.set_size(if on { tauri::LogicalSize::new(480.0, 290.0) } else { tauri::LogicalSize::new(380.0, 112.0) }).map_err(|e| e.to_string())?;
+            #[cfg(windows)] { if !on { round_native_window(&window)?; } }
+            Ok(on)
+        },
         "pin" => { let pinned = !window.is_always_on_top().map_err(|e| e.to_string())?;window.set_always_on_top(pinned).map_err(|e| e.to_string())?;Ok(pinned) },
         _ => Err("Unknown music action".into()),
     }

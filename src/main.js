@@ -22,7 +22,8 @@ import {createMusic} from "./devil-music.js";
 import {initializeMusic} from "./music-profile-startup.js";
 import {wireReleaseNotes} from "./app-release-notes.js";
 import {wireSupporters} from "./supporters.js";
-import {wireAppearance} from "./appearance.js";
+import {wireAppearance, applyTheme} from "./appearance.js";
+import {wireCustomTheme} from "./custom-theme.js";
 import {downloadAuthView} from "./account-status.js";
 import {wireGalleryDownloads} from "./gallery-download.js";
 import {downloadMusic} from "./music-download.js";
@@ -205,6 +206,7 @@ $("notice-button").addEventListener("click", () => {
 $("notice-close").addEventListener("click", () => $("notice-dialog").close());
 $("notice-clear").addEventListener("click", () => { notices = []; unreadNotices = 0; $("notice-count").hidden = true; renderNotices(); });
 wireAppearance();
+wireCustomTheme({invoke,convertFileSrc,applyTheme});
 function syncSwitch(id, on) { $(id).setAttribute("aria-checked", String(on)); }
 function syncSystemPreferences() {
   syncSwitch("tray-toggle", localStorage.getItem("deviload-tray") === "true");

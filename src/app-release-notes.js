@@ -1,5 +1,5 @@
 import {t,onLanguageChange} from "./i18n.js";
-import {shouldShowReleaseNotes,markReleaseNotesSeen} from "./release-notes-state.js";
+import {shouldShowReleaseNotes,markReleaseNotesSeen,lastSeenReleaseNotes,compareVersions} from "./release-notes-state.js";
 const instances=new WeakMap();
 export function wireReleaseNotes(workspace){
   if(instances.has(workspace))return instances.get(workspace);
@@ -11,47 +11,42 @@ export function wireReleaseNotes(workspace){
   const cinemaNotice=make("strong","app-release-cinema-notice");
   title.id="app-release-title";close.type="button";close.textContent="×";header.append(eyebrow,close,title,intro,cinemaNotice);
   const sections=make("div","app-release-sections"),changed=make("section"),fixed=make("section"),changedTitle=make("h3"),fixedTitle=make("h3"),changes=make("ul"),fixes=make("ul");
-  const changeItems=Array.from({length:4},()=>make("li")),fixItems=Array.from({length:3},()=>make("li"));changes.append(...changeItems);fixes.append(...fixItems);changed.append(changedTitle,changes);fixed.append(fixedTitle,fixes);sections.append(changed,fixed);
+  changed.append(changedTitle,changes);fixed.append(fixedTitle,fixes);
+  // Earlier releases follow below; the ones someone skipped while updating start open.
+  const earlier=make("section","app-release-earlier"),earlierTitle=make("h3"),earlierList=make("div","app-release-earlier-list");earlier.append(earlierTitle,earlierList);
+  sections.append(changed,fixed,earlier);
   const done=make("button","app-release-done");done.type="button";card.append(header,sections,done);document.body.append(card);actions.prepend(button);
   let version=null,returnFocus=null,autoPending=false,storage;try{storage=localStorage;}catch{/* Optional persistence. */}
+  const seen=lastSeenReleaseNotes(storage),opened=new Set();
   const translate=()=>{
     button.textContent=t("What's new");title.textContent=version?t("Deviload {version} is out",{version}):button.textContent;eyebrow.textContent=button.textContent;
     intro.textContent=t("A closer look at what changed and what was fixed.");close.ariaLabel=t("Dismiss release notes");done.textContent=t("Got it");
     cinemaNotice.hidden=version!=="2.7.9";
     cinemaNotice.textContent=t("TEMPORARY: Devil Cinema uses the official YouTube player for online videos. Our own player is planned for the next update.");
     changedTitle.textContent=t("What changed");fixedTitle.textContent=t("What was fixed");
-    changeItems[0].textContent=t("Import Spotify JSON and CSV exports in batches, resume later and save unresolved songs.");
-    changeItems[1].textContent=t("Search suggestions now include songs, artists and albums as you type.");
-    changeItems[2].textContent=t("Open an artist’s full song list and load more pages when the source provides them.");
-    changeItems[3].textContent=t("Try a listening room with a friend on another Windows PC. Share the room link; the host controls playback.");
-    fixItems[0].textContent=t("Large liked-song lists render only visible rows, keeping scrolling and navigation responsive.");
-    fixItems[1].textContent=t("Large covers use higher resolution when available; small list thumbnails stay lightweight.");
-    fixItems[2].textContent=t("Import progress is separate from your music profile. Imported listening history is optional.");
-    if(version==="2.8.0"){
-      changeItems[0].textContent=t("Keep browsing the same For you picks until your next visit or refresh.");
-      changeItems[1].textContent=t("Choose another recording from the player if a source fails.");
-      changeItems[2].textContent=t("Open lyrics from the artwork or the full player.");
-      changeItems[3].textContent=t("Transfer music from a public Spotify playlist or album link, or import a JSON or CSV export.");
-      fixItems[2].textContent=t("Artist pages can show previously loaded results or songs from search.");
-    }
-    if(version==="2.9.0"){
-      changeItems[0].textContent=t("Crossfade between songs, play albums without gaps and set a sleep timer.");
-      changeItems[1].textContent=t("Show a translation or Latin letters under each line of the lyrics.");
-      changeItems[2].textContent=t("Jump anywhere in a playing song almost instantly.");
-      changeItems[3].textContent=t("A new look for Devil Music and Deviload, with keyboard shortcuts and right-click menus.");
-      fixItems[0].textContent=t("For you keeps its picks when you come back, and hiding a song leaves the rest in place.");
-      fixItems[1].textContent=t("Shuffle spreads out artists and avoids repeating the end of the last round.");
-      fixItems[2].textContent=t("The music engine and download tools close together with Deviload.");
-    }
-    if(version==="2.10.0"){
-      changeItems[0].textContent=t("Watch a song's music video on its own stage, in step with the music.");
-      changeItems[1].textContent=t("Choose video quality up to 1080p and open music videos in full screen.");
-      changeItems[2].textContent=t("New Noir, Vinyl and Paper themes. Ambient stays the default.");
-      changeItems[3].textContent=t("Mini-player and phone remote shortcuts on the player bar, and a refreshed library sidebar.");
-      fixItems[0].textContent=t("The window can be dragged from anywhere on the top bar.");
-      fixItems[1].textContent=t("Light themes keep a light Now Playing panel.");
-      fixItems[2].textContent=t("Player colours follow the theme.");
-    }
+    // Every release with its notes, newest first.
+    const releases=[
+      {version:"2.11.0",changes:[t("Your own theme: put a photo, GIF or silent video behind Deviload and tune blur, light and colour."),t("Edit layout: move blocks and player buttons, hide the ones you do not need and swap the side panels."),t("Music videos in the mini player, in a window you can resize and keep on top."),t("A folded library stays at hand as a rail of icons and playlist covers.")],fixes:[t("Player buttons no longer overlap at medium window widths."),t("Leftover update files and old music engines are cleaned up automatically."),t("The library fits narrow windows without scrolling sideways.")]},
+      {version:"2.10.0",changes:[t("Watch a song's music video on its own stage, in step with the music."),t("Choose video quality up to 1080p and open music videos in full screen."),t("New Noir, Vinyl and Paper themes. Ambient stays the default."),t("Mini-player and phone remote shortcuts on the player bar, and a refreshed library sidebar.")],fixes:[t("The window can be dragged from anywhere on the top bar."),t("Light themes keep a light Now Playing panel."),t("Player colours follow the theme.")]},
+      {version:"2.9.0",changes:[t("Crossfade between songs, play albums without gaps and set a sleep timer."),t("Show a translation or Latin letters under each line of the lyrics."),t("Jump anywhere in a playing song almost instantly."),t("A new look for Devil Music and Deviload, with keyboard shortcuts and right-click menus.")],fixes:[t("For you keeps its picks when you come back, and hiding a song leaves the rest in place."),t("Shuffle spreads out artists and avoids repeating the end of the last round."),t("The music engine and download tools close together with Deviload.")]},
+      {version:"2.8.0",changes:[t("Keep browsing the same For you picks until your next visit or refresh."),t("Choose another recording from the player if a source fails."),t("Open lyrics from the artwork or the full player."),t("Transfer music from a public Spotify playlist or album link, or import a JSON or CSV export.")],fixes:[t("Large liked-song lists render only visible rows, keeping scrolling and navigation responsive."),t("Large covers use higher resolution when available; small list thumbnails stay lightweight."),t("Artist pages can show previously loaded results or songs from search.")]},
+      {version:"2.7.9",changes:[t("Import Spotify JSON and CSV exports in batches, resume later and save unresolved songs."),t("Search suggestions now include songs, artists and albums as you type."),t("Open an artist’s full song list and load more pages when the source provides them."),t("Try a listening room with a friend on another Windows PC. Share the room link; the host controls playback.")],fixes:[t("Large liked-song lists render only visible rows, keeping scrolling and navigation responsive."),t("Large covers use higher resolution when available; small list thumbnails stay lightweight."),t("Import progress is separate from your music profile. Imported listening history is optional.")]}
+    ];
+    const current=releases.find(entry=>compareVersions(entry.version,version)===0)||(version&&compareVersions(version,releases.at(-1).version)<0?releases.at(-1):releases[0]);
+    const list=(node,items)=>node.replaceChildren(...items.map(text=>{const item=make("li");item.textContent=text;return item;}));
+    list(changes,current.changes);list(fixes,current.fixes);
+    earlierTitle.textContent=t("Earlier updates");
+    for(const node of earlierList.querySelectorAll("details"))if(node.open)opened.add(node.dataset.version);else opened.delete(node.dataset.version);
+    const older=releases.filter(entry=>compareVersions(entry.version,current.version)<0);
+    earlier.hidden=!older.length;
+    earlierList.replaceChildren(...older.map(entry=>{
+      const details=make("details","app-release-earlier-item"),summary=make("summary"),body=make("div","app-release-earlier-body");
+      details.dataset.version=entry.version;details.open=opened.has(entry.version)||!!seen&&compareVersions(entry.version,seen)>0;
+      summary.textContent=t("Deviload {version}",{version:entry.version});
+      const changedHeading=make("h4"),fixedHeading=make("h4"),changedList=make("ul"),fixedList=make("ul");
+      changedHeading.textContent=t("What changed");fixedHeading.textContent=t("What was fixed");list(changedList,entry.changes);list(fixedList,entry.fixes);
+      body.append(changedHeading,changedList,fixedHeading,fixedList);details.append(summary,body);return details;
+    }));
   };
   const open=()=>{if(card.open)return;returnFocus=document.activeElement;card.showModal();button.setAttribute("aria-expanded","true");markReleaseNotesSeen(storage,version);autoPending=false;done.focus();};
   const tryAutomatic=()=>{if(!autoPending||document.hidden||document.querySelector('dialog[open]'))return;open();};

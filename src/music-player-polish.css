@@ -28,7 +28,7 @@
   outline:2px solid var(--player-ink,var(--workspace-ink,#efefef));outline-offset:2px;
 }
 :root body :is(.music-dock,.music-stage,.music-queue-panel) button:disabled{opacity:.38;cursor:default;transform:none}
-:root body .music-dock{gap:16px;padding-block:10px;grid-template-columns:minmax(0,1fr) minmax(280px,1.2fr) minmax(0,1fr)}
+:root body .music-dock{gap:16px;padding-block:10px;grid-template-columns:minmax(0,1fr) minmax(280px,1.2fr) minmax(max-content,1fr)}
 :root body .music-dock .music-now-info{min-width:0}
 :root body .music-dock .music-now-info :is(strong,.music-artist-link){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
 :root body .music-dock .music-dock-extras{gap:2px;min-width:0}

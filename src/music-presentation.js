@@ -34,6 +34,8 @@ export function createNowPlaying({invoke,language=()=>'en',getAudio=()=>null,aud
   const ambient=make("div","music-preview-ambient"),scene=make('div','music-scene-backdrop'),facts=make("p","music-playing-facts"),reason=make("p","music-playing-reason");ambient.setAttribute("aria-hidden","true");scene.setAttribute('aria-hidden','true');
   const flip=make('div','music-preview-flip'),faces=make('div','music-preview-faces'),inlineLyrics=make('section','music-preview-lyrics');inlineLyrics.hidden=true;inlineLyrics.setAttribute('aria-label',t('Lyrics'));
   const flipButton=button(t('Show lyrics'),'music-notes',()=>setPreviewLyrics(!previewLyricsOn),'music-preview-toggle');
+  // A word next to the note icon, so the way to the lyrics is obvious.
+  const flipLabel=make('span','music-preview-toggle-label');flipButton.append(flipLabel);
   const previewTop=make('div','music-preview-top'),previewTools=make('div','music-preview-tools');previewTools.append(flipButton,previewOpen);previewTop.append(previewHeading,previewTools);faces.append(previewArt,inlineLyrics);flip.append(faces);
   preview.append(ambient,previewTop,flip,previewTitle,previewArtist,facts,reason);
   artwork.setAttribute("role","button");artwork.tabIndex=0;artwork.setAttribute("aria-haspopup","dialog");
@@ -43,7 +45,7 @@ export function createNowPlaying({invoke,language=()=>'en',getAudio=()=>null,aud
   function setPreviewLyrics(value){
     clearTimeout(flipCleanup);previewLyricsOn=value;preview.classList.toggle('showing-lyrics',value);faces.classList.toggle('is-flipped',value);previewArt.inert=value;inlineLyrics.inert=!value;
     showMedia(current);
-    flipButton.setAttribute('aria-pressed',String(value));flipButton.title=flipButton.ariaLabel=value?t('Show cover'):t('Show lyrics');
+    flipButton.setAttribute('aria-pressed',String(value));flipButton.title=flipButton.ariaLabel=value?t('Show cover'):t('Show lyrics');flipLabel.textContent=value?t('Cover'):t('Lyrics');
     const glyph=flipButton.querySelector('.icon');if(glyph)glyph.dataset.icon=value?'image':'music-notes';
     if(value){inlineLyrics.hidden=false;if(lyrics&&!stage.open)lyrics.mount(inlineLyrics);}
     else {
@@ -104,7 +106,7 @@ export function createNowPlaying({invoke,language=()=>'en',getAudio=()=>null,aud
   function labels(){
     stage.setAttribute("aria-label",t("Now playing"));heading.textContent=t("NOW PLAYING");caption.textContent=t("YOUR OWN FREQUENCY");lyricsPanel.setAttribute("aria-label",t("Lyrics"));
     for(const [node,label]of [[expand,t("Now playing")],[close,t("Back to browsing")],[download,t("Download MP3")],[dislike,t("Do not recommend this song")],[block,t("Do not recommend this artist")]])node.title=node.ariaLabel=label;
-    previewHeading.textContent=t("NOW PLAYING");previewLabel.textContent=t("Open player and lyrics");previewOpen.title=previewOpen.ariaLabel=t("Open player and lyrics");previewArt.title=previewArt.ariaLabel=artwork.title=artwork.ariaLabel=t("Open player and lyrics");
+    previewHeading.textContent=t("NOW PLAYING");flipLabel.textContent=previewLyricsOn?t('Cover'):t('Lyrics');previewLabel.textContent=t("Open player and lyrics");previewOpen.title=previewOpen.ariaLabel=t("Open player and lyrics");previewArt.title=previewArt.ariaLabel=artwork.title=artwork.ariaLabel=t("Open player and lyrics");
     flipButton.title=flipButton.ariaLabel=previewLyricsOn?t('Show cover'):t('Show lyrics');
     dockClip.title=dockClip.ariaLabel=t('Music video');flipButton.setAttribute('aria-pressed',String(previewLyricsOn));
   }

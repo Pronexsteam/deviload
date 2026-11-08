@@ -48,9 +48,12 @@ Open the YouTube Music catalog and start listening without a Devil Music account
 - **Stay with the music:** open the full player or flip the Now Playing cover into lyrics while browsing. Timed words receive a moving highlight when the lyrics source provides word timings; other songs use synced lines or plain text.
 - **Make room on your desktop:** switch to a small, rounded mini-player with a vinyl cover, playback controls, repeat, shuffle, seeking and volume. Returning restores the main window.
 - **Control it from your phone:** click the remote icon and scan its QR code on the same Wi-Fi. The phone follows your theme; sound stays on the computer. No account or hosted server is needed.
-- **Set the mood:** Ambient carries the cover colors across the workspace and reacts to the audio. Choose from six themes, adjust the equalizer, or keep motion reduced. The next track is prepared in advance to reduce waiting.
+- **Set the mood:** Ambient carries the cover colors across the workspace and reacts to the audio. Choose from eight themes, adjust the equalizer, or keep motion reduced. The next track is prepared in advance to reduce waiting.
+- **Make it yours:** the Your own theme puts a photo, GIF or silent looping video behind the workspace. Adjust blur, darkening, panel transparency, ambient light and the accent color. Files up to 300 MB are accepted, roughly 2 to 5 minutes of Full HD video; a 10 to 60 second loop looks best.
 - **Keep a copy:** queue an MP3 download from a song card or the player without interrupting playback. Supported completed audio downloads can play offline.
 - **Take your preferences with you:** export and restore a local music profile with likes, playlists and taste settings. The backup contains metadata, not music files or account credentials.
+
+![Devil Music with the Your own theme: a silent looping video behind the workspace while the library folds into a rail of covers and opens again](docs/screenshots/music-video-background.gif)
 
 Playback and catalog availability depend on YouTube, your region and your connection. Spotify imports match metadata to playable catalog tracks; they do not download Spotify audio. A Spotify preview may omit tracks, and a YouTube Mix import is a snapshot of up to 100 songs rather than a continuously synced playlist. See [data and privacy](#data-and-privacy) for the services contacted.
 

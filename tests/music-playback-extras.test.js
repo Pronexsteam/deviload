@@ -124,3 +124,13 @@ test("a music video is the artist's own upload of exactly this recording",()=>{
   assert.equal(pick([video("card","Memories","Maroon 5",{duration:189+13})]),"card");
   assert.equal(pickClip({...song,title:"Memories (Live)"},[video("live","Maroon 5 - Memories (Live)","Maroon 5")])?.id.replace(/x+$/,""),"live");
 });
+
+import {normalizeCustom,customVariables} from "../src/custom-theme-model.js";
+test("your own theme keeps usable settings and drops broken ones",()=>{
+  assert.deepEqual(normalizeCustom(null),{blur:24,dim:45,ambient:70,panels:66,accent:"",background:null});
+  const s=normalizeCustom({blur:999,dim:-3,ambient:"55",accent:"#ABCDEF",background:{path:"C:/bg/a.webm",kind:"video"}});
+  assert.deepEqual(s,{blur:60,dim:0,ambient:55,panels:66,accent:"#abcdef",background:{path:"C:/bg/a.webm",kind:"video"}});
+  assert.equal(normalizeCustom({accent:"red",background:{path:"x",kind:"exe"}}).accent,"");
+  assert.equal(normalizeCustom({background:{path:"x",kind:"exe"}}).background,null);
+  assert.deepEqual(customVariables({blur:10,dim:30,ambient:100}),{"--custom-blur":"10px","--custom-dim":"0.30","--custom-ambient":"1.00","--custom-panel":"0.66","--custom-accent":null});
+});

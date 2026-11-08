@@ -38,6 +38,8 @@ pub fn confirm_recovery_monitor(id:&str)->bool{
 }
 pub fn note_reserve_denial(id:&str){protection_guard().lock().unwrap().note(id,protection::Reason::Restricted);}
 impl Drop for Worker {fn drop(&mut self){if let Ok(child)=self.child.get_mut(){let _=child.kill();let _=child.wait();}}}
+/// Engine folders older than the built-in engine are never chosen again.
+pub fn sweep_old_engines(){if let Ok(root)=root(){crate::leftovers::sweep_old_engines(&root,VERSION);}}
 fn root()->Result<PathBuf,String>{
     #[cfg(debug_assertions)]
     if let Some(path)=std::env::var_os("DEVILOAD_MUSIC_TEST_DIR"){return Ok(PathBuf::from(path));}

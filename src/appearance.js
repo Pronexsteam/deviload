@@ -2,10 +2,10 @@ import {t, onLanguageChange} from "./i18n.js";
 import {wireGlassMaterial} from "./theme-glass.js";
 
 export const THEME_KEY = "deviload-theme";
-export const THEMES = Object.freeze(["ambient", "glass-light", "aurora", "prism", "noir", "vinyl", "paper"]);
-const themeLabels = {ambient:"Ambient", "glass-light":"Light Liquid Glass", aurora:"Aurora", prism:"Prism", noir:"Noir", vinyl:"Vinyl", paper:"Paper"};
+export const THEMES = Object.freeze(["ambient", "glass-light", "aurora", "prism", "noir", "vinyl", "paper", "custom"]);
+const themeLabels = {ambient:"Ambient", "glass-light":"Light Liquid Glass", aurora:"Aurora", prism:"Prism", noir:"Noir", vinyl:"Vinyl", paper:"Paper", custom:"Your own"};
 // Palette themes reuse a base theme's rules and only change its colours.
-export const THEME_BASE = Object.freeze({noir:"prism", vinyl:"prism", paper:"glass-light"});
+export const THEME_BASE = Object.freeze({noir:"prism", vinyl:"prism", paper:"glass-light", custom:"ambient"});
 export const themeBase = theme => THEME_BASE[theme] || theme;
 export const THEME_COLLECTION_KEY = "deviload-theme-collection";
 export const THEME_COLLECTION = "ambient-aurora-prism-v1";
