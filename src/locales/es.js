@@ -2047,4 +2047,11 @@ export default {
 "Download a song from its menu to listen without internet.": "Descarga una canción desde su menú para escucharla sin internet.",
 "Mostly {artist}": "Sobre todo {artist}",
 "{plays} listens": "{plays} escuchas",
+"Crossfade between songs, play albums without gaps and set a sleep timer.": "Fundido entre canciones, álbumes sin pausas y temporizador de apagado.",
+"Show a translation or Latin letters under each line of the lyrics.": "Traducción o letras latinas bajo cada línea de la letra.",
+"Jump anywhere in a playing song almost instantly.": "Salta a cualquier punto de la canción casi al instante.",
+"A new look for Devil Music and Deviload, with keyboard shortcuts and right-click menus.": "Nuevo aspecto para Devil Music y Deviload, con atajos de teclado y menús contextuales.",
+"For you keeps its picks when you come back, and hiding a song leaves the rest in place.": "Para ti conserva sus elecciones al volver, y ocultar una canción no mueve las demás.",
+"Shuffle spreads out artists and avoids repeating the end of the last round.": "El modo aleatorio separa artistas y no repite el final de la ronda anterior.",
+"The music engine and download tools close together with Deviload.": "El motor de música y las herramientas de descarga se cierran junto con Deviload.",
 };

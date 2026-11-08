@@ -34,6 +34,15 @@ export function wireReleaseNotes(workspace){
       changeItems[3].textContent=t("Transfer music from a public Spotify playlist or album link, or import a JSON or CSV export.");
       fixItems[2].textContent=t("Artist pages can show previously loaded results or songs from search.");
     }
+    if(version==="2.9.0"){
+      changeItems[0].textContent=t("Crossfade between songs, play albums without gaps and set a sleep timer.");
+      changeItems[1].textContent=t("Show a translation or Latin letters under each line of the lyrics.");
+      changeItems[2].textContent=t("Jump anywhere in a playing song almost instantly.");
+      changeItems[3].textContent=t("A new look for Devil Music and Deviload, with keyboard shortcuts and right-click menus.");
+      fixItems[0].textContent=t("For you keeps its picks when you come back, and hiding a song leaves the rest in place.");
+      fixItems[1].textContent=t("Shuffle spreads out artists and avoids repeating the end of the last round.");
+      fixItems[2].textContent=t("The music engine and download tools close together with Deviload.");
+    }
   };
   const open=()=>{if(card.open)return;returnFocus=document.activeElement;card.showModal();button.setAttribute("aria-expanded","true");markReleaseNotesSeen(storage,version);autoPending=false;done.focus();};
   const tryAutomatic=()=>{if(!autoPending||document.hidden||document.querySelector('dialog[open]'))return;open();};

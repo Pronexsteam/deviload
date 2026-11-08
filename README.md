@@ -10,12 +10,12 @@ Discover and listen with Devil Music. Save with yt-dlp. Create with Devil Cut an
 <br>
 Built with Rust and Tauri 2 · English, Russian and Spanish
 
-[![Windows download](docs/downloads/windows.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.8.0/Deviload-2.8.0-setup.exe)
-[![macOS download](docs/downloads/macos.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.8.0/Deviload-2.8.0-macos-test.zip)
+[![Windows download](docs/downloads/windows.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.9.0/Deviload-2.9.0-setup.exe)
+[![macOS download](docs/downloads/macos.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.9.0/Deviload-2.9.0-macos-test.zip)
 [![Linux download](docs/downloads/linux.svg)](#install-on-linux)
 [![Devil Music for Android](docs/downloads/android.svg)](https://github.com/Pronexsteam/DevilMusic/releases/download/v0.0.18/Devil-Music-0.0.18-android.apk)
 
-Desktop downloads: **2.8.0** · Android: **0.0.18 preview**
+Desktop downloads: **2.9.0** · Android: **0.0.18 preview**
 
 <p>
 <a href="https://github.com/Pronexsteam/deviload/releases/latest"><img src="https://img.shields.io/github/v/release/Pronexsteam/deviload?style=flat&amp;label=Release&amp;logo=github&amp;logoColor=d5e5df&amp;color=252d34&amp;labelColor=151b20" height="28" alt="Latest release"></a>
@@ -32,7 +32,7 @@ Deviload is free. If it saves you time, a coffee helps me keep building it.
 
 </div>
 
-![Devil Music: your playlists, discovery, a weekly listening summary and Now Playing in one workspace](docs/screenshots/music-home-2.8.0.png)
+![Devil Music: your playlists, discovery, a weekly listening summary and Now Playing in one workspace](docs/screenshots/music-home-2.9.0.png)
 
 Deviload is a free, open-source desktop app for discovering music, keeping a local media collection and making clips. Listen in **Devil Music**, save video or audio with [yt-dlp](https://github.com/yt-dlp/yt-dlp), and send downloaded files to **Devil Cut** or **Devil Convert**.
 
@@ -84,9 +84,9 @@ Add a live link to record from that moment, then stop when you have what you nee
 
 ## Latest update
 
-**Deviload 2.8.0 keeps Devil Music in the desktop app.** Search as you type, reorder your queue by dragging tracks, and follow synced lyrics in the sidebar or full player. Add local audio or bring a collection from Spotify using a public playlist link, a JSON export or a CSV file.
+**Deviload 2.9.0 gives Devil Music a new look and smoother listening.** Crossfade between songs, play albums without gaps, set a sleep timer and jump anywhere in a track almost instantly. Lyrics can show a translation or Latin letters under each line, and the rest of Deviload now shares the same floating, translucent design.
 
-Read the [2.8.0 release notes](.github/release-notes/v2.8.0.md).
+Read the [2.9.0 release notes](.github/release-notes/v2.9.0.md).
 
 ## Installation
 
@@ -159,9 +159,9 @@ The screenshots below show the 2.7.8 interface with sample media, original demo 
 
 ### Browse and read lyrics
 
-![Devil Music: the Now Playing cover flips into synced lyrics with an optional translation under each line](docs/screenshots/music-inline-lyrics-2.8.0.png)
+![Devil Music: the Now Playing cover flips into synced lyrics with an optional translation under each line](docs/screenshots/music-inline-lyrics-2.9.0.png)
 
-![Devil Music: full player with word-synced lyrics and line-by-line translation](docs/screenshots/music-lyrics-2.8.0.png)
+![Devil Music: full player with word-synced lyrics and line-by-line translation](docs/screenshots/music-lyrics-2.9.0.png)
 
 ### Keep the controls close
 
@@ -173,9 +173,9 @@ The phone controls the desktop player over your local network; it does not strea
 
 ### Download and convert
 
-![Downloads: link entry, format choices and a readable queue](docs/screenshots/downloads-2.8.0.png)
+![Downloads: link entry, format choices and a readable queue](docs/screenshots/downloads-2.9.0.png)
 
-![Devil Convert: source preview, actions and output settings](docs/screenshots/convert-2.8.0.png)
+![Devil Convert: source preview, actions and output settings](docs/screenshots/convert-2.9.0.png)
 
 ## Install on Windows
 
@@ -193,7 +193,7 @@ The archive includes yt-dlp, FFmpeg and Deno. The in-app updater signature is se
 
 ## Install on Linux
 
-**Download 2.8.0:** [Debian / Ubuntu (.deb)](https://github.com/Pronexsteam/deviload/releases/download/v2.8.0/Deviload-2.8.0-amd64.deb) · [AppImage (x86_64)](https://github.com/Pronexsteam/deviload/releases/download/v2.8.0/Deviload-2.8.0-x86_64.AppImage)
+**Download 2.9.0:** [Debian / Ubuntu (.deb)](https://github.com/Pronexsteam/deviload/releases/download/v2.9.0/Deviload-2.9.0-amd64.deb) · [AppImage (x86_64)](https://github.com/Pronexsteam/deviload/releases/download/v2.9.0/Deviload-2.9.0-x86_64.AppImage)
 
 
 `sudo apt install ./Deviload-<version>-amd64.deb` on Debian or Ubuntu, or make the AppImage executable (`chmod +x Deviload-<version>-x86_64.AppImage`) and run it. Both bring yt-dlp, FFmpeg and Deno along; the AppImage updates itself from inside the app, the .deb package is updated by installing the new one. The built-in player uses the system's GStreamer, so MKV playback needs its usual plugins (`gstreamer1.0-plugins-good`).

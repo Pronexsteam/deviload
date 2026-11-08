@@ -2097,4 +2097,11 @@ export default {
 "Download a song from its menu to listen without internet.": "Скачайте песню через её меню, чтобы слушать без интернета.",
 "Mostly {artist}": "Чаще всего: {artist}",
 "{plays} listens": "Прослушиваний: {plays}",
+"Crossfade between songs, play albums without gaps and set a sleep timer.": "Плавный переход между песнями, альбомы без пауз и таймер сна.",
+"Show a translation or Latin letters under each line of the lyrics.": "Перевод или латиница под каждой строкой текста песни.",
+"Jump anywhere in a playing song almost instantly.": "Мгновенная перемотка в любое место играющей песни.",
+"A new look for Devil Music and Deviload, with keyboard shortcuts and right-click menus.": "Новый вид Devil Music и Deviload, горячие клавиши и меню по правому клику.",
+"For you keeps its picks when you come back, and hiding a song leaves the rest in place.": "«Для вас» не меняется при каждом возвращении, а скрытая песня не перемешивает остальные.",
+"Shuffle spreads out artists and avoids repeating the end of the last round.": "Перемешивание разносит исполнителей и не повторяет конец прошлого круга.",
+"The music engine and download tools close together with Deviload.": "Движок музыки и загрузчики закрываются вместе с Deviload.",
 };
