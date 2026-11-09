@@ -184,9 +184,12 @@ export function wireMusicPanels(workspace) {
   };
   // A swapped workspace mirrors the panels, so each handle sits on the other edge and drags the other way.
   const swapped = () => workspace.classList.contains("music-panels-swapped");
-  function layout() {
+  // The workspace width, kept from the last time it was measured, so deciding which panels fit never has to
+  // stop the browser in the middle of a click to measure the page.
+  let width = workspace.clientWidth;
+  function fit() {
     const value = panelLayout(
-      workspace.clientWidth,
+      width,
       sizes.library,
       sizes.playing,
       workspace.classList.contains("library-panel-open"),
@@ -203,6 +206,10 @@ export function wireMusicPanels(workspace) {
     flag("music-library-overlay", value.overlay);
     size("--music-library-width", value.library + "px");
     size("--music-playing-width", value.playing + "px");
+    return value;
+  }
+  // The resize handles sit on the panels' edges, so they are placed once the panels have settled.
+  function placeHandles(value) {
     const box = workspace.getBoundingClientRect();
     const places = handles.map(({ key, panel }) => {
       const rect = panel.getBoundingClientRect();
@@ -217,6 +224,10 @@ export function wireMusicPanels(workspace) {
       if (handle.hidden !== place.hidden) handle.hidden = place.hidden;
       if (handle.style.left !== place.left) handle.style.left = place.left;
     });
+  }
+  // Dragging a handle needs both at once.
+  function layout() {
+    placeHandles(fit());
   }
   for (const [key, selector, side] of [
     ["library", ".music-library-sidebar", 1],
@@ -285,9 +296,36 @@ export function wireMusicPanels(workspace) {
       save();
     });
   }
-  const observer = new ResizeObserver(layout);
-  observer.observe(workspace);
-  new MutationObserver(layout).observe(workspace, { attributes: true, attributeFilter: ["class"] });
+  // A panel opening or closing decides at once which panels fit, from the width already known, so they
+  // glide together. The resize handles are placed after the next paint, and while a panel glides they wait
+  // for it to settle: measuring inside the click forced the whole music page to be restyled first.
+  let pending = false;
+  const gliding = () =>
+    workspace.classList.contains("music-panel-animating") ||
+    workspace.classList.contains("music-library-animating");
+  const settle = () => {
+    if (gliding()) {
+      setTimeout(settle, 90);
+      return;
+    }
+    pending = false;
+    placeHandles(fit());
+  };
+  const scheduleHandles = () => {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(() => setTimeout(settle, 0));
+  };
+  // A resize is reported after layout, when reading the width is free.
+  new ResizeObserver(() => {
+    width = workspace.clientWidth;
+    fit();
+    scheduleHandles();
+  }).observe(workspace);
+  new MutationObserver(() => {
+    fit();
+    scheduleHandles();
+  }).observe(workspace, { attributes: true, attributeFilter: ["class"] });
   layout();
 }
 
