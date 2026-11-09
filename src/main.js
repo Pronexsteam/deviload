@@ -2448,7 +2448,7 @@ syncTrayLabels();
 init();
 // Someone who has neither seen the tour nor played music is new, and is asked once how they will use the app.
 const newcomer = !localStorage.getItem("deviload-tour-v1") && !localStorage.getItem("deviload-music-session-v1");
-wireAppMode({navigate, host: $("music-preferences"), isNewcomer: () => newcomer, installMode: async () => invoke ? invoke("take_install_mode") : null});
+wireAppMode({navigate, host: $("music-preferences"), isNewcomer: () => newcomer});
 wireTour(navigate);
 
 

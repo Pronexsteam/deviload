@@ -46,27 +46,3 @@
     Abort
   deviload_checked:
 !macroend
-
-; On a first install, and only then, the installer asks how Deviload will be used. The answer waits in a
-; small file that the app takes on its first start. Updates and silent installs never ask: by then the
-; app's data folder already exists.
-!macro NSIS_HOOK_POSTINSTALL
-  IfSilent deviload_mode_done
-  IfFileExists "$LOCALAPPDATA\com.deviload.desktop\*.*" deviload_mode_done
-  IfFileExists "$APPDATA\com.deviload.desktop\*.*" deviload_mode_done
-    !insertmacro DEVILOAD_TEXT $R1 \
-      "How will you use Deviload?$\r$\n$\r$\nYes - only Devil Music: a music player and nothing else around it.$\r$\nNo - everything: music, downloads, Cinema, Cut and Convert.$\r$\n$\r$\nYou can change this later in music settings." \
-      "${DEVILOAD_RU_2}" \
-      "¿Cómo usarás Deviload?$\r$\n$\r$\nSí - solo Devil Music: un reproductor de música y nada más.$\r$\nNo - todo: música, descargas, Cinema, Cut y Convert.$\r$\n$\r$\nPuedes cambiarlo más tarde en los ajustes de música."
-    StrCpy $R2 "all"
-    MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "$R1" /SD IDNO IDNO deviload_mode_write
-    StrCpy $R2 "music"
-  deviload_mode_write:
-    CreateDirectory "$LOCALAPPDATA\com.deviload.desktop"
-    ClearErrors
-    FileOpen $R0 "$LOCALAPPDATA\com.deviload.desktop\install-mode" w
-    IfErrors deviload_mode_done
-    FileWrite $R0 "$R2"
-    FileClose $R0
-  deviload_mode_done:
-!macroend

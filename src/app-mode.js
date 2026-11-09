@@ -5,7 +5,7 @@ import {t,onLanguageChange} from './i18n.js';
 export const MODE_KEY='deviload-app-mode';
 export function readMode(storage=globalThis.localStorage){try{return storage?.getItem(MODE_KEY)==='music'?'music':'all';}catch{return 'all';}}
 
-export function wireAppMode({navigate,host,isNewcomer=()=>false,installMode=async()=>null,storage=globalThis.localStorage}){
+export function wireAppMode({navigate,host,isNewcomer=()=>false,storage=globalThis.localStorage}){
   const root=document.documentElement;
   let mode=readMode(storage);
   const save=()=>{try{storage?.setItem(MODE_KEY,mode);}catch{/* Kept for this session. */}};
@@ -21,7 +21,7 @@ export function wireAppMode({navigate,host,isNewcomer=()=>false,installMode=asyn
   row.append(input,text,note);const head=host?.querySelector('.music-preferences-head');if(head)head.after(row);else host?.prepend(row);const toggle={input};
   input.addEventListener('change',()=>{mode=input.checked?'music':'all';save();apply();});
 
-  // A newcomer chooses once: in the Windows installer, or else on the first start.
+  // A newcomer chooses once, on the first start.
   let welcome=null;
   function showWelcome(){
     welcome=document.createElement('dialog');welcome.className='app-mode-welcome';
@@ -30,12 +30,7 @@ export function wireAppMode({navigate,host,isNewcomer=()=>false,installMode=asyn
     welcome.addEventListener('cancel',event=>event.preventDefault());
     document.body.append(welcome);labels();requestAnimationFrame(()=>welcome.showModal());
   }
-  async function firstStart(){
-    if(storage?.getItem(MODE_KEY))return;
-    const chosen=await installMode().catch(()=>null);
-    if(chosen==='music'||chosen==='all'){mode=chosen;save();apply();return;}
-    if(isNewcomer())showWelcome();
-  }
+  function firstStart(){if(!storage?.getItem(MODE_KEY)&&isNewcomer())showWelcome();}
   function labels(){
     text.textContent=t('Show only Devil Music');
     note.textContent=t('Downloads, Cinema, Cut and Convert are hidden. Switch back here at any time.');
@@ -46,6 +41,6 @@ export function wireAppMode({navigate,host,isNewcomer=()=>false,installMode=asyn
     all.querySelector('strong').textContent=t('Everything');all.querySelector('span').textContent=t('Music, downloads, Cinema, Cut and Convert.');
     music.querySelector('strong').textContent=t('Only Devil Music');music.querySelector('span').textContent=t('A music player and nothing else around it.');
   }
-  labels();onLanguageChange(labels);apply();void firstStart();
+  labels();onLanguageChange(labels);apply();firstStart();
   return {get mode(){return mode;}};
 }

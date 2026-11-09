@@ -227,7 +227,10 @@ export function createMusic({invoke,onDownload,storage}) {
   const lyricsButton=button(t("Lyrics"),"music-notes",()=>{if(presentation.toggleLyrics()||presentation.togglePreviewLyrics())return;presentation.open();});lyricsButton.dataset.i18nTitle="Lyrics";lyricsButton.dataset.i18nAriaLabel="Lyrics";extras.insertBefore(lyricsButton,queueButton);
   lyricsButton.classList.add('music-stage-lyrics-trigger','music-labeled-control');const lyricsLabel=el('span','music-control-label',t('Lyrics'));lyricsButton.append(lyricsLabel);onLanguageChange(()=>{lyricsLabel.textContent=t('Lyrics');});
   presentation.attachLyrics(lyrics,lyricsButton);
-  const lyricLines=wireLyricsLines({invoke,lyrics,audios:decks.nodes,isMiniOpen:()=>!!miniPlayer?.isOpen,isRemoteOn:()=>!!phoneRemote?.active});
+  // The mini-player gets lines only while its lyrics are switched on; it keeps that choice in shared storage.
+  const miniLyricsOn=()=>{try{return localStorage.getItem('deviload-mini-lyrics')==='1';}catch{return false;}};
+  const lyricLines=wireLyricsLines({invoke,lyrics,audios:decks.nodes,isMiniOpen:()=>!!miniPlayer?.isOpen&&miniLyricsOn(),isRemoteOn:()=>!!phoneRemote?.active});
+  window.addEventListener?.('storage',event=>{if(event.key==='deviload-mini-lyrics')lyricLines.refresh();});
   // Lyrics on the desktop: from the lyrics toolbar, and from the player's More menu.
   const desktopTool=button(t("Lyrics on the desktop"),"monitor",()=>lyricLines.toggle().catch(error=>status(errorText(error))),"music-lyrics-desktop");
   lyrics.addTool(desktopTool);

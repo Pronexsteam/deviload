@@ -54,7 +54,7 @@ Open the YouTube Music catalog and start listening without a Devil Music account
 - **Make it yours:** the Your own theme puts a photo, GIF or silent looping video behind the workspace. Adjust blur, darkening, panel transparency, ambient light and the accent color. Files up to 300 MB are accepted, roughly 2 to 5 minutes of Full HD video; a 10 to 60 second loop looks best.
 - **Arrange it your way:** Edit layout, in the Themes menu, lets you drag blocks and player buttons to another place, hide the ones you do not need, swap the side panels or reset everything. A folded library stays as a rail of icons and playlist covers.
 - **Look back at your listening:** open your week, month or year in a stats window with your top artists and songs.
-- **Only the music, if you like:** choose Only Devil Music in the installer or in music settings to open straight into the player. Updates and your library stay the same.
+- **Only the music, if you like:** choose Only Devil Music on the first start or later in music settings to open straight into the player. Updates and your library stay the same.
 - **Keep a copy:** queue an MP3 download from a song card or the player without interrupting playback. Supported completed audio downloads can play offline.
 - **Take your preferences with you:** export and restore a local music profile with likes, playlists and taste settings. The backup contains metadata, not music files or account credentials.
 
