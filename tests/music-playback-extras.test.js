@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {transitionPlan,sameAlbum} from "../src/music-transition-model.js";
 import {soundSettings} from "../src/music-sound-model.js";
+import {yieldStep,readYield,YIELD_KEY} from "../src/music-yield-model.js";
 import {createSleepTimer,sleepDim,sleepLabel} from "../src/music-sleep.js";
 import {romanize,needsRomanization,lyricsLanguage,lyricsExtrasFor,translatable} from "../src/music-romanize.js";
 
@@ -133,4 +134,19 @@ test("your own theme keeps usable settings and drops broken ones",()=>{
   assert.equal(normalizeCustom({accent:"red",background:{path:"x",kind:"exe"}}).accent,"");
   assert.equal(normalizeCustom({background:{path:"x",kind:"exe"}}).background,null);
   assert.deepEqual(customVariables({blur:10,dim:30,ambient:100}),{"--custom-blur":"10px","--custom-dim":"0.30","--custom-ambient":"1.00","--custom-panel":"0.66","--custom-accent":null});
+});
+
+test("music steps aside for another app only when asked, and resumes only if asked too", () => {
+  const off={pause:false,resume:false},pauseOnly={pause:true,resume:false},both={pause:true,resume:true};
+  assert.equal(yieldStep({yielded:false},{otherPlaying:true,musicPlaying:true,settings:off}).action,null);
+  let state=yieldStep({yielded:false},{otherPlaying:true,musicPlaying:true,settings:pauseOnly});
+  assert.deepEqual(state,{yielded:true,action:"pause"});
+  assert.deepEqual(yieldStep(state,{otherPlaying:false,musicPlaying:false,settings:pauseOnly}),{yielded:false,action:null});
+  state=yieldStep({yielded:false},{otherPlaying:true,musicPlaying:true,settings:both});
+  assert.deepEqual(yieldStep(state,{otherPlaying:false,musicPlaying:false,settings:both}),{yielded:false,action:"play"});
+  assert.equal(yieldStep({yielded:false},{otherPlaying:true,musicPlaying:false,settings:both}).action,null,"music that was not playing is left alone");
+  assert.equal(yieldStep({yielded:false},{otherPlaying:false,musicPlaying:false,settings:both}).action,null,"quiet without a pause does not start music");
+  const values=new Map();const storage={getItem:key=>values.get(key)??null};
+  assert.deepEqual(readYield(storage),{pause:false,resume:false},"both are off by default");
+  values.set(YIELD_KEY,"{broken");assert.deepEqual(readYield(storage),{pause:false,resume:false});
 });

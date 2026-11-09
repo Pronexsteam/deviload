@@ -1,14 +1,172 @@
-import {t,language,onLanguageChange,errorText} from './i18n.js';
-export function createMusicRemote({invoke,button,extras,getState,notify}){
- let active=false,pending=false,starting=false,link='',connected=false;
- const dialog=document.createElement('dialog');dialog.className='music-remote-dialog';dialog.setAttribute('aria-labelledby','music-remote-heading');
- const head=document.createElement('div');head.className='dialog-head';const title=document.createElement('h2');title.id='music-remote-heading';const close=button(t('Close'),'x-circle',()=>dialog.close());head.append(title,close);
- const qr=document.createElement('div');qr.className='music-remote-qr';const help=document.createElement('p'),status=document.createElement('p');status.setAttribute('role','status');
- const stop=button(t('Turn off'),null,async()=>{try{await invoke('music_remote_stop');active=false;link='';qr.replaceChildren();dialog.close();trigger.setAttribute('aria-pressed','false');}catch(e){status.textContent=errorText(e);}},'music-remote-stop');
- dialog.append(head,qr,help,status,stop);document.body.append(dialog);
- function labels(){title.textContent=t('Phone remote');help.textContent=t('Scan with your phone on the same Wi-Fi. Keep Deviload running. Allow access on private networks if the firewall asks.');close.title=close.ariaLabel=t('Close');stop.textContent=t('Turn off');trigger.title=trigger.ariaLabel=t('Phone remote');}
- const snapshot=()=>({player:{...getState(),theme:document.documentElement.dataset.theme||'ambient',variant:document.documentElement.dataset.variant||''},lang:language(),labels:{empty:t('Pick your first track'),play:t('Play'),pause:t('Pause'),previous:t('Previous track'),next:t('Next track'),repeat:t('Repeat queue'),shuffle:t('Shuffle'),mute:t('Mute'),volume:t('Volume'),seek:t('Playback position'),note:t('Sound plays on your computer.'),connected:t('Remote connected'),offline:t('Disconnected. Scan the QR code again.'),failed:t('Could not control playback.')}});
- async function sync(){if(!active||pending)return;pending=true;try{const result=await invoke('music_remote_update',{state:snapshot()});if(!result){active=false;link='';qr.replaceChildren();status.textContent=t('Disconnected. Scan the QR code again.');trigger.setAttribute('aria-pressed','false');return;}connected=result.connected;if(dialog.open)status.textContent=connected?t('Remote connected'):t('Waiting for your phone…');}catch{/* Playback stays independent from the remote. */}finally{pending=false;}}
- const trigger=button(t('Phone remote'),'phone-remote',async()=>{if(starting)return;starting=true;try{const result=await invoke('music_remote_start',{state:snapshot()});active=true;link=result.url;connected=result.connected;trigger.setAttribute('aria-pressed','true');qr.replaceChildren();new window.QRCode(qr,{text:link,width:230,height:230,colorDark:'#111111',colorLight:'#ffffff',correctLevel:window.QRCode.CorrectLevel.M});status.textContent=connected?t('Remote connected'):t('Waiting for your phone…');if(!dialog.open)dialog.showModal();close.focus();}catch(e){notify(errorText(e),true);}finally{starting=false;}});trigger.id='music-remote-open';trigger.setAttribute('aria-pressed','false');trigger.setAttribute('aria-haspopup','dialog');extras.append(trigger);
- labels();onLanguageChange(()=>{labels();sync();});document.addEventListener('deviload-theme-change',sync);setInterval(sync,500);return {sync};
+import { t, language, onLanguageChange, errorText } from "./i18n.js";
+import { artworkCandidates } from "./music-artwork.js";
+export function createMusicRemote({ invoke, button, extras, getState, getLyric = () => null, notify }) {
+  let active = false,
+    pending = false,
+    starting = false,
+    link = "",
+    connected = false;
+  const dialog = document.createElement("dialog");
+  dialog.className = "music-remote-dialog";
+  dialog.setAttribute("aria-labelledby", "music-remote-heading");
+  const head = document.createElement("div");
+  head.className = "dialog-head";
+  const title = document.createElement("h2");
+  title.id = "music-remote-heading";
+  const close = button(t("Close"), "x-circle", () => dialog.close());
+  head.append(title, close);
+  const qr = document.createElement("div");
+  qr.className = "music-remote-qr";
+  const help = document.createElement("p"),
+    status = document.createElement("p");
+  status.setAttribute("role", "status");
+  const stop = button(
+    t("Turn off"),
+    null,
+    async () => {
+      try {
+        await invoke("music_remote_stop");
+        active = false;
+        link = "";
+        qr.replaceChildren();
+        dialog.close();
+        trigger.setAttribute("aria-pressed", "false");
+      } catch (e) {
+        status.textContent = errorText(e);
+      }
+    },
+    "music-remote-stop",
+  );
+  // The code on one side, three short steps and the connection state on the other.
+  const steps = document.createElement("ol");
+  steps.className = "music-remote-steps";
+  const stepItems = [0, 1, 2].map(() => document.createElement("li"));
+  steps.append(...stepItems);
+  const dot = document.createElement("span");
+  dot.className = "music-remote-dot";
+  dot.setAttribute("aria-hidden", "true");
+  const state = document.createElement("div");
+  state.className = "music-remote-state";
+  state.append(dot, status);
+  const side = document.createElement("div");
+  side.className = "music-remote-side";
+  help.className = "music-remote-note";
+  side.append(steps, state, help, stop);
+  const layout = document.createElement("div");
+  layout.className = "music-remote-layout";
+  layout.append(qr, side);
+  dialog.append(head, layout);
+  document.body.append(dialog);
+  const showState = () => {
+    dialog.dataset.state = connected ? "connected" : "waiting";
+  };
+  function labels() {
+    title.textContent = t("Phone remote");
+    help.textContent = t(
+      "Keep Deviload running. If Windows asks about the firewall, allow access on private networks.",
+    );
+    stepItems[0].textContent = t("Connect your phone to the same Wi-Fi as this computer.");
+    stepItems[1].textContent = t("Point the phone camera at the code.");
+    stepItems[2].textContent = t("Control the music from your phone. The sound stays here.");
+    close.title = close.ariaLabel = t("Close");
+    stop.textContent = t("Turn off");
+    trigger.title = trigger.ariaLabel = t("Phone remote");
+  }
+  // The phone shows the cover large, so it gets the biggest size the provider offers.
+  const sharp = image => artworkCandidates(image, 1024)[0] || image || "";
+  const snapshot = () => ({
+    lyric: getLyric(),
+    player: {
+      ...getState(),
+      image: sharp(getState().image),
+      theme: document.documentElement.dataset.theme || "ambient",
+      variant: document.documentElement.dataset.variant || "",
+    },
+    lang: language(),
+    labels: {
+      empty: t("Pick your first track"),
+      play: t("Play"),
+      pause: t("Pause"),
+      previous: t("Previous track"),
+      next: t("Next track"),
+      repeat: t("Repeat queue"),
+      shuffle: t("Shuffle"),
+      mute: t("Mute"),
+      volume: t("Volume"),
+      seek: t("Playback position"),
+      note: t("Sound plays on your computer."),
+      connected: t("Remote connected"),
+      offline: t("Disconnected. Scan the QR code again."),
+      failed: t("Could not control playback."),
+    },
+  });
+  async function sync() {
+    if (!active || pending) return;
+    pending = true;
+    try {
+      const result = await invoke("music_remote_update", { state: snapshot() });
+      if (!result) {
+        active = false;
+        link = "";
+        qr.replaceChildren();
+        status.textContent = t("Disconnected. Scan the QR code again.");
+        trigger.setAttribute("aria-pressed", "false");
+        return;
+      }
+      connected = result.connected;
+      if (dialog.open) {
+        status.textContent = connected ? t("Remote connected") : t("Waiting for your phone…");
+        showState();
+      }
+    } catch {
+      /* Playback stays independent from the remote. */
+    } finally {
+      pending = false;
+    }
+  }
+  const trigger = button(t("Phone remote"), "phone-remote", async () => {
+    if (starting) return;
+    starting = true;
+    try {
+      const result = await invoke("music_remote_start", { state: snapshot() });
+      active = true;
+      link = result.url;
+      connected = result.connected;
+      trigger.setAttribute("aria-pressed", "true");
+      qr.replaceChildren();
+      new window.QRCode(qr, {
+        text: link,
+        width: 230,
+        height: 230,
+        colorDark: "#111111",
+        colorLight: "#ffffff",
+        correctLevel: window.QRCode.CorrectLevel.M,
+      });
+      status.textContent = connected ? t("Remote connected") : t("Waiting for your phone…");
+      showState();
+      if (!dialog.open) dialog.showModal();
+      stop.focus({ focusVisible: false });
+    } catch (e) {
+      notify(errorText(e), true);
+    } finally {
+      starting = false;
+    }
+  });
+  trigger.id = "music-remote-open";
+  trigger.setAttribute("aria-pressed", "false");
+  trigger.setAttribute("aria-haspopup", "dialog");
+  extras.append(trigger);
+  labels();
+  onLanguageChange(() => {
+    labels();
+    sync();
+  });
+  document.addEventListener("deviload-theme-change", sync);
+  setInterval(sync, 500);
+  return {
+    sync,
+    get active() {
+      return active;
+    },
+  };
 }

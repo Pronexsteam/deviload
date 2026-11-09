@@ -15,8 +15,22 @@ const capture=source.slice(source.indexOf('  function captureListening('),source
 const toggle=source.slice(source.indexOf('  $("music-private-session").addEventListener('),source.indexOf('  function renderWeekly('));
 const persistence=source.slice(source.indexOf('  function persistSession('),source.indexOf('  async function playbackSource('));
 const subtitle=source.slice(source.indexOf('function displaySubtitle('),source.indexOf('const time ='));
-const playing=source.split('\n').find(line=>line.includes('listen("playing",'));
-const boundary=source.split('\n').find(line=>line.includes('function listeningBoundary('));
+// The whole statement that starts at [marker], however many lines it spans: up to the bracket that closes
+// the first one opened, and its semicolon if any.
+function statement(code,marker){
+  const from=code.indexOf(marker);assert.notEqual(from,-1,marker);
+  let depth=0,quote='',opened=false;
+  for(let i=from;i<code.length;i++){
+    const c=code[i];
+    if(quote){if(c==='\\')i++;else if(c===quote)quote='';continue;}
+    if(c==='"'||c==="'"||c==='`')quote=c;
+    else if('({['.includes(c)){depth++;opened=true;}
+    else if(')}]'.includes(c)&&--depth===0&&opened){const end=code[i+1]===';'?i+2:i+1;if(c==='}'||code[i+1]===';')return code.slice(from,end);}
+  }
+  return code.slice(from);
+}
+const playing=statement(source,'decks.listen("playing",');
+const boundary=statement(source,'function listeningBoundary(');
 const song=n=>({id:String(n).padStart(11,'0'),title:`Track ${n}`,subtitle:'Artist',artists:['Artist'],kind:'song'});
 
 function player(){
@@ -26,7 +40,7 @@ function player(){
     weekly:createWeeklyStats(storage,{now:()=>1800000000000}),recommendationSession:createRecommendationSession(),recommendationRevision:0,listeningRevision:0,recordListening,remember,recommendationFamiliarity,rememberInterestTrack,profileWrites:0,sessionWrites:0,
     persist(){ctx.profileWrites++;},saveMusicProfile(_storage,profile){ctx.profileWrites++;ctx.lastProfile=profile;},saveMusicSession(){ctx.sessionWrites++;},storage,sessionTransition:false,queue:[song(1)],resolvedTrack:song(1).id,retryPosition:0,knownDuration:200,repeat:'off',shuffle:false,autoplay:true,sessionSavedAt:0,
     status(){},view:'favorites',homeCache:null,clearRecommendationContext(){ctx.recommendationSession.reset();ctx.playbackContext=[];ctx.playbackSourceContext={kind:'manual'};ctx.playbackOrigin='manual';},
-    t:value=>value,$:()=>control,listen:(name,fn)=>events[name]=fn,clearTimeout(){},bufferingTimer:null,artist:{},syncDock(){},performance:{now:()=>0}};
+    t:value=>value,$:()=>control,decks:{listen:(name,fn)=>events[name]=fn},clearTimeout(){},bufferingTimer:null,artist:{},syncDock(){},performance:{now:()=>0}};
   const actions=runInNewContext(`(()=>{${subtitle}\n${capture}\n${persistence}\n${toggle}\n${boundary}\n${playing}\nreturn {captureListening,persistSession};})()`,ctx);
   return {ctx,...actions,toggle(value){control.checked=value;handlers.change();},playing(){events.playing();},listen(seconds){ctx.clock.seconds=seconds;actions.captureListening();}};
 }

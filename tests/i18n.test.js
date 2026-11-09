@@ -14,7 +14,7 @@ import {SPOTIFY_MESSAGES} from '../src-tauri/spotify-import.mjs';
 const root = fileURLToPath(new URL("../", import.meta.url));
 const read = path => readFileSync(join(root, path), "utf8");
 const keys = new Set(Object.keys(ru));
-const translatedSources = ["src/cinema-youtube-player.js","src/cinema-home.js","src/cinema-player.js", "src/gallery-download.js", "src/main.js", "src/appearance.js", "src/app-release-notes.js", "src/supporters.js", "src/custom-theme.js", "src/devil-music.js", ...readdirSync(join(root,"src")).filter(name=>/^music-.*\.js$/.test(name)).map(name=>"src/"+name), "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/quick-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js", "src/download-profiles.js", "src/download-options.js", "src/queue-selection.js", "src/settings-backup.js"];
+const translatedSources = ["src/cinema-youtube-player.js","src/cinema-home.js","src/cinema-player.js", "src/gallery-download.js", "src/main.js", "src/appearance.js", "src/app-release-notes.js", "src/supporters.js", "src/custom-theme.js", "src/app-mode.js", "src/lyrics-overlay.js", "src/devil-music.js", ...readdirSync(join(root,"src")).filter(name=>/^music-.*\.js$/.test(name)).map(name=>"src/"+name), "src/tour.js", "src/devil-mascot.js", "src/devil-cut.js", "src/quick-cut.js", "src/cut-main.js", "src/converter.js", "src/export-folder.js", "src/download-profiles.js", "src/download-options.js", "src/queue-selection.js", "src/settings-backup.js"];
 // Brand names, formats and codes read the same in both languages.
 const neutral = new Set(["Devil Library", "MOV", "MEDIA", "Deviload", "Devil Music", "01 / DM", "Devil", "oad", "Devil Cut", "Devil Cut · Deviload", "Devil Convert", "Devil Convert · Deviload", "DEVIL CINEMA", "YouTube", "YouTube Music", "VK", "TikTok",
   "Instagram", "Twitch", "SoundCloud", "1080p", "720p", "480p", "1440p", "4K", "H.264", "H.265", "MP3", "FLAC", "WAV", "GIF", "GIF · 480px", "Chrome", "Edge", "Ctrl K",
@@ -48,7 +48,7 @@ function translatedLiterals(code, words = false) {
 }
 
 function htmlStrings() {
-  const profileHtml=[...(read("src/download-profiles.js")+read("src/settings-backup.js")).matchAll(/innerHTML='([^']*)'/g)].map(match=>match[1]).join('');
+  const profileHtml=[...(read("src/download-profiles.js")+read("src/settings-backup.js")).matchAll(/innerHTML\s*=\s*'([^']*)'/g)].map(match=>match[1]).join('');
   const html = (read("src/index.html") + read("src/cut.html") + read("src/converter.html")+profileHtml).replace(/<(script|style)[\s\S]*?<\/\1>/g, "").replace(/<svg[\s\S]*?<\/svg>/g, "");
   const strings = new Set();
   for (const [, text] of html.matchAll(/>([^<]+)</g)) if (text.trim()) strings.add(text.trim());
@@ -57,7 +57,7 @@ function htmlStrings() {
   }
   for(const file of ['src/download-profiles.js','src/download-profile-data.js','src/download-options.js','src/quick-cut.js','src/settings-backup.js','src/cut-editing.js','src/converter-model.js',...translatedSources.filter(path=>path.startsWith('src/music-'))]) {
     for(const [,message] of read(file).matchAll(/(?:Error|warn)\(["']([^"']+)["']/g))strings.add(message);
-    for(const [,message] of read(file).matchAll(/warnings\.push\("([^"]+)"/g))strings.add(message);
+    for(const [,message] of read(file).matchAll(/warnings\.push\(\s*"([^"]+)"/g))strings.add(message);
   }
   for(const error of ["HTTP 429", "restricted", "timed out", "Music engine is busy", "Could not start music engine", "Network failed", "decode", "unsupported", "Invalid music engine response", "unknown", "unplayable", "HTTP 403", "not available in your country"]){
     strings.add(playbackFailure(error).message);
@@ -99,13 +99,13 @@ function rustMessages() {
 }
 
 function tableStrings() {
-  const cinemaLabels=[...read('src/cinema-controls.js').matchAll(/(?:button|label)\((?:\w+,)?'([^']+)'/g)].map(match=>match[1]);
+  const cinemaLabels=[...read('src/cinema-controls.js').matchAll(/(?:button|label)\(\s*(?:\w+,\s*)?["']([^"']+)["']/g)].map(match=>match[1]);
   const main = read("src/main.js");
   const tables = [
     block(main, "const stateNames =", "\n"), block(main, "const filters =", "\n"), block(main, "const pageTitles =", "\n"),
     block(main, "const description =", "\n"), block(main, "const emptyTitle =", ";"),
-    block(main, "const title = {retry:", "\n"), block(main, "for (const [direction,title,icon] of", "\n"),
-    ...[...read("src/tour.js").matchAll(/(?:title|text):"[^"]*"/g)].map(match => match[0]),
+    block(main, "const title = {", "\n"), block(main, "for (const [direction, title, icon] of", "\n"),
+    ...[...read("src/tour.js").matchAll(/(?:title|text):\s*"[^"]*"/g)].map(match => match[0]),
   ];
   const strings = tables.flatMap(literals).filter(text => !/^[a-z0-9-]+$/.test(text) && !text.endsWith("-tab"));
   strings.push(...cinemaLabels,...translatedLiterals(read('src/cinema-controls.js')));
@@ -134,10 +134,23 @@ function tableStrings() {
   return strings;
 }
 
+// The code that starts with [start] and ends at [end]. A declaration that used to fit on one line (ending
+// at a line break) is read up to the bracket that closes its first object or array, since it may now span
+// several lines.
 function block(code, start, end) {
   const from = code.indexOf(start);
   assert.notEqual(from, -1, start);
-  return code.slice(from, code.indexOf(end, from + start.length));
+  const open = code.slice(from + start.length).search(/[{[]/), stop = code.indexOf(end, from + start.length);
+  if (end !== "\n" || open < 0) return code.slice(from, stop);
+  let depth = 0, quote = "";
+  for (let i = from + start.length + open; i < code.length; i++) {
+    const c = code[i];
+    if (quote) { if (c === "\\") i++; else if (c === quote) quote = ""; continue; }
+    if (c === '"' || c === "'" || c === "`") quote = c;
+    else if (c === "{" || c === "[") depth++;
+    else if ((c === "}" || c === "]") && --depth === 0) return code.slice(from, i + 1);
+  }
+  return code.slice(from);
 }
 
 test("static HTML text has a Russian translation", () => {

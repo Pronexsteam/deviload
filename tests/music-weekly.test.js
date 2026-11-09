@@ -65,3 +65,33 @@ test("repeated spellings of the same artist are counted once per delta",()=>{
   stats.record({item:{...song(),artists:["Artist","artist"," Artist "]},seconds:10});
   assert.equal(stats.summary().topArtistSeconds,10);
 });
+
+test("the most listened songs and artists of the week are ranked by time and survive a restart", () => {
+  const saved=storage(),stats=createWeeklyStats(saved,{now:()=>date(14)});
+  stats.record({item:{id:"aaaaaaaaaaa",title:"First  song",artists:["Band A","Guest"]},seconds:300,qualified:true});
+  stats.record({item:{id:"bbbbbbbbbbb",title:"Second",artists:["Band B"]},seconds:120,qualified:true});
+  stats.record({item:{id:"aaaaaaaaaaa",title:"First  song",artists:["Band A"]},seconds:60});
+  assert.deepEqual(stats.songs(5).map(song=>[song.id,song.title,song.artist,Math.round(song.seconds)]),[["aaaaaaaaaaa","First song","Band A",360],["bbbbbbbbbbb","Second","Band B",120]]);
+  assert.deepEqual(stats.artists(2).map(artist=>artist.name),["Band A","Guest"]);
+  const again=createWeeklyStats(saved,{now:()=>date(14)});
+  assert.deepEqual(again.songs(1).map(song=>song.id),["aaaaaaaaaaa"]);
+  assert.equal(createWeeklyStats(saved,{now:()=>date(30)}).songs().length,0,"songs older than a week are forgotten");
+});
+
+test("days leaving the week are folded into a monthly archive for Recap", () => {
+  let now=date(3,12);const saved=storage(),stats=createWeeklyStats(saved,{now:()=>now});
+  stats.record({item:{id:"aaaaaaaaaaa",title:"Early",artists:["Band A"]},seconds:600,qualified:true});
+  now=date(5,12);stats.record({item:{id:"bbbbbbbbbbb",title:"Later",artists:["Band B"]},seconds:300,qualified:true});
+  now=date(20,12);
+  const later=createWeeklyStats(saved,{now:()=>now});
+  assert.equal(later.summary().totalSeconds,0,"the week no longer holds them");
+  const month=later.recap("month");
+  assert.equal(Math.round(month.seconds),900);assert.equal(month.plays,2);
+  assert.deepEqual(month.artists.map(artist=>artist.name),["Band A","Band B"]);
+  assert.deepEqual(month.songs.map(song=>song.title),["Early","Later"]);
+  later.record({item:{id:"aaaaaaaaaaa",title:"Early",artists:["Band A"]},seconds:120,qualified:true});
+  const year=later.recap("year");
+  assert.equal(Math.round(year.seconds),1020);assert.equal(year.months.length,12);
+  assert.equal(Math.round(year.months.reduce((sum,entry)=>sum+entry.seconds,0)),1020);
+  assert.equal(createWeeklyStats(saved,{now:()=>now}).recap("month").plays,3,"the archive survives a restart");
+});

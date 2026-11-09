@@ -1,18 +1,64 @@
 /* Devil Music surfaces for the separate Devil Convert window. */
-:root{--surf-line:color-mix(in srgb,var(--workspace-ink,#fff) 10%,transparent);--surf-fill:color-mix(in srgb,var(--workspace-ink,#fff) 5%,transparent);--surf-hover:color-mix(in srgb,var(--workspace-ink,#fff) 9%,transparent);--tool-card-radius:24px;--tool-control-radius:14px}
+:root {
+  --surf-line: color-mix(in srgb, var(--workspace-ink, #fff) 10%, transparent);
+  --surf-fill: color-mix(in srgb, var(--workspace-ink, #fff) 5%, transparent);
+  --surf-hover: color-mix(in srgb, var(--workspace-ink, #fff) 9%, transparent);
+  --tool-card-radius: 24px;
+  --tool-control-radius: 14px;
+}
 
-:root[data-theme] body.convert-page :is(.convert-drop,.convert-source,.convert-actions,.convert-options){border:1px solid var(--surf-line);border-radius:var(--tool-card-radius);background:var(--surf-fill);box-shadow:none}
-:root[data-theme] body.convert-page .convert-drop{border-style:dashed}
-:root[data-theme] body.convert-page .convert-preview{border-color:var(--surf-line);border-radius:18px;background:var(--surf-fill)}
+:root[data-theme] body.convert-page :is(.convert-drop, .convert-source, .convert-actions, .convert-options) {
+  border: 1px solid var(--surf-line);
+  border-radius: var(--tool-card-radius);
+  background: var(--surf-fill);
+  box-shadow: none;
+}
+:root[data-theme] body.convert-page .convert-drop {
+  border-style: dashed;
+}
+:root[data-theme] body.convert-page .convert-preview {
+  border-color: var(--surf-line);
+  border-radius: 18px;
+  background: var(--surf-fill);
+}
 
 /* Action tiles around the wheel: rounder, with the chosen one clearly lifted. */
-:root[data-theme] body.convert-page .convert-actions button:not(.outline,.quiet,.primary){border:1px solid var(--surf-line);border-radius:18px;background:var(--surf-fill)}
-:root[data-theme] body.convert-page .convert-actions button:not(.outline,.quiet,.primary):hover{background:var(--surf-hover)}
-:root[data-theme] body.convert-page .convert-actions button.selected{border-color:color-mix(in srgb,var(--workspace-ink,#f2f3f7) 55%,transparent);background:var(--surf-hover)}
+:root[data-theme] body.convert-page .convert-actions button:not(.outline, .quiet, .primary) {
+  border: 1px solid var(--surf-line);
+  border-radius: 18px;
+  background: var(--surf-fill);
+}
+:root[data-theme] body.convert-page .convert-actions button:not(.outline, .quiet, .primary):hover {
+  background: var(--surf-hover);
+}
+:root[data-theme] body.convert-page .convert-actions button.selected {
+  border-color: color-mix(in srgb, var(--workspace-ink, #f2f3f7) 55%, transparent);
+  background: var(--surf-hover);
+}
 
-:root[data-theme] body.convert-page :is(select,input:not([type="checkbox"],[type="radio"],[type="range"]),.export-folder-name){border-color:var(--surf-line);border-radius:var(--tool-control-radius);background-color:var(--surf-fill)}
-:root[data-theme] body.convert-page :is(select,input:not([type="checkbox"],[type="radio"],[type="range"])):focus{outline:none;border-color:color-mix(in srgb,var(--workspace-ink,#f2f3f7) 34%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--workspace-ink,#f2f3f7) 8%,transparent)}
-:root[data-theme] body.convert-page :is(button.outline,button.quiet,button.primary){border-radius:999px}
+:root[data-theme]
+  body.convert-page
+  :is(select, input:not([type="checkbox"], [type="radio"], [type="range"]), .export-folder-name) {
+  border-color: var(--surf-line);
+  border-radius: var(--tool-control-radius);
+  background-color: var(--surf-fill);
+}
+:root[data-theme]
+  body.convert-page
+  :is(select, input:not([type="checkbox"], [type="radio"], [type="range"])):focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--workspace-ink, #f2f3f7) 34%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--workspace-ink, #f2f3f7) 8%, transparent);
+}
+:root[data-theme] body.convert-page :is(button.outline, button.quiet, button.primary) {
+  border-radius: 999px;
+}
 
 /* The action bar floats like the music player bar. */
-:root[data-theme] body.convert-page .convert-foot{margin:0 0 16px;border:1px solid var(--surf-line);border-radius:var(--tool-card-radius);background:var(--surf-fill);backdrop-filter:blur(18px)}
+:root[data-theme] body.convert-page .convert-foot {
+  margin: 0 0 16px;
+  border: 1px solid var(--surf-line);
+  border-radius: var(--tool-card-radius);
+  background: var(--surf-fill);
+  backdrop-filter: blur(18px);
+}

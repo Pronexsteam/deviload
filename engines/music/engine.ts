@@ -4,7 +4,7 @@ import { buildSabrFormat, EnabledTrackTypes } from 'googlevideo/utils';
 import { safe } from './runtime.ts';
 import { restricted, playbackError } from './errors.ts';
 import { fileURLToPath } from 'node:url';
-import { AudioCache, TRACK_LIMIT, byteRange, readBytes, writeBytes, same, validId } from './storage.ts';
+import { AudioCache, TRACK_LIMIT, byteRange, readBytes, writeBytes, same, validId, validLoudness } from './storage.ts';
 import { pendingOpening } from './opening.ts';
 import { idleRelease } from './idle.ts';
 import { stallClock } from './stall.ts';
@@ -71,7 +71,7 @@ function protectedFiles() {return new Set([...sessions.values()].filter(t=>t.id=
 class Track {
   token=crypto.randomUUID();file=crypto.randomUUID()+'.audio';prefix=new Uint8Array();ranges=new Ranges();complete=false;error='';readers=0;
   control=new AbortController();started=false;at=Date.now();epoch=cache.epoch;
-  readAt=0;parked=false;choice={height:0,wanted:0,heights:[] as number[]};
+  readAt=0;parked=false;choice={height:0,wanted:0,heights:[] as number[]};loudness:number|undefined;
   index:SegmentIndex|undefined;resume:Snapshot|undefined;want:number|undefined;claim=0;sessionAt=0;starts=0;session:{from:number;control:AbortController}|undefined;
   constructor(readonly id:string,readonly size:number,readonly itag=140,readonly video=false){}
   async read(offset:number,length:number,reader=0,gone=()=>false) {
@@ -136,7 +136,7 @@ class Track {
     }finally{file.close();}
     this.complete=true;this.prefix=new Uint8Array();
     if(this.video)return;
-    await cache.commit({id:this.id,file:this.file,size:this.size,at:Date.now()},this.epoch);
+    await cache.commit({id:this.id,file:this.file,size:this.size,at:Date.now(),...(validLoudness(this.loudness)?{loudness:this.loudness}:{})},this.epoch);
   }
   async stream(file:Deno.FsFile){
     // Only uncached foreground audio needs the heavier guest session.
@@ -246,7 +246,7 @@ async function getTrack(id:string,preload:boolean,refresh:boolean,generation:num
   const openingSignal=AbortSignal.any([control.signal,AbortSignal.timeout(5000)]);openingDeadlines.set(id,openingSignal);
   const job=(async()=>{
     const cached=!refresh?await cache.find(id):undefined;
-    if(cached){track=new Track(id,cached.size);track.file=cached.file;track.ranges.add(0,cached.size);track.complete=true;}
+    if(cached){track=new Track(id,cached.size);track.file=cached.file;track.ranges.add(0,cached.size);track.complete=true;track.loudness=cached.loudness;}
     else{
       if(preload&&[...sessions.values()].some(t=>!t.complete&&t.id!==selected&&t.id!==id&&!t.control.signal.aborted))throw Error('Preload busy');
       const info=await client.getBasicInfo(id,{client:'IOS'});
@@ -258,7 +258,7 @@ async function getTrack(id:string,preload:boolean,refresh:boolean,generation:num
       await cache.makeSpace(reserved,protectedFiles());
       const url=new URL(await format.decipher(client.session.player));
       if(url.protocol!=='https:'||!url.hostname.endsWith('.googlevideo.com'))throw Error('Invalid audio source');
-      track=new Track(id,size);track.prefix=await openingBytes(url,info.cpn,size,openingSignal);
+      track=new Track(id,size);const loudness=Number(format.loudness_db);if(validLoudness(loudness))track.loudness=loudness;track.prefix=await openingBytes(url,info.cpn,size,openingSignal);
     }
     if(control.signal.aborted||(generation!==selection&&selected!==id))throw Error('Cancelled');
     sessions.get(id)?.cancel();sessions.set(id,track!);
@@ -296,6 +296,8 @@ emit({event:'ready',port:server.addr.port,version:'1.0.0'});
 async function command(cmd:any){
   try{
     if(cmd.action==='prepare'){return;}
+    // How loud the recording is, for optional volume levelling; null when unknown.
+    if(cmd.action==='loudness'){if(!validId(cmd.id))throw Error('Invalid music request');const value=sessions.get(cmd.id)?.loudness??(await cache.find(cmd.id))?.loudness;emit({key:cmd.key,data:validLoudness(value)?value:null});return;}
     if(cmd.action==='reserve'){const p=pending.get(cmd.key);if(p){pending.delete(cmd.key);clearTimeout(p.timer);cmd.error?p.reject(Error(cmd.error)):p.resolve(cmd);}return;}
     if(cmd.action==='cancel'){
       if(Number(cmd.generation)<foregroundGeneration)return;

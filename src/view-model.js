@@ -1,13 +1,28 @@
-export const labels = Object.freeze({queued:"Queued",running:"Downloading",done:"Done",skipped:"Already downloaded",error:"Error",cancelling:"Cancelling…",pausing:"Pausing…",paused:"Paused",cancelled:"Cancelled",interrupted:"Interrupted"});
+export const labels = Object.freeze({
+  queued: "Queued",
+  running: "Downloading",
+  done: "Done",
+  skipped: "Already downloaded",
+  error: "Error",
+  cancelling: "Cancelling…",
+  pausing: "Pausing…",
+  paused: "Paused",
+  cancelled: "Cancelled",
+  interrupted: "Interrupted",
+});
 export function actions(status) {
-  if (["queued","running"].includes(status)) return ["pause","cancel"];
-  if (status === "paused") return ["resume","cancel"];
-  if (["error","cancelled","interrupted"].includes(status)) return ["retry"];
+  if (["queued", "running"].includes(status)) return ["pause", "cancel"];
+  if (status === "paused") return ["resume", "cancel"];
+  if (["error", "cancelled", "interrupted"].includes(status)) return ["retry"];
   return [];
 }
 export function counts(jobs) {
-  const queue = jobs.filter(j=>!j.hiddenInQueue);
-  return {total:queue.length,active:queue.filter(j=>["running","cancelling","pausing"].includes(j.status)).length,done:queue.filter(j=>["done","skipped"].includes(j.status)).length};
+  const queue = jobs.filter(j => !j.hiddenInQueue);
+  return {
+    total: queue.length,
+    active: queue.filter(j => ["running", "cancelling", "pausing"].includes(j.status)).length,
+    done: queue.filter(j => ["done", "skipped"].includes(j.status)).length,
+  };
 }
 
 // Finished files the library still shows; the queue may have dropped them.
@@ -17,44 +32,71 @@ export function inLibrary(job) {
 
 export function mediaIdentity(raw) {
   try {
-    const url=new URL(raw);
-    if(!['https:','http:'].includes(url.protocol))return '';
-    const host=url.hostname.toLowerCase().replace(/^www\./,'');
-    if(['youtube.com','m.youtube.com','music.youtube.com','youtu.be'].includes(host)){
-      const parts=url.pathname.split('/');
-      const id=host==='youtu.be'?parts[1]:url.searchParams.get('v')||(['shorts','live','embed'].includes(parts[1])?parts[2]:'');
-      if(/^[a-zA-Z0-9_-]{11}$/.test(id||''))return 'youtube:'+id;
+    const url = new URL(raw);
+    if (!["https:", "http:"].includes(url.protocol)) return "";
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+    if (["youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"].includes(host)) {
+      const parts = url.pathname.split("/");
+      const id =
+        host === "youtu.be"
+          ? parts[1]
+          : url.searchParams.get("v") || (["shorts", "live", "embed"].includes(parts[1]) ? parts[2] : "");
+      if (/^[a-zA-Z0-9_-]{11}$/.test(id || "")) return "youtube:" + id;
     }
-    url.hostname=host;url.hash='';url.pathname=url.pathname.replace(/\/$/,'');
-    for(const key of [...url.searchParams.keys()])if(/^utm_/i.test(key)||['igsh','igshid','fbclid','si'].includes(key))url.searchParams.delete(key);
-    url.searchParams.sort();return url.href;
-  } catch { return ''; }
+    url.hostname = host;
+    url.hash = "";
+    url.pathname = url.pathname.replace(/\/$/, "");
+    for (const key of [...url.searchParams.keys()])
+      if (/^utm_/i.test(key) || ["igsh", "igshid", "fbclid", "si"].includes(key))
+        url.searchParams.delete(key);
+    url.searchParams.sort();
+    return url.href;
+  } catch {
+    return "";
+  }
 }
 
 export function isProcessing(job) {
-  return job.status==='running'&&!job.live&&(['processing','merging','remuxing','converting','saving'].includes(job.stage)||(!job.stage&&Number(job.percent)>=99.95));
+  return (
+    job.status === "running" &&
+    !job.live &&
+    (["processing", "merging", "remuxing", "converting", "saving"].includes(job.stage) ||
+      (!job.stage && Number(job.percent) >= 99.95))
+  );
 }
 
-export function hostCooldown(job, limits, now = Date.now()/1000) {
-  if(job.status!=='queued'||Number(job.scheduledAt)>now)return null;
-  let host;try{host=new URL(job.url).hostname.toLowerCase().replace(/\.$/,'');}catch{return null;}
-  const groups=[['youtube.com'],['facebook.com','fb.com'],['x.com','twitter.com'],['instagram.com'],['tiktok.com']];
-  if(host==='youtu.be')host='youtube.com';if(host==='fb.watch')host='facebook.com';
-  const aliases=groups.find(group=>group.some(base=>host===base||host.endsWith('.'+base)));
-  host=aliases?.[0]||host;
-  const deadline=limits.find(item=>item.host===host&&Number.isFinite(item.until)&&item.until>now);
-  return deadline?{host,minutes:Math.max(1,Math.ceil((deadline.until-now)/60))}:null;
+export function hostCooldown(job, limits, now = Date.now() / 1000) {
+  if (job.status !== "queued" || Number(job.scheduledAt) > now) return null;
+  let host;
+  try {
+    host = new URL(job.url).hostname.toLowerCase().replace(/\.$/, "");
+  } catch {
+    return null;
+  }
+  const groups = [
+    ["youtube.com"],
+    ["facebook.com", "fb.com"],
+    ["x.com", "twitter.com"],
+    ["instagram.com"],
+    ["tiktok.com"],
+  ];
+  if (host === "youtu.be") host = "youtube.com";
+  if (host === "fb.watch") host = "facebook.com";
+  const aliases = groups.find(group => group.some(base => host === base || host.endsWith("." + base)));
+  host = aliases?.[0] || host;
+  const deadline = limits.find(item => item.host === host && Number.isFinite(item.until) && item.until > now);
+  return deadline ? { host, minutes: Math.max(1, Math.ceil((deadline.until - now) / 60)) } : null;
 }
 
 export function orbState(jobs) {
-  if (jobs.some(j=>j.status==="running")) return "running";
-  if (jobs.some(j=>j.status==="cancelling")) return "cancelling";
-  if (jobs.some(j=>j.status==="pausing")) return "pausing";
-  if (jobs.some(j=>j.status==="queued")) return "queued";
-  if (jobs.some(j=>j.status==="paused")) return "paused";
-  if (jobs.some(j=>j.status==="error")) return "error";
-  if (jobs.some(j=>j.status==="interrupted")) return "interrupted";
-  if (jobs.some(j=>j.status==="done")) return "done";
+  if (jobs.some(j => j.status === "running")) return "running";
+  if (jobs.some(j => j.status === "cancelling")) return "cancelling";
+  if (jobs.some(j => j.status === "pausing")) return "pausing";
+  if (jobs.some(j => j.status === "queued")) return "queued";
+  if (jobs.some(j => j.status === "paused")) return "paused";
+  if (jobs.some(j => j.status === "error")) return "error";
+  if (jobs.some(j => j.status === "interrupted")) return "interrupted";
+  if (jobs.some(j => j.status === "done")) return "done";
   return "idle";
 }
 
@@ -66,11 +108,17 @@ export function mediaPreview(raw) {
     if (host === "youtu.be") id = url.pathname.split("/")[1] || "";
     else if (["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"].includes(host)) {
       const parts = url.pathname.split("/");
-      id = parts[1] === "watch" ? url.searchParams.get("v") || "" :
-        ["shorts", "live", "embed"].includes(parts[1]) ? parts[2] || "" : "";
+      id =
+        parts[1] === "watch"
+          ? url.searchParams.get("v") || ""
+          : ["shorts", "live", "embed"].includes(parts[1])
+            ? parts[2] || ""
+            : "";
     }
     return /^[a-zA-Z0-9_-]{11}$/.test(id) ? "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg" : "";
-  } catch { return ""; }
+  } catch {
+    return "";
+  }
 }
 
 export function visibleJobs(jobs, filter = "all", query = "") {
@@ -79,8 +127,11 @@ export function visibleJobs(jobs, filter = "all", query = "") {
     if (job.hiddenInQueue) return false;
     const status = job.status;
     const scheduled = status === "queued" && job.scheduledAt != null;
-    const matchesFilter = filter === "all" ||
-      (filter === "active" && !scheduled && ["queued", "running", "cancelling", "pausing", "paused"].includes(status)) ||
+    const matchesFilter =
+      filter === "all" ||
+      (filter === "active" &&
+        !scheduled &&
+        ["queued", "running", "cancelling", "pausing", "paused"].includes(status)) ||
       (filter === "scheduled" && scheduled) ||
       (filter === "done" && ["done", "skipped"].includes(status)) ||
       (filter === "issues" && ["error", "interrupted"].includes(status));
@@ -89,99 +140,259 @@ export function visibleJobs(jobs, filter = "all", query = "") {
 }
 
 export function playlistSelection(indices) {
-  const sorted = [...new Set(indices.filter(n => Number.isInteger(n) && n > 0))].sort((a,b) => a-b);
+  const sorted = [...new Set(indices.filter(n => Number.isInteger(n) && n > 0))].sort((a, b) => a - b);
   const groups = [];
   for (const value of sorted) {
     const last = groups.at(-1);
     if (last && value === last[1] + 1) last[1] = value;
-    else groups.push([value,value]);
+    else groups.push([value, value]);
   }
   // A singleton uses N-N because a plain N is the legacy "first N items" setting.
-  return groups.map(([first,last]) => first + "-" + last).join(",");
+  return groups.map(([first, last]) => first + "-" + last).join(",");
 }
 
 // Titles and messages are English source strings; the UI translates them.
 // `action` names the fix the task card offers: "login" or "update".
 const ISSUES = [
-  [/no space left|disk full|errno 28|winerror 112/, "Disk is full", "Not enough space in the destination folder. Free some space and retry.", ""],
-  [/js runtimes?: none|n challenge solving failed|signature solving failed|nsig extraction failed|signature extraction failed/, "YouTube changed its protection", "yt-dlp could not solve YouTube's check. Update yt-dlp; Deno must stay in the bin folder.", "update"],
-  [/sign in to confirm you.re not a bot/, "YouTube asks to sign in", "YouTube wants a signed-in session for this network. Sign in to YouTube and retry.", "login"],
-  [/age-restricted|sign in to confirm your age|age.verification|inappropriate for some users/, "Age check", "This video needs an age-verified Google account. Sign in; if it still fails, confirm your age on youtube.com once.", "login"],
-  [/private video/, "Private video", "Only accounts the owner shared the video with can download it. Sign in with such an account.", "login"],
-  [/members-only|join this channel|members only/, "Members only", "This video is for channel members. Sign in with an account that has the membership.", "login"],
-  [/unable to connect to proxy|proxyerror|proxy connection|sockshttps?connection|socks\d?[a-z]? (?:proxy )?(?:error|server)|tunnel connection failed/, "Proxy not responding", "Deviload could not reach the proxy. Check its address in the settings or clear it to connect directly.", "proxy"],
-  [/available in your country|geo.?restrict|geo.?block|from your location/, "Not available in your region", "The owner blocked this video in your country. Set a proxy in another country in the settings.", "proxy"],
-  [/video (is )?unavailable|has been removed|been terminated|no longer available|does not exist/, "Video unavailable", "The video was removed or hidden. Check the link in a browser.", ""],
-  [/http error 429|too many requests/, "Too many requests", "YouTube slowed down this network. Wait a few minutes or sign in and retry.", "login"],
-  [/(?:ffmpeg|ffprobe)\S* not found|ffmpeg is not installed/, "FFmpeg is missing", "FFmpeg or FFprobe is missing. Put them into the bin folder next to Deviload.", ""],
-  [/requested format is not available|format is not available/, "Format not available", "This video has no such format. Pick a lower quality and add the link again.", ""],
-  [/unsupported url|no suitable extractor/, "Unsupported link", "yt-dlp does not support this site or address. Check the link.", ""],
-  [/http error 403|forbidden/, "Download refused", "The site refused the download. Update yt-dlp; if it keeps failing, sign in.", "update"],
-  [/timed out|timeout|connection reset|connection aborted|temporary failure|network is unreachable|getaddrinfo failed|winerror 10054/, "Network error", "The connection dropped. Retry the task when the network is back.", ""],
-  [/login required|cookies|authentication/, "Sign-in needed", "Access needs a signed-in YouTube account.", "login"],
+  [
+    /no space left|disk full|errno 28|winerror 112/,
+    "Disk is full",
+    "Not enough space in the destination folder. Free some space and retry.",
+    "",
+  ],
+  [
+    /js runtimes?: none|n challenge solving failed|signature solving failed|nsig extraction failed|signature extraction failed/,
+    "YouTube changed its protection",
+    "yt-dlp could not solve YouTube's check. Update yt-dlp; Deno must stay in the bin folder.",
+    "update",
+  ],
+  [
+    /sign in to confirm you.re not a bot/,
+    "YouTube asks to sign in",
+    "YouTube wants a signed-in session for this network. Sign in to YouTube and retry.",
+    "login",
+  ],
+  [
+    /age-restricted|sign in to confirm your age|age.verification|inappropriate for some users/,
+    "Age check",
+    "This video needs an age-verified Google account. Sign in; if it still fails, confirm your age on youtube.com once.",
+    "login",
+  ],
+  [
+    /private video/,
+    "Private video",
+    "Only accounts the owner shared the video with can download it. Sign in with such an account.",
+    "login",
+  ],
+  [
+    /members-only|join this channel|members only/,
+    "Members only",
+    "This video is for channel members. Sign in with an account that has the membership.",
+    "login",
+  ],
+  [
+    /unable to connect to proxy|proxyerror|proxy connection|sockshttps?connection|socks\d?[a-z]? (?:proxy )?(?:error|server)|tunnel connection failed/,
+    "Proxy not responding",
+    "Deviload could not reach the proxy. Check its address in the settings or clear it to connect directly.",
+    "proxy",
+  ],
+  [
+    /available in your country|geo.?restrict|geo.?block|from your location/,
+    "Not available in your region",
+    "The owner blocked this video in your country. Set a proxy in another country in the settings.",
+    "proxy",
+  ],
+  [
+    /video (is )?unavailable|has been removed|been terminated|no longer available|does not exist/,
+    "Video unavailable",
+    "The video was removed or hidden. Check the link in a browser.",
+    "",
+  ],
+  [
+    /http error 429|too many requests/,
+    "Too many requests",
+    "YouTube slowed down this network. Wait a few minutes or sign in and retry.",
+    "login",
+  ],
+  [
+    /(?:ffmpeg|ffprobe)\S* not found|ffmpeg is not installed/,
+    "FFmpeg is missing",
+    "FFmpeg or FFprobe is missing. Put them into the bin folder next to Deviload.",
+    "",
+  ],
+  [
+    /requested format is not available|format is not available/,
+    "Format not available",
+    "This video has no such format. Pick a lower quality and add the link again.",
+    "",
+  ],
+  [
+    /unsupported url|no suitable extractor/,
+    "Unsupported link",
+    "yt-dlp does not support this site or address. Check the link.",
+    "",
+  ],
+  [
+    /http error 403|forbidden/,
+    "Download refused",
+    "The site refused the download. Update yt-dlp; if it keeps failing, sign in.",
+    "update",
+  ],
+  [
+    /timed out|timeout|connection reset|connection aborted|temporary failure|network is unreachable|getaddrinfo failed|winerror 10054/,
+    "Network error",
+    "The connection dropped. Retry the task when the network is back.",
+    "",
+  ],
+  [
+    /login required|cookies|authentication/,
+    "Sign-in needed",
+    "Access needs a signed-in YouTube account.",
+    "login",
+  ],
 ];
 
 // Sites Deviload can sign in to besides YouTube, by the hosts of their links.
-const SIGN_IN_SITES = [["instagram.com", "instagram", "Instagram"], ["tiktok.com", "tiktok", "TikTok"], ["x.com", "x", "X"], ["twitter.com", "x", "X"]];
+const SIGN_IN_SITES = [
+  ["instagram.com", "instagram", "Instagram"],
+  ["tiktok.com", "tiktok", "TikTok"],
+  ["x.com", "x", "X"],
+  ["twitter.com", "x", "X"],
+];
 export function signInSite(url) {
   try {
     const host = new URL(url).hostname.toLowerCase();
     const found = SIGN_IN_SITES.find(([known]) => host === known || host.endsWith("." + known));
-    return found ? {key:found[1], name:found[2]} : null;
-  } catch { return null; }
+    return found ? { key: found[1], name: found[2] } : null;
+  } catch {
+    return null;
+  }
 }
 
 function isYouTube(url) {
-  try { const host = new URL(url).hostname.toLowerCase(); return host === "youtu.be" || host === "youtube.com" || host.endsWith(".youtube.com"); }
-  catch { return true; }
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host === "youtu.be" || host === "youtube.com" || host.endsWith(".youtube.com");
+  } catch {
+    return true;
+  }
 }
 
 function isFacebook(url) {
   try {
     const host = new URL(url).hostname.toLowerCase();
-    return ["facebook.com", "fb.watch", "fb.com"].some(domain => host === domain || host.endsWith("." + domain));
-  } catch { return false; }
+    return ["facebook.com", "fb.watch", "fb.com"].some(
+      domain => host === domain || host.endsWith("." + domain),
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function diagnoseError(log = [], signedIn = false, url = "") {
   const detail = log.slice(-30).join("\n").toLowerCase();
   if (url && !isYouTube(url) && /http error 429|too many requests|rate.limit reached/.test(detail)) {
-    return {title:"Too many requests", message:"The site is limiting requests. Wait before retrying and reduce parallel downloads.", action:""};
+    return {
+      title: "Too many requests",
+      message: "The site is limiting requests. Wait before retrying and reduce parallel downloads.",
+      action: "",
+    };
   }
   if (isFacebook(url)) {
-    if (/login required|log in to|log in first|use --cookies|cookies-from-browser|authentication|login wall/.test(detail)) {
-      return {title:"Facebook needs a session", message:"Open this Reel in your browser. If Facebook requires a login, select cookies from that browser or import a fresh cookies.txt file, then retry.", action:"cookies"};
+    if (
+      /login required|log in to|log in first|use --cookies|cookies-from-browser|authentication|login wall/.test(
+        detail,
+      )
+    ) {
+      return {
+        title: "Facebook needs a session",
+        message:
+          "Open this Reel in your browser. If Facebook requires a login, select cookies from that browser or import a fresh cookies.txt file, then retry.",
+        action: "cookies",
+      };
     }
     if (/cannot parse data|unable to extract|failed to parse|no suitable extractor/.test(detail)) {
-      return {title:"Facebook did not return the video", message:"Check the Reel in a browser and update yt-dlp. If the same account can open it, check the selected cookies source and retry.", action:"update"};
+      return {
+        title: "Facebook did not return the video",
+        message:
+          "Check the Reel in a browser and update yt-dlp. If the same account can open it, check the selected cookies source and retry.",
+        action: "update",
+      };
     }
   }
   if (signInSite(url)?.key === "instagram") {
     if (/selected cookies file contains no active instagram session/.test(detail)) {
-      return {title:"Instagram session missing", message:"The selected cookies file does not contain an active Instagram login. Choose Deviload sign-in or import fresh Instagram cookies, then retry.", action:"cookies"};
+      return {
+        title: "Instagram session missing",
+        message:
+          "The selected cookies file does not contain an active Instagram login. Choose Deviload sign-in or import fresh Instagram cookies, then retry.",
+        action: "cookies",
+      };
     }
-    if (/not available to everyone|isn't available to everyone|certain audiences|restricted video|18 years/.test(detail)) {
-      return {title:"Audience restriction", message:"Instagram limits this post to certain accounts or audiences. Check that the same account can open it in a browser.", action:"cookies"};
+    if (
+      /not available to everyone|isn't available to everyone|certain audiences|restricted video|18 years/.test(
+        detail,
+      )
+    ) {
+      return {
+        title: "Audience restriction",
+        message:
+          "Instagram limits this post to certain accounts or audiences. Check that the same account can open it in a browser.",
+        action: "cookies",
+      };
     }
     if (/empty media response|api is not granting access|failed to parse json/.test(detail)) {
-      return {title:"Instagram did not return the video", message:"Instagram may be limiting access, or its extractor may need an update. Check the post in a browser, update yt-dlp and check the cookies source.", action:"update"};
+      return {
+        title: "Instagram did not return the video",
+        message:
+          "Instagram may be limiting access, or its extractor may need an update. Check the post in a browser, update yt-dlp and check the cookies source.",
+        action: "update",
+      };
     }
   }
   // Other sites that want an account need cookies from where you are signed in; the Deviload sign-in is YouTube's.
-  if (url && !isYouTube(url) && /--cookies-from-browser or --cookies|use --cookies|empty media response|login required|log in to|authentication/.test(detail)) {
+  if (
+    url &&
+    !isYouTube(url) &&
+    /--cookies-from-browser or --cookies|use --cookies|empty media response|login required|log in to|authentication/.test(
+      detail,
+    )
+  ) {
     const site = signInSite(url);
-    if (site && signedIn) return {title:"Check the saved sign-in", message:"A saved session does not guarantee access. Check the cookies source and whether this account can open the post.", action:"cookies"};
-    if (site) return {title:"Sign-in needed", message:"{site} shows this only to signed-in users. Sign in to {site} in Deviload and retry.", action:"site-login", site:site.key, params:{site:site.name}};
-    return {title:"Sign-in needed", message:"This site shows it only to signed-in users. In the settings, pick cookies from a browser where you are signed in, or a cookies.txt file, and retry.", action:"cookies"};
+    if (site && signedIn)
+      return {
+        title: "Check the saved sign-in",
+        message:
+          "A saved session does not guarantee access. Check the cookies source and whether this account can open the post.",
+        action: "cookies",
+      };
+    if (site)
+      return {
+        title: "Sign-in needed",
+        message: "{site} shows this only to signed-in users. Sign in to {site} in Deviload and retry.",
+        action: "site-login",
+        site: site.key,
+        params: { site: site.name },
+      };
+    return {
+      title: "Sign-in needed",
+      message:
+        "This site shows it only to signed-in users. In the settings, pick cookies from a browser where you are signed in, or a cookies.txt file, and retry.",
+      action: "cookies",
+    };
   }
   for (const [pattern, title, message, action] of ISSUES) {
     if (!pattern.test(detail)) continue;
     if (action === "login" && signedIn && title === "YouTube asks to sign in") {
-      return {title, message:"Your saved sign-in may be stale. Sign in again and retry.", action};
+      return { title, message: "Your saved sign-in may be stale. Sign in again and retry.", action };
     }
-    return {title, message, action};
+    return { title, message, action };
   }
-  return {title:"Download failed", message:"Open the task log to see the cause of the error.", action:""};
+  return {
+    title: "Download failed",
+    message: "Open the task log to see the cause of the error.",
+    action: "",
+  };
 }
 
 export function isVideoJob(job) {
@@ -190,4 +401,18 @@ export function isVideoJob(job) {
 
 export function isLibraryAudio(job) {
   return job.status === "done" && /\.(mp3|flac|wav|m4a|ogg|opus|aac)$/i.test(job.file || "");
+}
+
+// How long to wait before the next look at the download queue: close while something is moving,
+// calm while the queue is idle or out of sight. Every action that changes the queue refreshes at once.
+export function pollDelay(jobs, { page = "downloads", hidden = false } = {}) {
+  // A task scheduled for later is waiting, not moving; it shows up as running when it starts.
+  const moving = jobs.some(
+    job =>
+      ["running", "queued", "pausing", "cancelling"].includes(job.status) &&
+      !(job.status === "queued" && job.scheduledAt != null),
+  );
+  if (moving) return hidden ? 2000 : 900;
+  if (hidden) return 6000;
+  return page === "downloads" || page === "library" ? 2000 : 5000;
 }

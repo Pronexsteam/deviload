@@ -1,15 +1,16 @@
 // Entry point of the Devil Cut window.
-import {hydrateMascots} from "./mascot-spot.js";
-import {t, errorText, translateDom, setLanguage, onLanguageChange} from "./i18n.js";
-import {mediaPreview, isVideoJob, isLibraryAudio} from "./view-model.js";
-import {createDevilCut} from "./devil-cut.js";
-import {wireAppearance} from "./appearance.js";
+import { hydrateMascots } from "./mascot-spot.js";
+import { t, errorText, translateDom, setLanguage, onLanguageChange } from "./i18n.js";
+import { mediaPreview, isVideoJob, isLibraryAudio } from "./view-model.js";
+import { createDevilCut } from "./devil-cut.js";
+import { wireAppearance } from "./appearance.js";
 
 wireAppearance();
 
 const invoke = window.__TAURI__?.core?.invoke;
 const convertFileSrc = window.__TAURI__?.core?.convertFileSrc;
-let jobs = [], jobsSignature = "";
+let jobs = [],
+  jobsSignature = "";
 
 function node(tag, className, value) {
   const element = document.createElement(tag);
@@ -38,18 +39,34 @@ function message(value, error = false) {
 }
 
 const editor = createDevilCut({
-  invoke, convertFileSrc, t, message, node, errorText, mediaPreview, isVideoJob, isLibraryAudio,
-  getJobs:() => jobs,
-  saveProject:(id, project) => invoke("save_ui_project", {id, project}),
-  loadProjects:async () => (await invoke("ui_store")).projects || {},
+  invoke,
+  convertFileSrc,
+  t,
+  message,
+  node,
+  errorText,
+  mediaPreview,
+  isVideoJob,
+  isLibraryAudio,
+  getJobs: () => jobs,
+  saveProject: (id, project) => invoke("save_ui_project", { id, project }),
+  loadProjects: async () => (await invoke("ui_store")).projects || {},
 });
 
 async function refreshJobs() {
   try {
     jobs = (await invoke("snapshot")).jobs || [];
-    const signature = jobs.filter(job => job.status === "done").map(job => job.id + ":" + job.file).join("|");
-    if (signature !== jobsSignature) { jobsSignature = signature; editor.refresh(); }
-  } catch { /* the next poll retries */ }
+    const signature = jobs
+      .filter(job => job.status === "done")
+      .map(job => job.id + ":" + job.file)
+      .join("|");
+    if (signature !== jobsSignature) {
+      jobsSignature = signature;
+      editor.refresh();
+    }
+  } catch {
+    /* the next poll retries */
+  }
 }
 
 function handle(query) {
@@ -62,7 +79,9 @@ function handle(query) {
 translateDom();
 onLanguageChange(() => editor.relabel());
 // The main window stores the language; follow it when it changes there.
-window.addEventListener("storage", event => { if (event.key === "deviload-lang" && event.newValue) setLanguage(event.newValue); });
+window.addEventListener("storage", event => {
+  if (event.key === "deviload-lang" && event.newValue) setLanguage(event.newValue);
+});
 
 if (invoke) {
   await refreshJobs();

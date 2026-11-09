@@ -86,3 +86,15 @@ Deno.test('larger caches restore more than one thousand completed tracks',async(
  const cache=new AudioCache(root);await cache.open();assert(cache.entries.length===entries.length);assert(cache.limit===CACHE_LIMITS[2]);
  }finally{await Deno.remove(root,{recursive:true});}
 });
+Deno.test('cache keeps a valid loudness across restarts and drops a damaged one',async()=>{
+ const root=await Deno.makeTempDir();try{
+ const cache=new AudioCache(root,1024);await cache.open();
+ const loud={id:'abcdefghijk',file:crypto.randomUUID()+'.audio',size:8,at:1,loudness:5.31};await Deno.writeFile(cache.path(loud.file),new Uint8Array(8));await cache.commit(loud,cache.epoch);
+ const plain={id:'lmnopqrstuv',file:crypto.randomUUID()+'.audio',size:8,at:2};await Deno.writeFile(cache.path(plain.file),new Uint8Array(8));await cache.commit(plain,cache.epoch);
+ const index=JSON.parse(await Deno.readTextFile(`${root}/index.json`));index[1].loudness='very loud';await Deno.writeTextFile(`${root}/index.json`,JSON.stringify(index));
+ const again=new AudioCache(root,1024);await again.open();
+ assert((await again.find('abcdefghijk'))?.loudness===5.31,'loudness survives a restart');
+ assert((await again.find('lmnopqrstuv'))?.loudness===undefined,'a damaged loudness is dropped');
+ await new Promise(resolve=>setTimeout(resolve,100));
+ }finally{await Deno.remove(root,{recursive:true});}
+});

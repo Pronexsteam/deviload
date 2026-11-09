@@ -1,0 +1,403 @@
+/* The song's timeline is a glass tube that fills with liquid in the player's colour. Bubbles drift through
+   the liquid and its front sways with the bass while the song plays; it all goes still on pause. Under the
+   pointer the tube widens, a glass bead appears and a bubble shows the time and the line sung there. */
+@property --track-h {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 8px;
+}
+:root :is(.music-dock, .music-stage, body.music-mini-page) .music-liquid {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  align-items: center;
+  height: 22px;
+  --track-h: 7px;
+  transition: --track-h 0.35s cubic-bezier(0.2, 1.12, 0.32, 1);
+}
+:root body #music-now-playing .music-progress .music-liquid {
+  --track-h: 9px;
+}
+body.music-mini-page .mini-timeline .music-liquid {
+  flex: 1;
+  --track-h: 6px;
+}
+body.music-mini-page .mini-timeline .music-liquid:is(:hover, .is-dragging) {
+  --track-h: 9px;
+}
+:root
+  :is(.music-dock, .music-stage, body.music-mini-page)
+  .music-liquid:is(:hover, .is-dragging):not(:has(input:disabled)),
+:root :is(.music-dock, .music-stage, body.music-mini-page) .music-liquid:has(input:focus-visible) {
+  --track-h: 11px;
+}
+:root :is(.music-dock, .music-stage, body.music-mini-page) .music-liquid input[type="range"] {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+}
+/* The tube: clear glass with a highlight along its top, drawn over the liquid. */
+:root
+  :is(.music-dock, .music-stage, body.music-mini-page)
+  .music-liquid
+  input[type="range"]::-webkit-slider-runnable-track {
+  height: var(--track-h);
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    rgb(255 255 255/0.3),
+    rgb(255 255 255/0.05) 45%,
+    rgb(255 255 255/0) 60%,
+    rgb(255 255 255/0.1)
+  );
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255/0.14),
+    inset 0 -1px 2px rgb(0 0 0/0.25);
+}
+:root
+  :is(.music-dock, .music-stage, body.music-mini-page)
+  .music-liquid
+  input[type="range"]::-webkit-slider-thumb {
+  margin-top: calc((var(--track-h) - var(--player-thumb-size, 12px)) / 2);
+  scale: 0;
+  background: radial-gradient(
+    circle at 35% 30%,
+    #fff,
+    color-mix(in srgb, var(--player-primary) 35%, #fff) 60%,
+    color-mix(in srgb, var(--player-primary) 70%, #fff)
+  );
+  box-shadow:
+    0 0 0 3px rgb(255 255 255/0.18),
+    0 0 14px color-mix(in srgb, var(--player-primary) 70%, transparent),
+    0 2px 6px rgb(0 0 0/0.4);
+  transition: scale 0.35s cubic-bezier(0.2, 1.12, 0.32, 1) !important;
+}
+:root
+  :is(.music-dock, .music-stage, body.music-mini-page)
+  .music-liquid:is(:hover, .is-dragging)
+  input[type="range"]:not(:disabled)::-webkit-slider-thumb,
+:root
+  :is(.music-dock, .music-stage, body.music-mini-page)
+  .music-liquid
+  input[type="range"]:focus-visible::-webkit-slider-thumb {
+  scale: 1.15;
+}
+/* The liquid, with two layers of bubbles drifting at their own pace. */
+:root :is(.music-dock, .music-stage, body.music-mini-page) .music-liquid::before {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: 50%;
+  z-index: 1;
+  width: max(0px, calc(var(--range-fill, 0%) - 1px));
+  height: calc(var(--track-h) - 2px);
+  border-radius: 999px;
+  pointer-events: none;
+  translate: 0 -50%;
+  background:
+    radial-gradient(circle, rgb(255 255 255/0.8) 0 1.3px, rgb(255 255 255/0.25) 1.6px, transparent 2.2px) 0
+      40%/53px 100% repeat-x,
+    radial-gradient(circle, rgb(255 255 255/0.75) 0 0.9px, transparent 1.5px) 17px 30%/31px 100% repeat-x,
+    radial-gradient(circle, rgb(255 255 255/0.5) 0 0.6px, transparent 1.1px) 7px 75%/19px 100% repeat-x,
+    linear-gradient(180deg, transparent 14%, rgb(255 255 255/0.55) 22%, transparent 36%),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--player-primary, #9ad0ff) 55%, #fff),
+      var(--player-primary, #9ad0ff) 55%,
+      color-mix(in srgb, var(--player-primary, #9ad0ff) 75%, #000)
+    );
+  box-shadow: 0 0 12px color-mix(in srgb, var(--player-primary, #9ad0ff) 40%, transparent);
+  filter: brightness(calc(1 + var(--orb-energy, 0) * 0.25)) saturate(calc(1 + var(--orb-energy, 0) * 0.3));
+  animation: music-seek-bubbles 9s linear infinite;
+  animation-play-state: paused;
+}
+/* Each layer travels a whole number of its own widths, so the loop is seamless; the small ones also bob. */
+@keyframes music-seek-bubbles {
+  0% {
+    background-position:
+      0 40%,
+      17px 30%,
+      7px 75%,
+      0 0,
+      0 0;
+  }
+  25% {
+    background-position:
+      13.25px 55%,
+      32.5px 20%,
+      21.25px 62%,
+      0 0,
+      0 0;
+  }
+  50% {
+    background-position:
+      26.5px 40%,
+      48px 34%,
+      35.5px 80%,
+      0 0,
+      0 0;
+  }
+  75% {
+    background-position:
+      39.75px 28%,
+      63.5px 22%,
+      49.75px 66%,
+      0 0,
+      0 0;
+  }
+  100% {
+    background-position:
+      53px 40%,
+      79px 30%,
+      64px 75%,
+      0 0,
+      0 0;
+  }
+}
+/* The liquid's front: a bright meniscus that sways with the bass. */
+:root :is(.music-dock, .music-stage, body.music-mini-page) .music-liquid::after {
+  content: "";
+  position: absolute;
+  left: var(--range-fill, 0%);
+  top: 50%;
+  z-index: 1;
+  width: 5px;
+  height: calc(var(--track-h) - 1px);
+  border-radius: 999px;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--player-primary, #9ad0ff) 40%, #fff);
+  box-shadow: 0 0 calc(6px + var(--orb-energy, 0) * 10px)
+    color-mix(in srgb, var(--player-primary, #9ad0ff) 90%, transparent);
+  translate: -100% -50%;
+  scale: calc(1 + var(--orb-energy, 0) * 0.6) calc(1 + var(--orb-energy, 0) * 0.25);
+  transform-origin: right center;
+  transition:
+    scale 0.12s linear,
+    opacity 0.2s;
+  animation: music-seek-sway 1.6s ease-in-out infinite alternate;
+  animation-play-state: paused;
+}
+@keyframes music-seek-sway {
+  from {
+    rotate: -6deg;
+  }
+  to {
+    rotate: 6deg;
+  }
+}
+/* A jump: the front flares and settles. */
+:root :is(.music-dock, .music-stage, body.music-mini-page) .music-liquid.is-splash.is-splash::after {
+  opacity: 1;
+  animation: music-seek-splash 0.65s cubic-bezier(0.2, 0.85, 0.15, 1);
+}
+@keyframes music-seek-splash {
+  0% {
+    scale: 2.4 1.5;
+    box-shadow: 0 0 22px color-mix(in srgb, var(--player-primary, #9ad0ff) 100%, transparent);
+  }
+  100% {
+    scale: 1 1;
+  }
+}
+/* Where a click would take the song: a faint pour from the play position to the pointer. */
+.music-seek-ghost {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  z-index: 1;
+  width: 0;
+  height: calc(var(--track-h) - 2px);
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0;
+  translate: 0 -50%;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--player-primary, #9ad0ff) 38%, transparent),
+    color-mix(in srgb, var(--player-primary, #9ad0ff) 18%, transparent)
+  );
+  transition: opacity 0.2s;
+}
+.music-seek-ghost.is-back {
+  background: linear-gradient(90deg, rgb(0 0 0/0), rgb(0 0 0/0.28));
+}
+.music-seek.is-peeking:not(.is-dragging) .music-seek-ghost {
+  opacity: 1;
+}
+:root :is(.music-dock, .music-stage, body.music-mini-page) .music-liquid.is-playing::before,
+:root :is(.music-dock, .music-stage, body.music-mini-page) .music-liquid.is-playing::after {
+  animation-play-state: running;
+}
+:root :is(.music-dock, .music-stage, body.music-mini-page) .music-liquid:is(:hover, .is-dragging)::after {
+  opacity: 0;
+}
+:root :is(.music-dock, .music-stage, body.music-mini-page) .music-liquid:has(input:disabled)::after,
+:root :is(.music-dock, .music-stage, body.music-mini-page) .music-liquid:has(input:disabled)::before {
+  display: none;
+}
+:root[data-theme="glass-light"]
+  :is(.music-dock, .music-stage, body.music-mini-page)
+  .music-liquid
+  input[type="range"]::-webkit-slider-runnable-track {
+  background: linear-gradient(180deg, rgb(255 255 255/0.7), rgb(255 255 255/0.15) 50%, rgb(0 0 0/0.04));
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0/0.1),
+    inset 0 1px 2px rgb(0 0 0/0.12);
+}
+
+.music-seek-bubble {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  z-index: 6;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  max-width: 300px;
+  padding: 6px 12px;
+  border: 1px solid rgb(255 255 255/0.14);
+  border-radius: 12px;
+  background: rgb(16 18 24/0.8);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  backdrop-filter: blur(18px) saturate(1.5);
+  color: #fff;
+  box-shadow: 0 10px 30px rgb(0 0 0/0.4);
+  pointer-events: none;
+  white-space: nowrap;
+  opacity: 0;
+  translate: -50% 6px;
+  scale: 0.92;
+  transition:
+    opacity 0.16s ease,
+    translate 0.3s cubic-bezier(0.2, 1.12, 0.32, 1),
+    scale 0.3s cubic-bezier(0.2, 1.12, 0.32, 1);
+}
+.music-seek.is-peeking .music-seek-bubble {
+  opacity: 1;
+  translate: -50% 0;
+  scale: 1;
+}
+.music-seek-bubble strong {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.music-seek-bubble span {
+  max-width: 276px;
+  overflow: hidden;
+  font-size: 12px;
+  opacity: 0.82;
+  text-overflow: ellipsis;
+}
+.music-seek-bubble:not(.has-line) span {
+  display: none;
+}
+:root[data-theme="glass-light"] .music-seek-bubble {
+  background: rgb(255 255 255/0.86);
+  color: #1b2433;
+  border-color: rgb(0 0 0/0.08);
+}
+
+.music-time-toggle {
+  cursor: pointer;
+  border-radius: 6px;
+  transition: color 0.2s;
+}
+.music-time-toggle:hover {
+  color: var(--player-ink, #fff);
+}
+.music-time-toggle:focus-visible {
+  outline: 2px solid var(--player-primary, #9ad0ff);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root :is(.music-dock, .music-stage, body.music-mini-page) .music-liquid input[type="range"],
+  :root
+    :is(.music-dock, .music-stage, body.music-mini-page)
+    .music-liquid
+    input[type="range"]::-webkit-slider-thumb,
+  .music-seek-bubble {
+    transition: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root :is(.music-dock, .music-stage, body.music-mini-page) .music-liquid::before,
+  :root :is(.music-dock, .music-stage, body.music-mini-page) .music-liquid::after {
+    animation: none;
+  }
+  :root :is(.music-dock, .music-stage, body.music-mini-page) .music-liquid {
+    transition: none;
+  }
+}
+
+/* Volume: the same glass tube, filled to the level; it widens and shows its bead under the pointer. */
+:root :is(.music-dock, .music-stage) .music-dock-extras > input[type="range"],
+body.music-mini-page #mini-volume {
+  --track-h: 6px;
+  transition: --track-h 0.35s cubic-bezier(0.2, 1.12, 0.32, 1) !important;
+}
+:root
+  :is(.music-dock, .music-stage)
+  .music-dock-extras
+  > input[type="range"]:is(:hover, :focus-visible, :active),
+body.music-mini-page #mini-volume:is(:hover, :focus-visible, :active) {
+  --track-h: 9px;
+}
+:root :is(.music-dock, .music-stage) .music-dock-extras > input[type="range"]::-webkit-slider-runnable-track,
+body.music-mini-page #mini-volume::-webkit-slider-runnable-track {
+  height: var(--track-h);
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      180deg,
+      rgb(255 255 255/0.3),
+      rgb(255 255 255/0.05) 45%,
+      rgb(255 255 255/0) 60%,
+      rgb(255 255 255/0.1)
+    ),
+    linear-gradient(180deg, transparent 14%, rgb(255 255 255/0.5) 24%, transparent 38%) 0 0 /
+      var(--range-fill, 0%) 100% no-repeat,
+    linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--player-primary, #9ad0ff) 55%, #fff),
+        var(--player-primary, #9ad0ff) 55%,
+        color-mix(in srgb, var(--player-primary, #9ad0ff) 75%, #000)
+      )
+      0 0 / var(--range-fill, 0%) 100% no-repeat;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255/0.14),
+    inset 0 -1px 2px rgb(0 0 0/0.25);
+}
+:root :is(.music-dock, .music-stage) .music-dock-extras > input[type="range"]::-webkit-slider-thumb,
+body.music-mini-page #mini-volume::-webkit-slider-thumb {
+  margin-top: calc((var(--track-h) - var(--player-thumb-size, 12px)) / 2);
+  scale: 0;
+  background: radial-gradient(
+    circle at 35% 30%,
+    #fff,
+    color-mix(in srgb, var(--player-primary) 35%, #fff) 60%,
+    color-mix(in srgb, var(--player-primary) 70%, #fff)
+  );
+  box-shadow:
+    0 0 0 3px rgb(255 255 255/0.18),
+    0 0 12px color-mix(in srgb, var(--player-primary) 70%, transparent),
+    0 2px 6px rgb(0 0 0/0.4);
+  transition: scale 0.35s cubic-bezier(0.2, 1.12, 0.32, 1) !important;
+}
+:root
+  :is(.music-dock, .music-stage)
+  .music-dock-extras
+  > input[type="range"]:is(:hover, :focus-visible, :active)::-webkit-slider-thumb,
+body.music-mini-page #mini-volume:is(:hover, :focus-visible, :active)::-webkit-slider-thumb {
+  scale: 1;
+}
+:root[data-theme="glass-light"]
+  :is(.music-dock, .music-stage, body.music-mini-page)
+  :is(.music-dock-extras > input[type="range"], #mini-volume)::-webkit-slider-runnable-track {
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0/0.1),
+    inset 0 1px 2px rgb(0 0 0/0.12);
+}

@@ -1,0 +1,1 @@
+{"identifier":"lyrics-overlay","description":"Floating lyrics strip; playback stays in the main window","windows":["lyrics-overlay"],"permissions":["core:event:default"]}

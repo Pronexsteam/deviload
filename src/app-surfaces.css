@@ -1,68 +1,289 @@
 /* Devil Music surfaces for the rest of Deviload: floating translucent panels,
    one outer margin, large radii, hairlines and pill controls. */
-:root[data-theme]{--app-edge:28px;--app-card-radius:24px;--app-control-radius:14px}
+:root[data-theme] {
+  --app-edge: 28px;
+  --app-card-radius: 24px;
+  --app-control-radius: 14px;
+}
 
 /* Quiet header: no band behind breadcrumbs and actions. */
-:root[data-theme] body main:not([data-page="music"])>.topbar::before{content:none}
+:root[data-theme] body main:not([data-page="music"]) > .topbar::before {
+  content: none;
+}
 
 /* The section list floats as one panel, like the music library. */
-:root[data-theme] body .sidebar{isolation:isolate;background:transparent;border-right:0;box-shadow:none}
-:root[data-theme] body .sidebar::before{content:"";position:absolute;inset:14px 0 14px 14px;z-index:-1;border:1px solid var(--surf-line);border-radius:var(--surf-radius-lg);background:var(--surf-fill);backdrop-filter:blur(18px);pointer-events:none}
-:root[data-theme] body .sidebar :is(nav button,nav a,.nav-item){border-radius:14px}
+:root[data-theme] body .sidebar {
+  isolation: isolate;
+  background: transparent;
+  border-right: 0;
+  box-shadow: none;
+}
+:root[data-theme] body .sidebar::before {
+  content: "";
+  position: absolute;
+  inset: 14px 0 14px 14px;
+  z-index: -1;
+  border: 1px solid var(--surf-line);
+  border-radius: var(--surf-radius-lg);
+  background: var(--surf-fill);
+  backdrop-filter: blur(18px);
+  pointer-events: none;
+}
+:root[data-theme] body .sidebar :is(nav button, nav a, .nav-item) {
+  border-radius: 14px;
+}
 
 /* Cards and page panels. */
-:root[data-theme] body main:not([data-page="music"]) :is(.download-composer,.media-library.page-content,.page-content.page-cinema,.editor-card.page-content,.queue-tools-panel){border:1px solid var(--surf-line);border-radius:var(--app-card-radius);background:var(--surf-fill);box-shadow:none;backdrop-filter:blur(18px)}
-:root[data-theme] body main:not([data-page="music"]) .supporters-board{border:1px solid var(--surf-line);border-radius:18px;background:var(--surf-fill);box-shadow:none}
-:root[data-theme] body main:not([data-page="music"]) :is(.media-library-empty,.library-view){border-color:var(--surf-line);border-radius:18px}
+:root[data-theme]
+  body
+  main:not([data-page="music"])
+  :is(
+    .download-composer,
+    .media-library.page-content,
+    .page-content.page-cinema,
+    .editor-card.page-content,
+    .queue-tools-panel
+  ) {
+  border: 1px solid var(--surf-line);
+  border-radius: var(--app-card-radius);
+  background: var(--surf-fill);
+  box-shadow: none;
+  backdrop-filter: blur(18px);
+}
+:root[data-theme] body main:not([data-page="music"]) .supporters-board {
+  border: 1px solid var(--surf-line);
+  border-radius: 18px;
+  background: var(--surf-fill);
+  box-shadow: none;
+}
+:root[data-theme] body main:not([data-page="music"]) :is(.media-library-empty, .library-view) {
+  border-color: var(--surf-line);
+  border-radius: 18px;
+}
 
 /* Fields: soft rounded boxes; search fields become pills. */
-:root[data-theme] body main:not([data-page="music"]) :is(input:not([type="checkbox"],[type="radio"],[type="range"],[type="color"]),select,textarea,.quick-link){border-color:var(--surf-line);border-radius:var(--app-control-radius);background-color:var(--surf-fill)}
-:root[data-theme] body main:not([data-page="music"]) :is(input[type="search"],#job-search,.media-library-search input,.cinema-search input){border-radius:999px}
+:root[data-theme]
+  body
+  main:not([data-page="music"])
+  :is(
+    input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"]),
+    select,
+    textarea,
+    .quick-link
+  ) {
+  border-color: var(--surf-line);
+  border-radius: var(--app-control-radius);
+  background-color: var(--surf-fill);
+}
+:root[data-theme]
+  body
+  main:not([data-page="music"])
+  :is(input[type="search"], #job-search, .media-library-search input, .cinema-search input) {
+  border-radius: 999px;
+}
 
 /* Buttons and chips are pills. */
-:root[data-theme] body main:not([data-page="music"]) :is(button.primary,button.outline,button.quiet,summary.outline,.options-toggle,.link-tool,.youtube-button,.phone-button,.icon-only,.cinema-topic,.quick-theme-toggle){border-radius:999px}
-:root[data-theme] body main:not([data-page="music"]) :is(.queue-filters,.media-library-filters)>button{border:1px solid var(--surf-line);border-radius:999px;background:transparent}
-:root[data-theme] body main:not([data-page="music"]) :is(.queue-filters,.media-library-filters)>button:is(.selected,[aria-pressed="true"]){border-color:var(--workspace-ink,#f2f3f7);background:transparent;color:var(--workspace-ink,#f2f3f7)}
-:root[data-theme] body main:not([data-page="music"]) .media-modes{border-color:var(--surf-line);border-radius:999px;background:var(--surf-fill)}
-:root[data-theme] body main:not([data-page="music"]) .media-modes>.media-mode{border-radius:999px}
-:root[data-theme] body main:not([data-page="music"]) .media-modes>.media-mode.selected{background:var(--surf-hover)}
+:root[data-theme]
+  body
+  main:not([data-page="music"])
+  :is(
+    button.primary,
+    button.outline,
+    button.quiet,
+    summary.outline,
+    .options-toggle,
+    .link-tool,
+    .youtube-button,
+    .phone-button,
+    .icon-only,
+    .cinema-topic,
+    .quick-theme-toggle
+  ) {
+  border-radius: 999px;
+}
+:root[data-theme] body main:not([data-page="music"]) :is(.queue-filters, .media-library-filters) > button {
+  border: 1px solid var(--surf-line);
+  border-radius: 999px;
+  background: transparent;
+}
+:root[data-theme]
+  body
+  main:not([data-page="music"])
+  :is(.queue-filters, .media-library-filters)
+  > button:is(.selected, [aria-pressed="true"]) {
+  border-color: var(--workspace-ink, #f2f3f7);
+  background: transparent;
+  color: var(--workspace-ink, #f2f3f7);
+}
+:root[data-theme] body main:not([data-page="music"]) .media-modes {
+  border-color: var(--surf-line);
+  border-radius: 999px;
+  background: var(--surf-fill);
+}
+:root[data-theme] body main:not([data-page="music"]) .media-modes > .media-mode {
+  border-radius: 999px;
+}
+:root[data-theme] body main:not([data-page="music"]) .media-modes > .media-mode.selected {
+  background: var(--surf-hover);
+}
 
 /* The player bar lines up with the page column outside Devil Music. */
-@media(min-width:900px){
-  :root[data-theme] body:has(main:not([data-page="music"])) .music-dock{margin-left:var(--app-edge);margin-right:var(--app-edge)}
+@media (min-width: 900px) {
+  :root[data-theme] body:not(.music-page) .music-dock {
+    margin-left: var(--app-edge);
+    margin-right: var(--app-edge);
+  }
 }
 
 /* One continuous backdrop: the page area adds no darker slab beside the section panel. */
-:root[data-theme] body main:not([data-page="music"]){background:transparent}
-:root[data-theme] body .sidebar{padding-left:24px;padding-right:10px}
-:root[data-theme] body .sidebar .nav{border:1px solid transparent;border-radius:14px;background:transparent;box-shadow:none}
-:root[data-theme] body .sidebar .nav:hover{background:var(--surf-hover)}
-:root[data-theme] body .sidebar .nav:is(.active,[aria-current="page"]){border-color:transparent;background:var(--surf-hover);color:var(--workspace-ink,#f2f3f7)}
-:root[data-theme] body .support-float{left:26px;bottom:28px;width:170px;border-color:var(--surf-line);border-radius:999px;background:var(--surf-fill)}
+:root[data-theme] body main:not([data-page="music"]) {
+  background: transparent;
+}
+:root[data-theme] body .sidebar {
+  padding-left: 24px;
+  padding-right: 10px;
+}
+:root[data-theme] body .sidebar .nav {
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-theme] body .sidebar .nav:hover {
+  background: var(--surf-hover);
+}
+:root[data-theme] body .sidebar .nav:is(.active, [aria-current="page"]) {
+  border-color: transparent;
+  background: var(--surf-hover);
+  color: var(--workspace-ink, #f2f3f7);
+}
+:root[data-theme] body .support-float {
+  left: 26px;
+  bottom: 28px;
+  width: 170px;
+  border-color: var(--surf-line);
+  border-radius: 999px;
+  background: var(--surf-fill);
+}
 
 /* Dialogs share the panel shape; their action buttons are pills. */
-:root[data-theme] body dialog:not([class*="music"]):not(.watch-dialog){border:1px solid var(--surf-line);border-radius:var(--app-card-radius)}
-:root[data-theme] body dialog:not([class*="music"]) :is(button.outline,button.primary,summary.outline){border-radius:999px}
-:root[data-theme] body dialog:not([class*="music"]) .settings-nav>button{border:1px solid transparent;border-radius:12px;background:transparent}
-:root[data-theme] body dialog:not([class*="music"]) .settings-nav>button:is(.selected,.active,[aria-current="page"],[aria-selected="true"]){background:var(--surf-hover)}
-:root[data-theme] body dialog:not([class*="music"]) .dialog-close{display:inline-grid;place-items:center;width:36px;height:36px;padding:0;border:1px solid var(--surf-line);border-radius:50%;background:var(--surf-fill)}
-:root[data-theme] body dialog:not([class*="music"]) :is(input:not([type="checkbox"],[type="radio"],[type="range"],[type="color"]),select,textarea){border-color:var(--surf-line);border-radius:var(--app-control-radius)}
+:root[data-theme] body dialog:not([class*="music"]):not(.watch-dialog) {
+  border: 1px solid var(--surf-line);
+  border-radius: var(--app-card-radius);
+}
+:root[data-theme] body dialog:not([class*="music"]) :is(button.outline, button.primary, summary.outline) {
+  border-radius: 999px;
+}
+:root[data-theme] body dialog:not([class*="music"]) .settings-nav > button {
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+}
+:root[data-theme]
+  body
+  dialog:not([class*="music"])
+  .settings-nav
+  > button:is(.selected, .active, [aria-current="page"], [aria-selected="true"]) {
+  background: var(--surf-hover);
+}
+:root[data-theme] body dialog:not([class*="music"]) .dialog-close {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--surf-line);
+  border-radius: 50%;
+  background: var(--surf-fill);
+}
+:root[data-theme]
+  body
+  dialog:not([class*="music"])
+  :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"]), select, textarea) {
+  border-color: var(--surf-line);
+  border-radius: var(--app-control-radius);
+}
 
 /* Focus: a soft lift of the field border instead of a thick white frame. */
-:root[data-theme] body :is(main:not([data-page="music"]),dialog:not([class*="music"])) :is(input:not([type="checkbox"],[type="radio"],[type="range"],[type="color"]),select,textarea):focus{outline:none;border-color:color-mix(in srgb,var(--workspace-ink,#f2f3f7) 34%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--workspace-ink,#f2f3f7) 8%,transparent)}
-:root[data-theme] body main:not([data-page="music"]) :is(.quick-link,.search-label):focus-within{outline:none;border-color:color-mix(in srgb,var(--workspace-ink,#f2f3f7) 34%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--workspace-ink,#f2f3f7) 8%,transparent)}
-:root[data-theme] body main:not([data-page="music"]) :is(.quick-link,.search-label) :is(input,textarea):focus{border-color:transparent;box-shadow:none}
+:root[data-theme]
+  body
+  :is(main:not([data-page="music"]), dialog:not([class*="music"]))
+  :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"]), select, textarea):focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--workspace-ink, #f2f3f7) 34%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--workspace-ink, #f2f3f7) 8%, transparent);
+}
+:root[data-theme] body main:not([data-page="music"]) :is(.quick-link, .search-label):focus-within {
+  outline: none;
+  border-color: color-mix(in srgb, var(--workspace-ink, #f2f3f7) 34%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--workspace-ink, #f2f3f7) 8%, transparent);
+}
+:root[data-theme]
+  body
+  main:not([data-page="music"])
+  :is(.quick-link, .search-label)
+  :is(input, textarea):focus {
+  border-color: transparent;
+  box-shadow: none;
+}
 
 /* Option toggles look like toggles: an outlined pill that fills when on. */
-:root[data-theme] body main:not([data-page="music"]) :is(.download-extras>.media-mode,[id="gallery-open"],.queue-select-toggle){border:1px solid var(--surf-line);border-radius:999px;background:transparent;color:var(--workspace-ink,#f2f3f7)}
-:root[data-theme] body main:not([data-page="music"]) :is(.download-extras>.media-mode,[id="gallery-open"],.queue-select-toggle):hover{background:var(--surf-hover)}
-:root[data-theme] body main:not([data-page="music"]) :is(.download-extras>.media-mode,.queue-select-toggle):is([aria-pressed="true"],.selected){border-color:color-mix(in srgb,var(--workspace-ink,#f2f3f7) 55%,transparent);background:var(--surf-hover)}
-:root[data-theme] body main:not([data-page="music"]) .download-extras{gap:8px}
-:root[data-theme] body main:not([data-page="music"]) .download-options-row{align-items:center}
-:root[data-theme] body main:not([data-page="music"]) :is(.download-extras>.media-mode,[id="gallery-open"]){min-height:40px;padding-inline:14px}
-:root[data-theme] body main:not([data-page="music"]) .media-modes{min-height:40px;height:auto;padding:3px}
-:root[data-theme] body main:not([data-page="music"]) .media-modes>.media-mode{min-height:32px}
+:root[data-theme]
+  body
+  main:not([data-page="music"])
+  :is(.download-extras > .media-mode, [id="gallery-open"], .queue-select-toggle) {
+  border: 1px solid var(--surf-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--workspace-ink, #f2f3f7);
+}
+:root[data-theme]
+  body
+  main:not([data-page="music"])
+  :is(.download-extras > .media-mode, [id="gallery-open"], .queue-select-toggle):hover {
+  background: var(--surf-hover);
+}
+:root[data-theme]
+  body
+  main:not([data-page="music"])
+  :is(.download-extras > .media-mode, .queue-select-toggle):is([aria-pressed="true"], .selected) {
+  border-color: color-mix(in srgb, var(--workspace-ink, #f2f3f7) 55%, transparent);
+  background: var(--surf-hover);
+}
+:root[data-theme] body main:not([data-page="music"]) .download-extras {
+  gap: 8px;
+}
+:root[data-theme] body main:not([data-page="music"]) .download-options-row {
+  align-items: center;
+}
+:root[data-theme]
+  body
+  main:not([data-page="music"])
+  :is(.download-extras > .media-mode, [id="gallery-open"]) {
+  min-height: 40px;
+  padding-inline: 14px;
+}
+:root[data-theme] body main:not([data-page="music"]) .media-modes {
+  min-height: 40px;
+  height: auto;
+  padding: 3px;
+}
+:root[data-theme] body main:not([data-page="music"]) .media-modes > .media-mode {
+  min-height: 32px;
+}
 /* Queue filters keep a hairline on every chip, matching the music mood chips. */
-:root[data-theme] body main[data-page="downloads"] .queue-column .queue-filters>button:not(.selected):not(:hover){border-color:var(--surf-line)}
+:root[data-theme]
+  body
+  main[data-page="downloads"]
+  .queue-column
+  .queue-filters
+  > button:not(.selected):not(:hover) {
+  border-color: var(--surf-line);
+}
 /* Job card actions match the other pills. */
-:root[data-theme] body main:not([data-page="music"]) :is(.job-controls .transfer-button,.job-more>summary,.library-more>summary){border-radius:999px}
+:root[data-theme]
+  body
+  main:not([data-page="music"])
+  :is(.job-controls .transfer-button, .job-more > summary, .library-more > summary) {
+  border-radius: 999px;
+}

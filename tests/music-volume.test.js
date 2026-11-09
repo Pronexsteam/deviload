@@ -33,7 +33,7 @@ test("muting, closing and importing a profile retain the previous quiet output f
 });
 
 test("actual player volume wiring reports curved percent and mute restores the prior output",()=>{
-  const source=readFileSync(new URL("../src/devil-music.js",import.meta.url),"utf8"),code=source.slice(source.indexOf("  const volume=el("),source.indexOf("  extras.append(queueButton"));
+  const source=readFileSync(new URL("../src/devil-music.js",import.meta.url),"utf8"),code=source.slice(source.indexOf("  const volume = el("),source.indexOf("  extras.append(queueButton"));
   const field=()=>({attrs:{},value:"",events:{},setAttribute(name,value){this.attrs[name]=value;},addEventListener(name,fn){this.events[name]=fn;}});
   let toggle;const audio={volume:.7},saved={volume:.7};
   const ctx={audio,saved,musicGain,gainFromVolumePosition,volumePositionFromGain,volumePercent,el:field,decks:{setVolume(value){audio.volume=value;}},button(_label,_icon,action){toggle=action;return field();},t:(text,params)=>text.replace("{percent}",params?.percent),onLanguageChange(){},setTimeout:()=>1,clearTimeout(){},persist(){}};

@@ -1,0 +1,377 @@
+/* The listening summary card invites a click. */
+#devil-music .music-sidebar-stats {
+  cursor: pointer;
+  transition:
+    background-color 0.18s,
+    border-color 0.18s,
+    translate 0.28s var(--panel-ease, ease),
+    box-shadow 0.2s;
+}
+#devil-music .music-sidebar-stats:hover {
+  translate: 0 -1px;
+  border-color: color-mix(in srgb, var(--workspace-ink, #fff) 24%, transparent);
+  box-shadow: 0 10px 30px #0004;
+}
+#devil-music .music-sidebar-stats:focus-visible {
+  outline: 2px solid var(--player-primary, #9ad0ff);
+  outline-offset: 3px;
+}
+
+/* "Your week in music": a liquid glass window. */
+dialog.music-stats-dialog {
+  box-sizing: border-box;
+  width: min(760px, calc(100vw - 40px));
+  max-height: min(820px, calc(100dvh - 48px));
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #ffffff26;
+  border-radius: 28px;
+  color: var(--theme-text, #f4f4f6);
+  background:
+    linear-gradient(160deg, #ffffff1c, #ffffff05 38%, #ffffff0a),
+    color-mix(in srgb, var(--theme-surface-strong, #15171d) 64%, transparent);
+  -webkit-backdrop-filter: blur(34px) saturate(1.7);
+  backdrop-filter: blur(34px) saturate(1.7);
+  box-shadow:
+    0 30px 90px #0009,
+    inset 0 1px 0 #ffffff2e;
+}
+dialog.music-stats-dialog:not([open]) {
+  display: none;
+}
+dialog.music-stats-dialog::backdrop {
+  background: #0006;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.music-stats-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 26px 28px 6px;
+}
+.music-stats-head h2 {
+  margin: 4px 0 2px;
+  font-size: 30px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+.music-stats-range {
+  margin: 0;
+  font-size: 13px;
+  color: var(--workspace-muted, #b9bcc6);
+}
+.music-stats-close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #ffffff26;
+  border-radius: 50%;
+  background: #ffffff12;
+  color: inherit;
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.music-stats-close:hover {
+  background: #ffffff26;
+}
+.music-stats-body {
+  display: grid;
+  gap: 22px;
+  padding: 14px 28px 26px;
+  max-height: calc(min(820px, 100dvh - 48px) - 110px);
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.music-stats-tiles {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(3, 1fr);
+  gap: 10px;
+}
+.music-stats-tile {
+  display: grid;
+  align-content: end;
+  gap: 4px;
+  min-height: 84px;
+  padding: 14px 16px;
+  border: 1px solid #ffffff17;
+  border-radius: 18px;
+  background: #ffffff0b;
+}
+.music-stats-tile strong {
+  font-size: 22px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.music-stats-tile.is-big strong {
+  font-size: 34px;
+}
+.music-stats-tile span {
+  font-size: 12px;
+  color: var(--workspace-muted, #b9bcc6);
+}
+
+.music-stats-chart {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  align-items: end;
+  gap: 12px;
+  height: 190px;
+  padding: 16px 18px 12px;
+  border: 1px solid #ffffff14;
+  border-radius: 20px;
+  background: #ffffff08;
+}
+.music-stats-day {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  justify-items: center;
+  gap: 6px;
+  height: 100%;
+  min-width: 0;
+}
+.music-stats-bar {
+  align-self: end;
+  width: min(34px, 70%);
+  height: var(--height, 0%);
+  min-height: 3px;
+  border-radius: 10px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--player-primary, #9ad0ff) 85%, #fff),
+    color-mix(in srgb, var(--player-primary, #9ad0ff) 45%, transparent)
+  );
+  transform-origin: bottom;
+  animation: music-stats-grow 0.7s var(--panel-ease, ease) both;
+  animation-delay: calc(160ms + var(--delay, 0ms));
+}
+.music-stats-day:not(.is-today) .music-stats-bar {
+  opacity: 0.55;
+}
+.music-stats-value {
+  font-size: 11px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--workspace-muted, #b9bcc6);
+}
+.music-stats-weekday {
+  font-size: 11px;
+  text-transform: capitalize;
+  color: var(--workspace-muted, #b9bcc6);
+}
+.music-stats-day.is-today .music-stats-weekday,
+.music-stats-day.is-today .music-stats-value {
+  color: var(--theme-text, #fff);
+  font-weight: 700;
+}
+@keyframes music-stats-grow {
+  from {
+    scale: 1 0;
+  }
+}
+
+.music-stats-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+.music-stats-list {
+  padding: 16px 18px;
+  border: 1px solid #ffffff14;
+  border-radius: 20px;
+  background: #ffffff08;
+}
+.music-stats-list h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.music-stats-list ol {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: rank;
+}
+.music-stats-list li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  counter-increment: rank;
+  font-size: 13px;
+}
+.music-stats-list li::before {
+  content: counter(rank);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--workspace-muted, #b9bcc6);
+  text-align: center;
+}
+.music-stats-list.is-songs li {
+  grid-template-columns: 22px 40px minmax(0, 1fr) auto;
+}
+.music-stats-name,
+.music-stats-song strong,
+.music-stats-song small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.music-stats-song {
+  display: grid;
+  min-width: 0;
+}
+.music-stats-song small {
+  font-size: 11px;
+  color: var(--workspace-muted, #b9bcc6);
+}
+.music-stats-time {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--workspace-muted, #b9bcc6);
+}
+.music-stats-meter {
+  grid-column: 2/-1;
+  height: 4px;
+  border-radius: 4px;
+  background: #ffffff12;
+  overflow: hidden;
+}
+.music-stats-meter::after {
+  content: "";
+  display: block;
+  width: var(--share, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--player-primary, #9ad0ff);
+  animation: music-stats-fill 0.8s var(--panel-ease, ease) 0.2s both;
+}
+@keyframes music-stats-fill {
+  from {
+    width: 0;
+  }
+}
+.music-stats-cover {
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  overflow: hidden;
+  background: #ffffff12;
+}
+.music-stats-cover .music-art {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+.music-stats-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--workspace-muted, #b9bcc6);
+}
+@media (max-width: 640px) {
+  .music-stats-tiles {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .music-stats-tile.is-big {
+    grid-column: 1/-1;
+  }
+  .music-stats-chart {
+    height: 150px;
+    gap: 6px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .music-stats-bar,
+  .music-stats-meter::after {
+    animation: none;
+  }
+}
+
+/* Week, month and year. */
+.music-stats-tabs {
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 4px;
+  border: 1px solid #ffffff1c;
+  border-radius: 999px;
+  background: #ffffff0a;
+}
+.music-stats-tabs button {
+  height: 30px;
+  margin: 0;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0.75;
+  box-shadow: none;
+  transition:
+    background-color 0.2s,
+    opacity 0.2s;
+}
+.music-stats-tabs button[aria-selected="true"] {
+  background: #ffffff26;
+  opacity: 1;
+  box-shadow: inset 0 1px 0 #ffffff33;
+}
+.music-stats-tabs button:focus-visible {
+  outline: 2px solid var(--player-primary, #9ad0ff);
+  outline-offset: 2px;
+}
+.music-stats-chart.is-year {
+  grid-template-columns: repeat(12, 1fr);
+  gap: 8px;
+}
+.music-stats-tile strong {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.music-stats-tile:not(.is-big) strong {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  white-space: normal;
+  font-size: 17px;
+  line-height: 1.2;
+}
+/* The close cross is drawn, not typed: a text "×" sits on the font's baseline and looks off centre. */
+:is(.music-stats-close, .music-lyric-card-close) {
+  position: relative;
+  font-size: 0;
+}
+:is(.music-stats-close, .music-lyric-card-close)::before,
+:is(.music-stats-close, .music-lyric-card-close)::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 1.75px;
+  border-radius: 2px;
+  background: currentColor;
+  translate: -50% -50%;
+  rotate: 45deg;
+}
+:is(.music-stats-close, .music-lyric-card-close)::after {
+  rotate: -45deg;
+}

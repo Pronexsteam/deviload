@@ -5,7 +5,7 @@ import {runInNewContext} from "node:vm";
 import {recordingAlternatives,recordingDescriptor,resolveRecordingSource,videoRecordingCandidates} from "../src/music-recordings.js";
 import {localRecordingCandidates,localDurationDiffers} from "../src/music-local-model.js";
 
-const source=readFileSync(new URL("../src/music-recording-ui.js",import.meta.url),"utf8").replace(/^import .*;\r?\n/gm,"").replace("export function openRecordingPicker","function openRecordingPicker");
+const source=readFileSync(new URL("../src/music-recording-ui.js",import.meta.url),"utf8").replace(/^import [\s\S]*?;\r?\n/gm,"").replace("export function openRecordingPicker","function openRecordingPicker");
 const song=(n,extra={})=>({kind:"song",id:String(n).padStart(11,"0"),title:"Night Drive",artists:["Artist"],duration:200,...extra});
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};

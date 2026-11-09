@@ -197,6 +197,17 @@ pub async fn music_clip_stream(id:Option<String>,height:Option<u32>,warm:Option<
         Ok(Some(json!({"url":url,"height":data["height"].as_u64().filter(|h|(144..=2160).contains(h)),"heights":heights})))
     }).await.map_err(|_|"Music video unavailable".to_owned())?
 }
+/// How much louder than YouTube's reference a song is, in dB, for optional volume levelling. None when
+/// the engine does not know, for example after the backup route played the song.
+#[tauri::command]
+pub async fn music_loudness(id:String)->Result<Option<f64>,String>{
+    if id.len()!=11||!id.chars().all(|c|c.is_ascii_alphanumeric()||c=='-'||c=='_'){return Err("Invalid music request".into());}
+    tauri::async_runtime::spawn_blocking(move||{
+        let Some(worker)=WORKER.get().and_then(|state|state.lock().unwrap().clone())else{return Ok(None);};
+        let data=worker.request(json!({"action":"loudness","id":id}),Duration::from_millis(800),&||false)?;
+        Ok(data.as_f64().filter(|value|value.is_finite()&&value.abs()<=60.0))
+    }).await.map_err(|_|"Could not read loudness".to_owned())?
+}
 #[tauri::command]
 pub async fn music_cache(clear:Option<bool>,limit:Option<u64>)->Reply{
     if limit.is_some_and(|value| ![209_715_200,1_073_741_824,5_368_709_120].contains(&value)){return Err("Invalid audio cache limit".into());}

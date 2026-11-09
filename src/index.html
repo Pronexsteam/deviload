@@ -7,7 +7,17 @@
   <link rel="stylesheet" href="app-surfaces.css">
   <link rel="stylesheet" href="music-layout-editor.css">
   <link rel="stylesheet" href="music-library-rail.css">
-  <link rel="stylesheet" href="theme-variants.css"></head>
+  <link rel="stylesheet" href="theme-variants.css">
+  <link rel="stylesheet" href="music-stats.css">
+  <link rel="stylesheet" href="music-lyric-card.css">
+  <link rel="stylesheet" href="music-liquid.css">
+  <link rel="stylesheet" href="music-hover.css">
+  <link rel="stylesheet" href="music-delight.css">
+  <link rel="stylesheet" href="music-tour.css">
+  <link rel="stylesheet" href="music-connect.css">
+  <link rel="stylesheet" href="music-glass.css">
+  <link rel="stylesheet" href="app-mode.css">
+  <link rel="stylesheet" href="ui-motion.css"></head>
 <body>
 <div id="reaction-overlay" class="reaction-overlay" role="status" aria-live="polite" hidden><div class="reaction-burst" aria-hidden="true"></div><strong id="reaction-title"></strong><span id="reaction-detail"></span></div>
 <div class="window-drag-strip" aria-hidden="true"></div>
@@ -205,11 +215,4 @@
 <div id="drop-overlay" class="drop-overlay" hidden><div class="drop-card"><span class="icon" data-icon="link-simple" aria-hidden="true"></span><strong>Drop the link to download it</strong><small>Links from the browser address bar, a page or a .txt file</small></div></div>
 <button id="support-float" class="support-float" type="button" title="Support on Ko-fi" aria-label="Support on Ko-fi"><span class="icon" data-icon="heart" aria-hidden="true"></span><span>Support</span></button>
 <div id="toasts" class="toasts" aria-live="polite" popover="manual"></div>
-<div id="tour-overlay" class="tour-overlay" hidden aria-hidden="true">
-  <div class="tour-shade"></div><div id="tour-ring" class="tour-ring" aria-hidden="true"></div>
-  <svg id="tour-arrow" class="tour-arrow" aria-hidden="true"><defs><marker id="tour-arrowhead" markerWidth="13" markerHeight="13" refX="10" refY="6.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M1 1 11 6.5 1 12" fill="none" stroke="#ff4b3b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></marker></defs><path id="tour-arrow-path" fill="none" stroke="#ff4b3b" stroke-width="4" stroke-linecap="round" marker-end="url(#tour-arrowhead)"/></svg>
-  <section id="tour-card" class="tour-card" role="dialog" aria-modal="true" aria-labelledby="tour-title" aria-describedby="tour-description" tabindex="-1">
-    <span id="tour-mascot" class="tour-mascot" data-mascot="front"></span><span id="tour-step" class="tour-step"></span><h2 id="tour-title"></h2><p id="tour-description"></p>
-    <div class="tour-controls"><button id="tour-skip" class="tour-skip" type="button">Skip</button><button id="tour-back" class="outline small" type="button">Back</button><button id="tour-next" class="primary" type="button">Next</button></div>
-  </section>
-</div></body></html>
+</body></html>
