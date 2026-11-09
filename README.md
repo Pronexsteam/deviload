@@ -10,12 +10,12 @@ Discover and listen with Devil Music. Save with yt-dlp. Create with Devil Cut an
 <br>
 Built with Rust and Tauri 2 · English, Russian and Spanish
 
-[![Windows download](docs/downloads/windows.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.11.0/Deviload-2.11.0-setup.exe)
-[![macOS download](docs/downloads/macos.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.11.0/Deviload-2.11.0-macos-test.zip)
+[![Windows download](docs/downloads/windows.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.12.0/Deviload-2.12.0-setup.exe)
+[![macOS download](docs/downloads/macos.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.12.0/Deviload-2.12.0-macos-test.zip)
 [![Linux download](docs/downloads/linux.svg)](#install-on-linux)
 [![Devil Music for Android](docs/downloads/android.svg)](https://github.com/Pronexsteam/DevilMusic/releases/download/v0.0.18/Devil-Music-0.0.18-android.apk)
 
-Desktop downloads: **2.11.0** · Android: **0.0.18 preview**
+Desktop downloads: **2.12.0** · Android: **0.0.18 preview**
 
 <p>
 <a href="https://github.com/Pronexsteam/deviload/releases/latest"><img src="https://img.shields.io/github/v/release/Pronexsteam/deviload?style=flat&amp;label=Release&amp;logo=github&amp;logoColor=d5e5df&amp;color=252d34&amp;labelColor=151b20" height="28" alt="Latest release"></a>
@@ -45,13 +45,16 @@ Open the YouTube Music catalog and start listening without a Devil Music account
 - **Find something to play:** search songs, artists, albums and playlists; save favorites and keep a queue.
 - **Bring your collection:** import public Spotify playlists and albums, YouTube playlists, or a snapshot of a YouTube Mix. Review uncertain matches before accepting them.
 - **Make discovery your own:** likes and listening shape local recommendations. Choose familiar music or more discoveries, and hide songs or artists you do not want.
-- **Stay with the music:** open the full player or flip the Now Playing cover into lyrics while browsing. Timed words receive a moving highlight when the lyrics source provides word timings; other songs use synced lines or plain text.
+- **Stay with the music:** one Lyrics button shows the words wherever the player is. In the full player the lines move in and out of focus; timed words fill as they are sung when the lyrics source provides word timings. The words can also run over the music video like subtitles, float on your desktop, or become a picture to share with Share a line.
+- **Liquid glass player:** the play button is a glass orb that breathes with the bass, the timeline fills like a glass tube, and panels, windows and menus glide. Hover the timeline to see the time and the line sung there; the mouse wheel seeks and sets the volume.
 - **Watch the music video:** the camera button opens the song's official video on its own stage, silent and in step with the music, in up to 1080p and full screen.
 - **Make room on your desktop:** switch to a small, rounded mini-player with a vinyl cover, playback controls, repeat, shuffle, seeking and volume. Its video mode shows the music video in a window you can resize and pin above other windows. Returning restores the main window.
 - **Control it from your phone:** click the remote icon and scan its QR code on the same Wi-Fi. The phone follows your theme; sound stays on the computer. No account or hosted server is needed.
 - **Set the mood:** Ambient carries the cover colors across the workspace and reacts to the audio. Choose from eight themes, adjust the equalizer, or keep motion reduced. The next track is prepared in advance to reduce waiting.
 - **Make it yours:** the Your own theme puts a photo, GIF or silent looping video behind the workspace. Adjust blur, darkening, panel transparency, ambient light and the accent color. Files up to 300 MB are accepted, roughly 2 to 5 minutes of Full HD video; a 10 to 60 second loop looks best.
 - **Arrange it your way:** Edit layout, in the Themes menu, lets you drag blocks and player buttons to another place, hide the ones you do not need, swap the side panels or reset everything. A folded library stays as a rail of icons and playlist covers.
+- **Look back at your listening:** open your week, month or year in a stats window with your top artists and songs.
+- **Only the music, if you like:** choose Only Devil Music in the installer or in music settings to open straight into the player. Updates and your library stay the same.
 - **Keep a copy:** queue an MP3 download from a song card or the player without interrupting playback. Supported completed audio downloads can play offline.
 - **Take your preferences with you:** export and restore a local music profile with likes, playlists and taste settings. The backup contains metadata, not music files or account credentials.
 
@@ -89,9 +92,9 @@ Add a live link to record from that moment, then stop when you have what you nee
 
 ## Latest update
 
-**Deviload 2.11.0 lets you make Devil Music your own.** Put a photo, a GIF or a silent looping video behind the app with the Your own theme, then tune blur, darkening, panel transparency, ambient light and the accent colour. Edit layout moves blocks and player buttons where you want them, hides the ones you do not need and swaps the side panels. A folded library stays as a rail of playlist covers, and music videos open in the mini-player.
+**Deviload 2.12.0 puts Devil Music in liquid glass.** The play button is a glass orb that breathes with the bass, the timeline fills like a glass tube, and panels, windows and menus glide. One Lyrics button shows the words in the full player, over the music video, on your desktop or as a picture to share. Your listening week, month and year open in a stats window, search finds the original song first, and the phone remote and Listen together are redesigned. Scrolling stays smooth while music plays.
 
-Read the [2.11.0 release notes](.github/release-notes/v2.11.0.md).
+Read the [2.12.0 release notes](.github/release-notes/v2.12.0.md).
 
 ## Installation
 
