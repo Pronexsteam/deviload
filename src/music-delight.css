@@ -33,5 +33,13 @@
 
 @media(prefers-reduced-motion:reduce){.music-row-ripple{display:none}
   :root[data-theme] body :is(.music-dock,.music-stage,#devil-music) .music-like::after,:root[data-theme] body :is(.music-dock,.music-stage) .music-volume-mark{transition:none}}
-/* The heart is the only thing drawn in its button; the hidden text beside it must not push it aside. */
-:root[data-theme] body :is(.music-dock,.music-stage,#devil-music) .music-like{gap:0}
+/* The heart is the only thing drawn in its button; the hidden text beside it must not push it aside, and
+   its red filling stays inside the button. */
+:root[data-theme] body :is(.music-dock,.music-stage,#devil-music) .music-like{gap:0;position:relative}
+
+/* The level above the volume while it changes. */
+.music-volume-bubble{position:fixed;z-index:2147483000;left:0;top:0;padding:4px 9px;border:1px solid rgb(255 255 255/.16);border-radius:10px;pointer-events:none;
+  background:rgb(16 18 24/.82);-webkit-backdrop-filter:blur(16px) saturate(1.5);backdrop-filter:blur(16px) saturate(1.5);color:#fff;font:700 12px/1.2 inherit;font-variant-numeric:tabular-nums;
+  box-shadow:0 8px 24px rgb(0 0 0/.35);opacity:0;translate:-50% -100%;scale:.9;transition:opacity .16s ease,scale .3s cubic-bezier(.2,1.12,.32,1)}
+.music-volume-bubble.is-shown{opacity:1;scale:1}
+:root[data-theme="glass-light"] .music-volume-bubble{background:rgb(255 255 255/.88);color:#1b2433;border-color:rgb(0 0 0/.08)}

@@ -49,6 +49,7 @@ import {createNowPlaying} from "./music-presentation.js";
 import {createLyricCard} from "./music-lyric-card.js";
 import {wireTimeline} from "./music-timeline.js";
 import {wireHoverLight} from "./music-hover.js";
+import {wireVolumeBubble} from "./music-volume-bubble.js";
 import {isMotionCover} from './music-motion.js';
 import {readMusicProfile,saveMusicProfile,sanitizeMusicCollection,sanitizeMusicTrack} from "./music-profile.js";
 import {wireMusicProfile} from "./music-profile-ui.js";
@@ -1626,6 +1627,11 @@ export function createMusic({invoke,onDownload,storage}) {
   const shortcutHelp=createShortcutHelp({button});
   const nudgeVolume=delta=>setVolume(gainFromVolumePosition(Math.max(0,Math.min(1,Number(volume.value)+delta))));
   const seekBy=delta=>{if(!roomControlsPlayback()&&Number.isFinite(audio.duration))audio.currentTime=Math.max(0,Math.min(audio.duration,audio.currentTime+delta));};
+  // The wheel seeks over the timeline and changes the volume over the speaker or its slider.
+  const volumeBubble=wireVolumeBubble({input:volume,percent:()=>volumePercent(audio.volume)});
+  const wheelStep=event=>event.deltaY<0?1:-1;
+  seek.closest?.('.music-seek')?.addEventListener('wheel',event=>{if(seek.disabled)return;event.preventDefault();seekBy(wheelStep(event)*5);},{passive:false});
+  for(const node of [volumeMark,volume])node.addEventListener?.('wheel',event=>{event.preventDefault();nudgeVolume(wheelStep(event)*.05);volumeBubble.show();},{passive:false});
   const shortcuts={play:togglePlay,next:()=>next.click(),previous:()=>previous.click(),forward:()=>seekBy(5),back:()=>seekBy(-5),louder:()=>nudgeVolume(.05),quieter:()=>nudgeVolume(-.05),mute:()=>volumeMark.click(),like:()=>like.click(),shuffle:()=>shuffleButton.click(),repeat:()=>repeatButton.click(),queue:()=>queueButton.click(),full:()=>{if(document.getElementById("music-now-playing")?.open)presentation.close();else $("music-expand")?.click();},help:()=>shortcutHelp.open()};
   document.addEventListener("keydown",event=>{
     if(document.querySelector("main").dataset.page!=="music"||document.querySelector("dialog[open]:not(#music-now-playing)")||document.querySelector(".music-dock-menu:popover-open"))return;
