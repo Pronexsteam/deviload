@@ -110,3 +110,20 @@ test('the lean spring reaches its target and settles',async()=>{
  while(!state.settled){state=springStep(state);overshoot=Math.min(overshoot,state.x);}
  assert.ok(overshoot<0&&overshoot>-1);
 });
+test('a music video gives way to the album recording, and videos keep their own thumbnail',async()=>{
+ const {bestResult,ownThumbnail}=await import('../src/music-ui-model.js');
+ const video={kind:'song',id:'YykjpeuMNEk',title:'Hymn For The Weekend (feat. Beyoncé)',artists:['Coldplay'],image:'https://i.ytimg.com/vi/YykjpeuMNEk/hqdefault.jpg'};
+ const slowed={kind:'song',id:'edtqYfYoGoE',title:'Coldplay - Hymn For The Weekend (Slowed & Reverbed)',artists:['Myst Audios'],image:'https://i.ytimg.com/vi/edtqYfYoGoE/hqdefault.jpg'};
+ const album={kind:'song',id:'H3Kzh6RrnMc',title:'Hymn For The Weekend',artists:['Coldplay'],image:'https://yt3.googleusercontent.com/x=w120'};
+ assert.equal(bestResult([video,slowed,album],'hymn for the weekend coldplay').id,'H3Kzh6RrnMc');
+ assert.equal(bestResult([video,slowed],'x').id,'YykjpeuMNEk');
+ assert.equal(bestResult([album,video],'x').id,'H3Kzh6RrnMc');
+ assert.equal(ownThumbnail({...video,image:'https://i.ytimg.com/vi/edtqYfYoGoE/hqdefault.jpg?sqp=1'}).image,'https://i.ytimg.com/vi/YykjpeuMNEk/hqdefault.jpg?sqp=1');
+ assert.equal(ownThumbnail(album).image,album.image);
+});
+test('a song title with ft inside a word is not cut short',async()=>{
+ const {bestResult}=await import('../src/music-ui-model.js');
+ const video={kind:'song',id:'aaaaaaaaaaa',title:'Soft Gift',artists:['A'],image:'https://i.ytimg.com/vi/aaaaaaaaaaa/hqdefault.jpg'};
+ const other={kind:'song',id:'bbbbbbbbbbb',title:'So',artists:['A'],image:'https://lh3.googleusercontent.com/x'};
+ assert.equal(bestResult([video,other],'q').id,'aaaaaaaaaaa');
+});

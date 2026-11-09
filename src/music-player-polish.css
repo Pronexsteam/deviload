@@ -310,3 +310,6 @@
 .music-sidebar-stats-detail{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 @container music-content (max-width:440px){.music-welcome .music-sidebar-stats{grid-template-columns:auto;padding-inline-start:10px}.music-sidebar-stats-chart{display:none}}
 .music-now-info>.music-change-source:not([hidden]){width:fit-content;max-width:100%;padding:3px 8px;border:1px solid var(--workspace-line);border-radius:6px;color:var(--workspace-ink);background:var(--workspace-hover);font:inherit;font-size:12px;cursor:pointer}
+.music-motion-cover.is-wide{object-fit:cover}
+/* A wide picture (a video track's frame) fills a square cover rather than showing black bars. */
+:root body :is(#devil-music,#music-now-playing,.music-dock) .music-art img.is-wide{object-fit:cover}

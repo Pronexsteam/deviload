@@ -24,7 +24,7 @@ import {transitionPlan} from "./music-transition-model.js";
 import {createSleepTimer,sleepLabel,SLEEP_MINUTES} from "./music-sleep.js";
 import {musicShortcut} from "./music-shortcuts.js";
 import {createShortcutHelp} from "./music-shortcut-help.js";
-import {collectionFacts,creditAlbumArtist,creditAlbumTracks,creditArtistCards} from "./music-ui-model.js";
+import {collectionFacts,creditAlbumArtist,creditAlbumTracks,creditArtistCards,bestResult} from "./music-ui-model.js";
 import {createMusicMiniPlayer} from "./music-mini-controller.js";
 import {createMusicRoom} from "./music-room-controller.js";
 import {createMusicRemote} from "./music-remote-controller.js";
@@ -87,6 +87,8 @@ function cover(item, cls="",size=320) {
   frame.append(icon("music-notes"));
   if(safeArtworkUrl(item?.image)) {
     const img=el("img","");if(loadArtwork(img,item.image,size))frame.append(img);
+    // A video track's picture is a wide frame; it fills square covers instead of sitting between black bars.
+    img.addEventListener?.("load",()=>img.classList.toggle("is-wide",img.naturalHeight>0&&img.naturalWidth/img.naturalHeight>1.2));
   }
   return frame;
 }
@@ -1318,7 +1320,7 @@ export function createMusic({invoke,onDownload,storage}) {
       if(!playlist.smart&&selectedTracks.size){const controls=el("div","music-batch-actions");controls.append(el("strong","",t("{count} selected",{count:selectedTracks.size})),button(t("Select visible tracks"),null,()=>{const ids=visibleTrackIds;if(ids.every(id=>selectedTracks.has(id)))ids.forEach(id=>selectedTracks.delete(id));else ids.forEach(id=>selectedTracks.add(id));render();},"quiet small"));for(const [label,action]of [[t("Copy to playlist"),()=>library.transfer(playlist.id,[...selectedTracks],false)],[t("Move to playlist"),()=>library.transfer(playlist.id,[...selectedTracks],true)],[t("Remove selected"),()=>library.removeTracks(playlist.id,[...selectedTracks])]]){const control=button(label,null,action,"outline small");control.disabled=!selectedTracks.size;controls.append(control);}if(library.canUndo())controls.append(button(t("Undo library change"),null,()=>library.undo(playlistId),"quiet small"));root.append(controls);}
       if(!playlist.items.length){const empty=el("div","music-empty");empty.append(el("h4","",playlist.smart?t("Your mix is still growing"):t("Make room for your favorites")),el("p","",playlist.smart?t("Keep listening and liking songs. This playlist updates from your history."):t("Create a playlist, then add songs from search or your liked songs.")));root.append(empty);return;}
     }
-    if(view==="search"&&!listFilter){const all=sections.flatMap(section=>section.items),best=all.find(item=>item.title?.toLocaleLowerCase()===lastQuery.value?.toLocaleLowerCase())||all[0];if(best){const feature=el("section","music-best-result"),copy=el("div",""),action=()=>best.kind==="song"?playItems(all,best.id):(browseItem=best,load("browse",best.id,best.title));const art=button(t("Open {title}",{title:best.title}),null,action,"music-best-art");art.replaceChildren(playableCover(best));
+    if(view==="search"&&!listFilter){const all=sections.flatMap(section=>section.items),best=bestResult(all,lastQuery.value);if(best){const feature=el("section","music-best-result"),copy=el("div",""),action=()=>best.kind==="song"?playItems(all,best.id):(browseItem=best,load("browse",best.id,best.title));const art=button(t("Open {title}",{title:best.title}),null,action,"music-best-art");art.replaceChildren(playableCover(best));
       // Video results have wide YouTube frames; a square would cut their sides off.
       if(/^https:\/\/i\.ytimg\.com\//.test(best.image||""))art.classList.add("is-wide");copy.append(el("span","music-eyebrow",t("Top result")),el("h2","",best.title),el("p","",displaySubtitle(best)),button(best.kind==="song"?t("Play"):t("Open {title}",{title:best.title}),best.kind==="song"?"play":"arrow-right",action,"music-primary music-text-button"));feature.append(art,copy);root.append(feature);}}
     if(!sections.some(section=>section.items.length)){

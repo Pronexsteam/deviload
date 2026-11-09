@@ -27,7 +27,10 @@ export function createMotionCover({invoke,convertFileSrc,host,getHost=()=>host,i
     const path=cache.has(key)?cache.get(key):await pending.get(key);
     if(disposed||token!==serial||!path||!isVisible()||document.hidden||!enabled||reduced.matches)return;
     video=document.createElement('video');decorativeMedia.add(video);video.className='music-motion-cover';video.muted=true;video.loop=true;video.playsInline=true;video.preload='metadata';video.setAttribute('aria-hidden','true');
-    const node=video;node.addEventListener('loadeddata',()=>{if(video===node){node.classList.add('is-ready');onAvailable(true);}});
+    const node=video;node.addEventListener('loadeddata',()=>{if(video===node){
+      // A wide clip in a square cover would show black bars; it fills the square instead.
+      node.classList.toggle('is-wide',node.videoHeight>0&&node.videoWidth/node.videoHeight>1.2);
+      node.classList.add('is-ready');onAvailable(true);}});
     node.addEventListener('error',()=>{if(video===node){cache.set(key,null);clear();onAvailable(false);}});
     node.src=convertFileSrc(path);getHost().append(node);sync();
   }

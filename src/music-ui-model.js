@@ -73,7 +73,24 @@ export function matchScore(query,item){
 const VARIANTS=new Set(['live','karaoke','cover','remix','acoustic','instrumental','nightcore','slowed','reverb','sped','8d','concert']);
 const variant=(tokens,title)=>title.some(word=>VARIANTS.has(word)&&!tokens.includes(word))?25:0;
 export function rememberSearch(history,query){const value=String(query||'').trim().slice(0,120);if(!value)return history;return [value,...history.filter(item=>typeof item==='string'&&item.toLocaleLowerCase()!==value.toLocaleLowerCase())].slice(0,8);}
-export function creditArtistCards(sections){return sections.map(section=>{let artist='';return {...section,items:section.items.map(item=>{if(item?.kind==='artist'){artist=item.title||'';return item;}if(item?.kind!=='song'||item.artists?.length){artist='';return item;}return artist?{...item,artists:[artist]}:item;})};});}
+export function creditArtistCards(sections){return sections.map(section=>{let artist='';return {...section,items:section.items.map(item=>{item=ownThumbnail(item);if(item?.kind==='artist'){artist=item.title||'';return item;}if(item?.kind!=='song'||item.artists?.length){artist='';return item;}return artist?{...item,artists:[artist]}:item;})};});}
+// A video's picture comes from its own video; the catalog sometimes hands it a neighbour's thumbnail.
+export function ownThumbnail(item){
+  if(item?.kind!=='song'||!/^[A-Za-z0-9_-]{11}$/.test(item.id||''))return item;
+  const match=String(item.image||'').match(/^(https:\/\/i\.ytimg\.com\/vi\/)([A-Za-z0-9_-]{11})(\/.*)$/);
+  return match&&match[2]!==item.id?{...item,image:match[1]+item.id+match[3]}:item;
+}
+const isVideoTrack=item=>/^https:\/\/i\.ytimg\.com\//.test(String(item?.image||''));
+const songCore=title=>foldSearch(String(title||'').replace(/[([][^)\]]*[)\]]/g,' ').replace(/\b(feat|ft)\b.*$/i,''));
+// The best search result: the exact title if there is one, else the first. A music video gives way to the
+// album recording of the same song by the same artist, whose timing matches its lyrics; the video is
+// still one click away on the player.
+export function bestResult(items,query){
+  const pick=items.find(item=>item.title?.toLocaleLowerCase()===String(query||'').toLocaleLowerCase())||items[0];
+  if(!pick||pick.kind!=='song'||!isVideoTrack(pick))return pick;
+  const core=songCore(pick.title),artists=new Set((pick.artists||[]).map(foldSearch));
+  return items.find(item=>item!==pick&&item.kind==='song'&&!isVideoTrack(item)&&songCore(item.title)===core&&(item.artists||[]).some(name=>artists.has(foldSearch(name))))||pick;
+}
 export function creditAlbumArtist(item,parent){return item?.kind==='album'&&!item.artists?.length&&parent?.kind==='artist'&&parent.title?{...item,artists:[parent.title]}:item;}
 export function creditAlbumTracks(album,sections){if(album?.kind!=='album')return sections;return sections.map(section=>section.title?section:{...section,items:section.items.map(item=>item.kind==='song'?{...item,album:item.album||album.title,artists:item.artists?.length?item.artists:album.artists||[]}:item)});}
 export function songAlbum(item){const album=item?.album;if(typeof album==='string')return album;if(album?.title||album?.name)return album.title||album.name;const parts=String(item?.subtitle||'').split(' • ');return parts.length>=3&&/^\d+:\d{2}/.test(parts[2])?parts[1]:'';}
