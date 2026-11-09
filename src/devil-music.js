@@ -47,6 +47,7 @@ import {interestSources,interestSeeds,interestProfile,rememberInterestTrack,sani
 import {createInterestMixesUI} from "./music-interest-ui.js";
 import {createNowPlaying} from "./music-presentation.js";
 import {createLyricCard} from "./music-lyric-card.js";
+import {wireTimeline} from "./music-timeline.js";
 import {isMotionCover} from './music-motion.js';
 import {readMusicProfile,saveMusicProfile,sanitizeMusicCollection,sanitizeMusicTrack} from "./music-profile.js";
 import {wireMusicProfile} from "./music-profile-ui.js";
@@ -221,6 +222,7 @@ export function createMusic({invoke,onDownload,storage}) {
   lyrics.addTool(desktopTool);
   // A picture of a sung line to share: from the lyrics tools, or a right click on a line.
   const lyricCard=createLyricCard({invoke,button,lyrics,getSong:()=>current});lyrics.addTool(lyricCard.button);
+  wireTimeline({seek,elapsed,duration,getAudio:()=>audio,lyrics,time});
   const syncDesktop=({open})=>{desktopTool.setAttribute("aria-pressed",String(open));desktopItem?.setAttribute("aria-pressed",String(open));};
   lyricLines.onChange(syncDesktop);
   // "Even out song volume": once per song and player, ask how loud the recording is and trim it.
@@ -1192,7 +1194,7 @@ export function createMusic({invoke,onDownload,storage}) {
     discordPresence.sync();
     const seconds=clock.sample(audio.currentTime,performance.now(),!audio.paused&&!audio.seeking&&audio.readyState>=3&&audio.volume>0&&!audio.muted);
     if(seconds>=30&&seconds-checkpoint>=15){checkpoint=seconds;captureListening();}
-    elapsed.textContent=time(audio.currentTime);duration.textContent=time(audio.duration);seek.disabled=!Number.isFinite(audio.duration)||audio.duration<=0;if(Number.isFinite(audio.duration)&&audio.duration>0&&!isRangeDragging(seek)){seek.setAttribute("aria-valuetext",`${time(audio.currentTime)} / ${time(audio.duration)}`);}
+    elapsed.textContent=time(audio.currentTime);duration.textContent=time(audio.duration);duration.paintTime?.();seek.disabled=!Number.isFinite(audio.duration)||audio.duration<=0;if(Number.isFinite(audio.duration)&&audio.duration>0&&!isRangeDragging(seek)){seek.setAttribute("aria-valuetext",`${time(audio.currentTime)} / ${time(audio.duration)}`);}
     watchCurrentBuffer();preloadNext();lyrics.update();
     const upcoming=plannedNext(),remaining=(Math.max(audio.duration,endSource?.duration||0)-audio.currentTime)/audio.playbackRate;
     if(!musicRoom?.isGuest()&&!sleep.holdsTrackEnd()&&repeat!=="one"&&!streamLoading&&!audio.paused&&!audio.seeking&&upcoming>=0&&decks.ready(queue[upcoming].id)){

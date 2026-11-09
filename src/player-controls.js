@@ -11,6 +11,9 @@ export function paintPlaybackRange(input){
  const fill=`calc(${progress} + ${(0.5-fraction).toFixed(6)} * var(--player-thumb-size, 10px))`;
  if(input.style.getPropertyValue('--range-progress')!==progress)input.style.setProperty('--range-progress',progress);
  if(input.style.getPropertyValue('--range-fill')!==fill)input.style.setProperty('--range-fill',fill);
+ // The timeline's glow and light follow the play position.
+ const seek=input.parentElement?.classList.contains('music-seek')?input.parentElement:null;
+ if(seek&&seek.style.getPropertyValue('--range-fill')!==fill)seek.style.setProperty('--range-fill',fill);
 }
 const paint=paintPlaybackRange;
 document.addEventListener('input',event=>{if(event.target.matches(selector))paint(event.target);});

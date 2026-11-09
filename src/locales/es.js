@@ -2138,6 +2138,8 @@ export default {
 "All sources": "Todas las fuentes",
 "Lyrics on the desktop": "Letra en el escritorio",
 "Lyrics over the video": "Letra sobre el vídeo",
+"Show song length": "Mostrar la duración",
+"Show time left": "Mostrar el tiempo restante",
 "Share a line": "Compartir un verso",
 "Look": "Estilo",
 "Lines (up to four)": "Versos (hasta cuatro)",

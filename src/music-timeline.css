@@ -1,0 +1,50 @@
+/* The song's timeline. The played part is a wave in the player's colour that flows while the song plays,
+   swells with the bass and settles into a straight line when it stops; the rest is a quiet line. Under the pointer the line
+   thickens, a glass bead appears and a bubble shows the time and the line sung there. */
+@property --track-h{syntax:"<length>";inherits:true;initial-value:3px}
+@property --wave-on{syntax:"<number>";inherits:true;initial-value:0}
+:root body :is(.music-dock,.music-stage) .music-progress .music-seek{position:relative;flex:1;min-width:0;display:grid;align-items:center;height:22px;--wave-on:0;transition:--wave-on .6s cubic-bezier(.2,.85,.15,1)}
+:root body :is(.music-dock,.music-stage) .music-seek.is-playing{--wave-on:1}
+:root body :is(.music-dock,.music-stage) .music-seek input[type="range"]{position:relative;z-index:2;width:100%;--track-h:3px;transition:--track-h .35s cubic-bezier(.2,1.12,.32,1)!important}
+:root body :is(.music-dock,.music-stage) .music-seek:is(:hover,.is-dragging) input[type="range"]:not(:disabled),
+:root body :is(.music-dock,.music-stage) .music-seek input[type="range"]:focus-visible{--track-h:5px}
+/* The track shows only the part still to come; the wave draws the played part. */
+:root body :is(.music-dock,.music-stage) .music-seek input[type="range"]::-webkit-slider-runnable-track{height:var(--track-h);border-radius:999px;box-shadow:none;
+  background:linear-gradient(to right,color-mix(in srgb,var(--player-primary,#9ad0ff) calc((1 - var(--wave-on,0)) * 100%),transparent) var(--range-fill,0%),color-mix(in srgb,var(--player-ink,#fff) 20%,transparent) var(--range-fill,0%))}
+:root body :is(.music-dock,.music-stage) .music-seek input[type="range"]::-webkit-slider-thumb{margin-top:calc((var(--track-h) - var(--player-thumb-size,12px)) / 2);scale:0;
+  background:radial-gradient(circle at 35% 30%,#fff,color-mix(in srgb,var(--player-primary) 35%,#fff) 60%,color-mix(in srgb,var(--player-primary) 70%,#fff));
+  box-shadow:0 0 0 3px rgb(255 255 255/.18),0 0 14px color-mix(in srgb,var(--player-primary) 70%,transparent),0 2px 6px rgb(0 0 0/.4);transition:scale .35s cubic-bezier(.2,1.12,.32,1)!important}
+:root body :is(.music-dock,.music-stage) .music-seek:is(:hover,.is-dragging) input[type="range"]:not(:disabled)::-webkit-slider-thumb,
+:root body :is(.music-dock,.music-stage) .music-seek input[type="range"]:focus-visible::-webkit-slider-thumb{scale:1}
+:root body :is(.music-dock,.music-stage) .music-seek.is-dragging input[type="range"]::-webkit-slider-thumb{scale:1.2}
+/* The wave. */
+:root body :is(.music-dock,.music-stage) .music-seek::before{content:"";position:absolute;left:5px;top:50%;z-index:1;width:max(0px,calc(var(--range-fill,0%) - 7px));height:14px;pointer-events:none;
+  background:linear-gradient(to right,color-mix(in srgb,var(--player-primary,#9ad0ff) 60%,transparent),var(--player-primary,#9ad0ff) 40px);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='14'%3E%3Cpath d='M0 7 Q7 2.5 14 7 T28 7' fill='none' stroke='%23000' stroke-width='2.75' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x 0 50%/28px 14px;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='14'%3E%3Cpath d='M0 7 Q7 2.5 14 7 T28 7' fill='none' stroke='%23000' stroke-width='2.75' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x 0 50%/28px 14px;
+  translate:0 -50%;scale:1 calc(.15 + var(--wave-on,0) * (.65 + var(--orb-energy,0) * .5));opacity:var(--wave-on,0);animation:music-seek-wave 1.4s linear infinite;animation-play-state:paused}
+:root body :is(.music-dock,.music-stage) .music-seek.is-playing::before{animation-play-state:running}
+@keyframes music-seek-wave{to{-webkit-mask-position:28px 50%;mask-position:28px 50%}}
+/* The play position: a glowing point that breathes with the bass; the bead takes over under the pointer. */
+:root body :is(.music-dock,.music-stage) .music-seek::after{content:"";position:absolute;left:var(--range-fill,0%);top:50%;z-index:1;width:9px;height:9px;border-radius:50%;pointer-events:none;
+  background:color-mix(in srgb,var(--player-primary,#9ad0ff) 70%,#fff);box-shadow:0 0 calc(8px + var(--orb-energy,0) * 10px) color-mix(in srgb,var(--player-primary,#9ad0ff) 85%,transparent);
+  translate:-50% -50%;scale:calc(1 + var(--orb-energy,0) * .35);transition:scale .12s linear,opacity .2s}
+:root body :is(.music-dock,.music-stage) .music-seek:is(:hover,.is-dragging)::after{opacity:0}
+:root body :is(.music-dock,.music-stage) .music-seek:has(input:disabled)::after,:root body :is(.music-dock,.music-stage) .music-seek:has(input:disabled)::before{display:none}
+
+.music-seek-bubble{position:absolute;bottom:calc(100% + 4px);left:0;z-index:6;display:grid;justify-items:center;gap:1px;max-width:300px;padding:6px 12px;border:1px solid rgb(255 255 255/.14);border-radius:12px;
+  background:rgb(16 18 24/.8);-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);color:#fff;box-shadow:0 10px 30px rgb(0 0 0/.4);
+  pointer-events:none;white-space:nowrap;opacity:0;translate:-50% 6px;scale:.92;transition:opacity .16s ease,translate .3s cubic-bezier(.2,1.12,.32,1),scale .3s cubic-bezier(.2,1.12,.32,1)}
+.music-seek.is-peeking .music-seek-bubble{opacity:1;translate:-50% 0;scale:1}
+.music-seek-bubble strong{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+.music-seek-bubble span{max-width:276px;overflow:hidden;font-size:12px;opacity:.82;text-overflow:ellipsis}
+.music-seek-bubble:not(.has-line) span{display:none}
+:root[data-theme="glass-light"] .music-seek-bubble{background:rgb(255 255 255/.86);color:#1b2433;border-color:rgb(0 0 0/.08)}
+
+.music-time-toggle{cursor:pointer;border-radius:6px;transition:color .2s}
+.music-time-toggle:hover{color:var(--player-ink,#fff)}
+.music-time-toggle:focus-visible{outline:2px solid var(--player-primary,#9ad0ff);outline-offset:2px}
+
+@media(prefers-reduced-motion:reduce){
+  :root body :is(.music-dock,.music-stage) .music-seek input[type="range"],:root body :is(.music-dock,.music-stage) .music-seek input[type="range"]::-webkit-slider-thumb,.music-seek-bubble{transition:none!important}}
+
+@media(prefers-reduced-motion:reduce){:root body :is(.music-dock,.music-stage) .music-seek::before{animation:none}:root body :is(.music-dock,.music-stage) .music-seek{transition:none}}

@@ -2188,6 +2188,8 @@ export default {
 "All sources": "Все источники",
 "Lyrics on the desktop": "Текст на рабочем столе",
 "Lyrics over the video": "Текст поверх клипа",
+"Show song length": "Показать длину песни",
+"Show time left": "Показать, сколько осталось",
 "Share a line": "Поделиться строкой",
 "Look": "Вид",
 "Lines (up to four)": "Строки (до четырёх)",

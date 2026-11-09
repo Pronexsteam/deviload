@@ -6,6 +6,8 @@ const still=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
 export function wireGlassOrb(button){
   if(!button)return {energy(){}};
   let energy=0,shown=0;
+  // The bass level is set on the whole transport, so the timeline's glow can breathe with the orb.
+  const host=()=>button.closest('.music-transport')||button;
   button.addEventListener('pointermove',event=>{
     const box=button.getBoundingClientRect();
     button.style.setProperty('--orb-x',`${Math.round((event.clientX-box.left)/box.width*100)}%`);
@@ -25,9 +27,9 @@ export function wireGlassOrb(button){
   return {
     // Bass level 0..1; rises quickly and settles slowly so the orb breathes rather than flickers.
     energy(level){
-      if(still()){if(shown){shown=0;button.style.removeProperty('--orb-energy');}return;}
+      if(still()){if(shown){shown=0;host().style.removeProperty('--orb-energy');}return;}
       const value=Math.max(0,Math.min(1,Number(level)||0));energy=value>energy?value:energy*.9+value*.1;
-      const rounded=Math.round(energy*50)/50;if(rounded===shown)return;shown=rounded;button.style.setProperty('--orb-energy',String(rounded));
+      const rounded=Math.round(energy*50)/50;if(rounded===shown)return;shown=rounded;host().style.setProperty('--orb-energy',String(rounded));
     },
   };
 }

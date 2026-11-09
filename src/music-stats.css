@@ -59,3 +59,7 @@ dialog.music-stats-dialog::backdrop{background:#0006;-webkit-backdrop-filter:blu
 .music-stats-chart.is-year{grid-template-columns:repeat(12,1fr);gap:8px}
 .music-stats-tile strong{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .music-stats-tile:not(.is-big) strong{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;white-space:normal;font-size:17px;line-height:1.2}
+/* The close cross is drawn, not typed: a text "×" sits on the font's baseline and looks off centre. */
+:is(.music-stats-close,.music-lyric-card-close){position:relative;font-size:0}
+:is(.music-stats-close,.music-lyric-card-close)::before,:is(.music-stats-close,.music-lyric-card-close)::after{content:"";position:absolute;left:50%;top:50%;width:14px;height:1.75px;border-radius:2px;background:currentColor;translate:-50% -50%;rotate:45deg}
+:is(.music-stats-close,.music-lyric-card-close)::after{rotate:-45deg}

@@ -96,3 +96,8 @@ test('two sung lines on a card are kept apart',async()=>{
  const {wrapRows}=await import('../src/music-lyric-card-model.js');
  assert.deepEqual(wrapRows(['one two','three'],100,()=>10),['one two',null,'three']);
 });
+test('the timeline finds the line sung under the pointer',async()=>{
+ const {lineAt}=await import('../src/music-timeline-model.js');
+ const lines=[{text:'a',at:10,end:14},{text:'b',at:15,end:20},{text:'c',at:60,end:70}];
+ assert.equal(lineAt(lines,16),'b');assert.equal(lineAt(lines,40),'');assert.equal(lineAt(lines,5),'');
+});

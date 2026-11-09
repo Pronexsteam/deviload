@@ -24,7 +24,7 @@ export function createStatsWindow({weekly,findItem=()=>null,cover=()=>make('span
     const tabs=make('div','music-stats-tabs');tabs.setAttribute('role','tablist');
     for(const [key,label]of [['week',t('Week')],['month',t('Month')],['year',t('Year')]]){const tab=make('button','',label);tab.type='button';tab.setAttribute('role','tab');tab.setAttribute('aria-selected',String(key===period));tab.addEventListener('click',()=>{if(period===key)return;period=key;const focus=render();dialog.querySelector(`.music-stats-tabs [aria-selected="true"]`)?.focus();dialog.querySelector('.music-stats-body')?.animate([{opacity:0,translate:'0 8px'},{opacity:1,translate:'0 0'}],{duration:260,easing:'cubic-bezier(.2,.85,.15,1)'});void focus;});tabs.append(tab);}
     titles.append(tabs);
-    const close=make('button','music-stats-close','×');close.type='button';close.title=close.ariaLabel=t('Close');close.addEventListener('click',()=>hide());
+    const close=make('button','music-stats-close','');close.type='button';close.title=close.ariaLabel=t('Close');close.addEventListener('click',()=>hide());
     head.append(titles,close);
 
     const tiles=make('div','music-stats-tiles');

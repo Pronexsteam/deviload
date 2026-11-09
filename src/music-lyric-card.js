@@ -11,7 +11,7 @@ export function createLyricCard({invoke,button,lyrics,getSong}){
   const make=(tag,cls='')=>{const node=document.createElement(tag);if(cls)node.className=cls;return node;};
   const dialog=make('dialog','music-lyric-card-dialog');dialog.setAttribute('aria-labelledby','music-lyric-card-title');
   const head=make('header','music-lyric-card-head'),title=make('h2');title.id='music-lyric-card-title';
-  const close=make('button','music-lyric-card-close');close.type='button';close.textContent='×';close.addEventListener('click',()=>dialog.close());
+  const close=make('button','music-lyric-card-close');close.type='button';close.addEventListener('click',()=>dialog.close());
   head.append(title,close);
   const canvas=make('canvas','music-lyric-card-preview');canvas.width=CARD.width;canvas.height=CARD.height;canvas.setAttribute('role','img');
   const side=make('div','music-lyric-card-side'),styleLabel=make('p','music-lyric-card-label'),styles=make('div','music-lyric-card-styles');styles.setAttribute('role','radiogroup');
