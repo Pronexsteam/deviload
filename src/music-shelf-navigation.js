@@ -57,9 +57,16 @@ export function enhanceMusicShelves(root){
     });
     return button;
   };
+  // New shelves are wrapped once the page has painted: reading each grid's flow in the middle of a render
+  // would make the browser restyle the whole new page before showing it.
+  let wrapTimer=0;
   const refresh=()=>{
     if(destroyed)return;
     for(const [grid,row]of rows)if(!root.contains(grid))detach(grid,row);
+    clearTimeout(wrapTimer);view.requestAnimationFrame(()=>{clearTimeout(wrapTimer);wrapTimer=setTimeout(wrap,0);});
+  };
+  const wrap=()=>{
+    if(destroyed)return;
     for(const grid of root.querySelectorAll('.music-card-grid')){
       if(rows.has(grid)||!view.getComputedStyle(grid).gridAutoFlow.includes('column'))continue;
       const wrapper=root.ownerDocument.createElement('div');wrapper.className='music-shelf-navigation';
@@ -77,7 +84,7 @@ export function enhanceMusicShelves(root){
     schedule();
   };
   const destroy=()=>{
-    destroyed=true;clearTimeout(settle);if(frame)view.cancelAnimationFrame(frame);frame=0;
+    destroyed=true;clearTimeout(settle);clearTimeout(wrapTimer);if(frame)view.cancelAnimationFrame(frame);frame=0;
     observer?.disconnect();view.removeEventListener('resize',schedule);
     for(const [grid,row]of rows)detach(grid,row,true);
     controllers.delete(root);
