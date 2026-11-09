@@ -19,7 +19,7 @@ import {wireMusicYield} from "./music-yield.js";
 import {wireGlassOrb,wireGlassButtons} from "./music-glass.js";
 import {wireResultKeys} from "./music-results-keys.js";
 import {createMusicHomeTiles} from "./music-home-tiles.js";
-import {revealView} from "./music-transitions.js";
+import {revealView,cascadeIn,flyFrom} from "./music-transitions.js";
 import {transitionPlan} from "./music-transition-model.js";
 import {createSleepTimer,sleepLabel,SLEEP_MINUTES} from "./music-sleep.js";
 import {musicShortcut} from "./music-shortcuts.js";
@@ -1241,7 +1241,7 @@ export function createMusic({invoke,onDownload,storage}) {
     contextActions.set(card,()=>item.kind==="song"?songActions(item):[[t("Open {title}",{title:item.title}),"arrow-right",()=>{browseItem=creditAlbumArtist(item,browseItem);load("browse",item.id,item.title);}],...(["album","artist","playlist"].includes(item.kind)?[[item.kind==="artist"?t("Follow artist"):t("Save album"),"plus",()=>toggleCollection(item)]]:[])]);
     const action=button(item.kind==="song"?t("Play {title}",{title:item.title}):t("Open {title}",{title:item.title}),null,()=>{
       if(item.kind==="song")playItems(items,item.id,personal?{kind:"personal"}:selectionContext(),contextItems);
-      else {browseItem=creditAlbumArtist(item,browseItem);load("browse",item.id,item.title);}
+      else {coverFlight=card.querySelector(".music-art")?.getBoundingClientRect()||null;browseItem=creditAlbumArtist(item,browseItem);load("browse",item.id,item.title);}
     },"music-card-main");
     const art=playableCover(item,item.kind==="song"?"play":"arrow-right");
     action.replaceChildren(art,el("strong","music-card-title",item.title),el("span","music-card-subtitle",displaySubtitle(item)));card.append(action);
@@ -1455,6 +1455,7 @@ export function createMusic({invoke,onDownload,storage}) {
     const durationLabel=el("span","music-track-duration",item.duration?time(item.duration):"");durationLabel.setAttribute("aria-label",t("Duration"));row.append(entry,durationLabel,actions);return row;
   }
   function skeleton() {clearVirtualLists();const grid=el("div","music-card-grid");for(let i=0;i<6;i++)grid.append(el("div","music-skeleton"));$("music-shelves").replaceChildren(grid);}
+  let coverFlight=null;
   async function load(kind,value="",heading="",refresh=false,params="") {
     const retainHome=kind==="home"&&view==="home"&&lastQuery.kind==="home"&&sections.length>0;
     rememberNavigation({type:"catalog",kind,value,heading,params,filter:searchFilter,mood:activeMood,item:browseItem});
@@ -1477,6 +1478,13 @@ export function createMusic({invoke,onDownload,storage}) {
       if(kind==="browse"){({item:browseItem,sections}=applyBrowseArtwork(browseItem,sections,result.artwork,value));sections=creditAlbumTracks(browseItem,sections);}
       const notice=result.notice==="cached"?t("Showing the last available artist page."):result.notice==="songs"?t("Showing songs while the full artist page is unavailable."):"";
       status(notice);if(!retainHome)render();loaded=true;
+      // A search arrives as a wave; an album or artist opened from a card takes its cover with it.
+      // Motion is decoration: it must never stand between the listener and the page.
+      try{
+        if(!retainHome&&kind==="search")cascadeIn($("music-shelves"));
+        if(kind==="browse"){const art=$("music-shelves").querySelector(".music-collection-banner>.music-art");if(coverFlight&&art)flyFrom(art,coverFlight,{duration:560});cascadeIn($("music-shelves"),{selector:".music-collection-copy>*,.music-track-row,.music-card",limit:14});}
+        coverFlight=null;
+      }catch{/* The page is already shown. */}
       if((kind==="browse"||kind==="search"&&searchFilter==="songs")&&audio.paused){const first=tracks(sections.flatMap(section=>section.items))[0];if(first)intent.enter(first.id);}
       if(kind==="home")personalize(token,result.sections);
     }catch(error){if(token!==request)return;if(kind==="search")musicSearch?.allowRetry();status(errorText(error),true);$("music-shelves").replaceChildren(button(t("Try again"),null,()=>load(kind,value,heading,true,params),"music-primary"));}
