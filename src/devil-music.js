@@ -103,7 +103,6 @@ export function createMusic({invoke,onDownload,storage}) {
   const diagnostics=createMusicDiagnostics();
   const loadArtistCatalog=createArtistCatalog(invoke);
   const decks=createMusicDecks();let audio=decks.current;document.body.append(...decks.nodes);
-  const listen=(name,handler)=>decks.listen(name,handler);
   if(!storage)try{storage=localStorage;}catch{/* storage unavailable */}
   // Preferences stay on this device; no account or remote profile is needed.
   const {saved,taste}=readMusicProfile(storage);
@@ -1056,7 +1055,7 @@ export function createMusic({invoke,onDownload,storage}) {
   function rememberMediaDuration(){
     if(Number.isFinite(audio.duration)&&audio.duration>0)endSource.duration=Math.max(endSource.duration,audio.duration);
   }
-  listen("ended",event=>{
+  decks.listen("ended",event=>{
     if(!currentEndSource()||!audio.ended||audio.seeking||event?.timeStamp<endSource.since||musicRoom?.isGuest())return;
     // Seeking directly to the genuine end is valid. A complete listen is a
     // separate statistic; it cannot be inferred from the final playhead alone.
@@ -1066,7 +1065,7 @@ export function createMusic({invoke,onDownload,storage}) {
       failPlayback(code,true);
     }else advance(false);
   });
-  listen("play",()=>{
+  decks.listen("play",()=>{
     document.querySelectorAll("audio, video").forEach(other=>{if(!decks.owns(other)&&!isMotionCover(other))other.pause();});
     if("mediaSession" in navigator && current){
       navigator.mediaSession.metadata=new MediaMetadata({title:current.title,artist:displaySubtitle(current),artwork:current.image?[{src:current.image}]:[]});
@@ -1086,11 +1085,11 @@ export function createMusic({invoke,onDownload,storage}) {
     else document.dispatchEvent(new CustomEvent("deviload:music-play"));
   },true);
   function listeningBoundary(){const at=performance.now();clock.sample(audio.currentTime,at,false);clock.sample(audio.currentTime,at,!audio.paused&&!audio.seeking&&audio.readyState>=3&&audio.volume>0&&!audio.muted);}
-  listen("playing",()=>{diagnostics.record("playing","success");clearTimeout(bufferingTimer);bufferingTimer=null;if(current)playbackContext=remember(playbackContext,current,12);if(current&&!historyAdded&&!privateSession){saved.recent=remember(saved.recent,current);historyAdded=true;persist();}listeningBoundary();artist.textContent=displaySubtitle(current)||"YouTube Music";syncDock();});
+  decks.listen("playing",()=>{diagnostics.record("playing","success");clearTimeout(bufferingTimer);bufferingTimer=null;if(current)playbackContext=remember(playbackContext,current,12);if(current&&!historyAdded&&!privateSession){saved.recent=remember(saved.recent,current);historyAdded=true;persist();}listeningBoundary();artist.textContent=displaySubtitle(current)||"YouTube Music";syncDock();});
   // Reset the clock boundary when muting/unmuting so a later timeupdate cannot
   // count the preceding muted interval as audible listening.
-  listen("volumechange",listeningBoundary);
-  listen("pause",()=>{if(!streamLoading&&!sessionTransition){recoveryLocal=null;recoveryCatalog=null;if(endSource)endSource.runway=null;}diagnostics.record("pause","success");decks.stopTail();clearTimeout(bufferingTimer);bufferingTimer=null;clock.sample(audio.currentTime,performance.now(),false);captureListening();syncDock();persistSession();});
+  decks.listen("volumechange",listeningBoundary);
+  decks.listen("pause",()=>{if(!streamLoading&&!sessionTransition){recoveryLocal=null;recoveryCatalog=null;if(endSource)endSource.runway=null;}diagnostics.record("pause","success");decks.stopTail();clearTimeout(bufferingTimer);bufferingTimer=null;clock.sample(audio.currentTime,performance.now(),false);captureListening();syncDock();persistSession();});
   function waitForAudio(){
     clock.sample(audio.currentTime,performance.now(),false);syncDock();
     if(!current||audio.paused||streamLoading)return;
@@ -1131,10 +1130,10 @@ export function createMusic({invoke,onDownload,storage}) {
     },depleted?2500:20000);
     bufferingTimer=timer;
   }
-  listen("waiting",waitForAudio);
-  listen("stalled",()=>{if(audio.readyState<3)waitForAudio();});
-  listen("durationchange",()=>{if(currentEndSource())rememberMediaDuration();});
-  listen("loadedmetadata",()=>{
+  decks.listen("waiting",waitForAudio);
+  decks.listen("stalled",()=>{if(audio.readyState<3)waitForAudio();});
+  decks.listen("durationchange",()=>{if(currentEndSource())rememberMediaDuration();});
+  decks.listen("loadedmetadata",()=>{
     const active=currentEndSource();if(active)rememberMediaDuration();
     if(!Number.isFinite(audio.duration))return;
     knownDuration=audio.duration;
@@ -1196,8 +1195,8 @@ export function createMusic({invoke,onDownload,storage}) {
     const pending=retryProgressedAlternate(code,earlyEnd,resume)||attemptEquivalent(code,resume);
     if(pending)pending.then(recovered=>{if(!recovered)finish();});else finish();
   }
-  listen("error",()=>{if(!streamLoading&&current&&resolvedTrack===current.id)failPlayback(mediaFailureCode());});
-  listen("seeking",()=>{
+  decks.listen("error",()=>{if(!streamLoading&&current&&resolvedTrack===current.id)failPlayback(mediaFailureCode());});
+  decks.listen("seeking",()=>{
     if(!endSource)return;
     endSource.runway=null;
     if(endSource.alternateRetry){
@@ -1205,9 +1204,9 @@ export function createMusic({invoke,onDownload,storage}) {
       else endSource.alternateRetry=null;
     }
   });
-  listen("seeked",()=>{if(endSource?.alternateRetry)endSource.alternateRetry.initialSeek=false;discordPresence.sync(true);});
+  decks.listen("seeked",()=>{if(endSource?.alternateRetry)endSource.alternateRetry.initialSeek=false;discordPresence.sync(true);});
   let joinTimer=0;
-  listen("timeupdate",()=>{
+  decks.listen("timeupdate",()=>{
     discordPresence.sync();
     const seconds=clock.sample(audio.currentTime,performance.now(),!audio.paused&&!audio.seeking&&audio.readyState>=3&&audio.volume>0&&!audio.muted);
     if(seconds>=30&&seconds-checkpoint>=15){checkpoint=seconds;captureListening();}
