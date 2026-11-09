@@ -33,7 +33,7 @@ body.music-focus .music-track-actions .music-icon-button{width:34px;height:34px}
 body.music-focus .music-library-sidebar-actions .music-icon-button{width:34px;height:34px}
 @media(min-width:960px){
   body.music-focus .music-library-sidebar{top:88px;height:calc(100dvh - 190px);max-height:calc(100dvh - 190px);min-height:0}
-  body.music-focus:has(.app-release-notes:not([hidden])) .music-library-sidebar{height:calc(100dvh - 290px);max-height:calc(100dvh - 190px)}
+  body.music-focus .music-library-sidebar{height:calc(100dvh - 290px);max-height:calc(100dvh - 190px)}
   body.music-focus .library-panel-open .music-card-grid{grid-auto-columns:calc((100% - 40px)/3)}
   body.music-focus .library-panel-open .music-results .music-card-grid{grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-columns:auto}
 }

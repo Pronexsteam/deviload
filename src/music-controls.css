@@ -109,7 +109,7 @@ body.music-mini-page #mini-play:hover{background:var(--player-primary);color:var
   :root[data-theme] body .topbar :is(.music-navigation-toggle,.music-navigation button,.topbar-actions :is(#notice-button,#music-settings-top)):not(:disabled):is(:hover,:active),:root[data-theme] body :is(.music-dock,.music-stage) .music-transport-buttons>.music-icon-button:not(:disabled):is(:hover,:active){transform:none}
 }
 :root[data-theme] body main[data-page="music"]>.topbar>.music-navigation button{display:inline-flex;align-items:center;justify-content:center}
-body:not(:has(#devil-music.music-preview-room)) .music-panel-toggle,body:not(:has(main[data-page="music"])) .music-panel-toggle,#music-now-playing .music-panel-toggle{display:none}
+body:not(.has-music-preview-room) .music-panel-toggle,body:not(.music-page) .music-panel-toggle,#music-now-playing .music-panel-toggle{display:none}
 :root[data-theme] body .music-dock .music-panel-toggle[aria-pressed="true"]{color:var(--player-primary);background:color-mix(in srgb,var(--player-primary) 14%,transparent)}
 :root[data-theme] body .music-dock #music-expand{color:var(--player-ink)}
 :root[data-theme] body .music-dock .music-now-art{position:relative;cursor:pointer}
@@ -117,7 +117,7 @@ body:not(:has(#devil-music.music-preview-room)) .music-panel-toggle,body:not(:ha
 .music-dock .music-now-art::before{content:"";position:absolute;z-index:1;top:50%;left:50%;width:22px;height:22px;margin:-11px 0 0 -11px;background:#fff;-webkit-mask:url("assets/icons/arrows-out.svg") center/contain no-repeat;mask:url("assets/icons/arrows-out.svg") center/contain no-repeat;opacity:0;pointer-events:none;transition:opacity var(--ctl-quick) linear}
 .music-dock .music-now-art:is(:hover,:focus-visible)::after,.music-dock .music-now-art:is(:hover,:focus-visible)::before{opacity:1}
 @media(min-width:900px) and (max-width:1040px){
-  :root[data-theme] body:has(main[data-page="music"]) .music-dock{grid-template-columns:minmax(150px,1fr) minmax(260px,1.3fr) auto}
+  :root[data-theme] body.music-page .music-dock{grid-template-columns:minmax(150px,1fr) minmax(260px,1.3fr) auto}
 }
 :root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) body :is(.music-dock,.music-stage){--player-primary:var(--cover-lyric-light,#f3f5fa)}
 :root[data-theme="glass-light"] body :is(.music-dock,.music-stage){--player-primary:var(--cover-lyric-dark,#405b80)}

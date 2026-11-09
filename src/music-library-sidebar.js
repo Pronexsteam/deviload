@@ -49,7 +49,7 @@ export function createMusicLibrarySidebar({workspace,saved,onPlaylist,onFavorite
     const rail=!value&&media.matches;
     // Folding and unfolding glide; window resizes stay immediate.
     if(value!==opened&&workspace.isConnected){workspace.classList.add("music-library-animating");clearTimeout(animation);animation=setTimeout(()=>workspace.classList.remove("music-library-animating"),620);}
-    opened=value;aside.hidden=!value&&!rail;workspace.classList.toggle("library-panel-open",value);workspace.classList.toggle("music-library-rail",rail);toggle.setAttribute("aria-expanded",String(value));closeLabel();
+    opened=value;aside.hidden=!value&&!rail;workspace.classList.toggle("library-panel-open",value);workspace.classList.toggle("music-library-rail",rail);document.body.classList.toggle("music-rail-start",rail&&!workspace.classList.contains("music-panels-swapped"));toggle.setAttribute("aria-expanded",String(value));closeLabel();
     if(remember){preference=value?"open":"closed";try{localStorage.setItem(STORAGE_KEY,preference);}catch{/* Remain usable with denied storage. */}}
     if(focus){if(value&&!media.matches)home.focus();else if(!value)toggle.focus();}
   }

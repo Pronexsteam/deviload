@@ -29,7 +29,7 @@
 
 /* The player bar lines up with the page column outside Devil Music. */
 @media(min-width:900px){
-  :root[data-theme] body:has(main:not([data-page="music"])) .music-dock{margin-left:var(--app-edge);margin-right:var(--app-edge)}
+  :root[data-theme] body:not(.music-page) .music-dock{margin-left:var(--app-edge);margin-right:var(--app-edge)}
 }
 
 /* One continuous backdrop: the page area adds no darker slab beside the section panel. */

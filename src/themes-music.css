@@ -17,8 +17,8 @@
   -webkit-backdrop-filter: none;
 }
 
-:root[data-theme]:not([data-theme="classic"]) body:has(main[data-page="music"]) main,
-:root[data-theme]:not([data-theme="classic"]) body:has(main[data-page="music"]) .sidebar {
+:root[data-theme]:not([data-theme="classic"]) body.music-page main,
+:root[data-theme]:not([data-theme="classic"]) body.music-page .sidebar {
   background: transparent;
 }
 

@@ -35,6 +35,7 @@ export function wireMusicLayout({workspace,document=globalThis.document,storage=
 
   function apply(){
     workspace.classList.toggle('music-panels-swapped',layout.swapped);
+    document.body.classList.toggle('music-rail-start',workspace.classList.contains('music-library-rail')&&!layout.swapped);
     for(const [zone,spec] of Object.entries(ZONES)){
       const box=spec.container();if(!box)continue;
       // Walk backwards so each block only moves when it is out of place; focus and playback stay put.

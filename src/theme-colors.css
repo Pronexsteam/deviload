@@ -43,8 +43,8 @@
 :root:is([data-theme="aurora"],[data-theme="prism"]) .music-workspace .music-track-row.active{background:var(--theme-selected);border-color:var(--theme-line)}
 /* Mini-player has its own small stylesheet; use the same palette without
    importing the desktop grid or changing native transparent corners. */
-:root:is([data-theme="aurora"],[data-theme="prism"]) body:has(#mini-drag){background:var(--atmosphere-panel);color:var(--ink);border-color:var(--theme-line)}
-:root:is([data-theme="aurora"],[data-theme="prism"]) body:has(#mini-drag)::before{position:absolute;border-radius:inherit}
+:root:is([data-theme="aurora"],[data-theme="prism"]) body.music-mini-page{background:var(--atmosphere-panel);color:var(--ink);border-color:var(--theme-line)}
+:root:is([data-theme="aurora"],[data-theme="prism"]) body.music-mini-page::before{position:absolute;border-radius:inherit}
 :root:is([data-theme="aurora"],[data-theme="prism"]) body.remote-page{background:transparent}
 :root:is([data-theme="aurora"],[data-theme="prism"]) body.remote-page::before{background:var(--atmosphere-base);filter:none;opacity:1}
 [data-theme-choice="aurora"] .quick-theme-swatch{background:radial-gradient(at 12% 15%,#a899dc,transparent 70%),linear-gradient(135deg,#322b63,#377e93)}
@@ -57,7 +57,7 @@
 @media(prefers-reduced-motion:no-preference){
  :root[data-theme="aurora"] body::before{inset:-4%;animation:aurora-flow 18s ease-in-out infinite alternate!important}
  :root[data-theme="prism"] body::before{inset:-4%;animation:prism-flow 24s ease-in-out infinite alternate!important}
- :root:is([data-theme="aurora"],[data-theme="prism"]) body:has(#mini-drag)::before{inset:0}
+ :root:is([data-theme="aurora"],[data-theme="prism"]) body.music-mini-page::before{inset:0}
  :root[data-atmosphere-paused="true"] body::before{animation-play-state:paused!important}
  @keyframes aurora-flow{from{transform:translate(-1.5%,-1%) scale(1.03);opacity:.6}to{transform:translate(1.5%,1%) scale(1.07);opacity:.9}}
  @keyframes prism-flow{0%{transform:scale(1.03) rotate(-3deg);opacity:.6}50%{opacity:.85}100%{transform:scale(1.09) rotate(3deg);opacity:.7}}

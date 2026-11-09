@@ -16,5 +16,7 @@ export function createLean(apply,options){
   return {
     to(x,y){if(still()){x=0;y=0;}state={...state,tx:x,ty:y,settled:false};if(!frame)frame=requestAnimationFrame(step);},
     release(){this.to(0,0);},
+    // Where it is now, so callers can measure from the resting place rather than the moved one.
+    get x(){return state.x;},get y(){return state.y;},
   };
 }

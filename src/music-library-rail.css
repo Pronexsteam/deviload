@@ -47,5 +47,5 @@
 :root[data-theme] body main[data-page="music"] .music-sidebar-controls #music-settings-open{display:none!important}
 /* Over the folded rail the menu button sits on the rail's centre line, gliding with the fold. */
 :root body main[data-page="music"] .music-navigation-toggle{transition:margin-inline-start .38s var(--open-ease,ease)}
-:root body main[data-page="music"]:has(#devil-music.music-library-rail:not(.music-panels-swapped)) .music-navigation-toggle{margin-inline-start:calc((var(--music-rail-width) - 42px) / 2)}
+:root body.music-rail-start main[data-page="music"] .music-navigation-toggle{margin-inline-start:calc((var(--music-rail-width) - 42px) / 2)}
 @media(prefers-reduced-motion:reduce){:root body main[data-page="music"] .music-navigation-toggle{transition:none}}

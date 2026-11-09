@@ -78,7 +78,7 @@ export function createClipView({dock,origin,button,onClose,onQuality=()=>{},onFu
   }
   const settle=()=>new Promise(resolve=>{let done=false;const finish=()=>{if(!done){done=true;removeEventListener('resize',finish);resolve();}};addEventListener('resize',finish);setTimeout(finish,260);});
   // Full screen takes the whole window, and the window the whole screen. The controls rest with the mouse.
-  function mark(on){
+  function mark(on){document.documentElement.classList.toggle('has-clip-fullscreen',on);
     fullscreen=on;full.setAttribute('aria-pressed',String(on));
     full.querySelector('.icon')?.setAttribute('data-icon',on?'screen-exit':'screen-full');full.title=full.ariaLabel=on?t('Exit full screen'):t('Full screen');
   }

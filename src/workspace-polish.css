@@ -399,7 +399,7 @@ body.music-focus #devil-music {padding-top: 8px}
 
 /* Music is a desktop workspace: chrome never travels through the content.
    Each library/content pane owns its scrolling; all other sections keep theirs. */
-body:has(main[data-page="music"]) {height:100dvh;min-height:0;overflow:hidden}
+body.music-page {height:100dvh;min-height:0;overflow:hidden}
 :root body main[data-page="music"] {height:100dvh;min-height:0;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;padding-bottom:108px}
 :root.custom-window body main[data-page="music"] {padding-top:34px}
 :root body main[data-page="music"]>.topbar {position:relative;top:auto;flex:none}

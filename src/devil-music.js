@@ -1222,7 +1222,7 @@ export function createMusic({invoke,onDownload,storage}) {
     if(view!==next)revealView($("music-shelves"));view=next;musicSearch?.sync(next==="search"&&!activeMood?lastQuery.value:"");$("music-home-hero").hidden=next!=="home";$("music-moods").hidden=next!=="home"&&!(next==="search"&&activeMood);
     document.querySelectorAll("[data-music-view]").forEach(b=>{const selected=b.dataset.musicView===(["playlist","interest"].includes(next)?"library":next);b.classList.toggle("selected",selected);b.setAttribute("aria-current",selected?"page":"false");});
     document.querySelectorAll("[data-music-mood]").forEach(b=>{b.classList.toggle("selected",b.dataset.musicMood===activeMood);b.setAttribute("aria-pressed",String(b.dataset.musicMood===activeMood));});
-    $("devil-music").dataset.view=next;
+    $("devil-music").dataset.view=next;document.body.classList.toggle("music-view-home",next==="home");
     $("music-library-tools").hidden=next==="home"||next==="library"||next==="search"||next==="browse"&&browseItem?.kind==="album";
     $("music-library-filter").value=listFilter;
   }

@@ -7,15 +7,17 @@ const still=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
 export function wireGlassOrb(button,{host:hostNode=null}={}){
   if(!button)return {energy(){}};
   let energy=0,shown=0;
-  const orbLean=createLean((x,y,settled)=>{if(settled&&!x&&!y){button.style.removeProperty('--mag-x');button.style.removeProperty('--mag-y');return;}button.style.setProperty('--mag-x',`${x.toFixed(2)}px`);button.style.setProperty('--mag-y',`${y.toFixed(2)}px`);});
+  const orbLean=createLean((x,y,settled)=>{if(settled&&!x&&!y){button.style.removeProperty('--mag-x');button.style.removeProperty('--mag-y');return;}button.style.setProperty('--mag-x',`${x.toFixed(2)}px`);button.style.setProperty('--mag-y',`${y.toFixed(2)}px`);},{stiffness:.08,damping:.62});
   // The bass level is set on the whole transport, so the timeline's glow can breathe with the orb.
   const host=()=>hostNode||button.closest('.music-transport')||button;
   button.addEventListener('pointermove',event=>{
     const box=button.getBoundingClientRect();
     button.style.setProperty('--orb-x',`${Math.round((event.clientX-box.left)/box.width*100)}%`);
     button.style.setProperty('--orb-y',`${Math.round((event.clientY-box.top)/box.height*100)}%`);
-    // The orb leans a little towards the pointer.
-    orbLean.to(((event.clientX-box.left)/box.width-.5)*7,((event.clientY-box.top)/box.height-.5)*7);
+    // The orb leans a little towards the pointer, measured from where it rests: measuring from the moved
+    // (and bass-scaled) orb would feed its own movement back and make it shake.
+    const size=button.offsetWidth||box.width,cx=box.left+box.width/2-orbLean.x,cy=box.top+box.height/2-orbLean.y;
+    orbLean.to(Math.max(-.5,Math.min(.5,(event.clientX-cx)/size))*3,Math.max(-.5,Math.min(.5,(event.clientY-cy)/size))*3);
   });
   button.addEventListener('pointerleave',()=>{button.style.removeProperty('--orb-x');button.style.removeProperty('--orb-y');orbLean.release();});
   // A press wobbles the orb like a drop of liquid.
@@ -37,7 +39,7 @@ export function wireGlassOrb(button,{host:hostNode=null}={}){
     // Bass level 0..1; rises quickly and settles slowly so the orb breathes rather than flickers.
     energy(level){
       if(still()){if(shown){shown=0;host().style.removeProperty('--orb-energy');}return;}
-      const value=Math.max(0,Math.min(1,Number(level)||0));energy=value>energy?value:energy*.9+value*.1;
+      const value=Math.max(0,Math.min(1,Number(level)||0));energy=value>energy?energy*.6+value*.4:energy*.94+value*.06;
       const rounded=Math.round(energy*50)/50;if(rounded===shown)return;shown=rounded;host().style.setProperty('--orb-energy',String(rounded));
     },
   };
@@ -67,13 +69,12 @@ function ringOut(button){
   button.append(ring);ring.addEventListener('animationend',()=>ring.remove(),{once:true});
 }
 export function wireGlassButtons(root=document){
-  // The symbol leans towards the pointer and the glass catches the light where the pointer is.
-  let lit=null,frame=0,px=0,py=0;const leans=new WeakMap();
-  const leanOf=node=>{let lean=leans.get(node);if(!lean){lean=createLean((x,y,settled)=>{if(settled&&!x&&!y){node.style.removeProperty('--mag-x');node.style.removeProperty('--mag-y');return;}node.style.setProperty('--mag-x',`${x.toFixed(2)}px`);node.style.setProperty('--mag-y',`${y.toFixed(2)}px`);});leans.set(node,lean);}return lean;};
+  // The glass catches the light where the pointer is; the symbol itself stays still.
+  let lit=null,frame=0,px=0,py=0;
   const paint=()=>{frame=0;if(!lit)return;const box=lit.getBoundingClientRect(),fx=(px-box.left)/box.width,fy=(py-box.top)/box.height;
     lit.style.setProperty('--bx',`${Math.round(fx*100)}%`);lit.style.setProperty('--by',`${Math.round(fy*100)}%`);
-    leanOf(lit).to((fx-.5)*6,(fy-.5)*6-1);};
-  const clear=node=>{if(!node)return;node.style.removeProperty('--bx');node.style.removeProperty('--by');leanOf(node).release();};
+};
+  const clear=node=>{if(!node)return;node.style.removeProperty('--bx');node.style.removeProperty('--by');};
   root.addEventListener('pointermove',event=>{
     const button=event.target instanceof Element?event.target.closest(BUTTONS):null;
     const next=button&&button.closest(PLAYER)&&!button.classList.contains('music-play-button')?button:null;

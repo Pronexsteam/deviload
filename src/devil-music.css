@@ -1,9 +1,9 @@
 main[data-page="music"] .page-content:not(.page-music){display:none!important}
 main[data-page="music"]>.workspace-heading,main[data-page="music"]>#clipboard-suggestion{display:none!important}
-body:has(main[data-page="music"]) .sidebar .mascot-portrait{display:none}
-body:has(main[data-page="music"]) main{background:radial-gradient(ellipse at 40% 10%,#33212645,transparent 55%),#101114}
-body:has(main[data-page="music"]) .sidebar{background:#111215}
-body:has(main[data-page="music"]) #open-youtube-view{display:none}
+body.music-page .sidebar .mascot-portrait{display:none}
+body.music-page main{background:radial-gradient(ellipse at 40% 10%,#33212645,transparent 55%),#101114}
+body.music-page .sidebar{background:#111215}
+body.music-page #open-youtube-view{display:none}
 .music-workspace{--music-ink:#f6f2ed;--music-muted:#a09a98;--music-accent:#f18a69;color:var(--music-ink);padding:14px 0 110px;min-width:0}
 .music-toolbar{justify-content:space-between;margin-bottom:26px}
 .music-tabs{display:flex;align-items:center}
@@ -76,7 +76,7 @@ body:has(main[data-page="music"]) #open-youtube-view{display:none}
 .icon[data-icon="skip-forward"]{--glyph:url("assets/icons/skip-forward.svg")}
 .icon[data-icon="repeat"]{--glyph:url("assets/icons/repeat.svg")}
 .icon[data-icon="speaker-high"]{--glyph:url("assets/icons/speaker-high.svg")}
-body:has(main[data-page="music"]) .companion-caption,body:has(main[data-page="music"]) .side-status,body:has(main[data-page="music"]) #phone-open,body:has(main[data-page="music"]) #open-folder{display:none}
+body.music-page .companion-caption,body.music-page .side-status,body.music-page #phone-open,body.music-page #open-folder{display:none}
 .music-character{align-items:center}
 .music-character img{height:97%;mask-image:none;-webkit-mask-image:none;mix-blend-mode:screen}
 .music-volume-mark{width:18px;height:18px}

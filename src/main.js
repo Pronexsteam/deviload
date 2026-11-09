@@ -147,6 +147,8 @@ function navigate(page, focus = false) {
   if (!pageTabs[page]) return;
   const entering=document.querySelector("main").dataset.page!==page;
   document.querySelector("main").dataset.page = page;
+  // A class, not body:has(main[data-page]): a :has() on the body makes every text change restyle the page.
+  document.body.classList.toggle("music-page", page === "music");
   setMusicFocus(page === "music");
   if (page === "music") devilMusic.open(entering);
   syncTitle();
