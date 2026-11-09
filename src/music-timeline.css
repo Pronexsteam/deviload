@@ -19,18 +19,35 @@
 /* The liquid, with two layers of bubbles drifting at their own pace. */
 :root body :is(.music-dock,.music-stage) .music-seek::before{content:"";position:absolute;left:1px;top:50%;z-index:1;width:max(0px,calc(var(--range-fill,0%) - 1px));height:calc(var(--track-h) - 2px);border-radius:999px;pointer-events:none;translate:0 -50%;
   background:
-    radial-gradient(circle,rgb(255 255 255/.75) 0 1px,transparent 1.7px) 0 30%/37px 100% repeat-x,
-    radial-gradient(circle,rgb(255 255 255/.5) 0 .8px,transparent 1.4px) 11px 72%/23px 100% repeat-x,
+    radial-gradient(circle,rgb(255 255 255/.8) 0 1.3px,rgb(255 255 255/.25) 1.6px,transparent 2.2px) 0 40%/53px 100% repeat-x,
+    radial-gradient(circle,rgb(255 255 255/.75) 0 .9px,transparent 1.5px) 17px 30%/31px 100% repeat-x,
+    radial-gradient(circle,rgb(255 255 255/.5) 0 .6px,transparent 1.1px) 7px 75%/19px 100% repeat-x,
+    linear-gradient(180deg,transparent 14%,rgb(255 255 255/.55) 22%,transparent 36%),
     linear-gradient(180deg,color-mix(in srgb,var(--player-primary,#9ad0ff) 55%,#fff),var(--player-primary,#9ad0ff) 55%,color-mix(in srgb,var(--player-primary,#9ad0ff) 75%,#000));
   box-shadow:0 0 12px color-mix(in srgb,var(--player-primary,#9ad0ff) 40%,transparent);
-  animation:music-seek-bubbles 6s linear infinite;animation-play-state:paused}
-@keyframes music-seek-bubbles{to{background-position:74px 30%,57px 72%,0 0}}
+  filter:brightness(calc(1 + var(--orb-energy,0) * .25)) saturate(calc(1 + var(--orb-energy,0) * .3));
+  animation:music-seek-bubbles 9s linear infinite;animation-play-state:paused}
+/* Each layer travels a whole number of its own widths, so the loop is seamless; the small ones also bob. */
+@keyframes music-seek-bubbles{
+  0%{background-position:0 40%,17px 30%,7px 75%,0 0,0 0}
+  25%{background-position:13.25px 55%,32.5px 20%,21.25px 62%,0 0,0 0}
+  50%{background-position:26.5px 40%,48px 34%,35.5px 80%,0 0,0 0}
+  75%{background-position:39.75px 28%,63.5px 22%,49.75px 66%,0 0,0 0}
+  100%{background-position:53px 40%,79px 30%,64px 75%,0 0,0 0}}
 /* The liquid's front: a bright meniscus that sways with the bass. */
 :root body :is(.music-dock,.music-stage) .music-seek::after{content:"";position:absolute;left:var(--range-fill,0%);top:50%;z-index:1;width:5px;height:calc(var(--track-h) - 1px);border-radius:999px;pointer-events:none;
   background:color-mix(in srgb,var(--player-primary,#9ad0ff) 40%,#fff);box-shadow:0 0 calc(6px + var(--orb-energy,0) * 10px) color-mix(in srgb,var(--player-primary,#9ad0ff) 90%,transparent);
   translate:-100% -50%;scale:calc(1 + var(--orb-energy,0) * .6) calc(1 + var(--orb-energy,0) * .25);transform-origin:right center;transition:scale .12s linear,opacity .2s;
   animation:music-seek-sway 1.6s ease-in-out infinite alternate;animation-play-state:paused}
 @keyframes music-seek-sway{from{rotate:-6deg}to{rotate:6deg}}
+/* A jump: the front flares and settles. */
+:root body :is(.music-dock,.music-stage) .music-seek.is-splash.is-splash::after{opacity:1;animation:music-seek-splash .65s cubic-bezier(.2,.85,.15,1)}
+@keyframes music-seek-splash{0%{scale:2.4 1.5;box-shadow:0 0 22px color-mix(in srgb,var(--player-primary,#9ad0ff) 100%,transparent)}100%{scale:1 1}}
+/* Where a click would take the song: a faint pour from the play position to the pointer. */
+.music-seek-ghost{position:absolute;top:50%;left:0;z-index:1;width:0;height:calc(var(--track-h) - 2px);border-radius:999px;pointer-events:none;opacity:0;translate:0 -50%;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--player-primary,#9ad0ff) 38%,transparent),color-mix(in srgb,var(--player-primary,#9ad0ff) 18%,transparent));transition:opacity .2s}
+.music-seek-ghost.is-back{background:linear-gradient(90deg,rgb(0 0 0/.0),rgb(0 0 0/.28))}
+.music-seek.is-peeking:not(.is-dragging) .music-seek-ghost{opacity:1}
 :root body :is(.music-dock,.music-stage) .music-seek.is-playing::before,:root body :is(.music-dock,.music-stage) .music-seek.is-playing::after{animation-play-state:running}
 :root body :is(.music-dock,.music-stage) .music-seek:is(:hover,.is-dragging)::after{opacity:0}
 :root body :is(.music-dock,.music-stage) .music-seek:has(input:disabled)::after,:root body :is(.music-dock,.music-stage) .music-seek:has(input:disabled)::before{display:none}

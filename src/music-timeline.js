@@ -8,11 +8,11 @@ const REMAINING_KEY='deviload-music-time-left';
 
 export function wireTimeline({seek,elapsed,duration,getAudio,lyrics,time,storage=globalThis.localStorage}){
   const make=(tag,cls)=>{const node=document.createElement(tag);node.className=cls;return node;};
-  const wrap=make('div','music-seek'),bubble=make('div','music-seek-bubble');
+  const wrap=make('div','music-seek'),ghost=make('div','music-seek-ghost'),bubble=make('div','music-seek-bubble');
   const bubbleTime=make('strong',''),bubbleLine=make('span','');bubble.append(bubbleTime,bubbleLine);bubble.setAttribute('aria-hidden','true');
-  seek.replaceWith(wrap);wrap.append(seek,bubble);
+  ghost.setAttribute('aria-hidden','true');seek.replaceWith(wrap);wrap.append(ghost,seek,bubble);
 
-  let timed={id:'',lines:[]},remaining=false,hovering=false,dragging=false,pointerX=0,prefetch=0;
+  let splash=0,timed={id:'',lines:[]},remaining=false,hovering=false,dragging=false,pointerX=0,prefetch=0;
   try{remaining=storage?.getItem(REMAINING_KEY)==='1';}catch{/* Shown as the length. */}
   const songLength=()=>{const audio=getAudio();return Number.isFinite(audio.duration)&&audio.duration>0?audio.duration:0;};
 
@@ -25,6 +25,9 @@ export function wireTimeline({seek,elapsed,duration,getAudio,lyrics,time,storage
     bubbleTime.textContent=time(at);const words=timed.lines.length?lineAt(timed.lines,at):'';bubbleLine.textContent=words;bubble.classList.toggle('has-line',!!words);
     const box=wrap.getBoundingClientRect(),half=bubble.offsetWidth/2,x=6+fraction*(box.width-12);
     bubble.style.left=`${Math.max(half,Math.min(box.width-half,x))}px`;wrap.classList.add('is-peeking');
+    // A faint pour from the play position to the pointer shows where a click would take the song.
+    const now=6+Number(seek.value)/1000*(box.width-12);
+    ghost.style.left=`${Math.min(now,x)}px`;ghost.style.width=`${Math.abs(x-now)}px`;ghost.classList.toggle('is-back',x<now);
   }
   wrap.addEventListener('pointerenter',()=>{hovering=true;readLines();});
   wrap.addEventListener('pointermove',event=>{pointerX=event.clientX;showBubble();});
@@ -36,6 +39,8 @@ export function wireTimeline({seek,elapsed,duration,getAudio,lyrics,time,storage
   const audios=new Set();
   function watchAudio(){
     const audio=getAudio();if(audios.has(audio))return;audios.add(audio);
+    // A jump makes the liquid's front splash.
+    audio.addEventListener('seeked',()=>{if(audio!==getAudio())return;wrap.classList.remove('is-splash');void wrap.offsetWidth;wrap.classList.add('is-splash');clearTimeout(splash);splash=setTimeout(()=>wrap.classList.remove('is-splash'),700);});
     // The liquid moves while the song plays and goes still when it stops.
     for(const name of ['play','playing','pause','ended','emptied'])audio.addEventListener(name,()=>{if(audio===getAudio())wrap.classList.toggle('is-playing',!audio.paused&&!audio.ended);});
     // The lyrics are fetched a moment into the song, so a quick skip costs nothing.
