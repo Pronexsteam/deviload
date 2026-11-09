@@ -1,0 +1,27 @@
+/* Songs under the pointer. Rows catch a soft light that follows the pointer and their cover lifts; cards
+   tilt towards the pointer with a glass glare on the cover; the play button on a cover is a glass orb. */
+:root[data-theme] body #devil-music .music-track-row.is-lit{background-image:radial-gradient(260px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--player-primary,#fff) 22%,transparent),transparent 70%);
+  box-shadow:inset 0 0 0 1px rgb(255 255 255/.06)}
+:root[data-theme] body #devil-music .music-track-row .music-track-select .music-art{transition:scale .45s cubic-bezier(.2,1.12,.32,1),box-shadow .3s}
+:root[data-theme] body #devil-music .music-track-row.is-lit .music-track-select .music-art{scale:1.08;box-shadow:0 6px 16px rgb(0 0 0/.35)}
+
+:root[data-theme] body #devil-music .music-card-main{transform:perspective(800px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .5s cubic-bezier(.2,1.12,.32,1)}
+:root[data-theme] body #devil-music .music-card-main.is-lit{transform:perspective(800px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) translateY(-4px);transition:transform .18s ease-out}
+:root[data-theme] body #devil-music .music-card-main .music-art{position:relative}
+:root[data-theme] body #devil-music .music-card-main .music-art::after{content:"";position:absolute;inset:0;z-index:3;border-radius:inherit;pointer-events:none;opacity:0;
+  background:radial-gradient(70% 70% at var(--mx,50%) var(--my,30%),rgb(255 255 255/.32),transparent 60%);mix-blend-mode:soft-light;transition:opacity .3s}
+:root[data-theme] body #devil-music .music-card-main.is-lit .music-art::after{opacity:1}
+:root[data-theme] body #devil-music .music-card-main.is-lit .music-art{box-shadow:0 18px 40px rgb(0 0 0/.45)}
+
+/* The play button on covers: a small glass orb that pops in. */
+:root[data-theme] body #devil-music .music-cover-overlay{background:linear-gradient(180deg,transparent 30%,rgb(0 0 0/.35))}
+:root[data-theme] body #devil-music .music-cover-action{border:1px solid rgb(255 255 255/.55);color:#fff;
+  background:radial-gradient(90% 90% at 32% 24%,rgb(255 255 255/.55),transparent 45%),rgb(255 255 255/.16);
+  -webkit-backdrop-filter:blur(10px) saturate(1.6);backdrop-filter:blur(10px) saturate(1.6);box-shadow:inset 0 1px 1px rgb(255 255 255/.6),0 6px 18px rgb(0 0 0/.35);
+  scale:.6;transition:scale .45s cubic-bezier(.2,1.12,.32,1)}
+:root[data-theme] body #devil-music .music-cover-action>.icon{background:#fff}
+:root[data-theme] body #devil-music :is(.music-card-main,.music-track-select):is(:hover,:focus-visible) .music-cover-action{scale:1}
+
+@media(prefers-reduced-motion:reduce){
+  :root[data-theme] body #devil-music .music-card-main,:root[data-theme] body #devil-music .music-card-main.is-lit{transform:none;transition:none}
+  :root[data-theme] body #devil-music .music-cover-action,:root[data-theme] body #devil-music .music-track-row .music-track-select .music-art{transition:none}}

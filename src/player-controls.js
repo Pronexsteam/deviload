@@ -12,7 +12,7 @@ export function paintPlaybackRange(input){
  if(input.style.getPropertyValue('--range-progress')!==progress)input.style.setProperty('--range-progress',progress);
  if(input.style.getPropertyValue('--range-fill')!==fill)input.style.setProperty('--range-fill',fill);
  // The timeline's glow and light follow the play position.
- const seek=input.parentElement?.classList.contains('music-seek')?input.parentElement:null;
+ const seek=input.parentElement?.classList.contains('music-liquid')?input.parentElement:null;
  if(seek&&seek.style.getPropertyValue('--range-fill')!==fill)seek.style.setProperty('--range-fill',fill);
 }
 const paint=paintPlaybackRange;

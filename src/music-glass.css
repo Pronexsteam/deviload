@@ -3,65 +3,65 @@
 :root[data-theme] body .music-dock{box-shadow:inset 0 1px 0 rgb(255 255 255/.14),inset 0 -1px 0 rgb(255 255 255/.04),0 18px 50px rgb(0 0 0/.28)}
 :root[data-theme] body .music-dock::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(180deg,rgb(255 255 255/.07),transparent 45%)}
 
-:root[data-theme] body :is(.music-dock,.music-stage) :is(.music-transport-buttons>button:not(.music-play-button),.music-dock-extras>button,.music-like){position:relative;isolation:isolate;transition:scale .45s var(--open-spring,cubic-bezier(.2,1.12,.32,1)),color .2s}
-:root[data-theme] body :is(.music-dock,.music-stage) :is(.music-transport-buttons>button:not(.music-play-button),.music-dock-extras>button,.music-like)::before{
+:root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page) :is(.music-transport-buttons>button:not(.music-play-button),.music-dock-extras>button,.music-like,.mini-controls>button:not(.music-play-button)){position:relative;isolation:isolate;transition:scale .45s var(--open-spring,cubic-bezier(.2,1.12,.32,1)),color .2s}
+:root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page) :is(.music-transport-buttons>button:not(.music-play-button),.music-dock-extras>button,.music-like,.mini-controls>button:not(.music-play-button))::before{
   content:"";position:absolute;inset:-1px;z-index:-1;border-radius:999px;pointer-events:none;
-  background:radial-gradient(120% 90% at 30% 20%,rgb(255 255 255/.32),rgb(255 255 255/.08) 45%,rgb(255 255 255/.03) 70%);
+  background:radial-gradient(120% 90% at var(--bx,30%) var(--by,20%),rgb(255 255 255/.34),rgb(255 255 255/.08) 45%,rgb(255 255 255/.03) 70%);
   border:1px solid rgb(255 255 255/.16);box-shadow:inset 0 1px 1px rgb(255 255 255/.35),0 6px 16px rgb(0 0 0/.22);
   opacity:0;scale:.55;transition:opacity .22s ease,scale .45s var(--open-spring,cubic-bezier(.2,1.12,.32,1)),background-color .25s,box-shadow .25s}
-:root[data-theme] body :is(.music-dock,.music-stage) :is(.music-transport-buttons>button:not(.music-play-button),.music-dock-extras>button,.music-like):is(:hover,:focus-visible)::before{opacity:1;scale:1}
-:root[data-theme] body :is(.music-dock,.music-stage) :is(.music-transport-buttons>button,.music-dock-extras>button,.music-like):active{scale:.86;transition-duration:.08s}
+:root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page) :is(.music-transport-buttons>button:not(.music-play-button),.music-dock-extras>button,.music-like,.mini-controls>button:not(.music-play-button)):is(:hover,:focus-visible)::before{opacity:1;scale:1}
+:root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page) :is(.music-transport-buttons>button,.music-dock-extras>button,.music-like,.mini-controls>button):active{scale:.86;transition-duration:.08s}
 /* A mode that is on keeps its bubble, tinted and glowing. */
-:root[data-theme] body :is(.music-dock,.music-stage) :is(.music-transport-buttons>button,.music-dock-extras>button,.music-like)[aria-pressed="true"]::before{opacity:1;scale:1;
+:root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page) :is(.music-transport-buttons>button,.music-dock-extras>button,.music-like,.mini-controls>button)[aria-pressed="true"]::before{opacity:1;scale:1;
   background:radial-gradient(120% 90% at 30% 20%,rgb(255 255 255/.34),color-mix(in srgb,var(--player-primary,#9ad0ff) 30%,transparent) 55%,color-mix(in srgb,var(--player-primary,#9ad0ff) 14%,transparent));
   box-shadow:inset 0 1px 1px rgb(255 255 255/.4),0 0 18px color-mix(in srgb,var(--player-primary,#9ad0ff) 45%,transparent)}
 
 /* The play orb. --orb-energy (0..1) follows the bass; --orb-x/--orb-y move the highlight with the pointer. */
-:root[data-theme] body :is(.music-dock,.music-stage,#music-now-playing.has-lyrics) .music-play-button:not(:disabled){position:relative;isolation:isolate;overflow:visible;color:var(--orb-ink);
+:root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page,#music-now-playing.has-lyrics) .music-play-button:not(:disabled){position:relative;isolation:isolate;overflow:visible;color:var(--orb-ink);
   background:radial-gradient(90% 90% at var(--orb-x,32%) var(--orb-y,24%),rgb(255 255 255/var(--orb-shine,.7)),transparent 42%),var(--orb-fill);
   border:1px solid var(--orb-rim,transparent);
   box-shadow:inset 0 2px 3px rgb(255 255 255/.55),inset 0 -6px 12px rgb(0 0 0/var(--orb-depth,.18)),0 calc(8px + var(--orb-energy,0) * 6px) calc(22px + var(--orb-energy,0) * 26px) color-mix(in srgb,var(--orb-glow) calc(35% + var(--orb-energy,0) * 35%),transparent);
   scale:calc(1 + var(--orb-energy,0) * .045);transition:scale .12s linear,box-shadow .12s linear,background-color .4s,color .4s}
 /* The orb's colour follows the theme. Coloured themes get a full gradient; neutral ones (Ambient, Light,
    Noir) get clear liquid glass with a breath of the cover's colour. */
-:root[data-theme] body :is(.music-dock,.music-stage){
+:root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page){
   --orb-fill:radial-gradient(circle at 50% 120%,var(--player-primary,#9ad0ff),color-mix(in srgb,var(--player-primary,#9ad0ff) 70%,#000) 95%);
   --orb-ink:var(--player-on-primary,#11151c);--orb-glow:var(--player-primary,#9ad0ff)}
-:root:is([data-theme="ambient"]:not([data-variant]),[data-variant="noir"]) body :is(.music-dock,.music-stage){
+:root:is([data-theme="ambient"]:not([data-variant]),[data-variant="noir"]) :is(.music-dock,.music-stage,body.music-mini-page){
   --orb-fill:radial-gradient(circle at 50% 115%,color-mix(in srgb,var(--cover-lyric-light,#ffffff) 34%,transparent),rgb(255 255 255/.07) 68%),rgb(255 255 255/.06);
   --orb-ink:#fff;--orb-glow:var(--cover-lyric-light,#ffffff);--orb-rim:rgb(255 255 255/.32);--orb-shine:.5;--orb-depth:.06}
-:root[data-theme="glass-light"]:not([data-variant]) body :is(.music-dock,.music-stage){
+:root[data-theme="glass-light"]:not([data-variant]) :is(.music-dock,.music-stage,body.music-mini-page){
   --orb-fill:radial-gradient(circle at 50% 115%,color-mix(in srgb,var(--cover-lyric-dark,#405b80) 26%,transparent),rgb(255 255 255/.55) 70%),rgb(255 255 255/.35);
   --orb-ink:#1b2433;--orb-glow:var(--cover-lyric-dark,#405b80);--orb-rim:rgb(255 255 255/.85);--orb-shine:.9;--orb-depth:.05}
-:root[data-theme="aurora"]:not([data-variant]) body :is(.music-dock,.music-stage){
+:root[data-theme="aurora"]:not([data-variant]) :is(.music-dock,.music-stage,body.music-mini-page){
   --orb-fill:linear-gradient(160deg,#e3dcff,#9d8cff 48%,#5b5cf0);--orb-ink:#fff;--orb-glow:#8f86ff}
-:root[data-theme="prism"]:not([data-variant]) body :is(.music-dock,.music-stage){
+:root[data-theme="prism"]:not([data-variant]) :is(.music-dock,.music-stage,body.music-mini-page){
   --orb-fill:linear-gradient(135deg,#a8f0ff,#c9b8ff 50%,#ffb5d8);--orb-ink:#15202d;--orb-glow:#b9c6ff}
-:root[data-variant="vinyl"] body :is(.music-dock,.music-stage){
+:root[data-variant="vinyl"] :is(.music-dock,.music-stage,body.music-mini-page){
   --orb-fill:linear-gradient(160deg,#ffe0a8,#f3a052 55%,#c8662a);--orb-ink:#2a1608;--orb-glow:#f3a052}
-:root[data-variant="paper"] body :is(.music-dock,.music-stage){
+:root[data-variant="paper"] :is(.music-dock,.music-stage,body.music-mini-page){
   --orb-fill:linear-gradient(160deg,#9a7853,#5a3f27);--orb-ink:#fff8ee;--orb-glow:#8a6a4b}
-:root[data-variant="custom"] body :is(.music-dock,.music-stage){
+:root[data-variant="custom"] :is(.music-dock,.music-stage,body.music-mini-page){
   --orb-fill:radial-gradient(circle at 50% 115%,color-mix(in srgb,var(--custom-accent,#ffffff) 55%,transparent),color-mix(in srgb,var(--custom-accent,#ffffff) 14%,transparent) 70%),rgb(255 255 255/.06);
   --orb-ink:#fff;--orb-glow:var(--custom-accent,#ffffff);--orb-rim:rgb(255 255 255/.32);--orb-shine:.5;--orb-depth:.06}
 /* Clear glass refracts what is behind it. */
-:root:is([data-theme="ambient"]:not([data-variant]),[data-variant="noir"],[data-variant="custom"],[data-theme="glass-light"]:not([data-variant])) body :is(.music-dock,.music-stage) .music-play-button:not(:disabled){-webkit-backdrop-filter:blur(10px) saturate(1.8) brightness(1.15);backdrop-filter:blur(10px) saturate(1.8) brightness(1.15)}
-:root[data-theme] body :is(.music-dock,.music-stage) .music-play-button:hover{scale:calc(1.06 + var(--orb-energy,0) * .045)}
-:root[data-theme] body :is(.music-dock,.music-stage) .music-play-button:active{scale:.9;transition:scale .08s}
+:root:is([data-theme="ambient"]:not([data-variant]),[data-variant="noir"],[data-variant="custom"],[data-theme="glass-light"]:not([data-variant])) :is(.music-dock,.music-stage,body.music-mini-page) .music-play-button:not(:disabled){-webkit-backdrop-filter:blur(10px) saturate(1.8) brightness(1.15);backdrop-filter:blur(10px) saturate(1.8) brightness(1.15)}
+:root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page) .music-play-button:hover{scale:calc(1.06 + var(--orb-energy,0) * .045)}
+:root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page) .music-play-button:active{scale:.9;transition:scale .08s}
 .music-orb-ripple{position:absolute;inset:0;border-radius:50%;pointer-events:none;border:2px solid color-mix(in srgb,var(--orb-glow,#9ad0ff) 80%,#fff);animation:music-orb-ripple .6s cubic-bezier(.2,.85,.15,1) forwards}
 @keyframes music-orb-ripple{from{opacity:.8;scale:1}to{opacity:0;scale:1.8}}
 /* The play and pause symbols blend into each other instead of swapping. */
-:root[data-theme] body :is(.music-dock,.music-stage) .music-play-button .icon{transition:opacity .18s,scale .3s var(--open-spring,ease)}
-:root[data-theme] body :is(.music-dock,.music-stage) .music-play-button.is-morphing .icon{opacity:0;scale:.6}
+:root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page) .music-play-button .icon{transition:opacity .18s,scale .3s var(--open-spring,ease)}
+:root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page) .music-play-button.is-morphing .icon{opacity:0;scale:.6}
 
 @media(prefers-reduced-motion:reduce){
-  :root[data-theme] body :is(.music-dock,.music-stage) :is(.music-transport-buttons>button,.music-dock-extras>button,.music-like,.music-play-button),:root[data-theme] body :is(.music-dock,.music-stage) :is(.music-transport-buttons>button,.music-dock-extras>button,.music-like)::before{transition:none}
-  :root[data-theme] body :is(.music-dock,.music-stage) .music-play-button{scale:1;--orb-energy:0}
+  :root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page) :is(.music-transport-buttons>button,.music-dock-extras>button,.music-like,.music-play-button),:root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page) :is(.music-transport-buttons>button,.music-dock-extras>button,.music-like,.mini-controls>button)::before{transition:none}
+  :root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page) .music-play-button{scale:1;--orb-energy:0}
   .music-orb-ripple{display:none}}
 
 /* Symbols lift a little under the pointer. */
-:root[data-theme] body :is(.music-dock,.music-stage) :is(.music-transport-buttons>button:not(.music-play-button),.music-dock-extras>button) .icon{transition:translate .35s var(--open-spring,cubic-bezier(.2,1.12,.32,1))}
-:root[data-theme] body :is(.music-dock,.music-stage) :is(.music-transport-buttons>button:not(.music-play-button),.music-dock-extras>button):hover .icon{translate:0 -1px}
+:root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page) :is(.music-transport-buttons>button:not(.music-play-button),.music-dock-extras>button,.mini-controls>button:not(.music-play-button)) :is(.icon,.mini-glyph){transition:translate .35s var(--open-spring,cubic-bezier(.2,1.12,.32,1))}
+:root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page) :is(.music-transport-buttons>button:not(.music-play-button),.music-dock-extras>button,.mini-controls>button:not(.music-play-button)):hover :is(.icon,.mini-glyph){translate:var(--mag-x,0) calc(var(--mag-y,0px) - 1px)}
 /* A mode switched on sends out one soft ring in the player's colour. */
 .music-mode-ring{position:absolute;inset:-2px;border-radius:999px;pointer-events:none;border:2px solid color-mix(in srgb,var(--player-primary,#9ad0ff) 85%,#fff);animation:music-mode-ring .55s cubic-bezier(.2,.85,.15,1) forwards}
 @keyframes music-mode-ring{from{opacity:.85;scale:.8}to{opacity:0;scale:1.7}}
@@ -71,4 +71,15 @@
 .music-like-burst i:nth-child(even){width:4px;height:4px;left:-2px;top:-2px;background:color-mix(in srgb,#ff5a6e 55%,#ffd36e)}
 @keyframes music-like-spark{from{transform:translateY(0) scale(1);opacity:1}to{transform:translateY(-24px) scale(.3);opacity:0}}
 @keyframes music-like-burst{to{opacity:1}}
-@media(prefers-reduced-motion:reduce){.music-mode-ring,.music-like-burst{display:none}:root[data-theme] body :is(.music-dock,.music-stage) button .icon{transition:none}}
+@media(prefers-reduced-motion:reduce){.music-mode-ring,.music-like-burst{display:none}:root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page) button .icon{transition:none}}
+
+/* The orb leans towards the pointer, and while music plays light moves inside its glass. */
+:root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page) .music-play-button:not(:disabled){translate:var(--mag-x,0) var(--mag-y,0);transition:scale .12s linear,box-shadow .12s linear,background-color .4s,color .4s,translate .35s cubic-bezier(.2,1.12,.32,1)}
+:root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page) .music-play-button:not(:disabled)::after{content:"";position:absolute;inset:2px;z-index:-1;border-radius:50%;pointer-events:none;opacity:0;
+  background:conic-gradient(from 0deg,transparent 0 12%,rgb(255 255 255/.32) 18%,transparent 26% 52%,rgb(255 255 255/.22) 60%,transparent 68% 100%);
+  -webkit-mask:radial-gradient(circle,transparent 38%,#000 62%);mask:radial-gradient(circle,transparent 38%,#000 62%);
+  filter:blur(1.5px);transition:opacity .6s ease;animation:music-orb-caustic 7s linear infinite;animation-play-state:paused}
+:root[data-theme] :is(.music-dock,.music-stage) .music-play-button:has(.icon[data-icon="pause"])::after,
+:root[data-theme] body.music-mini-page .music-play-button[data-icon^="pause"]::after{opacity:1;animation-play-state:running}
+@keyframes music-orb-caustic{to{rotate:1turn}}
+@media(prefers-reduced-motion:reduce){:root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page) .music-play-button::after{display:none}:root[data-theme] :is(.music-dock,.music-stage,body.music-mini-page) .music-play-button{translate:none}}

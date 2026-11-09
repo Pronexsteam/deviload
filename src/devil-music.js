@@ -48,6 +48,7 @@ import {createInterestMixesUI} from "./music-interest-ui.js";
 import {createNowPlaying} from "./music-presentation.js";
 import {createLyricCard} from "./music-lyric-card.js";
 import {wireTimeline} from "./music-timeline.js";
+import {wireHoverLight} from "./music-hover.js";
 import {isMotionCover} from './music-motion.js';
 import {readMusicProfile,saveMusicProfile,sanitizeMusicCollection,sanitizeMusicTrack} from "./music-profile.js";
 import {wireMusicProfile} from "./music-profile-ui.js";
@@ -223,6 +224,7 @@ export function createMusic({invoke,onDownload,storage}) {
   // A picture of a sung line to share: from the lyrics tools, or a right click on a line.
   const lyricCard=createLyricCard({invoke,button,lyrics,getSong:()=>current});lyrics.addTool(lyricCard.button);
   wireTimeline({seek,elapsed,duration,getAudio:()=>audio,lyrics,time});
+  wireHoverLight($("devil-music"));
   const syncDesktop=({open})=>{desktopTool.setAttribute("aria-pressed",String(open));desktopItem?.setAttribute("aria-pressed",String(open));};
   lyricLines.onChange(syncDesktop);
   // "Even out song volume": once per song and player, ask how loud the recording is and trim it.

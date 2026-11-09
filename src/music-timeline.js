@@ -8,7 +8,7 @@ const REMAINING_KEY='deviload-music-time-left';
 
 export function wireTimeline({seek,elapsed,duration,getAudio,lyrics,time,storage=globalThis.localStorage}){
   const make=(tag,cls)=>{const node=document.createElement(tag);node.className=cls;return node;};
-  const wrap=make('div','music-seek'),ghost=make('div','music-seek-ghost'),bubble=make('div','music-seek-bubble');
+  const wrap=make('div','music-seek music-liquid'),ghost=make('div','music-seek-ghost'),bubble=make('div','music-seek-bubble');
   const bubbleTime=make('strong',''),bubbleLine=make('span','');bubble.append(bubbleTime,bubbleLine);bubble.setAttribute('aria-hidden','true');
   ghost.setAttribute('aria-hidden','true');seek.replaceWith(wrap);wrap.append(ghost,seek,bubble);
 

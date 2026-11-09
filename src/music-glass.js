@@ -3,17 +3,24 @@
 // Only the system's "reduce motion" setting stills the player; the app's calm mode is for the downloader.
 const still=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-export function wireGlassOrb(button){
+export function wireGlassOrb(button,{host:hostNode=null}={}){
   if(!button)return {energy(){}};
   let energy=0,shown=0;
   // The bass level is set on the whole transport, so the timeline's glow can breathe with the orb.
-  const host=()=>button.closest('.music-transport')||button;
+  const host=()=>hostNode||button.closest('.music-transport')||button;
   button.addEventListener('pointermove',event=>{
     const box=button.getBoundingClientRect();
     button.style.setProperty('--orb-x',`${Math.round((event.clientX-box.left)/box.width*100)}%`);
     button.style.setProperty('--orb-y',`${Math.round((event.clientY-box.top)/box.height*100)}%`);
+    // The orb leans a little towards the pointer.
+    if(!still()){button.style.setProperty('--mag-x',`${((event.clientX-box.left)/box.width-.5)*6}px`);button.style.setProperty('--mag-y',`${((event.clientY-box.top)/box.height-.5)*6}px`);}
   });
-  button.addEventListener('pointerleave',()=>{button.style.removeProperty('--orb-x');button.style.removeProperty('--orb-y');});
+  button.addEventListener('pointerleave',()=>{for(const name of ['--orb-x','--orb-y','--mag-x','--mag-y'])button.style.removeProperty(name);});
+  // A press wobbles the orb like a drop of liquid.
+  button.addEventListener('click',()=>{
+    if(still())return;
+    button.animate([{transform:'scale(1,1)'},{transform:'scale(1.14,.84)',offset:.22},{transform:'scale(.9,1.1)',offset:.46},{transform:'scale(1.05,.96)',offset:.7},{transform:'scale(1,1)'}],{duration:620,easing:'ease-out',composite:'add'});
+  });
   button.addEventListener('pointerdown',()=>{
     if(still())return;
     const ring=document.createElement('span');ring.className='music-orb-ripple';ring.setAttribute('aria-hidden','true');
@@ -39,8 +46,8 @@ export function wireGlassOrb(button){
 // sends out a ring. Animations run on the symbol (or the heart) so they never fight the button's own
 // hover and press scale.
 const SPRING='cubic-bezier(.2,1.25,.3,1)';
-const PLAYER='.music-dock,.music-stage';
-const BUTTONS='.music-transport-buttons>button,.music-dock-extras>button,.music-like';
+const PLAYER='.music-dock,.music-stage,.music-mini-page';
+const BUTTONS='.music-transport-buttons>button,.music-dock-extras>button,.music-like,.mini-controls>button';
 function motionFor(icon){
   if(/^skip-forward/.test(icon))return {frames:[{transform:'translateX(0)',opacity:1},{transform:'translateX(12px)',opacity:0,offset:.38},{transform:'translateX(-12px)',opacity:0,offset:.4},{transform:'translateX(0)',opacity:1}],duration:420,easing:'ease-out'};
   if(/^skip-back/.test(icon))return {frames:[{transform:'translateX(0)',opacity:1},{transform:'translateX(-12px)',opacity:0,offset:.38},{transform:'translateX(12px)',opacity:0,offset:.4},{transform:'translateX(0)',opacity:1}],duration:420,easing:'ease-out'};
@@ -58,6 +65,18 @@ function ringOut(button){
   button.append(ring);ring.addEventListener('animationend',()=>ring.remove(),{once:true});
 }
 export function wireGlassButtons(root=document){
+  // The symbol leans towards the pointer and the glass catches the light where the pointer is.
+  let lit=null,frame=0,px=0,py=0;
+  const paint=()=>{frame=0;if(!lit)return;const box=lit.getBoundingClientRect(),fx=(px-box.left)/box.width,fy=(py-box.top)/box.height;
+    lit.style.setProperty('--bx',`${Math.round(fx*100)}%`);lit.style.setProperty('--by',`${Math.round(fy*100)}%`);
+    if(!still()){lit.style.setProperty('--mag-x',`${((fx-.5)*5).toFixed(2)}px`);lit.style.setProperty('--mag-y',`${((fy-.5)*5).toFixed(2)}px`);}};
+  const clear=node=>{if(node)for(const name of ['--bx','--by','--mag-x','--mag-y'])node.style.removeProperty(name);};
+  root.addEventListener('pointermove',event=>{
+    const button=event.target instanceof Element?event.target.closest(BUTTONS):null;
+    const next=button&&button.closest(PLAYER)&&!button.classList.contains('music-play-button')?button:null;
+    if(next!==lit){clear(lit);lit=next;}
+    if(!lit)return;px=event.clientX;py=event.clientY;if(!frame)frame=requestAnimationFrame(paint);
+  });
   root.addEventListener('click',event=>{
     if(still()||!(event.target instanceof Element))return;
     const button=event.target.closest(BUTTONS);
