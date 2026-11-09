@@ -1,35 +1,40 @@
-/* The song's timeline. The played part is a wave in the player's colour that flows while the song plays,
-   swells with the bass and settles into a straight line when it stops; the rest is a quiet line. Under the pointer the line
-   thickens, a glass bead appears and a bubble shows the time and the line sung there. */
-@property --track-h{syntax:"<length>";inherits:true;initial-value:3px}
-@property --wave-on{syntax:"<number>";inherits:true;initial-value:0}
-:root body :is(.music-dock,.music-stage) .music-progress .music-seek{position:relative;flex:1;min-width:0;display:grid;align-items:center;height:22px;--wave-on:0;transition:--wave-on .6s cubic-bezier(.2,.85,.15,1)}
-:root body :is(.music-dock,.music-stage) .music-seek.is-playing{--wave-on:1}
-:root body :is(.music-dock,.music-stage) .music-seek input[type="range"]{position:relative;z-index:2;width:100%;--track-h:3px;transition:--track-h .35s cubic-bezier(.2,1.12,.32,1)!important}
-:root body :is(.music-dock,.music-stage) .music-seek:is(:hover,.is-dragging) input[type="range"]:not(:disabled),
-:root body :is(.music-dock,.music-stage) .music-seek input[type="range"]:focus-visible{--track-h:5px}
-/* The track shows only the part still to come; the wave draws the played part. */
-:root body :is(.music-dock,.music-stage) .music-seek input[type="range"]::-webkit-slider-runnable-track{height:var(--track-h);border-radius:999px;box-shadow:none;
-  background:linear-gradient(to right,color-mix(in srgb,var(--player-primary,#9ad0ff) calc((1 - var(--wave-on,0)) * 100%),transparent) var(--range-fill,0%),color-mix(in srgb,var(--player-ink,#fff) 20%,transparent) var(--range-fill,0%))}
+/* The song's timeline is a glass tube that fills with liquid in the player's colour. Bubbles drift through
+   the liquid and its front sways with the bass while the song plays; it all goes still on pause. Under the
+   pointer the tube widens, a glass bead appears and a bubble shows the time and the line sung there. */
+@property --track-h{syntax:"<length>";inherits:true;initial-value:8px}
+:root body :is(.music-dock,.music-stage) .music-progress .music-seek{position:relative;flex:1;min-width:0;display:grid;align-items:center;height:22px;--track-h:7px;transition:--track-h .35s cubic-bezier(.2,1.12,.32,1)}
+:root body #music-now-playing .music-progress .music-seek{--track-h:9px}
+:root body :is(.music-dock,.music-stage) .music-seek:is(:hover,.is-dragging):not(:has(input:disabled)),
+:root body :is(.music-dock,.music-stage) .music-seek:has(input:focus-visible){--track-h:11px}
+:root body :is(.music-dock,.music-stage) .music-seek input[type="range"]{position:relative;z-index:2;width:100%}
+/* The tube: clear glass with a highlight along its top, drawn over the liquid. */
+:root body :is(.music-dock,.music-stage) .music-seek input[type="range"]::-webkit-slider-runnable-track{height:var(--track-h);border-radius:999px;
+  background:linear-gradient(180deg,rgb(255 255 255/.30),rgb(255 255 255/.05) 45%,rgb(255 255 255/0) 60%,rgb(255 255 255/.10));
+  box-shadow:inset 0 0 0 1px rgb(255 255 255/.14),inset 0 -1px 2px rgb(0 0 0/.25)}
 :root body :is(.music-dock,.music-stage) .music-seek input[type="range"]::-webkit-slider-thumb{margin-top:calc((var(--track-h) - var(--player-thumb-size,12px)) / 2);scale:0;
   background:radial-gradient(circle at 35% 30%,#fff,color-mix(in srgb,var(--player-primary) 35%,#fff) 60%,color-mix(in srgb,var(--player-primary) 70%,#fff));
   box-shadow:0 0 0 3px rgb(255 255 255/.18),0 0 14px color-mix(in srgb,var(--player-primary) 70%,transparent),0 2px 6px rgb(0 0 0/.4);transition:scale .35s cubic-bezier(.2,1.12,.32,1)!important}
 :root body :is(.music-dock,.music-stage) .music-seek:is(:hover,.is-dragging) input[type="range"]:not(:disabled)::-webkit-slider-thumb,
-:root body :is(.music-dock,.music-stage) .music-seek input[type="range"]:focus-visible::-webkit-slider-thumb{scale:1}
-:root body :is(.music-dock,.music-stage) .music-seek.is-dragging input[type="range"]::-webkit-slider-thumb{scale:1.2}
-/* The wave. */
-:root body :is(.music-dock,.music-stage) .music-seek::before{content:"";position:absolute;left:5px;top:50%;z-index:1;width:max(0px,calc(var(--range-fill,0%) - 7px));height:14px;pointer-events:none;
-  background:linear-gradient(to right,color-mix(in srgb,var(--player-primary,#9ad0ff) 60%,transparent),var(--player-primary,#9ad0ff) 40px);
-  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='14'%3E%3Cpath d='M0 7 Q7 2.5 14 7 T28 7' fill='none' stroke='%23000' stroke-width='2.75' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x 0 50%/28px 14px;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='14'%3E%3Cpath d='M0 7 Q7 2.5 14 7 T28 7' fill='none' stroke='%23000' stroke-width='2.75' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x 0 50%/28px 14px;
-  translate:0 -50%;scale:1 calc(.15 + var(--wave-on,0) * (.65 + var(--orb-energy,0) * .5));opacity:var(--wave-on,0);animation:music-seek-wave 1.4s linear infinite;animation-play-state:paused}
-:root body :is(.music-dock,.music-stage) .music-seek.is-playing::before{animation-play-state:running}
-@keyframes music-seek-wave{to{-webkit-mask-position:28px 50%;mask-position:28px 50%}}
-/* The play position: a glowing point that breathes with the bass; the bead takes over under the pointer. */
-:root body :is(.music-dock,.music-stage) .music-seek::after{content:"";position:absolute;left:var(--range-fill,0%);top:50%;z-index:1;width:9px;height:9px;border-radius:50%;pointer-events:none;
-  background:color-mix(in srgb,var(--player-primary,#9ad0ff) 70%,#fff);box-shadow:0 0 calc(8px + var(--orb-energy,0) * 10px) color-mix(in srgb,var(--player-primary,#9ad0ff) 85%,transparent);
-  translate:-50% -50%;scale:calc(1 + var(--orb-energy,0) * .35);transition:scale .12s linear,opacity .2s}
+:root body :is(.music-dock,.music-stage) .music-seek input[type="range"]:focus-visible::-webkit-slider-thumb{scale:1.15}
+/* The liquid, with two layers of bubbles drifting at their own pace. */
+:root body :is(.music-dock,.music-stage) .music-seek::before{content:"";position:absolute;left:1px;top:50%;z-index:1;width:max(0px,calc(var(--range-fill,0%) - 1px));height:calc(var(--track-h) - 2px);border-radius:999px;pointer-events:none;translate:0 -50%;
+  background:
+    radial-gradient(circle,rgb(255 255 255/.75) 0 1px,transparent 1.7px) 0 30%/37px 100% repeat-x,
+    radial-gradient(circle,rgb(255 255 255/.5) 0 .8px,transparent 1.4px) 11px 72%/23px 100% repeat-x,
+    linear-gradient(180deg,color-mix(in srgb,var(--player-primary,#9ad0ff) 55%,#fff),var(--player-primary,#9ad0ff) 55%,color-mix(in srgb,var(--player-primary,#9ad0ff) 75%,#000));
+  box-shadow:0 0 12px color-mix(in srgb,var(--player-primary,#9ad0ff) 40%,transparent);
+  animation:music-seek-bubbles 6s linear infinite;animation-play-state:paused}
+@keyframes music-seek-bubbles{to{background-position:74px 30%,57px 72%,0 0}}
+/* The liquid's front: a bright meniscus that sways with the bass. */
+:root body :is(.music-dock,.music-stage) .music-seek::after{content:"";position:absolute;left:var(--range-fill,0%);top:50%;z-index:1;width:5px;height:calc(var(--track-h) - 1px);border-radius:999px;pointer-events:none;
+  background:color-mix(in srgb,var(--player-primary,#9ad0ff) 40%,#fff);box-shadow:0 0 calc(6px + var(--orb-energy,0) * 10px) color-mix(in srgb,var(--player-primary,#9ad0ff) 90%,transparent);
+  translate:-100% -50%;scale:calc(1 + var(--orb-energy,0) * .6) calc(1 + var(--orb-energy,0) * .25);transform-origin:right center;transition:scale .12s linear,opacity .2s;
+  animation:music-seek-sway 1.6s ease-in-out infinite alternate;animation-play-state:paused}
+@keyframes music-seek-sway{from{rotate:-6deg}to{rotate:6deg}}
+:root body :is(.music-dock,.music-stage) .music-seek.is-playing::before,:root body :is(.music-dock,.music-stage) .music-seek.is-playing::after{animation-play-state:running}
 :root body :is(.music-dock,.music-stage) .music-seek:is(:hover,.is-dragging)::after{opacity:0}
 :root body :is(.music-dock,.music-stage) .music-seek:has(input:disabled)::after,:root body :is(.music-dock,.music-stage) .music-seek:has(input:disabled)::before{display:none}
+:root[data-theme="glass-light"] body :is(.music-dock,.music-stage) .music-seek input[type="range"]::-webkit-slider-runnable-track{background:linear-gradient(180deg,rgb(255 255 255/.7),rgb(255 255 255/.15) 50%,rgb(0 0 0/.04));box-shadow:inset 0 0 0 1px rgb(0 0 0/.10),inset 0 1px 2px rgb(0 0 0/.12)}
 
 .music-seek-bubble{position:absolute;bottom:calc(100% + 4px);left:0;z-index:6;display:grid;justify-items:center;gap:1px;max-width:300px;padding:6px 12px;border:1px solid rgb(255 255 255/.14);border-radius:12px;
   background:rgb(16 18 24/.8);-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);color:#fff;box-shadow:0 10px 30px rgb(0 0 0/.4);
@@ -47,4 +52,4 @@
 @media(prefers-reduced-motion:reduce){
   :root body :is(.music-dock,.music-stage) .music-seek input[type="range"],:root body :is(.music-dock,.music-stage) .music-seek input[type="range"]::-webkit-slider-thumb,.music-seek-bubble{transition:none!important}}
 
-@media(prefers-reduced-motion:reduce){:root body :is(.music-dock,.music-stage) .music-seek::before{animation:none}:root body :is(.music-dock,.music-stage) .music-seek{transition:none}}
+@media(prefers-reduced-motion:reduce){:root body :is(.music-dock,.music-stage) .music-seek::before,:root body :is(.music-dock,.music-stage) .music-seek::after{animation:none}:root body :is(.music-dock,.music-stage) .music-seek{transition:none}}

@@ -1,9 +1,9 @@
 import {t,onLanguageChange} from './i18n.js';
 import {lineAt} from './music-timeline-model.js';
 
-// The song's timeline. The played part is a wave that flows while the song plays and lies flat when it
-// stops; under the pointer it shows the time and the line sung there; a click on the length switches it
-// to the time left.
+// The song's timeline: a glass tube that fills as the song plays, with bubbles drifting through the
+// liquid while it plays. Under the pointer it shows the time and the line sung there; a click on the
+// length switches it to the time left.
 const REMAINING_KEY='deviload-music-time-left';
 
 export function wireTimeline({seek,elapsed,duration,getAudio,lyrics,time,storage=globalThis.localStorage}){
@@ -36,7 +36,7 @@ export function wireTimeline({seek,elapsed,duration,getAudio,lyrics,time,storage
   const audios=new Set();
   function watchAudio(){
     const audio=getAudio();if(audios.has(audio))return;audios.add(audio);
-    // The played part waves while the song plays and lies flat when it stops.
+    // The liquid moves while the song plays and goes still when it stops.
     for(const name of ['play','playing','pause','ended','emptied'])audio.addEventListener(name,()=>{if(audio===getAudio())wrap.classList.toggle('is-playing',!audio.paused&&!audio.ended);});
     // The lyrics are fetched a moment into the song, so a quick skip costs nothing.
     audio.addEventListener('playing',()=>{if(audio!==getAudio())return;readLines();clearTimeout(prefetch);
