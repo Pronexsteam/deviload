@@ -307,4 +307,3 @@
 /* While the controls show, the captions make room for the status line. */
 .music-clip-view:not(.is-idle):has(.music-clip-state:not(:empty)) .music-clip-captions{padding-bottom:56px}
 @media(prefers-reduced-motion:reduce){.music-clip-captions .lyric-cap-line,.music-clip-captions .lyric-cap-line.is-leaving{animation:none}.music-clip-captions .lyric-cap-word{transition:none}}
-:root[data-motion="reduced"] .music-clip-captions :is(.lyric-cap-line,.lyric-cap-word){animation:none;transition:none}

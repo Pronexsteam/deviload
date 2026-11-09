@@ -16,7 +16,7 @@ import {wireLyricsLines} from "./music-lyrics-desktop.js";
 import {createStatsWindow} from "./music-stats-window.js";
 import {runTour,tourSeen,forgetTour} from "./music-tour.js";
 import {wireMusicYield} from "./music-yield.js";
-import {wireGlassOrb} from "./music-glass.js";
+import {wireGlassOrb,wireGlassButtons} from "./music-glass.js";
 import {wireResultKeys} from "./music-results-keys.js";
 import {createMusicHomeTiles} from "./music-home-tiles.js";
 import {revealView} from "./music-transitions.js";
@@ -46,6 +46,7 @@ import {openRecordingPicker} from "./music-recording-ui.js";
 import {interestSources,interestSeeds,interestProfile,rememberInterestTrack,sanitizeInterestMixes} from "./music-interest-mixes.js";
 import {createInterestMixesUI} from "./music-interest-ui.js";
 import {createNowPlaying} from "./music-presentation.js";
+import {createLyricCard} from "./music-lyric-card.js";
 import {isMotionCover} from './music-motion.js';
 import {readMusicProfile,saveMusicProfile,sanitizeMusicCollection,sanitizeMusicTrack} from "./music-profile.js";
 import {wireMusicProfile} from "./music-profile-ui.js";
@@ -206,7 +207,7 @@ export function createMusic({invoke,onDownload,storage}) {
   }});
   const saveToPlaylist=button(t("Add to playlist"),"playlist",()=>{if(current)library.picker(current);});extras.insertBefore(saveToPlaylist,queueButton);
   const sound=createMusicSound({nodes:decks.nodes,storage,button,notify:status,getAudio:()=>audio,onRateChange:()=>miniPlayer?.sync()});
-  const orb=wireGlassOrb(dock.querySelector(".music-play-button"));
+  const orb=wireGlassOrb(dock.querySelector(".music-play-button"));wireGlassButtons();
   const ambient=createMusicAmbient({dock,sound,getAudio:()=>audio,getTrack:()=>current,nodes:decks.nodes,hasMini:()=>!!miniPlayer?.isOpen,onLevels:levels=>{miniPlayer?.ambient(levels);orb.energy(levels?.[0]);}});
   const lyrics=createMusicLyrics({invoke,button,getTrack:()=>current,getAudio:()=>audio,getLatency:()=>sound.latency(),isPrivate:()=>privateSession});
   // One Lyrics button: it shows the words wherever the player is, in the full player, the Now Playing
@@ -218,6 +219,8 @@ export function createMusic({invoke,onDownload,storage}) {
   // Lyrics on the desktop: from the lyrics toolbar, and from the player's More menu.
   const desktopTool=button(t("Lyrics on the desktop"),"monitor",()=>lyricLines.toggle().catch(error=>status(errorText(error))),"music-lyrics-desktop");
   lyrics.addTool(desktopTool);
+  // A picture of a sung line to share: from the lyrics tools, or a right click on a line.
+  const lyricCard=createLyricCard({invoke,button,lyrics,getSong:()=>current});lyrics.addTool(lyricCard.button);
   const syncDesktop=({open})=>{desktopTool.setAttribute("aria-pressed",String(open));desktopItem?.setAttribute("aria-pressed",String(open));};
   lyricLines.onChange(syncDesktop);
   // "Even out song volume": once per song and player, ask how loud the recording is and trim it.
@@ -1645,7 +1648,7 @@ export function createMusic({invoke,onDownload,storage}) {
   // The listening summary opens into "Your week in music".
   if(librarySidebar.stats){
     const findItem=id=>[...saved.recent,...saved.favorites,...(saved.playlists||[]).flatMap(list=>list.items)].find(item=>item?.id===id)||null;
-    const statsWindow=createStatsWindow({weekly,findItem,cover:item=>cover(item,"",96),motion:()=>!matchMedia("(prefers-reduced-motion: reduce)").matches&&document.documentElement.dataset.motion!=="reduced"});
+    const statsWindow=createStatsWindow({weekly,findItem,cover:item=>cover(item,"",96),motion:()=>!matchMedia("(prefers-reduced-motion: reduce)").matches});
     const card=librarySidebar.stats;card.tabIndex=0;card.setAttribute("role","button");card.setAttribute("aria-haspopup","dialog");
     card.addEventListener("click",()=>statsWindow.open(card));
     card.addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();statsWindow.open(card);}});

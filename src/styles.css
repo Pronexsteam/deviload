@@ -162,7 +162,9 @@ html[data-compact="yes"] .section-heading p{display:none}
 
 html[data-compact="yes"] .stat-grid{display:none}
 html[data-compact="yes"] .discover{padding:13px 17px}
-html[data-motion="reduced"] *,html[data-motion="reduced"] *::before,html[data-motion="reduced"] *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+/* Calm motion stills the downloader pages and the decorations. Devil Music, windows and menus keep their
+   motion, and the system's "reduce motion" setting still turns that off. */
+html[data-motion="reduced"] :is(main:not([data-page="music"]),.sidebar,#reaction-overlay,.engine-notice) *,html[data-motion="reduced"] :is(main:not([data-page="music"]),.sidebar,#reaction-overlay,.engine-notice) *::before,html[data-motion="reduced"] :is(main:not([data-page="music"]),.sidebar,#reaction-overlay,.engine-notice) *::after,html[data-motion="reduced"] :is(.mascot-spot,.share-mascot,body[data-reaction]),html[data-motion="reduced"] :is(.mascot-spot,.share-mascot,body[data-reaction])::before,html[data-motion="reduced"] :is(.mascot-spot,.share-mascot,body[data-reaction])::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
 @media(max-width:760px){.sidebar .side-foot{display:flex;order:4;width:100%;border:0;margin:0;padding:0}.side-status,.side-foot>p{display:none}}
 
 #playlist-browse{white-space:nowrap;min-height:35px}

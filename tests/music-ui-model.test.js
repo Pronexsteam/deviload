@@ -81,3 +81,18 @@ test('the same song under two ids shows once',()=>{
  const a={id:'a',kind:'song',title:'Believer',artists:['Imagine Dragons']},b={id:'b',kind:'song',title:'Believer',artists:['Imagine Dragons']};
  assert.deepEqual(suggestionRows('believer',{rich:[a],local:[b]}).map(row=>row.item?.id),['a']);
 });
+test('a lyric card starts from the sung line and keeps at most four lines in order',async()=>{
+ const {startingPick,togglePick,fitRows,cardFileName}=await import('../src/music-lyric-card-model.js');
+ const lines=['','one','two','three','four','five'];
+ assert.deepEqual(startingPick(lines,-1),[1]);assert.deepEqual(startingPick(lines,3),[3]);assert.deepEqual(startingPick(['',''],0),[]);
+ let pick=[3];for(const index of [1,5,2,4])pick=togglePick(pick,index,lines);
+ assert.deepEqual(pick,[2,3,4,5]);assert.deepEqual(togglePick([2],2,lines),[2]);assert.deepEqual(togglePick([2],0,lines),[2]);
+ const fit=fitRows(['a b c d e f g h'],{width:100,height:1000},(text,px)=>text.length*px/2);
+ assert.ok(fit.size<=76&&fit.rows.join(' ')==='a b c d e f g h');
+ assert.equal(cardFileName('Believer','Imagine Dragons'),'Imagine Dragons - Believer lyric.png');
+ assert.equal(cardFileName('a/b:c?',''),'a b c lyric.png');assert.equal(cardFileName('',''),'Devil Music lyric.png');
+});
+test('two sung lines on a card are kept apart',async()=>{
+ const {wrapRows}=await import('../src/music-lyric-card-model.js');
+ assert.deepEqual(wrapRows(['one two','three'],100,()=>10),['one two',null,'three']);
+});

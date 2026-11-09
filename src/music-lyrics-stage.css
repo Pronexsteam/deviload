@@ -46,11 +46,11 @@
 /* Depth in the full player, after Apple Music: lines glide in and out of focus, sung words lift a little
    and the word being sung glows in the cover's colour. */
 @media(prefers-reduced-motion:no-preference){
-  :root[data-theme]:not([data-motion="reduced"]) body #music-now-playing.is-immersive .music-lyrics-scroll .music-lyric-line{transform-origin:left center;transition:transform .6s cubic-bezier(.2,.85,.15,1),opacity .5s ease,filter .5s ease,background-color .2s}
-  :root[data-theme]:not([data-motion="reduced"]) body #music-now-playing.is-immersive .music-lyrics-scroll .music-lyric-line:not(.active):not([data-distance]):not(:hover){opacity:.14;filter:blur(2.4px)}
-  :root[data-theme]:not([data-motion="reduced"]) body #music-now-playing.is-immersive .music-lyrics-scroll.is-browsing .music-lyric-line:not(.active){opacity:.6;filter:none}
-  :root[data-theme]:not([data-motion="reduced"]) body #music-now-playing .music-lyric-line.active.has-word-sync .music-lyric-word{transition:transform .45s cubic-bezier(.2,1.12,.32,1),color .25s,text-shadow .3s}
-  :root[data-theme]:not([data-motion="reduced"]) body #music-now-playing .music-lyric-line.active.has-word-sync .music-lyric-word[data-state="sung"]{transform:translateY(-2px)}
-  :root[data-theme]:not([data-motion="reduced"]) body #music-now-playing .music-lyric-line.active.has-word-sync .music-lyric-word[data-state="current"]{transform:translateY(-1px);text-shadow:0 0 18px color-mix(in srgb,var(--lyric-aura,#fff) 55%,transparent)}
+  :root[data-theme] body #music-now-playing.is-immersive .music-lyrics-scroll .music-lyric-line{transform-origin:left center;transition:transform .6s cubic-bezier(.2,.85,.15,1),opacity .5s ease,filter .5s ease,background-color .2s}
+  :root[data-theme] body #music-now-playing.is-immersive .music-lyrics-scroll .music-lyric-line:not(.active):not([data-distance]):not(:hover){opacity:.14;filter:blur(2.4px)}
+  :root[data-theme] body #music-now-playing.is-immersive .music-lyrics-scroll.is-browsing .music-lyric-line:not(.active){opacity:.6;filter:none}
+  :root[data-theme] body #music-now-playing .music-lyric-line.active.has-word-sync .music-lyric-word{transition:transform .45s cubic-bezier(.2,1.12,.32,1),color .25s,text-shadow .3s}
+  :root[data-theme] body #music-now-playing .music-lyric-line.active.has-word-sync .music-lyric-word[data-state="sung"]{transform:translateY(-2px)}
+  :root[data-theme] body #music-now-playing .music-lyric-line.active.has-word-sync .music-lyric-word[data-state="current"]{transform:translateY(-1px);text-shadow:0 0 18px color-mix(in srgb,var(--lyric-aura,#fff) 55%,transparent)}
 }
 :root[data-theme] body #music-now-playing.is-immersive .music-lyric-background{display:block;margin-top:.15em;font-size:.6em;font-weight:600;opacity:.62}

@@ -50,4 +50,3 @@
 :root[data-theme] body .music-remote-dialog .music-remote-stop{margin:0}
 @media(max-width:560px){.music-remote-layout{grid-template-columns:1fr;justify-items:center}}
 @media(prefers-reduced-motion:reduce){.music-room-pulse::after,.music-remote-dot::after{animation:none}}
-:root[data-motion="reduced"] :is(.music-room-pulse,.music-remote-dot)::after{animation:none}

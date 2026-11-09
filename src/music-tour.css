@@ -29,4 +29,3 @@
 @keyframes mtour-undim{to{opacity:0}}
 @keyframes mtour-pulse{50%{box-shadow:0 0 0 10px color-mix(in srgb,var(--player-primary,#9ad0ff) 10%,transparent),0 0 50px color-mix(in srgb,var(--player-primary,#9ad0ff) 35%,transparent)}}
 @media(prefers-reduced-motion:reduce){.mtour-hole,.mtour-ring,.mtour-card{transition:none}.mtour-ring{animation:none}}
-:root[data-motion="reduced"] :is(.mtour-hole,.mtour-ring,.mtour-card){transition:none}

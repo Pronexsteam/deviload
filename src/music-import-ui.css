@@ -49,4 +49,3 @@
 @keyframes music-import-forward{from{opacity:0;translate:18px 0}}
 @keyframes music-import-back{from{opacity:0;translate:-18px 0}}
 @media(prefers-reduced-motion:reduce){.music-import-start,.music-import-step{animation:none!important}}
-:root[data-motion="reduced"] :is(.music-import-start,.music-import-step){animation:none!important}

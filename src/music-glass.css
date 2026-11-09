@@ -34,5 +34,17 @@
   :root[data-theme] body :is(.music-dock,.music-stage) :is(.music-transport-buttons>button,.music-dock-extras>button,.music-like,.music-play-button),:root[data-theme] body :is(.music-dock,.music-stage) :is(.music-transport-buttons>button,.music-dock-extras>button,.music-like)::before{transition:none}
   :root[data-theme] body :is(.music-dock,.music-stage) .music-play-button{scale:1;--orb-energy:0}
   .music-orb-ripple{display:none}}
-:root[data-motion="reduced"] body :is(.music-dock,.music-stage) .music-play-button{scale:1;--orb-energy:0}
-:root[data-motion="reduced"] .music-orb-ripple{display:none}
+
+/* Symbols lift a little under the pointer. */
+:root[data-theme] body :is(.music-dock,.music-stage) :is(.music-transport-buttons>button:not(.music-play-button),.music-dock-extras>button) .icon{transition:translate .35s var(--open-spring,cubic-bezier(.2,1.12,.32,1))}
+:root[data-theme] body :is(.music-dock,.music-stage) :is(.music-transport-buttons>button:not(.music-play-button),.music-dock-extras>button):hover .icon{translate:0 -1px}
+/* A mode switched on sends out one soft ring in the player's colour. */
+.music-mode-ring{position:absolute;inset:-2px;border-radius:999px;pointer-events:none;border:2px solid color-mix(in srgb,var(--player-primary,#9ad0ff) 85%,#fff);animation:music-mode-ring .55s cubic-bezier(.2,.85,.15,1) forwards}
+@keyframes music-mode-ring{from{opacity:.85;scale:.8}to{opacity:0;scale:1.7}}
+/* A like bursts into eight small sparks. */
+.music-like-burst{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none;animation:music-like-burst .6s linear forwards}
+.music-like-burst i{position:absolute;left:-3px;top:-3px;width:6px;height:6px;border-radius:50%;background:#ff5a6e;rotate:var(--turn);animation:music-like-spark .6s cubic-bezier(.2,.85,.15,1) forwards}
+.music-like-burst i:nth-child(even){width:4px;height:4px;left:-2px;top:-2px;background:color-mix(in srgb,#ff5a6e 55%,#ffd36e)}
+@keyframes music-like-spark{from{transform:translateY(0) scale(1);opacity:1}to{transform:translateY(-24px) scale(.3);opacity:0}}
+@keyframes music-like-burst{to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.music-mode-ring,.music-like-burst{display:none}:root[data-theme] body :is(.music-dock,.music-stage) button .icon{transition:none}}

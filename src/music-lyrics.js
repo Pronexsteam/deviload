@@ -23,7 +23,7 @@ export function createMusicLyrics({invoke,button,getTrack,getAudio,getLatency=()
   function adjustOffset(value){offset=clampLyricsOffset(value);offsets=saveLyricsOffset(localStorage,offsets,id,offset);timingLabel();manualUntil=0;followPending=true;update();}
   timingLabel();
   const close=button(t("Close"),"x-circle",()=>dialog.close());content.append(heading,toolbar,body,credit);dialog.append(close,content);document.body.append(dialog);
-  let request=0,id=null,lines=[],active=-1,host=null,manualUntil=0,followPending=false,frame=0;const cache=new Map(),loading=new Map();
+  let request=0,id=null,lines=[],plainLines=[],active=-1,host=null,manualUntil=0,followPending=false,frame=0;const cache=new Map(),loading=new Map();
   let activeRows=new Set(),nearRows=new Set(),lastFrameAt=0,hasWords=false;
   let syncLabel="",source="LRCLIB";
   const updateCredit=()=>{credit.textContent=source+(syncLabel?" · "+(syncLabel==="words"?t("Word timing"):t("Line timing · word timing unavailable")):"")+(extraNote?" · "+extraNote:"");};
@@ -42,7 +42,7 @@ export function createMusicLyrics({invoke,button,getTrack,getAudio,getLatency=()
     if(matchMedia("(prefers-reduced-motion: reduce)").matches){body.scrollTop=target;return;}
     scrollGoal=target;cancelAnimationFrame(scrollFrame);scrollAt=body.scrollTop;scrollTick=0;scrollFrame=requestAnimationFrame(glide);
   }
-  async function load(){if(frame)cancelAnimationFrame(frame);frame=0;hasWords=false;extras.attach(null,[],null);syncLabel="";source="LRCLIB";updateCredit();const track=getTrack();if(!track){++request;id=null;lines=[];active=-1;heading.textContent=t("Lyrics");body.textContent=t("Start playback to load lyrics.");return;}const token=++request;id=track.id;heading.textContent=host?t("Lyrics"):track.title;body.textContent=t("Finding lyrics…");lines=[];active=-1;manualUntil=0;followPending=false;body.scrollTop=0;
+  async function load(){if(frame)cancelAnimationFrame(frame);frame=0;hasWords=false;extras.attach(null,[],null);syncLabel="";source="LRCLIB";updateCredit();const track=getTrack();if(!track){++request;id=null;lines=[];plainLines=[];active=-1;heading.textContent=t("Lyrics");body.textContent=t("Start playback to load lyrics.");return;}const token=++request;id=track.id;heading.textContent=host?t("Lyrics"):track.title;body.textContent=t("Finding lyrics…");lines=[];plainLines=[];active=-1;manualUntil=0;followPending=false;body.scrollTop=0;
     try{
       if(isLocalMusicId(track.id)){body.textContent=t('Online lyrics are not requested for local files.');body.dataset.lyricsState='missing';return;}
       const duration=getAudio().duration;if(!Number.isFinite(duration)||duration<=0){body.textContent=t("Start playback to load lyrics.");id=null;return;}
@@ -70,7 +70,7 @@ export function createMusicLyrics({invoke,button,getTrack,getAudio,getLatency=()
       }
       if(token!==request)return;
       function render(result){
-      body.replaceChildren();active=-1;lines=result?.instrumental?[]:timedLyrics(result?.lines);if(!lines.length&&!result?.instrumental)lines=parseLyrics(result?.synced);activeRows=new Set();
+      body.replaceChildren();active=-1;plainLines=result?.instrumental?[]:String(result?.plain||'').split('\n').map(line=>line.trim()).filter(Boolean);lines=result?.instrumental?[]:timedLyrics(result?.lines);if(!lines.length&&!result?.instrumental)lines=parseLyrics(result?.synced);activeRows=new Set();
       body.dataset.lyricsState=result?.instrumental?"instrumental":lines.length?"synced":result?.plain?"plain":"missing";
       const lead=leadSinger(lines);if(lines.length){for(const [lineIndex,line] of lines.entries()){const row=button(line.text||(lineIndex===lines.length-1?t("End of available lyrics"):"♪"),null,()=>{const audio=getAudio();if(getTrack()?.id!==id||!Number.isFinite(audio.duration))return;manualUntil=0;followPending=true;audio.currentTime=Math.max(0,Math.min(line.at-offset,audio.duration));update();},"music-lyric-line");if(line.agent&&line.agent!==lead&&line.agent!=="v1000")row.dataset.singer="right";if(line.words?.length){row.classList.add("has-word-sync");row.replaceChildren();const wordSpan=word=>{const span=document.createElement("span");span.className="music-lyric-word";span.textContent=word.text;span.setAttribute("aria-hidden","true");return span;};row.append(...line.words.map(wordSpan));if(line.background?.length){const backing=document.createElement("span");backing.className="music-lyric-background";backing.append(...line.background.map(wordSpan));row.append(backing);}row.setAttribute("aria-label",[line.text,line.backgroundText].filter(Boolean).join(" "));}else if(line.backgroundText){const backing=document.createElement("span");backing.className="music-lyric-background";backing.textContent=line.backgroundText;row.append(backing);}body.append(row);}}
       else{const text=document.createElement("p");text.className="music-lyrics-plain";text.textContent=result?.instrumental?t("Instrumental"):(result?.plain||t("No matching lyrics found."));body.append(text);}
@@ -137,6 +137,8 @@ export function createMusicLyrics({invoke,button,getTrack,getAudio,getLatency=()
   return {
     open(){if(host){load();body.focus();return;}dialog.showModal();load();},
     addTool(node){toolbar.append(node);},
+    // The song's lines as text, with the one being sung, for a lyric card.
+    snapshot(){const texts=lines.length?lines.map(line=>line.text||''):plainLines;return {id:id||'',lines:texts,active:lines.length?active:-1};},
     watch(watcher){watchers.add(watcher);shared={key:'',at:0};update();return ()=>watchers.delete(watcher);},
     mount(target){host=target;if(dialog.open)dialog.close();host.append(content);load();},
     unmount(){++request;if(frame)cancelAnimationFrame(frame);frame=0;host=null;id=null;dialog.append(content);},

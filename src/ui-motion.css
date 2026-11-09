@@ -68,9 +68,6 @@
   :root body main[data-page="music"] #devil-music.music-panel-animating{transition:none}
   :root body main[data-page="music"] #devil-music:is(.music-panel-animating,.music-panel-closing)>.music-playing-preview{animation:none}
 }
-:root[data-motion="reduced"]:root :is(dialog,[popover],.music-queue-panel,.music-track-options),:root[data-motion="reduced"] dialog::backdrop{transition:none!important;scale:none!important;translate:none!important}
-:root[data-motion="reduced"] body main[data-page="music"] #devil-music:is(.music-panel-animating,.music-library-animating){transition:none!important}
-:root[data-motion="reduced"] body main[data-page="music"] #devil-music:is(.music-panel-animating,.music-library-animating)>*{animation:none!important}
 
 .icon[data-icon="monitor"]{--glyph:url("assets/icons/monitor.svg")}
 

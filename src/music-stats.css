@@ -50,7 +50,6 @@ dialog.music-stats-dialog::backdrop{background:#0006;-webkit-backdrop-filter:blu
 .music-stats-note{margin:0;font-size:12px;color:var(--workspace-muted,#b9bcc6)}
 @media(max-width:640px){.music-stats-tiles{grid-template-columns:repeat(2,1fr)}.music-stats-tile.is-big{grid-column:1/-1}.music-stats-chart{height:150px;gap:6px}}
 @media(prefers-reduced-motion:reduce){.music-stats-bar,.music-stats-meter::after{animation:none}}
-:root[data-motion="reduced"] :is(.music-stats-bar,.music-stats-meter::after){animation:none}
 
 /* Week, month and year. */
 .music-stats-tabs{display:inline-flex;gap:4px;margin-top:12px;padding:4px;border:1px solid #ffffff1c;border-radius:999px;background:#ffffff0a}
