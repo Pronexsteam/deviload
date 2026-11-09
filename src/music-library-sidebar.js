@@ -48,7 +48,7 @@ export function createMusicLibrarySidebar({workspace,saved,onPlaylist,onFavorite
     // On a wide window a closed library folds into a rail of icons and covers instead of disappearing.
     const rail=!value&&media.matches;
     // Folding and unfolding glide; window resizes stay immediate.
-    if(value!==opened&&workspace.isConnected){workspace.classList.add("music-library-animating");clearTimeout(animation);animation=setTimeout(()=>workspace.classList.remove("music-library-animating"),420);}
+    if(value!==opened&&workspace.isConnected){workspace.classList.add("music-library-animating");clearTimeout(animation);animation=setTimeout(()=>workspace.classList.remove("music-library-animating"),620);}
     opened=value;aside.hidden=!value&&!rail;workspace.classList.toggle("library-panel-open",value);workspace.classList.toggle("music-library-rail",rail);toggle.setAttribute("aria-expanded",String(value));closeLabel();
     if(remember){preference=value?"open":"closed";try{localStorage.setItem(STORAGE_KEY,preference);}catch{/* Remain usable with denied storage. */}}
     if(focus){if(value&&!media.matches)home.focus();else if(!value)toggle.focus();}
@@ -95,7 +95,7 @@ export function createMusicLibrarySidebar({workspace,saved,onPlaylist,onFavorite
   const onEscape=event=>{if(event.key==="Escape"&&opened){event.preventDefault();event.stopPropagation();setOpen(false,true,true);}};
   search.addEventListener("input",()=>refresh());aside.addEventListener("keydown",onEscape);media.addEventListener("change",onResize);onLanguageChange(translate);
   translate();setOpen(opened);
-  return {refresh,refreshStats,stats:summary?stats:null,destroy(){
+  return {refresh,refreshStats,stats:summary?stats:null,open(){if(!opened)setOpen(true,false,false);},get opened(){return opened;},destroy(){
     if(destroyed)return;destroyed=true;media.removeEventListener("change",onResize);aside.removeEventListener("keydown",onEscape);stats.remove();toggle.remove();aside.remove();
     content.replaceWith(...content.childNodes);workspace.classList.remove("has-library-sidebar","library-panel-open");
   }};

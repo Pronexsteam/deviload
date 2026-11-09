@@ -9,7 +9,7 @@ const time=n=>`${Math.floor((Number(n)||0)/60)}:${String(Math.floor((Number(n)||
 const glyphs={play:'play',pause:'pause',previous:'skip-back',next:'skip-forward',repeat:'repeat',shuffle:'shuffle',volume:'speaker-high',muted:'speaker-high'};
 function icon(id,name,one=false){const button=$(id);if(button.dataset.icon===name+one)return;button.dataset.icon=name+one;const glyph=document.createElement('span');glyph.className='mini-glyph';glyph.setAttribute('aria-hidden','true');glyph.style.setProperty('--mini-glyph',`url('./assets/icons/${glyphs[name]}.svg')`);button.replaceChildren(glyph);if(id==='mini-repeat')button.dataset.repeat=one?'one':'all';if(id==='mini-mute')button.dataset.muted=String(name==='muted');}
 const record=mountPictureDisc(document.querySelector(".mini-art"));
-let state={},pinned=false,receivedAt=0,videoOn=false;
+let state={},pinned=false,receivedAt=0,videoOn=false,lyricsOn=false;try{lyricsOn=localStorage.getItem('deviload-mini-lyrics')==='1';}catch{}
 const queueView=wireMiniQueue({invoke});
 registerPlaybackRange($('mini-progress'),()=>state.duration?Math.min(state.duration,state.position+(state.playing?Math.min(1.1,(performance.now()-receivedAt)/1000)*(state.rate||1):0))/state.duration:0);
 $('mini-progress').step='any';
@@ -29,7 +29,7 @@ function render(value){state=value||{};receivedAt=performance.now();document.doc
  $('mini-position').textContent=time(state.position);$('mini-duration').textContent=time(state.duration);$('mini-progress').disabled=!state.duration;
  if(!isRangeDragging($('mini-volume')))$('mini-volume').value=state.volume||0;labels();queueView.update(state);
 }
-function labels(){for(const [id,label]of [['mini-video',videoOn?t('Close music video'):t('Music video')],['mini-pin',t('Always on top')],['mini-show',t('Open Devil Music')],['mini-close',t('Close')],['mini-play',state.playing?t('Pause'):t('Play')],['mini-previous',t('Previous track')],['mini-next',t('Next track')],['mini-repeat',state.repeat==='one'?t('Repeat one song'):state.repeat==='all'?t('Repeat queue'):t('Repeat off')],['mini-shuffle',t('Shuffle')],['mini-mute',state.volume>0?t('Mute'):t('Unmute')],['mini-volume',t('Volume')],['mini-progress',t('Playback position')]])$(id).title=$(id).ariaLabel=label;$('mini-pin').setAttribute('aria-pressed',String(pinned));$('mini-volume').setAttribute('aria-valuetext',Math.round(Number($('mini-volume').value)*100)+'%');}
+function labels(){for(const [id,label]of [['mini-lyrics',lyricsOn?t('Hide lyrics'):t('Show lyrics')],['mini-video',videoOn?t('Close music video'):t('Music video')],['mini-pin',t('Always on top')],['mini-show',t('Open Devil Music')],['mini-close',t('Close')],['mini-play',state.playing?t('Pause'):t('Play')],['mini-previous',t('Previous track')],['mini-next',t('Next track')],['mini-repeat',state.repeat==='one'?t('Repeat one song'):state.repeat==='all'?t('Repeat queue'):t('Repeat off')],['mini-shuffle',t('Shuffle')],['mini-mute',state.volume>0?t('Mute'):t('Unmute')],['mini-volume',t('Volume')],['mini-progress',t('Playback position')]])$(id).title=$(id).ariaLabel=label;$('mini-pin').setAttribute('aria-pressed',String(pinned));$('mini-volume').setAttribute('aria-valuetext',Math.round(Number($('mini-volume').value)*100)+'%');}
 async function action(action,value){try{const result=await invoke('music_mini_action',{action,value});if(action==='pin')pinned=result;labels();$('mini-status').textContent='';}catch{$('mini-status').textContent=t('Could not control playback.');}}
 for(const name of ['pin','show','previous','play','next','repeat','shuffle','mute','close'])$('mini-'+name).addEventListener('click',()=>action(name));
 $('mini-volume').addEventListener('input',()=>{labels();action('volume',Number($('mini-volume').value));});
@@ -63,6 +63,24 @@ async function setVideo(on){
  labels();
 }
 $('mini-video').addEventListener('click',()=>setVideo(!videoOn));
+
+// Lyrics: the current line replaces the artist under the title, filling in as it is sung.
+let lyric=null,lyricAt=0,lyricKey='',lyricFrame=0;
+function showLyrics(on){
+ lyricsOn=on;try{localStorage.setItem('deviload-mini-lyrics',on?'1':'0');}catch{}
+ document.body.classList.toggle('has-lyric',on);$('mini-lyrics').setAttribute('aria-pressed',String(on));$('mini-lyric').hidden=!on;$('mini-artist').hidden=on;paintLyric(true);labels();
+}
+function paintLyric(force=false){
+ lyricFrame=0;if(!lyricsOn)return;const node=$('mini-lyric'),line=lyric?.line||{};
+ const key=`${lyric?.id}|${line.at}|${line.text}`;
+ if(force||key!==lyricKey){lyricKey=key;node.textContent=line.text||'♪';node.classList.remove('is-new');void node.offsetWidth;node.classList.add('is-new');}
+ const time=!lyric?0:lyric.position+(lyric.playing?(performance.now()-lyricAt)/1000*(lyric.rate||1):0);
+ const span=Math.max(.5,(line.end||line.at+4)-line.at);node.style.setProperty('--fill',`${Math.min(100,Math.max(0,(time-line.at)/span*100)).toFixed(1)}%`);
+ if(lyric?.playing)lyricFrame=requestAnimationFrame(()=>paintLyric());
+}
+window.__TAURI__.event.listen('lyrics-line',({payload})=>{lyric=payload;lyricAt=performance.now();if(lyricFrame)cancelAnimationFrame(lyricFrame);paintLyric();});
+$('mini-lyrics').addEventListener('click',()=>showLyrics(!lyricsOn));
+showLyrics(lyricsOn);
 setInterval(()=>{
  if(!videoOn)return;
  const item=song();

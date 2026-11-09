@@ -34,7 +34,7 @@ export function pickClip(song,items){
 }
 
 // Plays the song's music video, muted, and keeps it in step with the audio.
-export function createMusicClip({invoke,language,getItem=()=>null,getHost,isVisible,getAudio,audios=[],onState=()=>{},onBuffering=()=>{},storage=globalThis.localStorage}){
+export function createMusicClip({invoke,language,getLatency=()=>0,getItem=()=>null,getHost,isVisible,getAudio,audios=[],onState=()=>{},onBuffering=()=>{},storage=globalThis.localStorage}){
   let enabled=false,quality=720;
   let returning=false;
   try{quality=Number(storage?.getItem(QUALITY_KEY))||720;returning=storage?.getItem(USED_KEY)==='1';}catch{}
@@ -90,7 +90,9 @@ export function createMusicClip({invoke,language,getItem=()=>null,getHost,isVisi
     const audio=getAudio();if(!video||!ready||!audio)return;
     const host=getHost();if(!host.contains(video))host.append(video);
     if(!isVisible()||document.hidden){if(!video.paused)video.pause();return;}
-    const rate=audio.playbackRate||1,target=Math.min(audio.currentTime,Math.max(0,(video.duration||audio.currentTime)-.05)),drift=video.currentTime-target;
+    // The picture shows at once while sound reaches the speakers later, so it follows what is heard.
+    const heard=Math.max(0,audio.currentTime-getLatency());
+    const rate=audio.playbackRate||1,target=Math.min(heard,Math.max(0,(video.duration||heard)-.05)),drift=video.currentTime-target;
     // While the picture loads after a jump it is left alone; jumping again would only restart the load.
     if(!force&&(video.seeking||jumpAt&&video.readyState<3))return;
     // The cover stays until the picture is actually there and in step, so no frozen frame shows while it loads.

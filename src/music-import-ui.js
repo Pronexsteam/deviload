@@ -2,6 +2,7 @@ import {t,language,errorText} from './i18n.js';
 import {parseMusicImport} from './music-import-format.js';
 import {resolveMusicImportLibrary,readPlaylistLink} from './music-import-resolver.js';
 import {readImportDraft,writeImportDraft,clearImportDraft} from './music-import-session.js';
+import {showTip} from './music-tour.js';
 const el=(tag,cls,text)=>{const node=document.createElement(tag);node.className=cls;if(text!=null)node.textContent=text;return node;};
 export function wireMusicImport({invoke,button,commit,storage=window.localStorage}){
  function open(){
@@ -11,6 +12,8 @@ export function wireMusicImport({invoke,button,commit,storage=window.localStorag
   const resume=button(t('Resume unfinished import'),null,()=>{
     if(busy||reading)return;const draft=readImportDraft(storage);if(!draft)return;setBatch(draft.batch);name.value=draft.name||draft.batch.name;destination.value=draft.destination;subset.value=draft.subset;if(!subset.value)subset.value='all';use.checked=draft.useForTaste;
     rows=draft.rows;applied.clear();draft.applied.forEach(key=>applied.add(key));selected.clear();const restoredSelection=new Set(draft.selected);rows.filter(row=>restoredSelection.has(row.entry.key)&&!applied.has(row.entry.key)).forEach(row=>selected.add(row));renderRows();review.open=true;showRows();resume.hidden=true;
+    // An unfinished import goes straight to its review, with a way back to the sources.
+    start.hidden=true;step.hidden=false;linkArea.hidden=fileArea.hidden=true;stepList.replaceChildren();stepTitle.textContent=t('Resume unfinished import');
   },'music-primary');resume.hidden=!readImportDraft(storage);
   function persist(){if(!batch)return;try{if(batch.entries.every(entry=>applied.has(entry.key))){clearImportDraft(storage);return;}
     writeImportDraft(storage,{batch,rows,selected:[...selected].map(row=>row.entry.key),applied:[...applied],destination:destination.value,name:name.value,subset:subset.value,useForTaste:use.checked});
@@ -76,9 +79,34 @@ export function wireMusicImport({invoke,button,commit,storage=window.localStorag
   function showRows(){notice.textContent=t('{ready} songs ready. {review} need review.',{ready:selected.size,review:chosenEntries().filter(entry=>!applied.has(entry.key)).length-selected.size});updateSelection();}
   async function run(action){if(busy||reading)return;busy=true;updateSelection();cancelImport=false;controller=new AbortController();pick.disabled=read.disabled=link.disabled=match.disabled=subset.disabled=destination.disabled=name.disabled=apply.disabled=report.disabled=true;cancel.hidden=discard.hidden=false;try{await action(controller.signal);}catch(error){if(error.name==='AbortError'){if(cancelImport){clearImportDraft(storage);batch=null;rows=[];selected.clear();results.replaceChildren();preview.hidden=true;notice.textContent=t('Music import canceled.');}else notice.textContent=t('Matching stopped. {count} songs are ready to add.',{count:selected.size});}else notice.textContent=errorText(error);}finally{busy=false;controller=null;pick.disabled=read.disabled=link.disabled=subset.disabled=destination.disabled=name.disabled=report.disabled=false;match.disabled=!batch||chosenEntries().length===0;match.textContent=t(rows.length?'Continue matching missing songs':'Find my music');apply.disabled=!selected.size;cancel.hidden=discard.hidden=true;updateSelection();persist();}}
   linkForm.addEventListener('submit',event=>{event.preventDefault();run(async signal=>{notice.textContent=t('Reading playlist: {count} songs',{count:0});const value=await readPlaylistLink(link.value,{invoke,language:language(),signal,onProgress:count=>notice.textContent=t('Reading playlist: {count} songs',{count})});const fallbackNames={'Imported YouTube Music playlist':t('Imported YouTube Music playlist'),'Imported Spotify playlist':t('Imported Spotify playlist'),'Imported Spotify album':t('Imported Spotify album'),'Imported YouTube Mix':t('Imported YouTube Mix')};setBatch({...value,name:fallbackNames[value.name]||value.name});});});
-  const archive=el('details','music-import-archive');archive.open=false;archive.append(el('summary','',t('Import liked songs or a music export')),pick,file,drop,sources,guide,help);
-  const linkHint=el('p','music-import-caption',t('Public Spotify playlists and albums, YouTube playlists and Mixes. For liked songs, use a public playlist or a music export.'));
-  const completeFile=button(t('Choose an export for the full library'),'folder-open',()=>{archive.open=true;pick.click();},'outline small');completeFile.append(el('span','',t('Choose an export for the full library')));completeFile.hidden=true;const review=el('details','music-import-review-details');review.append(el('summary','',t('Review matches')),selectionTools,results,moreRows);preview.append(coverage,completeFile,destinationLabel,destinationHint,nameLabel,subsetLabel,summary,warnings,matchingNote,match,progress,review,useLabel,apply,report);body.append(intro,resume,linkForm,linkHint,archive,preview,cancel,discard,notice);modal.append(head,body);document.body.append(modal);const previous=document.activeElement;choose('spotify');updateSelection();modal.addEventListener('close',()=>{controller?.abort();persist();modal.remove();if(previous?.isConnected)previous.focus();});modal.showModal();link.focus();
+  // Step one: choose where the music comes from. Step two: short directions and the matching field.
+  const SOURCES=[
+   {key:'spotify',brand:'spotify',title:t('Spotify playlist or album'),text:t('Paste a share link to a public playlist or album.'),placeholder:t('Spotify playlist or album link'),
+    steps:[t('Open the playlist or album in Spotify.'),t('Click the three dots, then Share, then Copy link.'),t('Paste the link below.')]},
+   {key:'youtube',brand:'youtubemusic',title:t('YouTube Music playlist'),text:t('Paste a link to a public YouTube Music or YouTube playlist.'),placeholder:t('YouTube Music or YouTube playlist link'),
+    steps:[t('Open the playlist on YouTube Music or YouTube.'),t('Click Share, then Copy.'),t('Paste the link below.')]},
+   {key:'mix',brand:'youtube',title:t('YouTube Mix'),text:t('Keep a Mix as a playlist, up to 100 songs.'),placeholder:t('YouTube Mix link'),
+    steps:[t('Start a Mix on YouTube Music or YouTube.'),t('Copy its link from Share or the address bar.'),t('Paste it below. The songs are saved as they are now.')]},
+   {key:'file',icon:'files',title:t('Your whole library from a file'),text:t('Liked songs and every playlist from a Spotify or Google export.'),
+    steps:[t('Ask for your data on the Spotify privacy page, or use Google Takeout for YouTube Music.'),t('The export arrives by email, usually within a few days.'),t('Choose its JSON, CSV or ZIP files here.')]},
+  ];
+  const start=el('section','music-import-start'),cards=el('div','music-import-cards');start.append(intro,resume,cards);
+  const step=el('section','music-import-step'),back=button(t('All sources'),'arrow-left',()=>{if(busy||reading)return;showStart();},'quiet small music-import-back');back.append(el('span','',t('All sources')));
+  const stepHead=el('div','music-import-step-head'),stepTitle=el('h3',''),stepList=el('ol','music-import-steps');stepHead.append(el('span','music-import-art'),stepTitle);
+  const linkArea=el('div','music-import-link-area'),fileArea=el('div','music-import-file-area');linkArea.append(linkForm);fileArea.append(sources,guide,pick,file,drop,help);
+  step.append(back,stepHead,stepList,linkArea,fileArea);step.hidden=true;
+  const art=source=>{const node=el('span','music-import-art');if(source.brand){const image=el('img','');image.src=`assets/brands/${source.brand}.svg`;image.alt='';node.append(image);}else{const icon=el('span','icon');icon.dataset.icon=source.icon;icon.setAttribute('aria-hidden','true');node.append(icon);}return node;};
+  for(const source of SOURCES){const card=el('button','music-import-card');card.type='button';const copy=el('span','music-import-card-copy');copy.append(el('strong','',source.title),el('small','',source.text));const chevron=el('span','icon music-import-chevron');chevron.dataset.icon='caret-down';chevron.setAttribute('aria-hidden','true');card.append(art(source),copy,chevron);card.addEventListener('click',()=>showStep(source));if(!cards.childElementCount)card.autofocus=true;cards.append(card);}
+  function showStep(source){
+    start.hidden=true;step.hidden=false;stepHead.firstChild.replaceWith(art(source));stepTitle.textContent=source.title;
+    stepList.replaceChildren(...source.steps.map(text=>el('li','',text)));
+    const isFile=source.key==='file';linkArea.hidden=isFile;fileArea.hidden=!isFile;
+    if(isFile)choose(service);else{link.placeholder=source.placeholder;link.setAttribute('aria-label',source.placeholder);requestAnimationFrame(()=>link.focus());}
+    // The first time, point at the field the directions lead to.
+    if(!isFile)setTimeout(()=>{if(!step.hidden)showTip({key:'import-link',target:linkForm,title:t('Paste the link here'),text:t('Copy the link as the steps above show, paste it here and press Read link. You can check the matches before anything is added.')});},420);
+  }
+  function showStart(){step.hidden=true;preview.hidden=true;start.hidden=false;notice.textContent='';}
+  const completeFile=button(t('Choose an export for the full library'),'folder-open',()=>{showStep(SOURCES[3]);pick.click();},'outline small');completeFile.append(el('span','',t('Choose an export for the full library')));completeFile.hidden=true;const review=el('details','music-import-review-details');review.append(el('summary','',t('Review matches')),selectionTools,results,moreRows);preview.append(coverage,completeFile,destinationLabel,destinationHint,nameLabel,subsetLabel,summary,warnings,matchingNote,match,progress,review,useLabel,apply,report);body.append(start,step,preview,cancel,discard,notice);modal.append(head,body);document.body.append(modal);const previous=document.activeElement;choose('spotify');updateSelection();modal.addEventListener('close',()=>{controller?.abort();persist();modal.remove();if(previous?.isConnected)previous.focus();});modal.showModal();setTimeout(()=>{if(modal.open&&!start.hidden)showTip({key:'import-sources',target:cards,title:t('Choose where your music is'),text:t('Pick a source. The next screen shows exactly where to copy the link from.')});},520);
  }
  const trigger=button(t('Bring your music'),'arrows-left-right',open,'outline small music-import-open');trigger.id='music-import-open';trigger.append(el('span','',t('Bring your music')));trigger.lastChild.dataset.i18n='Bring your music';trigger.dataset.i18nTitle='Bring your music';trigger.dataset.i18nAriaLabel='Bring your music';document.querySelector('.music-heading-actions').prepend(trigger);return {open};
 }

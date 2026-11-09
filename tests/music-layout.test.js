@@ -9,7 +9,7 @@ test("blocks only move into the zones they belong to", () => {
   assert.deepEqual(layoutZonesFor("queue"), ["dock"]);
   assert.deepEqual(layoutZonesFor("nothing"), []);
   const moved = moveLayoutItem(defaultLayout(), "volume", "dock", 0);
-  assert.deepEqual(moved.zones.dock.slice(0, 2), ["volume", "queue"]);
+  assert.deepEqual(moved.zones.dock.slice(0, 2), ["volume", "lyrics"]);
   const refused = moveLayoutItem(defaultLayout(), "queue", "home", 0);
   assert.deepEqual(refused, defaultLayout());
   const roamed = moveLayoutItem(defaultLayout(), "stats", "sidebar", 1);
@@ -24,7 +24,7 @@ test("a damaged or old saved layout is repaired", () => {
   assert.deepEqual(repaired.zones.sidebar, ["navigation", "playlists", "stats"]);
   assert.deepEqual(repaired.zones.greeting, []);
   assert.equal(repaired.zones.dock.at(-1), "volume");
-  assert.equal(new Set(repaired.zones.dock).size, 7);
+  assert.equal(new Set(repaired.zones.dock).size, 8);
   assert.deepEqual(normalizeLayout(null), defaultLayout());
 });
 

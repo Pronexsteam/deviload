@@ -4,10 +4,16 @@ const PANEL_KEY='deviload-music-preview';
 
 export function musicPreviewOpen(){let saved=null;try{saved=localStorage.getItem(PANEL_KEY);}catch{}return saved===null?innerWidth>=1500:saved==='1';}
 
+let panelGlide=0;
 export function wireMusicDockMenu({extras,button,workspace,items,direct=[],shortcuts=[]}){
  const menu=document.createElement('div');menu.id='music-dock-menu';menu.className='music-dock-menu';menu.popover='auto';
  const toggle=button(t('More'),'dots-three',()=>{},'music-icon-button music-dock-more');toggle.popoverTargetElement=menu;
  const panel=button(t('Now playing panel'),'sidebar-simple',()=>{
+  // The panel glides in and out; the class only lasts for the move, so window resizes stay immediate.
+  const opening=!workspace.classList.contains('music-preview-open');
+  workspace.classList.add('music-panel-animating');workspace.classList.toggle('music-panel-closing',!opening);clearTimeout(panelGlide);
+  // A closing panel fades out first, then the column finishes gliding shut.
+  setTimeout(()=>workspace.classList.remove('music-panel-closing'),300);panelGlide=setTimeout(()=>workspace.classList.remove('music-panel-animating'),620);
   const open=workspace.classList.toggle('music-preview-open');panel.setAttribute('aria-pressed',String(open));
   try{localStorage.setItem(PANEL_KEY,open?'1':'0');}catch{}
  });

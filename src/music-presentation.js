@@ -5,7 +5,7 @@ import {createMusicClip} from "./music-clip.js";
 import {createClipView} from "./music-clip-view.js";
 
 // Move the existing controls into a modal, so both views share one audio player.
-export function createNowPlaying({invoke,language=()=>'en',getAudio=()=>null,audios=[],convertFileSrc,dock,identity,artwork,info,like,transport,extras,queuePanel,button,cover,renderDockArtwork,onDownload,onHideSong,onHideArtist,onArtist,onDismissQueue}) {
+export function createNowPlaying({invoke,language=()=>'en',getAudio=()=>null,getLatency=()=>0,audios=[],convertFileSrc,dock,identity,artwork,info,like,transport,extras,queuePanel,button,cover,renderDockArtwork,onDownload,onHideSong,onHideArtist,onArtist,onDismissQueue}) {
   const make=(tag,cls)=>{const node=document.createElement(tag);node.className=cls;return node;};
   const stage=make("dialog","music-stage is-immersive"),background=make("div","music-stage-background"),header=make("header","music-stage-header");
   stage.id="music-now-playing";background.setAttribute("aria-hidden","true");
@@ -67,7 +67,7 @@ export function createNowPlaying({invoke,language=()=>'en',getAudio=()=>null,aud
     if(stage.open){stage.close();requestAnimationFrame(()=>setClip(true));return;}
     clipView.setItem(current);clipView.show();if(clip.enabled)clip.update(current);else clip.toggle();
   }
-  const clip=createMusicClip({invoke,language,getAudio,audios,getItem:()=>current,getHost:()=>clipView.frame,
+  const clip=createMusicClip({invoke,language,getAudio,getLatency,audios,getItem:()=>current,getHost:()=>clipView.frame,
     isVisible:()=>clipView.isOpen&&!stage.open,
     onBuffering:on=>clipView.setBuffering(on),
     onState:state=>{dockClip.setAttribute('aria-pressed',String(state.enabled));dockClip.classList.toggle('is-loading',!!state.loading);clipView.setState(state);}});
@@ -111,7 +111,8 @@ export function createNowPlaying({invoke,language=()=>'en',getAudio=()=>null,aud
     dockClip.title=dockClip.ariaLabel=t('Music video');flipButton.setAttribute('aria-pressed',String(previewLyricsOn));
   }
   labels();onLanguageChange(labels);
-  const api={open,syncQueueVisibility(){if(stage.open)syncRail();},attachPreview(workspace){workspace.append(scene,preview);},attachLyrics(controller,trigger){lyrics=controller;lyricsTrigger=trigger;},toggleLyrics(){if(!stage.open)return false;if(!queuePanel.hidden){lyricsWanted=true;onDismissQueue?.();}else showLyrics(lyricsPanel.hidden);wake();return true;},update(item,downloading=false,meta={}){
+  const api={open,syncQueueVisibility(){if(stage.open)syncRail();},attachPreview(workspace){workspace.append(scene,preview);},attachLyrics(controller,trigger){lyrics=controller;lyricsTrigger=trigger;},togglePreviewLyrics(){if(stage.open||!preview.isConnected||!preview.getClientRects().length||getComputedStyle(preview).display==='none')return false;setPreviewLyrics(!previewLyricsOn);return true;},
+    toggleLyrics(){if(!stage.open)return false;if(!queuePanel.hidden){lyricsWanted=true;onDismissQueue?.();}else showLyrics(lyricsPanel.hidden);wake();return true;},update(item,downloading=false,meta={}){
     const trackChanged=current?.id!==item?.id,imageChanged=currentImage!==(item?.image||'');
     if(trackChanged||imageChanged){if(stage.open)background.replaceChildren(cover(item,"",320));previewArt.replaceChildren(cover(item,"",640));ambient.replaceChildren(cover(item,"",320));scene.replaceChildren(cover(item,"",320));}scene.hidden=!item;
     if(trackChanged){notice.hidden=true;for(const node of [previewArt,info,artwork]){node.classList.remove("music-track-arriving");requestAnimationFrame(()=>node.classList.add("music-track-arriving"));}}

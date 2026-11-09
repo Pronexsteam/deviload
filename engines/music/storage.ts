@@ -4,7 +4,9 @@ export const CACHE_LIMITS = [CACHE_LIMIT, 1024 * 1024 * 1024, 5 * 1024 * 1024 * 
 export const validCacheLimit = (value: unknown): value is number => typeof value === 'number' && CACHE_LIMITS.some(limit => limit === value);
 export const TRACK_LIMIT = 64 * 1024 * 1024;
 export const validId = (id: unknown): id is string => typeof id === 'string' && /^[\w-]{11}$/.test(id);
-export type Record = { id: string; file: string; size: number; at: number };
+// loudness: YouTube's measure of how much louder than its reference the recording is, in dB.
+export type Record = { id: string; file: string; size: number; at: number; loudness?: number };
+export const validLoudness = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= 60;
 const validFile = (name: unknown): name is string => typeof name === 'string' && /^[a-f0-9-]{36}\.audio$/.test(name);
 export async function readBytes(path: string, offset: number, length: number) {
   const file = await Deno.open(path, { read: true });
@@ -41,6 +43,7 @@ export class AudioCache {
       if (!Array.isArray(items) || items.length > 65536) throw Error('Invalid cache index');
       for (const entry of items) {
         if (!validId(entry?.id) || !validFile(entry?.file) || !Number.isSafeInteger(entry?.size) || entry.size <= 0 || entry.size > TRACK_LIMIT || !Number.isFinite(entry.at)) continue;
+        if (entry.loudness !== undefined && !validLoudness(entry.loudness)) delete entry.loudness;
         if (await Deno.stat(this.path(entry.file)).then(s => s.isFile && s.size === entry.size).catch(() => false)) this.entries.push(entry);
       }
     } catch { /* Missing or invalid indexes never expose partial files. */ }

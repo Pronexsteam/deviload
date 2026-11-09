@@ -11,6 +11,12 @@ import {playbackCandidates as eligiblePlaybackCandidates} from "./music-playback
 import {wireMusicPanels,wireMusicSuggestions,createMusicHero,wireMusicConnectionShortcuts} from "./music-workspace-tools.js";
 import {wireMusicDockMenu} from "./music-dock-menu.js";
 import {wireMusicLayout} from "./music-layout.js";
+import {wireMusicTopbar} from "./music-topbar.js";
+import {wireLyricsLines} from "./music-lyrics-desktop.js";
+import {createStatsWindow} from "./music-stats-window.js";
+import {runTour,tourSeen,forgetTour} from "./music-tour.js";
+import {wireMusicYield} from "./music-yield.js";
+import {wireGlassOrb} from "./music-glass.js";
 import {createMusicHomeTiles} from "./music-home-tiles.js";
 import {revealView} from "./music-transitions.js";
 import {transitionPlan} from "./music-transition-model.js";
@@ -108,7 +114,7 @@ export function createMusic({invoke,onDownload,storage}) {
   let resolvedTrack=null,resolvedOffline=false,autoplay=restored.autoplay;
   const virtualLists=[];const clearVirtualLists=()=>{virtualLists.splice(0).forEach(list=>list.destroy());};
   const contextActions=new WeakMap();let contextMenu=null;
-  let librarySidebar=null,homeHero=null,homeTiles=null,miniPlayer=null,musicRoom=null,roomReturn=null;
+  let librarySidebar=null,homeHero=null,homeTiles=null,miniPlayer=null,musicRoom=null,roomReturn=null,desktopItem=null;
   let selectedTracks=new Set(),selectionAnchor=null,visibleTrackIds=[],discoveryCandidates=[];
   let personalization=0,recommendationRevision=0,listeningRevision=0,homeListeningRevision=0,homeBuiltAt=0,playbackContext=[],playbackOrigin="manual",contextRevision=0,followedCursor=0,playbackSourceContext={kind:"restored"};
   const recommendationSession=createRecommendationSession(),automaticQueueIds=new Set();
@@ -186,7 +192,7 @@ export function createMusic({invoke,onDownload,storage}) {
   const queuePanel=el("section","music-queue-panel"); queuePanel.id="music-play-queue";queuePanel.hidden=true; queuePanel.setAttribute("aria-label",t("Play queue")); document.body.append(queuePanel);
   function closeQueue(){queueOpen=false;renderQueue();queueButton.focus({preventScroll:true});}
   queuePanel.addEventListener("keydown",event=>{if(event.key==="Escape"){event.preventDefault();event.stopPropagation();closeQueue();}});
-  const presentation=createNowPlaying({invoke,language,getAudio:()=>audio,audios:decks.nodes,convertFileSrc:path=>window.__TAURI__.core.convertFileSrc(path),dock,identity,artwork,info,like,transport,extras,queuePanel,button,cover,renderDockArtwork:updateDockArt,
+  const presentation=createNowPlaying({invoke,language,getAudio:()=>audio,getLatency:()=>sound.latency(),audios:decks.nodes,convertFileSrc:path=>window.__TAURI__.core.convertFileSrc(path),dock,identity,artwork,info,like,transport,extras,queuePanel,button,cover,renderDockArtwork:updateDockArt,
     onArtist:showArtist,onDownload:()=>downloadTrack(current),onHideSong:()=>feedback(false),onHideArtist:()=>feedback(true),onDismissQueue:()=>{queueOpen=false;renderQueue();}});
   function showArtist(item){openArtistPage({item,invoke,button,cover,onOpen:artist=>{document.getElementById('music-now-playing')?.close();browseItem=artist;load('browse',artist.id,artist.title);}});}
   const library=createMusicLibrary({saved,button,cover,onOpen:showPlaylist,notify:status,commit:playlists=>{
@@ -199,11 +205,27 @@ export function createMusic({invoke,onDownload,storage}) {
   }});
   const saveToPlaylist=button(t("Add to playlist"),"playlist",()=>{if(current)library.picker(current);});extras.insertBefore(saveToPlaylist,queueButton);
   const sound=createMusicSound({nodes:decks.nodes,storage,button,notify:status,getAudio:()=>audio,onRateChange:()=>miniPlayer?.sync()});
-  const ambient=createMusicAmbient({dock,sound,getAudio:()=>audio,getTrack:()=>current,nodes:decks.nodes,hasMini:()=>!!miniPlayer?.isOpen,onLevels:levels=>miniPlayer?.ambient(levels)});
-  const lyrics=createMusicLyrics({invoke,button,getTrack:()=>current,getAudio:()=>audio,isPrivate:()=>privateSession});
-  const lyricsButton=button(t("Lyrics"),"music-notes",()=>{if(!presentation.toggleLyrics())lyrics.open();});lyricsButton.dataset.i18nTitle="Lyrics";lyricsButton.dataset.i18nAriaLabel="Lyrics";extras.insertBefore(lyricsButton,queueButton);
+  const orb=wireGlassOrb(dock.querySelector(".music-play-button"));
+  const ambient=createMusicAmbient({dock,sound,getAudio:()=>audio,getTrack:()=>current,nodes:decks.nodes,hasMini:()=>!!miniPlayer?.isOpen,onLevels:levels=>{miniPlayer?.ambient(levels);orb.energy(levels?.[0]);}});
+  const lyrics=createMusicLyrics({invoke,button,getTrack:()=>current,getAudio:()=>audio,getLatency:()=>sound.latency(),isPrivate:()=>privateSession});
+  // One Lyrics button: it shows the words wherever the player is, in the full player, the Now Playing
+  // panel, or by opening the full player.
+  const lyricsButton=button(t("Lyrics"),"music-notes",()=>{if(presentation.toggleLyrics()||presentation.togglePreviewLyrics())return;presentation.open();});lyricsButton.dataset.i18nTitle="Lyrics";lyricsButton.dataset.i18nAriaLabel="Lyrics";extras.insertBefore(lyricsButton,queueButton);
   lyricsButton.classList.add('music-stage-lyrics-trigger','music-labeled-control');const lyricsLabel=el('span','music-control-label',t('Lyrics'));lyricsButton.append(lyricsLabel);onLanguageChange(()=>{lyricsLabel.textContent=t('Lyrics');});
   presentation.attachLyrics(lyrics,lyricsButton);
+  const lyricLines=wireLyricsLines({invoke,lyrics,audios:decks.nodes,isMiniOpen:()=>!!miniPlayer?.isOpen});
+  // Lyrics on the desktop: from the lyrics toolbar, and from the player's More menu.
+  const desktopTool=button(t("Lyrics on the desktop"),"monitor",()=>lyricLines.toggle().catch(error=>status(errorText(error))),"music-lyrics-desktop");
+  lyrics.addTool(desktopTool);
+  const syncDesktop=({open})=>{desktopTool.setAttribute("aria-pressed",String(open));desktopItem?.setAttribute("aria-pressed",String(open));};
+  lyricLines.onChange(syncDesktop);
+  // "Even out song volume": once per song and player, ask how loud the recording is and trim it.
+  {const levelled=new WeakMap();
+   const level=node=>{if(!sound.levelling||node!==audio||!current||isLocalMusicId(current.id)||levelled.get(node)===current.id)return;const id=current.id;levelled.set(node,id);
+     invoke("music_loudness",{id}).then(db=>{if(levelled.get(node)===id)sound.setLevel(node,db);}).catch(()=>{levelled.delete(node);});};
+   for(const node of decks.nodes)for(const name of ["playing","timeupdate"])node.addEventListener(name,()=>level(node));}
+  // Optional pause while another app plays sound; the choices live under Playback in music settings.
+  wireMusicYield({invoke,host:$("music-playback-settings"),audios:decks.nodes,isPlaying:()=>!!current&&!audio.paused,pause:()=>{if(!audio.paused)audio.pause();},play:()=>{if(audio.paused&&!streamLoading)togglePlay();},notify:message=>status(message)});
   const sleep=createSleepTimer({onDim:value=>decks.setDim(value),onExpire:()=>{if(!audio.paused)audio.pause();status(t("Sleep timer paused playback."));},onChange:()=>syncSleep()});
   const sleepButton=button(t("Sleep timer"),"moon",()=>{
     const box=sleepButton.getBoundingClientRect(),entries=[[t("After this track"),"moon",()=>sleep.set("track")],...SLEEP_MINUTES.map(minutes=>[t("{minutes} minutes",{minutes}),"moon",()=>sleep.set(minutes)])];
@@ -1617,6 +1639,14 @@ export function createMusic({invoke,onDownload,storage}) {
     homeCache=null;if(loaded && document.querySelector("main").dataset.page==="music"){view==="interest"?showInterestMix(interestViewId):view==="offline"?showOffline():["library","playlist"].includes(view)?showPlaylist(playlistId):["favorites","recent"].includes(view)?showLocal(view):load(lastQuery.kind,lastQuery.value,lastQuery.heading,true,lastQuery.params||"");}syncDock();renderQueue();
   });
   librarySidebar=createMusicLibrarySidebar({workspace:$("devil-music"),saved,onPlaylist:showPlaylist,onFavorites:()=>showLocal("favorites"),onOffline:showOffline,onCreate:()=>library.create(),onHome:()=>homeButton.click(),onSearch:()=>{$("music-query").focus();$("music-query").select();},summary:()=>({...weekly.summary(),days:weekly.daily()}),cover,button});
+  // The listening summary opens into "Your week in music".
+  if(librarySidebar.stats){
+    const findItem=id=>[...saved.recent,...saved.favorites,...(saved.playlists||[]).flatMap(list=>list.items)].find(item=>item?.id===id)||null;
+    const statsWindow=createStatsWindow({weekly,findItem,cover:item=>cover(item,"",96),motion:()=>!matchMedia("(prefers-reduced-motion: reduce)").matches&&document.documentElement.dataset.motion!=="reduced"});
+    const card=librarySidebar.stats;card.tabIndex=0;card.setAttribute("role","button");card.setAttribute("aria-haspopup","dialog");
+    card.addEventListener("click",()=>statsWindow.open(card));
+    card.addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();statsWindow.open(card);}});
+  }
   presentation.attachPreview($("devil-music"));
   wireMusicPanels($("devil-music"));
   wireMusicSuggestions({invoke,cover,getRecent:()=>saved.recent,onPick:item=>{if(item.kind==="song")playItems([item],item.id);else{browseItem=item;load("browse",item.id,item.title);}},input:$("music-query"),form:$("music-search"),isPrivate:()=>privateSession,getItems:()=>[...saved.collections,...saved.recent,...saved.favorites,...sections.flatMap(s=>s.items)]});
@@ -1632,9 +1662,28 @@ export function createMusic({invoke,onDownload,storage}) {
       if(roomReturn){queue=roomReturn.queue;index=roomReturn.index;const position=roomReturn.position;roomReturn=null;if(queue[index])playAt(index,{resume:position,autoplay:false});else{audio.pause();audio.removeAttribute("src");audio.load();current=null;resolvedTrack=null;knownDuration=0;syncDock();}}}
   });
   wireMusicConnectionShortcuts(button,librarySidebar.stats);
-  const shortcutsOpen=button(t("Keyboard shortcuts"),"keyboard",()=>shortcutHelp.open());onLanguageChange(()=>{shortcutsOpen.title=shortcutsOpen.ariaLabel=t("Keyboard shortcuts");});const layoutOpen=button(t("Edit layout"),"squares-four",()=>musicLayout?.edit());onLanguageChange(()=>{layoutOpen.title=layoutOpen.ariaLabel=t("Edit layout");});wireMusicDockMenu({extras,button,workspace:$("devil-music"),direct:[$("music-expand"),$("music-clip-open")],shortcuts:[{source:$("music-mini-open"),glyph:"arrows-in"},{source:$("music-remote-open"),glyph:"phone-remote"}],items:[saveToPlaylist,soundButton,sleepButton,downloadButton,...["music-mini-open","music-room-open","music-remote-open"].map($),layoutOpen,shortcutsOpen]});
+  const shortcutsOpen=button(t("Keyboard shortcuts"),"keyboard",()=>shortcutHelp.open());onLanguageChange(()=>{shortcutsOpen.title=shortcutsOpen.ariaLabel=t("Keyboard shortcuts");});const layoutOpen=button(t("Edit layout"),"squares-four",()=>musicLayout?.edit());desktopItem=button(t("Lyrics on the desktop"),"monitor",()=>lyricLines.toggle().catch(error=>status(errorText(error))));desktopItem.setAttribute("aria-pressed","false");onLanguageChange(()=>{desktopItem.title=desktopItem.ariaLabel=t("Lyrics on the desktop");});onLanguageChange(()=>{layoutOpen.title=layoutOpen.ariaLabel=t("Edit layout");});wireMusicDockMenu({extras,button,workspace:$("devil-music"),direct:[$("music-expand"),$("music-clip-open")],shortcuts:[{source:$("music-mini-open"),glyph:"arrows-in"},{source:$("music-remote-open"),glyph:"phone-remote"}],items:[saveToPlaylist,soundButton,sleepButton,downloadButton,...["music-mini-open","music-room-open","music-remote-open"].map($),desktopItem,layoutOpen,shortcutsOpen]});
   homeTiles=createMusicHomeTiles({hero:$("music-home-hero"),button,cover,getPlaylists:()=>saved.playlists,onView:target=>target==="offline"?showOffline():showLocal(target),onPlaylist:showPlaylist});
   const musicLayout=wireMusicLayout({workspace:$("devil-music")});
+  wireMusicTopbar();
+  // The first visit to Devil Music walks through the main controls; music settings can replay it.
+  const tourSteps=()=>{const dock=document.querySelector(".music-dock");return [
+    {target:()=>document.querySelector(".music-navigation-toggle"),title:t("Menu"),text:t("Open the rest of Deviload from here: downloads, your media library, Cinema, Cut and Convert.")},
+    {target:()=>$("music-search"),title:t("Search"),text:t("Find songs, artists and albums. Ctrl+K jumps here from anywhere.")},
+    {before:async()=>{librarySidebar?.open();await new Promise(resolve=>setTimeout(resolve,450));},target:()=>document.querySelector(".music-library-sidebar"),title:t("Your library"),text:t("Playlists, liked songs, history and downloads live here. The button at the top folds it into a slim strip of covers.")},
+    {target:()=>$("music-import-open"),title:t("Bring your music"),text:t("Move playlists over from Spotify or YouTube Music. The next screens show exactly what to copy.")},
+    {target:()=>document.querySelector(".music-sidebar-stats"),title:t("Your week in music"),text:t("Click the summary to see your listening time, top artists and top songs.")},
+    {target:()=>dock?.querySelector(".music-transport"),title:t("The player"),text:t("Play, skip, shuffle and repeat. The same buttons appear in the mini-player and the full player.")},
+    {target:()=>dock?.querySelector(".music-stage-lyrics-trigger"),title:t("Lyrics"),text:t("Shows the words wherever you are, highlighted as they are sung.")},
+    {target:()=>$("music-clip-open"),title:t("Music video"),text:t("Plays the song's video in step with the music, also in the mini-player.")},
+    {target:()=>dock?.querySelector(".music-dock-more"),title:t("More"),text:t("Sound and equalizer, sleep timer, mini-player, listening together, the phone remote and lyrics on the desktop.")},
+    {target:()=>$("music-settings-top"),title:t("Music settings"),text:t("Recommendations, playback, your music profile and this tour.")},
+    {target:()=>$("quick-theme-button"),title:t("Themes and layout"),text:t("Pick a theme, put your own picture or video behind the app, or rearrange Devil Music with Edit layout.")},
+  ];};
+  const startTour=(force=false)=>runTour({key:"music",steps:tourSteps(),force});
+  let tourQueued=false;
+  const offerTour=()=>{if(tourQueued||tourSeen("music"))return;tourQueued=true;setTimeout(()=>{if(document.querySelector("dialog[open]")||document.querySelector('main')?.dataset.page!=="music"){tourQueued=false;return;}startTour();},1400);};
+  {const preferences=$("music-preferences");if(preferences){const replay=button(t("Show the tour again"),"play",()=>{preferences.close();setTimeout(()=>{forgetTour("music");startTour(true);},350);},"outline small music-tour-replay");replay.append(el("span","",t("Show the tour again")));const note=preferences.querySelector(".music-session-note");(note||preferences).after?note.after(replay):preferences.append(replay);onLanguageChange(()=>{replay.lastChild.textContent=t("Show the tour again");});}}
   index=queue.findIndex(item=>item.id===restored.id);current=queue[index]||null;order.restore(restored.order,queue,current?.id);
   if(current){retryPosition=restored.position;title.textContent=current.title;artist.textContent=displaySubtitle(current);updateDockArt(current);elapsed.textContent=time(retryPosition);duration.textContent=time(knownDuration);seek.value=knownDuration?String(retryPosition/knownDuration*1000):"0";}
   window.__TAURI__?.event?.listen("music-control",({payload})=>{
@@ -1662,5 +1711,5 @@ export function createMusic({invoke,onDownload,storage}) {
       miniPlayer?.sync();
     }
   }).catch(()=>{});
-  return {open(entering=true){syncDock();if(!enginePrepared){enginePrepared=true;invoke?.("music_prepare",{}).catch(()=>{});}if(!loading&&(!loaded||entering&&view==="home"&&lastQuery.kind==="home"&&(homeRefreshRevision!==recommendationRevision||homeListeningRevision!==listeningRevision&&Date.now()-homeBuiltAt>=600000)))load("home");}};
+  return {open(entering=true){syncDock();if(entering)offerTour();if(!enginePrepared){enginePrepared=true;invoke?.("music_prepare",{}).catch(()=>{});}if(!loading&&(!loaded||entering&&view==="home"&&lastQuery.kind==="home"&&(homeRefreshRevision!==recommendationRevision||homeListeningRevision!==listeningRevision&&Date.now()-homeBuiltAt>=600000)))load("home");}};
 }

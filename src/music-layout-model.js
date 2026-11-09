@@ -6,13 +6,13 @@ export const LAYOUT_ZONES = Object.freeze({
   home: Object.freeze(["welcome", "quick", "moods"]),
   greeting: Object.freeze(["stats"]),
   sidebar: Object.freeze(["navigation", "playlists"]),
-  dock: Object.freeze(["queue", "panel", "expand", "clip", "mini", "remote", "volume"]),
+  dock: Object.freeze(["lyrics", "queue", "panel", "expand", "clip", "mini", "remote", "volume"]),
 });
 
 // Blocks that may also move to a zone other than the one they start in.
 const ROAMING = Object.freeze({stats: Object.freeze(["sidebar"])});
 // Blocks that may be hidden; navigation and playlists always stay so the page remains usable.
-export const HIDEABLE = Object.freeze(["quick", "moods", "stats", "queue", "panel", "expand", "clip", "mini", "remote", "volume"]);
+export const HIDEABLE = Object.freeze(["quick", "moods", "stats", "lyrics", "queue", "panel", "expand", "clip", "mini", "remote", "volume"]);
 
 const homeOf = id => Object.keys(LAYOUT_ZONES).find(zone => LAYOUT_ZONES[zone].includes(id)) || "";
 

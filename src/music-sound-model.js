@@ -7,7 +7,7 @@ export function soundSettings(raw={}){
   const custom=Array.isArray(raw.custom)?raw.custom.filter(p=>p&&typeof p.name==='string'&&p.name.trim()).slice(0,50).map(p=>({name:p.name.trim().slice(0,48),bands:gains(p.bands)})):[];
   const preset=Object.hasOwn(presets,raw.preset)?raw.preset:'custom';
   return {preset:preset==='custom'&&!Array.isArray(raw.bands)?'flat':preset,bands:gains(raw.bands||presets[preset]),custom,selected:custom.some(p=>p.name===raw.selected)?raw.selected:'',bypass:raw.bypass===true,
-    soft:raw.soft===true,transition:TRANSITIONS.includes(raw.transition)?raw.transition:0,seamless:raw.seamless!==false,rate:Number.isFinite(raw.rate)?Math.round(Math.max(.5,Math.min(2,raw.rate))*20)/20:1};
+    soft:raw.soft===true,level:raw.level===true,transition:TRANSITIONS.includes(raw.transition)?raw.transition:0,seamless:raw.seamless!==false,rate:Number.isFinite(raw.rate)?Math.round(Math.max(.5,Math.min(2,raw.rate))*20)/20:1};
 }
 // RBJ peaking response for the same Q and frequencies as the Web Audio graph.
 // Include overlapping boosts; using only the largest slider gain underestimates them.

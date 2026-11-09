@@ -59,3 +59,11 @@ html{background:transparent;overflow:hidden}
 .music-mini-page.video-missing #mini-stage::after{content:"";position:absolute;inset:0;background:var(--ambient-art,#000) center/cover;filter:blur(18px) brightness(.6)}
 @keyframes mini-ring-turn{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.mini-ring{animation-duration:3s}}
+
+/* Lyrics under the title: the sung part of the line fills with the accent. */
+#mini-lyrics{--mini-header-icon:url('./assets/icons/music-notes.svg')}
+#mini-lyrics[aria-pressed="true"]{background:var(--panel);color:var(--ink)}
+#mini-lyric{margin:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;font-weight:650;background:linear-gradient(90deg,var(--ink,#fff) var(--fill,0%),color-mix(in srgb,var(--ink,#fff) 45%,transparent) var(--fill,0%));-webkit-background-clip:text;background-clip:text;color:transparent}
+#mini-lyric.is-new{animation:mini-lyric-in .35s cubic-bezier(.2,.85,.15,1)}
+@keyframes mini-lyric-in{from{opacity:0;translate:0 6px}}
+@media(prefers-reduced-motion:reduce){#mini-lyric.is-new{animation:none}}

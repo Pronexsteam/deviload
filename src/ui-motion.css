@@ -1,0 +1,78 @@
+/* One motion language for everything that opens: windows, menus and floating panels grow out of the
+   button or point that opened them with a soft spring, and settle back into it when they close.
+   Individual scale and translate properties leave each element's own transform alone. */
+:root{
+  --open-spring:cubic-bezier(.2,1.12,.32,1);
+  --open-ease:cubic-bezier(.22,.8,.24,1);
+  --close-ease:cubic-bezier(.4,0,.8,.4);
+  --open-time:.34s;
+  --close-time:.2s;
+}
+
+/* Windows. Full-screen stages keep their own entrances. */
+:root:root dialog:not(.music-stage,#player-dialog,.music-stats-dialog){
+  transform-origin:var(--motion-origin,50% 45%);
+  transition:opacity var(--close-time) var(--close-ease),scale var(--close-time) var(--close-ease),translate var(--close-time) var(--close-ease),overlay var(--close-time) allow-discrete,display var(--close-time) allow-discrete;
+}
+:root:root dialog:not(.music-stage,#player-dialog,.music-stats-dialog):not([open]){opacity:0;scale:.94;translate:0 6px}
+:root:root dialog:not(.music-stage,#player-dialog,.music-stats-dialog)[open]{
+  opacity:1;scale:1;translate:0 0;animation:none;
+  transition:opacity .22s var(--open-ease),scale var(--open-time) var(--open-spring),translate var(--open-time) var(--open-spring),overlay var(--open-time) allow-discrete,display var(--open-time) allow-discrete;
+}
+@starting-style{:root:root dialog:not(.music-stage,#player-dialog,.music-stats-dialog)[open]{opacity:0;scale:.92;translate:0 10px}}
+
+/* The dimmed backdrop fades and blurs in rather than snapping. */
+:root:root dialog:not(.music-stage,#player-dialog,.music-stats-dialog)::backdrop{transition:opacity .28s var(--open-ease),overlay .28s allow-discrete,display .28s allow-discrete;opacity:0}
+:root:root dialog:not(.music-stage,#player-dialog,.music-stats-dialog)[open]::backdrop{opacity:1}
+@starting-style{:root:root dialog:not(.music-stage,#player-dialog,.music-stats-dialog)[open]::backdrop{opacity:0}}
+
+/* Menus and other popovers: quicker and smaller, anchored to their button. Tooltips only fade. */
+:root:root [popover]:not(.ui-tooltip,.mtour-layer){
+  transform-origin:var(--motion-origin,50% 0);
+  transition:opacity .14s var(--close-ease),scale .16s var(--close-ease),translate .16s var(--close-ease),overlay .16s allow-discrete,display .16s allow-discrete;
+}
+:root:root [popover]:not(.ui-tooltip,.mtour-layer):not(:popover-open){opacity:0;scale:.92}
+:root:root [popover]:not(.ui-tooltip,.mtour-layer):popover-open{
+  opacity:1;scale:1;translate:0 0;
+  transition:opacity .18s var(--open-ease),scale .3s var(--open-spring),translate .3s var(--open-spring),overlay .3s allow-discrete,display .3s allow-discrete;
+}
+@starting-style{:root:root [popover]:not(.ui-tooltip,.mtour-layer):popover-open{opacity:0;scale:.9;translate:0 4px}}
+
+/* Floating panels shown and hidden with the hidden attribute. */
+:root:root :is(.music-queue-panel,.music-track-options){
+  transform-origin:var(--motion-origin,100% 100%);
+  transition:opacity .16s var(--close-ease),scale .18s var(--close-ease),translate .18s var(--close-ease),display .18s allow-discrete;
+}
+:root:root :is(.music-queue-panel,.music-track-options)[hidden]{opacity:0;scale:.94;translate:0 6px}
+:root:root :is(.music-queue-panel,.music-track-options):not([hidden]){
+  opacity:1;scale:1;translate:0 0;animation:none;
+  transition:opacity .2s var(--open-ease),scale var(--open-time) var(--open-spring),translate var(--open-time) var(--open-spring),display var(--open-time) allow-discrete;
+}
+@starting-style{:root:root :is(.music-queue-panel,.music-track-options):not([hidden]){opacity:0;scale:.92;translate:0 10px}}
+
+/* The Now Playing panel glides in and out like the library. */
+/* Side panels move like the music video stage: the same timing and curve, and their contents travel
+   in from the outer edge rather than only fading. --panel-dir mirrors the motion when panels are swapped. */
+:root{--panel-ease:cubic-bezier(.2,.85,.15,1);--panel-time:.56s}
+#devil-music{--panel-dir:1}
+#devil-music.music-panels-swapped{--panel-dir:-1}
+:root[data-theme] body main[data-page="music"] #devil-music:is(.music-panel-animating,.music-library-animating){transition:grid-template-columns var(--panel-time) var(--panel-ease)!important}
+:root body main[data-page="music"] #devil-music.music-panel-animating:not(.music-panel-closing)>.music-playing-preview{animation:music-panel-in var(--panel-time) var(--panel-ease) both}
+:root body main[data-page="music"] #devil-music.music-panel-closing>.music-playing-preview{display:flex!important;grid-column:3!important;grid-row:1;animation:music-panel-out .3s cubic-bezier(.4,0,.8,.4) forwards}
+@keyframes music-panel-in{from{opacity:0;translate:calc(28px * var(--panel-dir)) 0;scale:.97}25%{opacity:0}}
+@keyframes music-panel-out{to{opacity:0;translate:calc(28px * var(--panel-dir)) 0;scale:.97}}
+
+/* Reduced motion: everything appears and disappears at once. */
+@media(prefers-reduced-motion:reduce){
+  :root:root :is(dialog,[popover],.music-queue-panel,.music-track-options),:root:root dialog::backdrop{transition:none!important;scale:none!important;translate:none!important}
+  :root body main[data-page="music"] #devil-music.music-panel-animating{transition:none}
+  :root body main[data-page="music"] #devil-music:is(.music-panel-animating,.music-panel-closing)>.music-playing-preview{animation:none}
+}
+:root[data-motion="reduced"]:root :is(dialog,[popover],.music-queue-panel,.music-track-options),:root[data-motion="reduced"] dialog::backdrop{transition:none!important;scale:none!important;translate:none!important}
+:root[data-motion="reduced"] body main[data-page="music"] #devil-music:is(.music-panel-animating,.music-library-animating){transition:none!important}
+:root[data-motion="reduced"] body main[data-page="music"] #devil-music:is(.music-panel-animating,.music-library-animating)>*{animation:none!important}
+
+.icon[data-icon="monitor"]{--glyph:url("assets/icons/monitor.svg")}
+
+/* While the window edge is being dragged, nothing animates. */
+.is-resizing *,.is-resizing *::before,.is-resizing *::after{transition:none!important;animation-play-state:paused!important}

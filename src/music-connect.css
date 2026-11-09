@@ -1,0 +1,53 @@
+/* Listen together: two choices before a room, one clear state inside it. */
+:root body .music-room-dialog{width:min(640px,calc(100vw - 32px))}
+:root body .music-room-dialog .music-room-intro{margin:4px 0 16px;font-size:14px;line-height:1.5;opacity:.85}
+.music-room-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.music-room-choices[hidden],.music-room-live[hidden],.music-room-share[hidden]{display:none}
+.music-room-card{display:grid;align-content:start;gap:8px;padding:18px;border:1px solid var(--surf-line,#ffffff1c);border-radius:20px;background:var(--surf-fill,#ffffff08)}
+.music-room-card h3{margin:0;font-size:16px;font-weight:700}
+.music-room-card p{margin:0 0 6px;font-size:13px;line-height:1.5;color:var(--workspace-muted,#b9bcc6)}
+.music-room-card.is-host{background:linear-gradient(150deg,color-mix(in srgb,var(--player-primary,#9ad0ff) 16%,transparent),transparent 70%),var(--surf-fill,#ffffff08)}
+.music-room-card>button{justify-self:start}
+.music-room-join{display:grid;gap:8px}
+.music-room-join input{width:100%;min-width:0;margin:0;box-sizing:border-box}
+.music-room-join button{justify-self:start}
+:root body .music-room-dialog .music-room-link{margin:0}
+.music-room-live{display:grid;gap:14px;padding:18px;border:1px solid var(--surf-line,#ffffff1c);border-radius:20px;background:var(--surf-fill,#ffffff08)}
+.music-room-state{display:flex;align-items:center;gap:12px}
+.music-room-state p{margin:0;font-size:14px;font-weight:600}
+.music-room-pulse{position:relative;flex:none;width:12px;height:12px;border-radius:50%;background:#f5b94d}
+.music-room-pulse::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid currentColor;color:#f5b94d;opacity:0;animation:music-room-ping 1.6s ease-out infinite}
+.music-room-live[data-state="live"] .music-room-pulse,.music-room-live[data-state="live"] .music-room-pulse::after{background:#4ade80;color:#4ade80}
+.music-room-live[data-state="live"] .music-room-pulse::after{background:transparent}
+.music-room-share{display:flex;gap:8px}
+.music-room-share input{flex:1;min-width:0;font-size:12px}
+.music-room-copy{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.music-room-control{margin:0;font-size:13px;color:var(--workspace-muted,#b9bcc6)}
+.music-room-control:empty{display:none}
+.music-room-live>button{justify-self:start}
+.music-room-about{margin-top:14px;font-size:12px;color:var(--workspace-muted,#b9bcc6)}
+.music-room-about summary{cursor:pointer;font-weight:600}
+.music-room-about p{margin:8px 0 0;line-height:1.55}
+@keyframes music-room-ping{0%{opacity:.7;scale:.6}100%{opacity:0;scale:1.6}}
+@media(max-width:600px){.music-room-choices{grid-template-columns:1fr}}
+
+/* Phone remote: the code beside three steps and the connection state. */
+:root body .music-remote-dialog{width:min(620px,calc(100vw - 32px))}
+.music-remote-layout{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:24px}
+:root body .music-remote-dialog .music-remote-qr{width:220px;margin:0;padding:12px;border-radius:20px;box-shadow:0 18px 50px #0006}
+.music-remote-qr img,.music-remote-qr canvas{display:block;width:100%!important;height:auto!important}
+.music-remote-side{display:grid;gap:14px;min-width:0}
+.music-remote-steps{display:grid;gap:10px;margin:0;padding:0;list-style:none;counter-reset:remote-step}
+.music-remote-steps li{display:grid;grid-template-columns:26px minmax(0,1fr);gap:10px;align-items:start;font-size:13px;line-height:1.5;counter-increment:remote-step}
+.music-remote-steps li::before{content:counter(remote-step);display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:color-mix(in srgb,var(--workspace-ink,#fff) 12%,transparent);font-size:12px;font-weight:700}
+.music-remote-state{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:color-mix(in srgb,var(--workspace-ink,#fff) 6%,transparent)}
+.music-remote-state p{margin:0;font-size:13px;font-weight:600}
+.music-remote-dot{position:relative;flex:none;width:10px;height:10px;border-radius:50%;background:#f5b94d}
+.music-remote-dot::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2px solid #f5b94d;opacity:0;animation:music-room-ping 1.6s ease-out infinite}
+.music-remote-dialog[data-state="connected"] .music-remote-dot{background:#4ade80}
+.music-remote-dialog[data-state="connected"] .music-remote-dot::after{border-color:#4ade80}
+.music-remote-note{margin:0;font-size:11px;line-height:1.5;color:var(--workspace-muted,#b9bcc6)}
+:root[data-theme] body .music-remote-dialog .music-remote-stop{margin:0}
+@media(max-width:560px){.music-remote-layout{grid-template-columns:1fr;justify-items:center}}
+@media(prefers-reduced-motion:reduce){.music-room-pulse::after,.music-remote-dot::after{animation:none}}
+:root[data-motion="reduced"] :is(.music-room-pulse,.music-remote-dot)::after{animation:none}

@@ -11,15 +11,21 @@ export function enhanceMusicShelves(root){
   let frame=0,destroyed=false;
   const update=()=>{
     frame=0;
+    // Read every shelf first and write afterwards, and only what changed: interleaving the two, or
+    // rewriting equal values, makes the browser restyle the page once per shelf on every resize.
+    const plans=[];
     for(const [grid,row]of rows){
       if(!root.contains(grid))continue;
       const max=Math.max(0,grid.scrollWidth-grid.clientWidth),position=Math.max(0,Math.min(max,grid.scrollLeft)),horizontal=view.getComputedStyle(grid).gridAutoFlow.includes('column');
-      const previousUnavailable=!horizontal||position<=2,nextUnavailable=!horizontal||max-position<=2;
-      row.previous.disabled=previousUnavailable;row.previous.hidden=previousUnavailable;
-      row.next.disabled=nextUnavailable;row.next.hidden=nextUnavailable;
-      row.wrapper.classList.toggle('music-shelf-overflows',horizontal&&max>2);
-      const art=grid.querySelector('.music-art'),bounds=row.wrapper.getBoundingClientRect();
-      if(art){const image=art.getBoundingClientRect();row.wrapper.style.setProperty('--music-shelf-control-y',`${Math.max(20,image.top-bounds.top+image.height/2)}px`);}
+      const art=grid.querySelector('.music-art'),bounds=row.wrapper.getBoundingClientRect(),image=art?.getBoundingClientRect();
+      plans.push({row,previous:!horizontal||position<=2,next:!horizontal||max-position<=2,overflows:horizontal&&max>2,y:image?`${Math.max(20,image.top-bounds.top+image.height/2)}px`:null});
+    }
+    const set=(node,name,value)=>{if(node[name]!==value)node[name]=value;};
+    for(const {row,previous,next,overflows,y}of plans){
+      set(row.previous,'disabled',previous);set(row.previous,'hidden',previous);
+      set(row.next,'disabled',next);set(row.next,'hidden',next);
+      if(row.wrapper.classList.contains('music-shelf-overflows')!==overflows)row.wrapper.classList.toggle('music-shelf-overflows',overflows);
+      if(y&&row.wrapper.style.getPropertyValue('--music-shelf-control-y')!==y)row.wrapper.style.setProperty('--music-shelf-control-y',y);
     }
   };
   const schedule=()=>{if(!destroyed&&!frame)frame=view.requestAnimationFrame(update);};

@@ -3,11 +3,12 @@ import {frequencies,presets,soundSettings,equalizerHeadroom,createMusicRate} fro
 export {soundSettings} from './music-sound-model.js';
 export function createMusicSound({nodes,storage,button,notify,getAudio=()=>nodes[0],onRateChange=()=>{}}){
   let settings;try{settings=soundSettings(JSON.parse(storage?.getItem("devil-music-sound")||"{}"));}catch{settings=soundSettings();}
-  let context=null,graphs=[],revision=0;
+  // Per-player level trims for "Even out song volume": loud songs are turned down, quiet ones left as they are.
+  let context=null,graphs=[],revision=0;const trims=new Map();
   const speed=createMusicRate(nodes,()=>settings.rate);
   function ramp(param,value,delay=0){const now=context.currentTime;param.cancelScheduledValues(now);param.setValueAtTime(param.value,now);param.setTargetAtTime(value,now+delay,.025);}
   function apply(){const bands=settings.bypass?frequencies.map(()=>0):settings.bands;
-    for(const graph of graphs){const gain=equalizerHeadroom(bands,context.sampleRate);ramp(graph.preamp.gain,gain,gain>graph.preamp.gain.value?.12:0);
+    for(const graph of graphs){const gain=equalizerHeadroom(bands,context.sampleRate)*(settings.level?trims.get(graph.node)??1:1);ramp(graph.preamp.gain,gain,gain>graph.preamp.gain.value?.12:.6);
       graph.filters.forEach((filter,i)=>ramp(filter.gain,bands[i]));ramp(graph.compressor.threshold,!settings.bypass&&settings.soft?-24:0);ramp(graph.compressor.ratio,!settings.bypass&&settings.soft?3:1);}
   }
   async function activate(){
@@ -20,7 +21,7 @@ export function createMusicSound({nodes,storage,button,notify,getAudio=()=>nodes
       }
     }apply();await context.resume();
   }
-  async function commit(){const token=++revision;try{storage?.setItem('devil-music-sound',JSON.stringify(settings));speed.refresh();onRateChange();if(context||settings.soft||settings.bands.some(Boolean))await activate();}catch(error){if(token===revision)notify(error.message,true);}refresh();}
+  async function commit(){const token=++revision;try{storage?.setItem('devil-music-sound',JSON.stringify(settings));speed.refresh();onRateChange();if(context||settings.soft||settings.level||settings.bands.some(Boolean))await activate();}catch(error){if(token===revision)notify(error.message,true);}refresh();}
   const node=(tag,text)=>{const n=document.createElement(tag);if(text)n.textContent=text;return n;};
   const dialog=node('dialog');dialog.className='music-settings-dialog music-sound-panel';dialog.setAttribute('aria-label',t('Sound and transitions'));
   const heading=node('h2'),intro=node('p');dialog.append(heading,intro);
@@ -32,7 +33,7 @@ export function createMusicSound({nodes,storage,button,notify,getAudio=()=>nodes
   const remove=button('',null,()=>{const selected=settings.custom.findIndex(p=>p.name===settings.selected);if(selected>=0){settings.custom.splice(selected,1);settings.selected='';commit();}},'outline small');presetEditor.append(name,save,remove);dialog.append(presetEditor);
   function choice(onchange){const row=node('label'),label=node('span'),input=node('select');row.append(label,input);dialog.append(row);input.addEventListener('change',()=>{onchange(input.value);commit();});return {label,input};}
   function toggle(onchange){const row=node('label'),label=node('span'),input=node('input');input.type='checkbox';row.className='music-sound-toggle';row.append(label,input);dialog.append(row);input.addEventListener('change',()=>{onchange(input.checked);commit();});return {label,input};}
-  const bypass=toggle(value=>settings.bypass=value),soft=toggle(value=>settings.soft=value),transition=choice(value=>settings.transition=Number(value)),seamless=toggle(value=>settings.seamless=value);
+  const bypass=toggle(value=>settings.bypass=value),soft=toggle(value=>settings.soft=value),level=toggle(value=>settings.level=value),transition=choice(value=>settings.transition=Number(value)),seamless=toggle(value=>settings.seamless=value);
   const rateRow=node('label'),rateLabel=node('span'),rate=node('input'),rateValue=node('output');rate.type='range';rate.min=.5;rate.max=2;rate.step=.05;rate.addEventListener('input',()=>{if(!speed.reason(getAudio())){settings.rate=Number(rate.value);commit();}});rateRow.className='music-sound-rate';rateRow.append(rateLabel,rate,rateValue);dialog.append(rateRow);
   const rateHelp=node('p');rateHelp.role='status';dialog.append(rateHelp);
   const actions=node('div');actions.className='music-sound-actions';const reset=button('',null,()=>{settings=soundSettings({custom:settings.custom});commit();},'outline small'),close=button('',null,()=>dialog.close(),'outline small');actions.append(reset,close);dialog.append(actions);
@@ -43,7 +44,7 @@ export function createMusicSound({nodes,storage,button,notify,getAudio=()=>nodes
     options(presetInput,[['flat',t('Flat')],['bass',t('Bass boost')],['voice',t('Vocals')],['night',t('Night')],['custom',t('Custom')],...settings.custom.map((p,i)=>['saved:'+i,p.name])],settings.preset==='custom'&&customIndex>=0?'saved:'+customIndex:settings.preset);presetLabel.textContent=t('Equalizer');
     for(const [i,slider]of sliders.entries()){slider.input.value=settings.bands[i];slider.input.disabled=settings.bypass;slider.value.textContent=(settings.bands[i]>0?'+':'')+settings.bands[i]+' dB';slider.input.setAttribute('aria-valuetext',slider.value.textContent);}
     name.placeholder=name.ariaLabel=t('Preset name');save.textContent=save.ariaLabel=t('Save preset');remove.textContent=remove.ariaLabel=t('Delete preset');remove.disabled=customIndex<0;
-    bypass.input.checked=!!settings.bypass;soft.input.checked=!!settings.soft;bypass.label.textContent=t('Bypass sound effects');soft.label.textContent=t('Volume smoothing');soft.input.disabled=settings.bypass;
+    bypass.input.checked=!!settings.bypass;soft.input.checked=!!settings.soft;bypass.label.textContent=t('Bypass sound effects');soft.label.textContent=t('Volume smoothing');soft.input.disabled=settings.bypass;level.input.checked=!!settings.level;level.label.textContent=t('Even out song volume');level.input.disabled=settings.bypass;level.label.title=(t('Loud songs play a little quieter, the way YouTube levels them. Quiet songs are not boosted.'));
     transition.label.textContent=t('Track transition');options(transition.input,[[0,t('No overlap')],[2,t('2 seconds')],[4,t('4 seconds')],[6,t('6 seconds')],[8,t('8 seconds')],[12,t('12 seconds')]],String(settings.transition));
     seamless.input.checked=settings.seamless;seamless.label.textContent=t('Play albums without gaps');
     rateLabel.textContent=rate.ariaLabel=t('Playback speed');rate.value=settings.rate;rateValue.textContent=settings.rate.toFixed(2)+'\u00d7';rate.disabled=!!speed.reason(getAudio());
@@ -52,7 +53,12 @@ export function createMusicSound({nodes,storage,button,notify,getAudio=()=>nodes
   }
   refresh();onLanguageChange(refresh);
   document.addEventListener('pointerdown',()=>{if(settings.bands.some(Boolean)||settings.soft)activate().catch(()=>{});},{once:true});
-  return {open(){refresh();if(!dialog.open)dialog.showModal();},get transition(){return settings.transition;},get seamless(){return settings.seamless;},resume(){if(context)context.resume().catch(()=>{});},
+  // How long sound takes from the player to the speakers; Bluetooth headphones add a lot. Text and video
+  // that follow the song subtract it so they meet the voice rather than run ahead of it.
+  const latency=()=>{if(!context||context.state!=="running")return 0;const value=(Number(context.outputLatency)||0)+(Number(context.baseLatency)||0);return Number.isFinite(value)?Math.min(.6,Math.max(0,value)):0;};
+  // [db] is how much louder than YouTube's reference the song is; unknown leaves the player at full level.
+  async function setLevel(node,db){const trim=Number.isFinite(db)&&db>0?Math.max(.25,10**(-db/20)):1;if(trims.get(node)===trim)return;trims.set(node,trim);if(!settings.level)return;try{await activate();}catch{/* Levelling needs the sound graph; playback continues without it. */}}
+  return {latency,setLevel,get levelling(){return !!settings.level;},open(){refresh();if(!dialog.open)dialog.showModal();},get transition(){return settings.transition;},get seamless(){return settings.seamless;},resume(){if(context)context.resume().catch(()=>{});},
     setSource(node,offline){speed.setSource(node,offline);if(dialog.open)refresh();},setRoomMode(mode){speed.setMode(mode);refresh();onRateChange();},
     async enableAnalysis(){
       await activate();

@@ -15,3 +15,38 @@
 
 .music-import-dialog [hidden]{display:none!important}
 .music-import-dialog .music-import-coverage{padding:14px;border:1px solid var(--theme-line,#ffffff30);border-radius:12px;background:color-mix(in srgb,var(--theme-accent,#ced9e8) 12%,transparent);color:var(--theme-text,#f4f4f6);font-size:13px;line-height:1.6}
+
+/* Step one: where the music comes from, as large cards. */
+.music-import-start[hidden],.music-import-step[hidden],.music-import-link-area[hidden],.music-import-file-area[hidden]{display:none}
+.music-import-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px}
+.music-import-card{display:grid;grid-template-columns:44px minmax(0,1fr) 16px;align-items:center;gap:14px;min-height:84px;margin:0;padding:14px 16px;border:1px solid var(--surf-line,#ffffff1a);border-radius:18px;background:var(--surf-fill,#ffffff08);color:inherit;font:inherit;text-align:left;cursor:pointer;box-shadow:none;transition:background-color .15s,border-color .15s,translate .25s var(--open-spring,ease)}
+.music-import-card:hover{background:var(--surf-hover,#ffffff12);border-color:color-mix(in srgb,var(--workspace-ink,#fff) 22%,transparent);translate:0 -1px}
+.music-import-card:focus-visible{outline:2px solid var(--player-primary,#9ad0ff);outline-offset:2px}
+.music-import-card-copy{display:grid;gap:4px;min-width:0}
+.music-import-card-copy strong{font-size:14px;font-weight:650}
+.music-import-card-copy small{font-size:12px;line-height:1.45;color:var(--workspace-muted,#aab)}
+.music-import-chevron{width:14px!important;height:14px!important;rotate:-90deg;opacity:.55}
+.music-import-art{display:grid;place-items:center;width:44px;height:44px;border-radius:12px;background:color-mix(in srgb,var(--workspace-ink,#fff) 7%,transparent);flex:none}
+.music-import-art img{width:26px;height:26px}
+.music-import-art .icon{width:22px;height:22px}
+@media(max-width:620px){.music-import-cards{grid-template-columns:minmax(0,1fr)}}
+
+/* Step two: short numbered directions above the field. */
+.music-import-step{display:grid;gap:14px;margin-top:6px}
+.music-import-back{justify-self:start;display:inline-flex;align-items:center;gap:6px}
+.music-import-back .icon{width:15px;height:15px}
+.music-import-step-head{display:flex;align-items:center;gap:12px}
+.music-import-step-head h3{margin:0;font-size:18px;font-weight:650}
+.music-import-steps{display:grid;gap:8px;margin:0;padding:0;list-style:none;counter-reset:import-step}
+.music-import-steps li{display:grid;grid-template-columns:24px minmax(0,1fr);align-items:start;gap:10px;font-size:13px;line-height:1.5;color:var(--workspace-muted,#c8c8d0);counter-increment:import-step}
+.music-import-steps li::before{content:counter(import-step);display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:color-mix(in srgb,var(--workspace-ink,#fff) 10%,transparent);color:var(--workspace-ink,#fff);font-size:11px;font-weight:700}
+.music-import-steps:empty{display:none}
+.music-import-file-area{display:grid;gap:10px}
+.icon[data-icon="arrow-left"]{--glyph:url("assets/icons/arrow-left.svg")}
+/* Moving between the source list and a source glides sideways instead of swapping at once. */
+.music-import-start:not([hidden]){animation:music-import-back .32s var(--open-ease,ease) both}
+.music-import-step:not([hidden]){animation:music-import-forward .32s var(--open-ease,ease) both}
+@keyframes music-import-forward{from{opacity:0;translate:18px 0}}
+@keyframes music-import-back{from{opacity:0;translate:-18px 0}}
+@media(prefers-reduced-motion:reduce){.music-import-start,.music-import-step{animation:none!important}}
+:root[data-motion="reduced"] :is(.music-import-start,.music-import-step){animation:none!important}

@@ -1,3 +1,5 @@
+import "./ui-motion.js";
+import {wireAppMode} from "./app-mode.js";
 import {orderDownloads, orderLibrary} from "./download-order.js";
 import {createCinema} from "./cinema-player.js";
 import {wireCinemaControls} from "./cinema-controls.js";
@@ -140,6 +142,8 @@ function renderEngines() {
   $("engines").textContent = missingComponents.length ? t("Missing: {names}", {names:missingComponents.join(", ")}) : t("Components ready");
 }
 function navigate(page, focus = false) {
+  // "Only Devil Music" keeps every route on the music page.
+  if (document.documentElement.classList.contains("music-only")) page = "music";
   if (!pageTabs[page]) return;
   const entering=document.querySelector("main").dataset.page!==page;
   document.querySelector("main").dataset.page = page;
@@ -2440,6 +2444,9 @@ syncLanguageButtons();
 syncTitle();
 syncTrayLabels();
 init();
+// Someone who has neither seen the tour nor played music is new, and is asked once how they will use the app.
+const newcomer = !localStorage.getItem("deviload-tour-v1") && !localStorage.getItem("deviload-music-session-v1");
+wireAppMode({navigate, host: $("music-preferences"), isNewcomer: () => newcomer});
 wireTour(navigate);
 
 

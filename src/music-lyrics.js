@@ -6,7 +6,7 @@ import {clampLyricsOffset,readLyricsOffsets,saveLyricsOffset} from './music-lyri
 import {parseTtml,richerLyricsFit} from './music-ttml.js';
 import {songAlbum} from './music-ui-model.js';
 export {parseLyrics} from "./music-lyrics-timing.js";
-export function createMusicLyrics({invoke,button,getTrack,getAudio,isPrivate=()=>false}){
+export function createMusicLyrics({invoke,button,getTrack,getAudio,getLatency=()=>0,isPrivate=()=>false}){
   const dialog=document.createElement("dialog");dialog.className="music-lyrics-dialog";dialog.setAttribute("aria-label",t("Lyrics"));
   const content=document.createElement("section"),heading=document.createElement("h2"),body=document.createElement("div"),credit=document.createElement("p");
   content.className="music-lyrics-content";body.className="music-lyrics-scroll";body.tabIndex=0;body.setAttribute("aria-label",t("Lyrics"));credit.className="music-lyrics-credit";credit.textContent="LRCLIB";
@@ -105,14 +105,30 @@ export function createMusicLyrics({invoke,button,getTrack,getAudio,isPrivate=()=
       offerRetry();
     }catch(error){if(token===request){body.dataset.lyricsState="error";body.textContent=errorText(error);body.append(button(t("Retry"),null,()=>load(),"music-lyrics-retry"));}}
   }
+  // Other windows (the desktop strip, the mini-player) can follow the current line. While anyone does,
+  // timing runs even when the lyrics are not on screen here; a line is shared when it changes, on pause,
+  // seek or speed change, and once a second to keep their clocks honest.
+  const watchers=new Set();let shared={key:'',at:0};
+  function share(time,audio){
+    if(!watchers.size)return;
+    const line=lines[active],next=lines[active+1],paused=audio.paused||audio.ended;
+    const key=`${id}|${active}|${paused}|${audio.playbackRate}|${offset}`,stamp=performance.now();
+    if(key===shared.key&&stamp-shared.at<1000)return;shared={key,at:stamp};
+    const payload={id:id||'',position:Math.max(0,time),playing:!paused,rate:audio.playbackRate||1,
+      line:line?{text:line.text||'',next:next?.text||'',at:line.at,end:line.end??next?.at??line.at+5,words:(line.words||[]).map(word=>({text:word.text,at:word.at,end:word.end??word.at}))}
+        :{text:'',next:lines[0]?.text||'',at:0,end:0,words:[]}};
+    for(const watcher of watchers){try{watcher(payload);}catch{/* A closed window must not stop the others. */}}
+  }
   function update(){
-    if(!visible()){if(frame)cancelAnimationFrame(frame);frame=0;return;}if(getTrack()?.id!==id){load();return;}
-    const audio=getAudio(), states=lyricFrame(lines,audio.currentTime+offset,Number.isFinite(audio.duration)?audio.duration+offset:Infinity),nextRows=new Set(states.map(state=>state.index));
+    const shown=visible();
+    if(!shown&&!watchers.size){if(frame)cancelAnimationFrame(frame);frame=0;return;}if(getTrack()?.id!==id){load();return;}
+    const audio=getAudio(), states=lyricFrame(lines,audio.currentTime+offset-getLatency(),Number.isFinite(audio.duration)?audio.duration+offset:Infinity),nextRows=new Set(states.map(state=>state.index));
     for(const index of activeRows)if(!nextRows.has(index)){const row=body.children[index];row?.classList.remove("active");row?.removeAttribute("aria-current");}
     for(const state of states){const row=body.children[state.index];if(!row)continue;if(!activeRows.has(state.index)){row.classList.add("active");row.setAttribute("aria-current","true");}const paint=(span,word)=>{if(!span)return;if(span.dataset.state!==word.state)span.dataset.state=word.state;const progress=(word.progress*100).toFixed(1)+"%";if(span.style.getPropertyValue("--word-progress")!==progress)span.style.setProperty("--word-progress",progress);};state.words.forEach((word,i)=>paint(row.children[i],word));const backing=row.querySelector(".music-lyric-background");state.background.forEach((word,i)=>paint(backing?.children[i],word));}
     activeRows=nextRows;const index=states.at(-1)?.index??-1;if(index!==active){active=index;followPending=index>=0;for(const i of nearRows){const row=body.children[i];row?.classList.remove("lyric-near");if(row)delete row.dataset.distance;}nearRows=new Set(index<0?[]:[-4,-3,-2,-1,1,2,3,4].map(step=>index+step));for(const i of nearRows){const row=body.children[i];if(!row)continue;const distance=Math.abs(i-index);row.dataset.distance=String(distance);row.classList.toggle("lyric-near",distance===1);}}
-    if(followPending&&Date.now()>=manualUntil)follow(body.children[active]);
-    if(!audio.paused&&!audio.ended&&hasWords&&!frame){const tick=now=>{frame=0;if(now-lastFrameAt<16){frame=requestAnimationFrame(tick);return;}lastFrameAt=now;update();};frame=requestAnimationFrame(tick);}
+    if(shown&&followPending&&Date.now()>=manualUntil)follow(body.children[active]);
+    share(audio.currentTime+offset-getLatency(),audio);
+    if(!audio.paused&&!audio.ended&&!frame){const tick=now=>{frame=0;if(now-lastFrameAt<16){frame=requestAnimationFrame(tick);return;}lastFrameAt=now;update();};frame=requestAnimationFrame(tick);}
   }
   document.addEventListener("visibilitychange",update);
   onLanguageChange(()=>{timingTitle.textContent=t('Lyrics timing');earlier.title=earlier.ariaLabel=t('Show lyrics earlier');later.title=later.ariaLabel=t('Show lyrics later');reset.title=reset.ariaLabel=t('Reset lyrics timing');});
@@ -120,6 +136,8 @@ export function createMusicLyrics({invoke,button,getTrack,getAudio,isPrivate=()=
   onLanguageChange(()=>{updateCredit();dialog.ariaLabel=body.ariaLabel=t("Lyrics");close.title=close.ariaLabel=t("Close");smaller.title=smaller.ariaLabel=t("Smaller lyrics");larger.title=larger.ariaLabel=t("Larger lyrics");resume.textContent=resume.title=resume.ariaLabel=t("Follow current line");if(host)heading.textContent=t("Lyrics");});
   return {
     open(){if(host){load();body.focus();return;}dialog.showModal();load();},
+    addTool(node){toolbar.append(node);},
+    watch(watcher){watchers.add(watcher);shared={key:'',at:0};update();return ()=>watchers.delete(watcher);},
     mount(target){host=target;if(dialog.open)dialog.close();host.append(content);load();},
     unmount(){++request;if(frame)cancelAnimationFrame(frame);frame=0;host=null;id=null;dialog.append(content);},
     update

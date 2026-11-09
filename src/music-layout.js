@@ -3,7 +3,7 @@ import {readLayout,saveLayout,moveLayoutItem,swapLayoutPanels,toggleLayoutHidden
 
 // Edit layout: blocks and dock buttons can be dragged into the zones they fit, and the side panels swapped.
 const LABELS={welcome:()=>t('Greeting'),quick:()=>t('Quick picks'),moods:()=>t('Moods'),stats:()=>t('Listening summary'),navigation:()=>t('Navigation'),playlists:()=>t('Playlists'),
-  queue:()=>t('Play queue'),panel:()=>t('Now playing panel'),expand:()=>t('Now playing'),clip:()=>t('Music video'),mini:()=>t('Mini player'),remote:()=>t('Phone remote'),volume:()=>t('Volume')};
+  lyrics:()=>t('Lyrics'),queue:()=>t('Play queue'),panel:()=>t('Now playing panel'),expand:()=>t('Now playing'),clip:()=>t('Music video'),mini:()=>t('Mini player'),remote:()=>t('Phone remote'),volume:()=>t('Volume')};
 
 export function wireMusicLayout({workspace,document=globalThis.document,storage=globalThis.localStorage}){
   if(!workspace||!document?.body)return null;
@@ -16,6 +16,7 @@ export function wireMusicLayout({workspace,document=globalThis.document,storage=
     stats:()=>one(workspace.querySelector('.music-sidebar-stats')),
     navigation:()=>one(workspace.querySelector('.music-library-body>.music-sidebar-controls')),
     playlists:()=>[...workspace.querySelectorAll('.music-library-body>:is(.music-library-sidebar-head,.music-library-sidebar-search,.music-library-sidebar-list,.music-library-sidebar-empty)')],
+    lyrics:()=>one(extras()?.querySelector(':scope>.music-stage-lyrics-trigger')),
     queue:()=>one(extras()?.querySelector(':scope>.music-queue-toggle')),
     panel:()=>one(extras()?.querySelector(':scope>.music-panel-toggle')),
     expand:()=>one(extras()?.querySelector(':scope>#music-expand')),

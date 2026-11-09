@@ -88,8 +88,10 @@ export function wireAppearance({document = globalThis.document, window = globalT
   const choose = value => { sessionOnly = !apply(value, true).saved; updateStatus(); };
   const change = () => choose(select.value);
   const selectedItem = () => quickItems.find(item => item.dataset.themeChoice === (applied.get(document) || document.documentElement.dataset.theme)) || quickItems[0];
-  const positionQuickMenu = () => {
+  const positionQuickMenu = event => {
     if (!quickButton || !quickMenu) return;
+    // A closed menu is placed when it opens; moving it on every resize only costs the window smoothness.
+    if (event?.type === "resize" && !quickMenu.matches(":popover-open")) return;
     const bounds = quickButton.getBoundingClientRect();
     const width = Math.min(288, window.innerWidth - 24);
     const top = Math.max(12, Math.min(bounds.bottom + 8, window.innerHeight - Math.min(360, window.innerHeight - 24)));
