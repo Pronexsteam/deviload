@@ -11,7 +11,7 @@
 :root[data-theme] body #devil-music .music-card-main .music-art::after{content:"";position:absolute;inset:0;z-index:3;border-radius:inherit;pointer-events:none;opacity:0;
   background:radial-gradient(70% 70% at var(--mx,50%) var(--my,30%),rgb(255 255 255/.32),transparent 60%);mix-blend-mode:soft-light;transition:opacity .3s}
 :root[data-theme] body #devil-music .music-card-main.is-lit .music-art::after{opacity:1}
-:root[data-theme] body #devil-music .music-card-main.is-lit .music-art{box-shadow:0 18px 40px rgb(0 0 0/.45)}
+/* The lifted card's shadow is its own coloured glow (music-delight.css), not a dark one. */
 
 /* The play button on covers: a small glass orb that pops in. */
 :root[data-theme] body #devil-music .music-cover-overlay{background:linear-gradient(180deg,transparent 30%,rgb(0 0 0/.35))}

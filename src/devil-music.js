@@ -155,7 +155,16 @@ export function createMusic({invoke,onDownload,storage}) {
   const dock=el("section","music-dock"); dock.hidden=true; dock.setAttribute("aria-label",t("Music player"));
   const identity=el("div","music-now");
   const artwork=el("div","music-now-art"),dockDisc=mountPictureDisc(el("span","music-dock-disc"));
-  const updateDockArt=item=>{setPictureDiscArtwork(dockDisc,item?.image,192);artwork.replaceChildren(artwork.closest('.music-stage')?cover(item,"",1024):dockDisc);};updateDockArt(null);
+  // A new song flows into the player bar: the disc settles in with a turn and the names rise into place.
+  let dockShown=null;
+  const flowIn=item=>{
+    const id=item?.id||null;if(id===dockShown)return;const first=dockShown===null;dockShown=id;
+    if(first||!id||matchMedia("(prefers-reduced-motion: reduce)").matches||artwork.closest('.music-stage'))return;
+    artwork.animate([{opacity:0,transform:'scale(.78) rotate(-24deg)',filter:'blur(4px)'},{opacity:1,transform:'none',filter:'none'}],{duration:560,easing:'cubic-bezier(.2,1.1,.3,1)'});
+    title.animate([{opacity:0,transform:'translateY(8px)'},{opacity:1,transform:'none'}],{duration:420,delay:60,easing:'cubic-bezier(.2,.85,.15,1)',fill:'backwards'});
+    artist.animate([{opacity:0,transform:'translateY(8px)'},{opacity:1,transform:'none'}],{duration:420,delay:120,easing:'cubic-bezier(.2,.85,.15,1)',fill:'backwards'});
+  };
+  const updateDockArt=item=>{setPictureDiscArtwork(dockDisc,item?.image,192);artwork.replaceChildren(artwork.closest('.music-stage')?cover(item,"",1024):dockDisc);flowIn(item);};updateDockArt(null);
   const info=el("div","music-now-info"), title=el("strong","",t("Pick your first track")), artist=el("button","music-artist-link",t("Your soundtrack starts here"));
   artist.type="button";artist.addEventListener("click",()=>showArtist(current));
   const artistLine=el("span","music-dock-artist-line");artistLine.append(artist);
@@ -185,7 +194,7 @@ export function createMusic({invoke,onDownload,storage}) {
   downloadButton.classList.add("music-dock-download");
   const volume=el("input",""); volume.type="range"; volume.min="0"; volume.max="1"; volume.step=".01"; volume.value=String(volumePositionFromGain(audio.volume)); volume.setAttribute("aria-label",t("Volume"));
   let previousVolume=musicGain(saved.volumeBeforeMute,audio.volume||.7),volumeSave=null;
-  function syncVolume(){const percent=volumePercent(audio.volume);volume.value=String(volumePositionFromGain(audio.volume));volume.title=t("Volume: {percent}%",{percent});volume.setAttribute("aria-valuetext",`${percent}%`);const label=audio.volume===0?t("Unmute"):t("Mute");volumeMark.title=label;volumeMark.setAttribute("aria-label",label);volumeMark.setAttribute("aria-pressed",String(audio.volume===0));}
+  function syncVolume(){const percent=volumePercent(audio.volume);volume.value=String(volumePositionFromGain(audio.volume));volume.title=t("Volume: {percent}%",{percent});volume.setAttribute("aria-valuetext",`${percent}%`);const label=audio.volume===0?t("Unmute"):t("Mute");volumeMark.title=label;volumeMark.setAttribute("aria-label",label);volumeMark.setAttribute("aria-pressed",String(audio.volume===0));volumeMark.style?.setProperty("--vol-level",String(Math.round(percent)/100));}
   function setVolume(value){value=musicGain(value);decks.setVolume(value);saved.volume=value;if(value>0)saved.volumeBeforeMute=previousVolume=value;syncVolume();clearTimeout(volumeSave);volumeSave=setTimeout(persist,200);}
   volume.addEventListener("input",()=>setVolume(gainFromVolumePosition(Number(volume.value))));
   volume.addEventListener("change",()=>{clearTimeout(volumeSave);persist();});
