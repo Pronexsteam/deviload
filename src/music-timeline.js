@@ -108,7 +108,13 @@ export function wireTimeline({
   });
 
   const audios = new Set();
+  function syncPlaying() {
+    const audio = getAudio(),
+      playing = !audio.paused && !audio.ended;
+    if (wrap.classList.contains("is-playing") !== playing) wrap.classList.toggle("is-playing", playing);
+  }
   function watchAudio() {
+    syncPlaying();
     const audio = getAudio();
     if (audios.has(audio)) return;
     audios.add(audio);
@@ -121,11 +127,10 @@ export function wireTimeline({
       clearTimeout(splash);
       splash = setTimeout(() => wrap.classList.remove("is-splash"), 700);
     });
-    // The liquid moves while the song plays and goes still when it stops.
+    // The liquid moves while the song plays and goes still when it stops. Any player's event checks the
+    // one now in use: the next song may start on another player before it is watched here.
     for (const name of ["play", "playing", "pause", "ended", "emptied"])
-      audio.addEventListener(name, () => {
-        if (audio === getAudio()) wrap.classList.toggle("is-playing", !audio.paused && !audio.ended);
-      });
+      audio.addEventListener(name, syncPlaying);
     // The lyrics are fetched a moment into the song, so a quick skip costs nothing.
     audio.addEventListener("playing", () => {
       if (audio !== getAudio()) return;
