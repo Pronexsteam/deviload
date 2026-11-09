@@ -1,11 +1,12 @@
 import {t,onLanguageChange} from './i18n.js';
 import {loadArtwork} from './music-artwork.js';
+import {createLyricLine} from './lyric-line-view.js';
 
-const OPEN_MS=560,CLOSE_MS=420,FULL_IN_MS=360,FULL_OUT_MS=320,EASE='cubic-bezier(.2,.85,.15,1)';
+const LYRICS_KEY='deviload-clip-lyrics',OPEN_MS=560,CLOSE_MS=420,FULL_IN_MS=360,FULL_OUT_MS=320,EASE='cubic-bezier(.2,.85,.15,1)';
 const reducedMotion=()=>globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 // The music video's own stage. It rises out of the player's cover above the dock and sinks back into it.
-export function createClipView({dock,origin,button,onClose,onQuality=()=>{},onFullscreen=()=>{}}){
+export function createClipView({dock,origin,button,onClose,onQuality=()=>{},onFullscreen=()=>{},onLyrics=()=>{},storage=globalThis.localStorage}){
   const make=(tag,cls)=>{const node=document.createElement(tag);node.className=cls;return node;};
   const view=make('section','music-clip-view'),backdrop=make('img','music-clip-backdrop'),frame=make('div','music-clip-frame');
   const poster=make('img','music-clip-poster'),head=make('header','music-clip-head'),names=make('div','music-clip-names');
@@ -15,10 +16,19 @@ export function createClipView({dock,origin,button,onClose,onQuality=()=>{},onFu
   const tools=make('div','music-clip-tools'),menu=make('div','music-clip-quality-menu');
   const pick=make('button','music-clip-quality');pick.type='button';pick.hidden=true;pick.popoverTargetElement=menu;menu.popover='auto';menu.setAttribute('role','menu');
   const full=button(t('Full screen'),'screen-full',()=>setFullscreen(!fullscreen));full.classList.add('music-clip-full');
-  tools.append(pick,full,close);
+  // The song's words over the picture, like subtitles. On by default; the choice is remembered.
+  const captions=make('div','music-clip-captions');captions.setAttribute('aria-hidden','true');
+  const captionLine=createLyricLine({host:captions});
+  let lyricsOn=true;try{lyricsOn=storage?.getItem(LYRICS_KEY)!=='off';}catch{/* On for this session. */}
+  const words=button(t('Lyrics over the video'),'music-notes',()=>{
+    lyricsOn=!lyricsOn;try{storage?.setItem(LYRICS_KEY,lyricsOn?'on':'off');}catch{/* Kept for this session. */}
+    syncWords();onLyrics(lyricsOn);
+  });words.classList.add('music-clip-words');
+  function syncWords(){words.setAttribute('aria-pressed',String(lyricsOn));view.classList.toggle('has-captions',lyricsOn&&!!captionLine.text);if(!lyricsOn)captionLine.clear();}
+  tools.append(pick,words,full,close);
   poster.alt='';poster.decoding='async';poster.style.transformOrigin='0 0';backdrop.alt='';backdrop.setAttribute('aria-hidden','true');state.setAttribute('role','status');
   view.hidden=true;view.setAttribute('aria-label',t('Music video'));
-  names.append(title,artist);head.append(names,tools);frame.append(poster);view.append(backdrop,frame,spinner,head,state,menu);
+  names.append(title,artist);head.append(names,tools);frame.append(poster);view.append(backdrop,frame,captions,spinner,head,state,menu);
   document.body.append(view);
   let open=false,moves=[],image='',idle=0,shown='',fullscreen=false,spin=0;
   const rect=node=>node?.getBoundingClientRect();
@@ -89,11 +99,18 @@ export function createClipView({dock,origin,button,onClose,onQuality=()=>{},onFu
   menu.addEventListener('toggle',()=>{wake();if(!menu.matches(':popover-open'))return;const at=rect(pick);menu.style.top=`${at.bottom+8}px`;menu.style.right=`${innerWidth-at.right}px`;});
   addEventListener('resize',()=>{if(open)place();});
   document.addEventListener('keydown',onKey);
-  onLanguageChange(()=>{close.title=close.ariaLabel=t('Close music video');pick.title=pick.ariaLabel=t('Video quality');full.title=full.ariaLabel=fullscreen?t('Exit full screen'):t('Full screen');view.setAttribute('aria-label',t('Music video'));});
-  pick.title=pick.ariaLabel=t('Video quality');
+  onLanguageChange(()=>{words.title=words.ariaLabel=t('Lyrics over the video');close.title=close.ariaLabel=t('Close music video');pick.title=pick.ariaLabel=t('Video quality');full.title=full.ariaLabel=fullscreen?t('Exit full screen'):t('Full screen');view.setAttribute('aria-label',t('Music video'));});
+  pick.title=pick.ariaLabel=t('Video quality');syncWords();
   return {
     frame,
     get isOpen(){return open;},
+    get lyricsOn(){return lyricsOn;},
+    // A line from the lyrics; an empty one (no lyrics, or between lines) hides the captions.
+    setLyrics(payload){
+      if(!lyricsOn)return;
+      if(payload?.line?.text)captionLine.set(payload);else captionLine.clear();
+      view.classList.toggle('has-captions',!!captionLine.text);
+    },
     show(){
       if(open)return;open=true;place();view.hidden=false;view.classList.add('is-open');
       void travel(false).then(()=>{if(open)stopMoves();});
@@ -103,7 +120,7 @@ export function createClipView({dock,origin,button,onClose,onQuality=()=>{},onFu
       // Leaving from full screen: the window returns first, then the stage sinks back into the cover.
       if(fullscreen){mark(false);onFullscreen(false);await settle();stopMoves();view.classList.remove('is-fullscreen');place();}
       await travel(true);
-      if(!open){view.hidden=true;stopMoves();}
+      if(!open){view.hidden=true;stopMoves();captionLine.clear();view.classList.remove('has-captions');}
     },
     // Short waits stay quiet; the ring appears only when the picture is late enough to notice.
     setBuffering(on){

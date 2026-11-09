@@ -53,7 +53,8 @@ test('search matches forgive case, accents, alphabet, word order and one slip',(
  assert.equal(matchScore('kino',kino),100);
  assert.equal(matchScore('beli',believer),80);
  assert.equal(matchScore('dragons imagine',believer),60);
- assert.equal(matchScore('believer imagine',believer),55);
+ assert.equal(matchScore('believer imagine',believer),90);
+ assert.equal(matchScore('believer imagine dragons',believer),90);
  assert.equal(matchScore('belever',believer),30);
  assert.equal(matchScore('zzz',believer),0);
 });
@@ -70,4 +71,13 @@ test('arrow keys move to the nearest result in that direction',()=>{
  const go=(from,dir)=>nearestInDirection(from,all.filter(entry=>entry.box!==from),dir);
  assert.equal(go(best,'down'),'row1');assert.equal(go(row1,'down'),'row2');assert.equal(go(row2,'down'),'cardA');
  assert.equal(go(cardA,'right'),'cardB');assert.equal(go(cardB,'left'),'cardA');assert.equal(go(best,'up'),null);
+});
+test('the original song leads its live takes and uploads named after the artist',()=>{
+ const live={id:'l',kind:'song',title:'Imagine Dragons - Believer (Live in Vegas)',artists:['ImagineDragons']},show={id:'p',kind:'song',title:'Imagine Dragons - Believer - Pinkpop 2017 (HD Live Show)',artists:['Summervibzz']},song={id:'s',kind:'song',title:'Believer',artists:['Imagine Dragons']};
+ assert.equal(suggestionRows('Believer Imagine Dragons',{rich:[live,show,song]})[0].item.id,'s');
+ assert.equal(suggestionRows('believer live',{rich:[song,live]})[0].item.id,'l');
+});
+test('the same song under two ids shows once',()=>{
+ const a={id:'a',kind:'song',title:'Believer',artists:['Imagine Dragons']},b={id:'b',kind:'song',title:'Believer',artists:['Imagine Dragons']};
+ assert.deepEqual(suggestionRows('believer',{rich:[a],local:[b]}).map(row=>row.item?.id),['a']);
 });

@@ -18,7 +18,9 @@ export function searchSuggestions(query,history=[],items=[]){
 export function suggestionRows(query,{history=[],local=[],rich=[],texts=[],recent=[]}={}){
   const key=String(query||'').trim().toLocaleLowerCase(),seen=new Set(),titles=new Set(),items=[];
   const kinds=['artist','album','song','playlist'];
-  const add=(item,score,order)=>{if(!item?.id||!item.title||!kinds.includes(item.kind)||seen.has(item.id))return;seen.add(item.id);titles.add(foldSearch(item.title));items.push({row:{text:item.title,kind:item.kind,item},score,order});};
+  // One row per song: the same title by the same artist under another id is the same choice twice.
+  const same=item=>`${item.kind}|${foldSearch(item.title)}|${foldSearch(item.artists?.[0]||'')}`;
+  const add=(item,score,order)=>{if(!item?.id||!item.title||!kinds.includes(item.kind)||seen.has(item.id)||seen.has(same(item)))return;seen.add(item.id);seen.add(same(item));titles.add(foldSearch(item.title));items.push({row:{text:item.title,kind:item.kind,item},score,order});};
   if(!key){recent.slice(0,4).forEach((item,order)=>add(item,0,order));return [...history.slice(0,4).map(text=>({text,kind:'recent'})),...items.map(entry=>entry.row)];}
   // Catalog results stay even when the words differ (the catalog matched them some other way), but the
   // closest matches by title or artist lead; an artist leads only when the query names that artist.
@@ -58,13 +60,18 @@ export function matchScore(query,item){
     if(tokens.every(token=>words.some(word=>word.startsWith(token))))best=Math.max(best,60);
     if(name.includes(q))best=Math.max(best,45);
   }
-  if(best)return best;
+  // The whole title plus its artist, as in "believer imagine dragons": nearly as good as the exact title.
+  const title=foldSearch(item.title).split(' ').filter(Boolean),words=names.join(' ').split(' ');
+  if(title.length&&tokens.length>title.length&&title.every(word=>tokens.includes(word))&&tokens.every(token=>words.some(word=>word.startsWith(token))))return 90-variant(tokens,title);
+  if(best)return Math.max(1,best-variant(tokens,title));
   // Title and artist words together, so "believer imagine" finds Believer by Imagine Dragons.
-  const words=names.join(' ').split(' ');
-  if(tokens.every(token=>words.some(word=>word.startsWith(token))))return 55;
-  if(tokens.every(token=>words.some(word=>wordMatches(token,word))))return 30;
+  if(tokens.every(token=>words.some(word=>word.startsWith(token))))return Math.max(1,55-variant(tokens,title));
+  if(tokens.every(token=>words.some(word=>wordMatches(token,word))))return Math.max(1,30-variant(tokens,title));
   return 0;
 }
+// A live take, cover, remix or karaoke the query did not ask for gives way to the original.
+const VARIANTS=new Set(['live','karaoke','cover','remix','acoustic','instrumental','nightcore','slowed','reverb','sped','8d','concert']);
+const variant=(tokens,title)=>title.some(word=>VARIANTS.has(word)&&!tokens.includes(word))?25:0;
 export function rememberSearch(history,query){const value=String(query||'').trim().slice(0,120);if(!value)return history;return [value,...history.filter(item=>typeof item==='string'&&item.toLocaleLowerCase()!==value.toLocaleLowerCase())].slice(0,8);}
 export function creditArtistCards(sections){return sections.map(section=>{let artist='';return {...section,items:section.items.map(item=>{if(item?.kind==='artist'){artist=item.title||'';return item;}if(item?.kind!=='song'||item.artists?.length){artist='';return item;}return artist?{...item,artists:[artist]}:item;})};});}
 export function creditAlbumArtist(item,parent){return item?.kind==='album'&&!item.artists?.length&&parent?.kind==='artist'&&parent.title?{...item,artists:[parent.title]}:item;}

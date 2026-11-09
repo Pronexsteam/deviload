@@ -2187,6 +2187,7 @@ export default {
 "Choose its JSON, CSV or ZIP files here.": "Выберите здесь её файлы JSON, CSV или ZIP.",
 "All sources": "Все источники",
 "Lyrics on the desktop": "Текст на рабочем столе",
+"Lyrics over the video": "Текст поверх клипа",
 "Let clicks pass through": "Пропускать клики насквозь",
 "Close lyrics on the desktop": "Убрать текст с рабочего стола",
 "Hide lyrics": "Скрыть текст",

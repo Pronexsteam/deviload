@@ -4,13 +4,13 @@ html,body{margin:0;height:100%;background:transparent;overflow:hidden;color-sche
 /* Glass only while the pointer is over the strip, so on the desktop it is just the words. */
 .lyrics-strip:hover{background:rgb(16 18 24 / .42);border-color:#ffffff1f;-webkit-backdrop-filter:blur(22px) saturate(1.4);backdrop-filter:blur(22px) saturate(1.4)}
 .is-locked .lyrics-strip,.is-locked .lyrics-strip:hover{background:transparent;border-color:transparent;backdrop-filter:none;cursor:default}
-.lyrics-strip-line{grid-area:1/1;margin:0;max-width:100%;font-size:30px;font-weight:750;line-height:1.2;letter-spacing:-.01em;text-align:center;color:#ffffff73;text-wrap:balance;
+.lyric-cap-line{grid-area:1/1;margin:0;max-width:100%;font-size:30px;font-weight:750;line-height:1.2;letter-spacing:-.01em;text-align:center;color:#ffffff73;text-wrap:balance;
   text-shadow:0 2px 14px #000c,0 0 2px #000;animation:strip-in .42s cubic-bezier(.2,.85,.15,1) both}
 /* The sung part fills with the accent colour, word by word or across the whole line. */
-.lyrics-strip-line:not(.is-words){background:linear-gradient(90deg,var(--strip-accent) var(--fill,0%),#ffffff73 var(--fill,0%));-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 2px 8px #000b)}
-.lyrics-strip-word{background:linear-gradient(90deg,var(--strip-accent) var(--fill,0%),#ffffff73 var(--fill,0%));-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 2px 6px #000c);transition:translate .25s}
-.lyrics-strip-word.is-sung{translate:0 -1px}
-.lyrics-strip-line.is-leaving{animation:strip-out .36s ease forwards}
+.lyric-cap-line:not(.is-words){background:linear-gradient(90deg,var(--strip-accent) var(--fill,0%),#ffffff73 var(--fill,0%));-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 2px 8px #000b)}
+.lyric-cap-word{background:linear-gradient(90deg,var(--strip-accent) var(--fill,0%),#ffffff73 var(--fill,0%));-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 2px 6px #000c);transition:translate .25s}
+.lyric-cap-word.is-sung{translate:0 -1px}
+.lyric-cap-line.is-leaving{animation:strip-out .36s ease forwards}
 .lyrics-strip-next{grid-area:2/1;margin:0;max-width:100%;font-size:15px;font-weight:600;text-align:center;color:#ffffffa6;text-shadow:0 1px 8px #000c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lyrics-strip-next:empty{display:none}
 @keyframes strip-in{from{opacity:0;translate:0 14px;filter:blur(4px)}}
@@ -20,4 +20,4 @@ html,body{margin:0;height:100%;background:transparent;overflow:hidden;color-sche
 .is-locked .lyrics-strip-tools{display:none}
 .lyrics-strip-tools button{display:grid;place-items:center;width:28px;height:28px;margin:0;padding:0;border:1px solid #ffffff26;border-radius:50%;background:#0006;color:#fff;font:inherit;font-size:14px;line-height:1;cursor:pointer}
 .lyrics-strip-tools button:hover{background:#ffffff2e}
-@media(prefers-reduced-motion:reduce){.lyrics-strip-line,.lyrics-strip-line.is-leaving{animation:none}}
+@media(prefers-reduced-motion:reduce){.lyric-cap-line,.lyric-cap-line.is-leaving{animation:none}}

@@ -288,3 +288,23 @@
 :root[data-theme] body #devil-music .music-best-art.is-wide,:root[data-theme] body #devil-music[data-view="search"] #music-shelves>.music-best-result .music-best-art.is-wide{aspect-ratio:16/9}
 #devil-music .music-best-art.is-wide>.music-art{aspect-ratio:16/9;height:100%}
 #devil-music .music-best-art.is-wide img{object-fit:cover}
+/* Lyrics over the music video: subtitles that fill word by word, on a soft shade at the bottom. */
+:root[data-theme] body .music-clip-view .music-clip-words{flex:none;width:40px;height:40px;min-width:40px;border:1px solid rgba(255,255,255,.14);border-radius:50%;background:rgba(255,255,255,.1);color:#fff;box-shadow:none}
+:root[data-theme] body .music-clip-view .music-clip-words:hover{background:rgba(255,255,255,.2)}
+:root[data-theme] body .music-clip-view .music-clip-words.music-clip-words[aria-pressed="true"]{background:rgba(255,255,255,.88);color:#111;border-color:transparent}
+.music-clip-captions{--strip-accent:#fff;position:absolute;inset:auto 0 0;z-index:2;display:grid;justify-items:center;padding:56px 7% clamp(22px,5%,48px);pointer-events:none;opacity:0;
+  background:linear-gradient(transparent,rgba(0,0,0,.42));transition:opacity .4s ease}
+.music-clip-view.has-captions .music-clip-captions{opacity:1}
+.music-clip-captions .lyric-cap-line{grid-area:1/1;margin:0;max-width:min(100%,1100px);font-size:clamp(20px,2.7vw,44px);font-weight:750;line-height:1.22;letter-spacing:-.01em;text-align:center;text-wrap:balance;color:rgba(255,255,255,.5);
+  text-shadow:0 2px 14px rgba(0,0,0,.8);animation:music-caption-in .42s cubic-bezier(.2,.85,.15,1) both}
+.music-clip-captions .lyric-cap-line:not(.is-words),.music-clip-captions .lyric-cap-word{background:linear-gradient(90deg,var(--strip-accent) var(--fill,0%),rgba(255,255,255,.5) var(--fill,0%));-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 2px 6px rgba(0,0,0,.75))}
+.music-clip-captions .lyric-cap-line.is-words{text-shadow:none}
+.music-clip-captions .lyric-cap-word{display:inline-block;white-space:pre;transition:translate .3s cubic-bezier(.2,1.12,.32,1)}
+.music-clip-captions .lyric-cap-word.is-sung{translate:0 -2px}
+.music-clip-captions .lyric-cap-line.is-leaving{animation:music-caption-out .36s ease forwards}
+@keyframes music-caption-in{from{opacity:0;translate:0 16px;filter:blur(4px)}}
+@keyframes music-caption-out{to{opacity:0;translate:0 -16px;filter:blur(4px)}}
+/* While the controls show, the captions make room for the status line. */
+.music-clip-view:not(.is-idle):has(.music-clip-state:not(:empty)) .music-clip-captions{padding-bottom:56px}
+@media(prefers-reduced-motion:reduce){.music-clip-captions .lyric-cap-line,.music-clip-captions .lyric-cap-line.is-leaving{animation:none}.music-clip-captions .lyric-cap-word{transition:none}}
+:root[data-motion="reduced"] .music-clip-captions :is(.lyric-cap-line,.lyric-cap-word){animation:none;transition:none}

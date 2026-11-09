@@ -58,14 +58,21 @@ export function createNowPlaying({invoke,language=()=>'en',getAudio=()=>null,get
   let idleTimer=null,playing=false;
   const motion=createMotionCover({invoke,convertFileSrc,getHost:()=>stage.open?artwork:previewArt,isVisible:()=>stage.open||(!preview.hidden&&!previewLyricsOn&&preview.getClientRects().length>0),isPlaying:()=>playing});
 
-  const clipView=createClipView({dock,origin:()=>artwork,button,onClose:()=>setClip(false),onQuality:height=>clip.setQuality(height),onFullscreen:on=>invoke("window_action",{action:on?"enter_fullscreen":"exit_fullscreen"}).catch(()=>{})});
+  const clipView=createClipView({dock,origin:()=>artwork,button,onClose:()=>setClip(false),onQuality:height=>clip.setQuality(height),onFullscreen:on=>invoke("window_action",{action:on?"enter_fullscreen":"exit_fullscreen"}).catch(()=>{}),onLyrics:()=>syncClipLyrics()});
+  // Lyrics flow to the video's captions only while the video is up and they are switched on.
+  let clipLyrics=null;
+  function syncClipLyrics(){
+    const wanted=!!lyrics&&clipView.isOpen&&clipView.lyricsOn;
+    if(wanted&&!clipLyrics)clipLyrics=lyrics.watch(state=>clipView.setLyrics(state));
+    else if(!wanted&&clipLyrics){clipLyrics();clipLyrics=null;}
+  }
   function setClip(on){
     if(on===clipView.isOpen)return;
     // The picture stays while the stage sinks back; the video is let go once it is gone.
-    if(!on){dockClip.setAttribute('aria-pressed','false');void clipView.hide().then(()=>{if(!clipView.isOpen&&clip.enabled)clip.toggle();});return;}
+    if(!on){dockClip.setAttribute('aria-pressed','false');void clipView.hide().then(()=>{syncClipLyrics();if(!clipView.isOpen&&clip.enabled)clip.toggle();});return;}
     // The full player borrows the cover; it returns to the dock before the video rises from it.
     if(stage.open){stage.close();requestAnimationFrame(()=>setClip(true));return;}
-    clipView.setItem(current);clipView.show();if(clip.enabled)clip.update(current);else clip.toggle();
+    clipView.setItem(current);clipView.show();syncClipLyrics();if(clip.enabled)clip.update(current);else clip.toggle();
   }
   const clip=createMusicClip({invoke,language,getAudio,getLatency,audios,getItem:()=>current,getHost:()=>clipView.frame,
     isVisible:()=>clipView.isOpen&&!stage.open,

@@ -2137,6 +2137,7 @@ export default {
 "Choose its JSON, CSV or ZIP files here.": "Elige aquí sus archivos JSON, CSV o ZIP.",
 "All sources": "Todas las fuentes",
 "Lyrics on the desktop": "Letra en el escritorio",
+"Lyrics over the video": "Letra sobre el vídeo",
 "Let clicks pass through": "Dejar pasar los clics",
 "Close lyrics on the desktop": "Quitar la letra del escritorio",
 "Hide lyrics": "Ocultar letra",
