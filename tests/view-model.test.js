@@ -63,3 +63,7 @@ test("Instagram restrictions and throttling do not ask for an unrelated YouTube 
  assert.equal(diagnoseError(["HTTP Error 429"], false, "https://example.com/v").action, "");
  assert.doesNotMatch(diagnoseError(["HTTP Error 429"], false, url).message, /YouTube/);
 });
+test("the queue is watched closely only while something moves",async()=>{const {pollDelay}=await import("../src/view-model.js");
+  assert.equal(pollDelay([{status:"running"}],{page:"music"}),900);assert.equal(pollDelay([{status:"running"}],{hidden:true}),2000);
+  assert.equal(pollDelay([{status:"done"}],{page:"downloads"}),2000);assert.equal(pollDelay([{status:"done"}],{page:"music"}),5000);
+  assert.equal(pollDelay([{status:"queued",scheduledAt:1}],{page:"music"}),5000);assert.equal(pollDelay([],{hidden:true}),6000);});

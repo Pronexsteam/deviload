@@ -16,7 +16,7 @@ import {wireTour} from "./tour.js";
 import {createCutHome} from "./devil-cut.js";
 import {pop, wireMotion} from "./motion.js";
 import {hydrateMascots, mascotSpot, setPose} from "./mascot-spot.js";
-import {labels, actions, counts, orbState, mediaPreview, visibleJobs, playlistSelection, diagnoseError, signInSite, isVideoJob, isLibraryAudio, inLibrary, mediaIdentity, isProcessing, hostCooldown} from "./view-model.js";
+import {labels, actions, counts, orbState, pollDelay, mediaPreview, visibleJobs, playlistSelection, diagnoseError, signInSite, isVideoJob, isLibraryAudio, inLibrary, mediaIdentity, isProcessing, hostCooldown} from "./view-model.js";
 import {t, tn, errorText, translateMessage, translateDom, setLanguage, onLanguageChange, language, locale, languageNames} from "./i18n.js";
 import {createEngineUpdater} from "./engine-update.js";
 import {createAppUpdateScheduler,isAppUpdateDismissed,dismissAppUpdate,clearAppUpdateDismissal,updateDownloadProgress} from "./app-update-prompt.js";
@@ -721,7 +721,7 @@ function clipboardEnabled() { return localStorage.getItem("deviload-clipboard") 
 function syncClipboardToggle() { syncSwitch("clipboard-toggle", clipboardEnabled()); }
 syncClipboardToggle();
 async function scanClipboard() {
-  if (!clipboardEnabled() || document.visibilityState !== "visible" || !document.hasFocus()) return;
+  if (!clipboardEnabled() || document.documentElement.classList.contains("music-only") || document.visibilityState !== "visible" || !document.hasFocus()) return;
   const api = window.__TAURI__?.clipboardManager;
   if (!api?.readText) return;
   try {
@@ -2405,7 +2405,7 @@ async function init() {
       ? "Components are missing. On a Mac run: brew install yt-dlp ffmpeg deno"
       : "Components are missing. Put yt-dlp, ffmpeg, ffprobe and deno into the bin folder next to Deviload."), true);
   } catch (error) { message(errorText(error), true); }
-  const poll = async () => { await refresh(); setTimeout(poll, 900); };
+  const poll = async () => { await refresh(); setTimeout(poll, pollDelay(jobs, {page:document.querySelector("main").dataset.page, hidden:document.hidden})); };
   setTimeout(poll, 900);
 }
 function syncLanguageButtons() {

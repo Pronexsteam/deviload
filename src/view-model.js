@@ -191,3 +191,13 @@ export function isVideoJob(job) {
 export function isLibraryAudio(job) {
   return job.status === "done" && /\.(mp3|flac|wav|m4a|ogg|opus|aac)$/i.test(job.file || "");
 }
+
+// How long to wait before the next look at the download queue: close while something is moving,
+// calm while the queue is idle or out of sight. Every action that changes the queue refreshes at once.
+export function pollDelay(jobs, {page = "downloads", hidden = false} = {}) {
+  // A task scheduled for later is waiting, not moving; it shows up as running when it starts.
+  const moving = jobs.some(job => ["running","queued","pausing","cancelling"].includes(job.status) && !(job.status === "queued" && job.scheduledAt != null));
+  if (moving) return hidden ? 2000 : 900;
+  if (hidden) return 6000;
+  return page === "downloads" || page === "library" ? 2000 : 5000;
+}
