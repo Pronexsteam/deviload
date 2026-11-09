@@ -1,0 +1,7 @@
+# Translations are long tables of strings; third-party code keeps its own style.
+src/locales/
+src/vendor/
+src/assets/
+src-tauri/
+engines/
+node_modules/
