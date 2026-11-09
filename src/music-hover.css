@@ -25,3 +25,7 @@
 @media(prefers-reduced-motion:reduce){
   :root[data-theme] body #devil-music .music-card-main,:root[data-theme] body #devil-music .music-card-main.is-lit{transform:none;translate:none;transition:none}
   :root[data-theme] body #devil-music .music-cover-action,:root[data-theme] body #devil-music .music-track-row .music-track-select .music-art{transition:none}}
+
+/* Shelves out of sight are neither styled nor laid out until they come near, which keeps panel motion,
+   searches and the first paint of Home light. */
+:root[data-theme] body #devil-music .music-shelf{content-visibility:auto;contain-intrinsic-size:auto 320px}

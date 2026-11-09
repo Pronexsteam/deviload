@@ -28,7 +28,14 @@ export function enhanceMusicShelves(root){
       if(y&&row.wrapper.style.getPropertyValue('--music-shelf-control-y')!==y)row.wrapper.style.setProperty('--music-shelf-control-y',y);
     }
   };
-  const schedule=()=>{if(!destroyed&&!frame)frame=view.requestAnimationFrame(update);};
+  // While a side panel glides open or shut the shelves change width every frame; the arrows are measured
+  // once it settles instead of forcing a layout on each of those frames.
+  const workspace=root.closest?.('#devil-music')||root;let settle=0;
+  const schedule=()=>{
+    if(destroyed)return;
+    if(workspace.classList?.contains('music-panel-animating')||workspace.classList?.contains('music-library-animating')){clearTimeout(settle);settle=setTimeout(schedule,90);return;}
+    if(!frame)frame=view.requestAnimationFrame(update);
+  };
   const observer=typeof view.ResizeObserver==='function'?new view.ResizeObserver(schedule):null;
   const detach=(grid,row,unwrap=false)=>{
     observer?.unobserve(grid);if(row.art)observer?.unobserve(row.art);
@@ -66,10 +73,11 @@ export function enhanceMusicShelves(root){
       row.previous.setAttribute('aria-label',t('Previous tracks'));row.previous.title=t('Previous tracks');
       row.next.setAttribute('aria-label',t('Next tracks'));row.next.title=t('Next tracks');
     }
-    if(frame)view.cancelAnimationFrame(frame);frame=0;update();
+    // Measured on the next frame, with the browser's own layout, instead of forcing one in the middle of a render.
+    schedule();
   };
   const destroy=()=>{
-    destroyed=true;if(frame)view.cancelAnimationFrame(frame);frame=0;
+    destroyed=true;clearTimeout(settle);if(frame)view.cancelAnimationFrame(frame);frame=0;
     observer?.disconnect();view.removeEventListener('resize',schedule);
     for(const [grid,row]of rows)detach(grid,row,true);
     controllers.delete(root);
