@@ -6,7 +6,8 @@ const SEEN_PREFIX='deviload-tour-';
 const visible=node=>node instanceof Element&&node.getClientRects().length>0&&getComputedStyle(node).visibility!=='hidden';
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
-export function tourSeen(key,storage=globalThis.localStorage){try{return storage?.getItem(SEEN_PREFIX+key)==='done';}catch{return true;}}
+// Any stored mark counts as seen, including the older "seen" of the first Deviload tour.
+export function tourSeen(key,storage=globalThis.localStorage){try{return !!storage?.getItem(SEEN_PREFIX+key);}catch{return true;}}
 function markSeen(key,storage=globalThis.localStorage){try{storage?.setItem(SEEN_PREFIX+key,'done');}catch{/* Shown again next time. */}}
 export function forgetTour(key,storage=globalThis.localStorage){try{storage?.removeItem(SEEN_PREFIX+key);}catch{/* Nothing to forget. */}}
 
@@ -50,6 +51,8 @@ export function runTour({key,steps,force=false,single=false,storage=globalThis.l
     const follow=()=>{frame=0;if(current)place(current);};
     const relayout=()=>{if(!frame)frame=requestAnimationFrame(follow);};
     async function go(step){
+      // Moving to the next step can change the page under the old one; that is not "the person moved on".
+      ui.root.classList.add('is-moving');
       let next=index+step;
       while(next>=0&&next<steps.length){
         await steps[next].before?.();
@@ -57,7 +60,7 @@ export function runTour({key,steps,force=false,single=false,storage=globalThis.l
         if(!steps[next].target||visible(node)){index=next;current=node||null;break;}
         next+=step;
       }
-      if(next<0)return;
+      if(next<0){ui.root.classList.remove('is-moving');return;}
       if(next>=steps.length){finish(true);return;}
       const item=steps[index];
       ui.root.classList.add('is-moving');ui.card.classList.remove('is-shown');await pause(140);

@@ -639,31 +639,6 @@ html[data-motion="reduced"] .share-mascot{animation:none!important}
 .share-network-warning[hidden]{display:none}
 .share-network-warning{padding:9px 10px;margin:10px 0;border:1px solid #f19a62;border-radius:8px;background:#5c3026;color:#ffe3c6;font-size:11px;line-height:1.4;text-align:left}
 
-.tour-overlay[hidden]{display:none!important}
-.tour-overlay{position:fixed;inset:0;pointer-events:none}
-.tour-shade{position:fixed;inset:0;pointer-events:auto}
-.tour-arrow{position:fixed;inset:0;width:100vw;height:100vh;overflow:visible;filter:drop-shadow(0 0 7px #ff3e37b0);pointer-events:none}
-.tour-arrow #tour-arrow-path{stroke-dasharray:10 8;animation:tour-arrow-flow 1s linear infinite}
-@keyframes tour-arrow-flow{to{stroke-dashoffset:-36}}
-.tour-card{max-width:calc(100vw - 30px);padding:18px;border:1px solid #ff7655;border-radius:12px;background:linear-gradient(150deg,#25272c,#181d22);box-shadow:0 17px 50px #000d,0 0 20px #e444333d;color:#f6f0e9;pointer-events:auto}
-.tour-card:focus{outline:none}
-.tour-step{font-size:10px;font-weight:800;letter-spacing:.15em;color:#ff9a72}
-.tour-card h2{margin:7px 0 8px;font-size:19px;line-height:1.2}
-.tour-card p{margin:0;color:#c7ced3;font-size:12px;line-height:1.5}
-.tour-controls{display:flex;align-items:center;justify-content:flex-end;gap:7px;margin-top:16px}
-.tour-controls button{min-height:34px}
-.tour-skip{margin-right:auto;padding:6px 2px;border:0;background:transparent;color:#b4bec5;font-size:11px}
-.tour-skip:hover{color:#fff;text-decoration:underline}
-.tour-focus{position:relative!important;outline-offset:5px!important;pointer-events:none}
-@media(prefers-reduced-motion:reduce){.tour-arrow #tour-arrow-path{animation:none}}
-/* The spotlight and card share one fixed stacking layer, so content cannot cover navigation. */
-.tour-overlay{z-index:1000}
-.tour-shade{z-index:0;background:transparent;backdrop-filter:none}
-.tour-ring{position:fixed;z-index:1;border:3px solid #ff5b46;border-radius:10px;background:transparent;box-shadow:0 0 0 9999px #050607bf,0 0 0 5px #fa4e3a50,0 0 25px #fa4e3aa0;pointer-events:none}
-.tour-arrow{z-index:2}
-.tour-card{z-index:3}
-.tour-focus{z-index:auto!important;outline:none!important;box-shadow:none!important}
-
 
 
 

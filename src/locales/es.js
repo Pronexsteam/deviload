@@ -724,7 +724,6 @@ export default {
   "Skip": "Omitir",
   "Back": "Atrás",
   "Next": "Siguiente",
-  "Finish": "Finalizar",
   "Download from a link": "Descarga desde un enlace",
   "Choose a format": "Elige un formato",
   "Before downloading, set the quality, video or audio, subtitles and other options. For a GIF or a clip open the extra options.": "Antes de descargar, elige la calidad, video o audio, subtítulos y otras opciones. Para un GIF o un clip, abre las opciones adicionales.",

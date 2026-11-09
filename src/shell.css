@@ -527,8 +527,6 @@ select:disabled, input:disabled { opacity: .5; }
 .head-mascot { --mascot: 46px; margin-right: 10px; }
 .watch-dialog .dialog-head { display: flex; align-items: center; }
 .watch-dialog .dialog-head > div { flex: 1; }
-.tour-mascot { --mascot: 54px; position: absolute; top: -40px; right: 14px; }
-.tour-card { position: relative; }
 
 .help-mascot { --mascot: 38px; }
 .job-help { display: flex; align-items: center; gap: 10px; }

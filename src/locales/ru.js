@@ -763,7 +763,6 @@ export default {
   "Skip": "Пропустить",
   "Back": "Назад",
   "Next": "Далее",
-  "Finish": "Готово",
   "Download from a link": "Скачайте по ссылке",
   "Choose a format": "Выберите формат",
   "Before downloading, set the quality, video or audio, subtitles and other options. For a GIF or a clip open the extra options.": "Перед загрузкой задайте качество, видео или аудио, субтитры и другие параметры. Для GIF и фрагмента откройте дополнительные параметры.",
