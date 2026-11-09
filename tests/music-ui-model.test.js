@@ -101,3 +101,12 @@ test('the timeline finds the line sung under the pointer',async()=>{
  const lines=[{text:'a',at:10,end:14},{text:'b',at:15,end:20},{text:'c',at:60,end:70}];
  assert.equal(lineAt(lines,16),'b');assert.equal(lineAt(lines,40),'');assert.equal(lineAt(lines,5),'');
 });
+test('the lean spring reaches its target and settles',async()=>{
+ const {springStep}=await import('../src/music-lean.js');
+ let state={x:0,y:0,vx:0,vy:0,tx:4,ty:-2,settled:false},steps=0;
+ while(!state.settled&&steps<400){state=springStep(state);steps++;}
+ assert.ok(state.settled&&steps<200);assert.equal(state.x,4);assert.equal(state.y,-2);
+ state={...state,tx:0,ty:0,settled:false};let overshoot=0;
+ while(!state.settled){state=springStep(state);overshoot=Math.min(overshoot,state.x);}
+ assert.ok(overshoot<0&&overshoot>-1);
+});

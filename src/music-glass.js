@@ -1,3 +1,4 @@
+import {createLean} from './music-lean.js';
 // The play orb: its light follows the pointer, a press sends out a ripple, the play and pause symbols
 // blend into each other, and its glow breathes with the bass when the Ambient analysis is running.
 // Only the system's "reduce motion" setting stills the player; the app's calm mode is for the downloader.
@@ -6,6 +7,7 @@ const still=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
 export function wireGlassOrb(button,{host:hostNode=null}={}){
   if(!button)return {energy(){}};
   let energy=0,shown=0;
+  const orbLean=createLean((x,y,settled)=>{if(settled&&!x&&!y){button.style.removeProperty('--mag-x');button.style.removeProperty('--mag-y');return;}button.style.setProperty('--mag-x',`${x.toFixed(2)}px`);button.style.setProperty('--mag-y',`${y.toFixed(2)}px`);});
   // The bass level is set on the whole transport, so the timeline's glow can breathe with the orb.
   const host=()=>hostNode||button.closest('.music-transport')||button;
   button.addEventListener('pointermove',event=>{
@@ -13,9 +15,9 @@ export function wireGlassOrb(button,{host:hostNode=null}={}){
     button.style.setProperty('--orb-x',`${Math.round((event.clientX-box.left)/box.width*100)}%`);
     button.style.setProperty('--orb-y',`${Math.round((event.clientY-box.top)/box.height*100)}%`);
     // The orb leans a little towards the pointer.
-    if(!still()){button.style.setProperty('--mag-x',`${((event.clientX-box.left)/box.width-.5)*6}px`);button.style.setProperty('--mag-y',`${((event.clientY-box.top)/box.height-.5)*6}px`);}
+    orbLean.to(((event.clientX-box.left)/box.width-.5)*7,((event.clientY-box.top)/box.height-.5)*7);
   });
-  button.addEventListener('pointerleave',()=>{for(const name of ['--orb-x','--orb-y','--mag-x','--mag-y'])button.style.removeProperty(name);});
+  button.addEventListener('pointerleave',()=>{button.style.removeProperty('--orb-x');button.style.removeProperty('--orb-y');orbLean.release();});
   // A press wobbles the orb like a drop of liquid.
   button.addEventListener('click',()=>{
     if(still())return;
@@ -66,11 +68,12 @@ function ringOut(button){
 }
 export function wireGlassButtons(root=document){
   // The symbol leans towards the pointer and the glass catches the light where the pointer is.
-  let lit=null,frame=0,px=0,py=0;
+  let lit=null,frame=0,px=0,py=0;const leans=new WeakMap();
+  const leanOf=node=>{let lean=leans.get(node);if(!lean){lean=createLean((x,y,settled)=>{if(settled&&!x&&!y){node.style.removeProperty('--mag-x');node.style.removeProperty('--mag-y');return;}node.style.setProperty('--mag-x',`${x.toFixed(2)}px`);node.style.setProperty('--mag-y',`${y.toFixed(2)}px`);});leans.set(node,lean);}return lean;};
   const paint=()=>{frame=0;if(!lit)return;const box=lit.getBoundingClientRect(),fx=(px-box.left)/box.width,fy=(py-box.top)/box.height;
     lit.style.setProperty('--bx',`${Math.round(fx*100)}%`);lit.style.setProperty('--by',`${Math.round(fy*100)}%`);
-    if(!still()){lit.style.setProperty('--mag-x',`${((fx-.5)*5).toFixed(2)}px`);lit.style.setProperty('--mag-y',`${((fy-.5)*5).toFixed(2)}px`);}};
-  const clear=node=>{if(node)for(const name of ['--bx','--by','--mag-x','--mag-y'])node.style.removeProperty(name);};
+    leanOf(lit).to((fx-.5)*6,(fy-.5)*6-1);};
+  const clear=node=>{if(!node)return;node.style.removeProperty('--bx');node.style.removeProperty('--by');leanOf(node).release();};
   root.addEventListener('pointermove',event=>{
     const button=event.target instanceof Element?event.target.closest(BUTTONS):null;
     const next=button&&button.closest(PLAYER)&&!button.classList.contains('music-play-button')?button:null;
