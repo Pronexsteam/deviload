@@ -86,11 +86,16 @@ function render(snapshot) {
     : labels.connected || "Connected";
   document.body.dataset.link = lastError ? "error" : "live";
 }
-// The largest cover is not always published; a smaller one is the fallback.
-$("art").addEventListener("error", () => {
+// The largest cover is not always published; a smaller one is the fallback. YouTube answers a missing one
+// either with an error or with a 120x90 placeholder, so both lead to the fallback.
+const smallerCover = () => {
   const art = $("art"),
     next = art.src.replace(/\/maxresdefault\.(jpg|webp)/, "/hqdefault.$1");
   if (next !== art.src) art.src = next;
+};
+$("art").addEventListener("error", smallerCover);
+$("art").addEventListener("load", () => {
+  if ($("art").naturalWidth <= 120) smallerCover();
 });
 // The current lyric line fills in as it is sung, timed here from the position the computer sent.
 let lyric = null,
