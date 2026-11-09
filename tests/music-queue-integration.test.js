@@ -4,7 +4,8 @@ import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import {createPlaybackOrder} from '../src/music-session.js';
 import {insertNext,reorderTrack} from '../src/music-state.js';
-const source=readFileSync(new URL('../src/devil-music.js',import.meta.url),'utf8');
+// Line endings depend on how the checkout was made (CRLF on Windows CI), and the markers below span lines.
+const source=readFileSync(new URL('../src/devil-music.js',import.meta.url),'utf8').replace(/\r\n/g,'\n');
 const between=(a,b)=>source.slice(source.indexOf(a),source.indexOf(b));
 const code=between('  function toggleShuffle(','  function renderQueue(')+between('  function syncQueue(','  function removeTrack(')+between('  function miniQueue(','  function cancelResolution(');
 const miniControl=between('  window.__TAURI__?.event\n    ?.listen("music-mini-queue",','  return {\n    open(');
