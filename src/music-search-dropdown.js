@@ -1,15 +1,20 @@
 import {t,language} from './i18n.js';
-import {searchSuggestions,rememberSearch,suggestionRows,creditArtistCards} from './music-ui-model.js';
+import {searchSuggestions,rememberSearch,suggestionRows,creditArtistCards,matchScore,foldSearch} from './music-ui-model.js';
 
 // One in-flight catalog request, latest draft wins, and a small session cache.
 // Typing never changes the active queue or recommendation profile.
-export function wireMusicSuggestions({input,form,getItems,getRecent=()=>[],cover,invoke,onPick,isPrivate=()=>false}){
+export function wireMusicSuggestions({input,form,getItems,getRecent=()=>[],cover,invoke,onPick,isPrivate=()=>false,onArrowOut=()=>false}){
  let history=[];try{const raw=JSON.parse(localStorage.getItem('deviload-music-searches')||'[]');if(Array.isArray(raw))history=raw.filter(x=>typeof x==='string').slice(0,8);}catch{}
  const panel=document.createElement('div'),list=document.createElement('div');
  panel.className='music-search-suggestions music-text-suggestions';panel.hidden=true;list.id='music-search-suggestions';list.role='listbox';panel.append(list);form.append(panel);
  input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-controls',list.id);input.setAttribute('aria-expanded','false');
  let rows=[],active=-1,timer=0,revision=0,filter='all',inFlight=false,queued=null,composing=false;
  const cache=new Map();
+ // The catalog answer for an earlier draft, kept while the next one loads so results do not blink away.
+ let last={texts:[],rich:[]},submitted='';
+ // The query whose results are on the page: coming back to it leads into those results, not a new list.
+ const onResults=()=>!!submitted&&input.value.trim()===submitted;
+ const still=query=>{const key=foldSearch(query);return {texts:last.texts.filter(row=>foldSearch(row.text).includes(key)),rich:last.rich.filter(item=>matchScore(query,item)>=30)};};
  const hide=()=>{clearTimeout(timer);revision++;queued=null;panel.hidden=true;active=-1;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');};
  const remember=()=>{if(isPrivate())return;history=rememberSearch(history,input.value);try{localStorage.setItem('deviload-music-searches',JSON.stringify(history));}catch{}};
  function pick(row){if(row.item&&onPick){remember();hide();onPick(row.item);return;}hide();input.value=row.text;form.requestSubmit();}
@@ -34,7 +39,7 @@ export function wireMusicSuggestions({input,form,getItems,getRecent=()=>[],cover
    const rich=catalog.status==='fulfilled'?creditArtistCards(catalog.value?.sections||[]).flatMap(section=>section.items||[]).slice(0,6):[];
    // A failed lookup is not an empty answer: try again on the next keystroke.
    if(words.status==='fulfilled'||catalog.status==='fulfilled'){cache.set(job.key,{at:Date.now(),texts,rich});while(cache.size>8)cache.delete(cache.keys().next().value);}
-   if(job.revision===revision&&document.activeElement===input)render(rowsFor(job.query,texts,rich));
+   if(job.revision===revision&&document.activeElement===input){last={texts,rich};render(rowsFor(job.query,texts,rich));}
   }catch{/* Keep local suggestions usable when offline. */}
   finally{inFlight=false;if(queued){const next=queued;queued=null;if(next.revision===revision)request(next);}}
  }
@@ -44,18 +49,21 @@ export function wireMusicSuggestions({input,form,getItems,getRecent=()=>[],cover
  }
  function refresh(){
   clearTimeout(timer);const current=++revision;queued=null;const query=input.value.trim().slice(0,120);
-  render(rowsFor(query));
+  const kept=query.length>=2?still(query):{texts:[],rich:[]};
+  render(rowsFor(query,kept.texts,kept.rich));
   if(query.length<2||composing||typeof invoke!=='function')return;
   const lang=language(),key=JSON.stringify([query.toLocaleLowerCase(),filter,lang]),hit=cache.get(key);
-  if(hit&&Date.now()-hit.at<60000){render(rowsFor(query,hit.texts,hit.rich));return;}
+  if(hit&&Date.now()-hit.at<60000){last={texts:hit.texts,rich:hit.rich};render(rowsFor(query,hit.texts,hit.rich));return;}
   timer=setTimeout(()=>request({query,filter,language:lang,key,revision:current}),350);
  }
- input.addEventListener('focus',refresh);input.addEventListener('input',refresh);
+ input.addEventListener('focus',()=>{if(!onResults())refresh();});input.addEventListener('input',refresh);
  input.addEventListener('compositionstart',()=>{composing=true;hide();});input.addEventListener('compositionend',()=>{composing=false;refresh();});
  input.addEventListener('blur',()=>setTimeout(()=>{if(document.activeElement!==input&&!panel.contains(document.activeElement))hide();},100));
  input.addEventListener('keydown',e=>{if(e.isComposing)return;if(e.key==='Escape'&&!panel.hidden){e.preventDefault();e.stopImmediatePropagation();hide();return;}
+  // With the list closed and results on the page, Down moves into the results instead of reopening it.
+  if(e.key==='ArrowDown'&&(panel.hidden||onResults())&&onArrowOut()){hide();e.preventDefault();e.stopImmediatePropagation();return;}
   if(['ArrowDown','ArrowUp'].includes(e.key)){if(panel.hidden)refresh();if(!rows.length)return;e.preventDefault();active=(active+(e.key==='ArrowDown'?1:-1)+rows.length)%rows.length;[...list.children].forEach((node,i)=>node.setAttribute('aria-selected',String(i===active)));input.setAttribute('aria-activedescendant',list.children[active].id);list.children[active].scrollIntoView({block:'nearest'});}
   else if(e.key==='Enter'&&active>=0&&!panel.hidden){e.preventDefault();e.stopImmediatePropagation();pick(rows[active]);}},true);
- form.addEventListener('submit',()=>{remember();hide();},true);document.addEventListener('pointerdown',e=>{if(!form.contains(e.target))hide();});
+ form.addEventListener('submit',()=>{remember();submitted=input.value.trim();hide();},true);document.addEventListener('pointerdown',e=>{if(!form.contains(e.target))hide();});
  return {hide};
 }

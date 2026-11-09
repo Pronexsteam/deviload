@@ -6,7 +6,7 @@ use std::{collections::{HashMap,VecDeque},io::{Read,Write},net::{TcpListener,Tcp
 use tauri::Emitter;
 
 #[derive(Clone,Default,Serialize,Deserialize)]
-pub struct RemoteState { pub player:MiniState, #[serde(default)] pub labels:HashMap<String,String>, #[serde(default)] pub lang:String }
+pub struct RemoteState { pub player:MiniState, #[serde(default)] pub labels:HashMap<String,String>, #[serde(default)] pub lang:String, #[serde(default)] pub lyric:Option<crate::lyrics_overlay::LyricState> }
 struct Session { token:String, authority:String, snapshot:RemoteState, seen:Instant, connected:bool, commands:VecDeque<String> }
 struct Hub { session:Mutex<Session>, stopped:AtomicBool }
 static HUB:OnceLock<Mutex<Option<Arc<Hub>>>>=OnceLock::new();
@@ -15,7 +15,7 @@ fn slot()-> &'static Mutex<Option<Arc<Hub>>> {HUB.get_or_init(||Mutex::new(None)
 pub struct RemoteStatus { url:String, connected:bool }
 fn active(hub:&Hub)->bool {!hub.stopped.load(Ordering::Relaxed)&&hub.session.lock().unwrap().seen.elapsed()<Duration::from_secs(1800)}
 fn status(hub:&Hub)->RemoteStatus {let s=hub.session.lock().unwrap();RemoteStatus{url:format!("http://{}/#{}",s.authority,s.token),connected:s.connected&&s.seen.elapsed()<Duration::from_secs(5)}}
-fn checked(mut s:RemoteState)->RemoteState {s.player=sanitize(s.player);s.lang=if matches!(s.lang.as_str(),"ru"|"es"){s.lang}else{"en".into()};s.labels.retain(|k,v|k.len()<40&&v.chars().count()<=240);if s.labels.len()>32{s.labels.clear();}s}
+fn checked(mut s:RemoteState)->RemoteState {s.player=sanitize(s.player);s.lyric=s.lyric.map(crate::lyrics_overlay::sanitize);s.lang=if matches!(s.lang.as_str(),"ru"|"es"){s.lang}else{"en".into()};s.labels.retain(|k,v|k.len()<40&&v.chars().count()<=240);if s.labels.len()>32{s.labels.clear();}s}
 #[tauri::command]
 pub fn music_remote_start(app:tauri::AppHandle,window:tauri::WebviewWindow,state:RemoteState)->Result<RemoteStatus,String>{
  if window.label()!="main"{return Err("Unavailable window".into());}

@@ -51,3 +51,12 @@ dialog.music-stats-dialog::backdrop{background:#0006;-webkit-backdrop-filter:blu
 @media(max-width:640px){.music-stats-tiles{grid-template-columns:repeat(2,1fr)}.music-stats-tile.is-big{grid-column:1/-1}.music-stats-chart{height:150px;gap:6px}}
 @media(prefers-reduced-motion:reduce){.music-stats-bar,.music-stats-meter::after{animation:none}}
 :root[data-motion="reduced"] :is(.music-stats-bar,.music-stats-meter::after){animation:none}
+
+/* Week, month and year. */
+.music-stats-tabs{display:inline-flex;gap:4px;margin-top:12px;padding:4px;border:1px solid #ffffff1c;border-radius:999px;background:#ffffff0a}
+.music-stats-tabs button{height:30px;margin:0;padding:0 14px;border:0;border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:12px;font-weight:600;cursor:pointer;opacity:.75;box-shadow:none;transition:background-color .2s,opacity .2s}
+.music-stats-tabs button[aria-selected="true"]{background:#ffffff26;opacity:1;box-shadow:inset 0 1px 0 #ffffff33}
+.music-stats-tabs button:focus-visible{outline:2px solid var(--player-primary,#9ad0ff);outline-offset:2px}
+.music-stats-chart.is-year{grid-template-columns:repeat(12,1fr);gap:8px}
+.music-stats-tile strong{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.music-stats-tile:not(.is-big) strong{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;white-space:normal;font-size:17px;line-height:1.2}

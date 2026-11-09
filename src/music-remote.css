@@ -27,3 +27,8 @@ body:is([data-link="offline"],[data-link="error"]) #remote-status::before{backgr
 #remote-play:active{scale:.94}
 button:active{scale:.94;transition:scale .1s}
 .remote-volume{padding:6px 12px;border-radius:18px;background:color-mix(in srgb,var(--theme-text) 5%,transparent)}
+
+#remote-lyric{margin:14px 0 0;font-size:17px;font-weight:700;line-height:1.35;color:transparent;background:linear-gradient(90deg,var(--theme-text) var(--fill,0%),color-mix(in srgb,var(--theme-text) 40%,transparent) var(--fill,0%));-webkit-background-clip:text;background-clip:text;text-wrap:balance}
+#remote-lyric.is-new{animation:remote-lyric-in .4s cubic-bezier(.2,.85,.15,1)}
+@keyframes remote-lyric-in{from{opacity:0;translate:0 8px}}
+@media(prefers-reduced-motion:reduce){#remote-lyric.is-new{animation:none}}

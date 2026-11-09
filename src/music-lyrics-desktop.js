@@ -1,11 +1,11 @@
 // Sends the current lyric line to the windows that show it: the floating desktop strip and the
 // mini-player. Lines flow only while one of them is open.
-export function wireLyricsLines({invoke,lyrics,audios=[],isMiniOpen=()=>false,getAccent=()=>'',listen=window.__TAURI__?.event?.listen}){
-  let stripOpen=false,stripLocked=false,unwatch=null;const changes=new Set();
+export function wireLyricsLines({invoke,lyrics,audios=[],isMiniOpen=()=>false,isRemoteOn=()=>false,getAccent=()=>'',listen=window.__TAURI__?.event?.listen}){
+  let stripOpen=false,stripLocked=false,unwatch=null,latest=null,latestAt=0;const changes=new Set();
   const notify=()=>{for(const change of changes)change({open:stripOpen,locked:stripLocked});};
-  const send=state=>invoke('lyrics_line_update',{state:{...state,accent:getAccent()||''}}).catch(()=>{});
+  const send=state=>{latest=state;latestAt=performance.now();invoke('lyrics_line_update',{state:{...state,accent:getAccent()||''}}).catch(()=>{});};
   function refresh(){
-    const wanted=stripOpen||isMiniOpen();
+    const wanted=stripOpen||isMiniOpen()||isRemoteOn();
     if(wanted&&!unwatch)unwatch=lyrics.watch(send);
     else if(!wanted&&unwatch){unwatch();unwatch=null;}
   }
@@ -17,6 +17,8 @@ export function wireLyricsLines({invoke,lyrics,audios=[],isMiniOpen=()=>false,ge
   setInterval(refresh,1000);
   return {
     get open(){return stripOpen;},get locked(){return stripLocked;},
+    // The current line with its position brought up to now, for the phone remote's snapshot.
+    current(){if(!latest)return null;const moved=latest.playing?(performance.now()-latestAt)/1000*(latest.rate||1):0;return {...latest,position:latest.position+moved};},
     onChange(change){changes.add(change);return ()=>changes.delete(change);},
     async toggle(){
       // A locked strip lets clicks through and hides its own buttons, so the first press unlocks it.

@@ -17,13 +17,53 @@ export function searchSuggestions(query,history=[],items=[]){
 }
 export function suggestionRows(query,{history=[],local=[],rich=[],texts=[],recent=[]}={}){
   const key=String(query||'').trim().toLocaleLowerCase(),seen=new Set(),titles=new Set(),items=[];
-  const kinds=['artist','album','song','playlist'],named=item=>[item?.title,...(item?.artists||[])].some(name=>typeof name==='string'&&name.toLocaleLowerCase().includes(key));
-  const add=item=>{if(!item?.id||!item.title||!kinds.includes(item.kind)||seen.has(item.id))return;seen.add(item.id);titles.add(item.title.toLocaleLowerCase());items.push({text:item.title,kind:item.kind,item});};
-  if(!key){recent.slice(0,4).forEach(add);return [...history.slice(0,4).map(text=>({text,kind:'recent'})),...items];}
-  rich.forEach(add);local.filter(named).forEach(add);
-  const top=items.sort((a,b)=>Number(b.kind==='artist')-Number(a.kind==='artist')).slice(0,4),rows=[];
-  for(const row of texts){const id=row.text.toLocaleLowerCase();if(!titles.has(id)&&!rows.some(value=>value.text.toLocaleLowerCase()===id))rows.push(row);}
+  const kinds=['artist','album','song','playlist'];
+  const add=(item,score,order)=>{if(!item?.id||!item.title||!kinds.includes(item.kind)||seen.has(item.id))return;seen.add(item.id);titles.add(foldSearch(item.title));items.push({row:{text:item.title,kind:item.kind,item},score,order});};
+  if(!key){recent.slice(0,4).forEach((item,order)=>add(item,0,order));return [...history.slice(0,4).map(text=>({text,kind:'recent'})),...items.map(entry=>entry.row)];}
+  // Catalog results stay even when the words differ (the catalog matched them some other way), but the
+  // closest matches by title or artist lead; an artist leads only when the query names that artist.
+  rich.forEach((item,order)=>add(item,Math.max(10,matchScore(query,item))+(item?.kind==='artist'&&matchScore(query,item)>=80?5:0),order));
+  local.forEach((item,order)=>{const score=matchScore(query,item);if(score>0)add(item,score+(item?.kind==='artist'&&score>=80?5:0),rich.length+order);});
+  const top=items.sort((a,b)=>b.score-a.score||a.order-b.order).slice(0,4).map(entry=>entry.row),rows=[];
+  for(const row of texts){const id=foldSearch(row.text);if(!titles.has(id)&&!rows.some(value=>foldSearch(value.text)===id))rows.push(row);}
   return [...top,...rows].slice(0,8);
+}
+
+// Search text compared the forgiving way: case, accents, punctuation and Cyrillic versus Latin letters
+// do not matter, so "maneskin" finds Måneskin and "kino" finds the Cyrillic spelling of Kino.
+// Cyrillic letters by code point, so the source stays in Latin script.
+const LATIN=['a','b','v','g','d','e','zh','z','i','i','k','l','m','n','o','p','r','s','t','u','f','h','ts','ch','sh','sch','','y','','e','yu','ya'];
+const EXTRA={'\u0451':'e','\u0454':'e','\u0456':'i','\u0457':'i','\u0491':'g'};
+const latin=letter=>{const code=letter.charCodeAt(0);return code>=0x430&&code<=0x44f?LATIN[code-0x430]:EXTRA[letter]??letter;};
+export function foldSearch(value){
+  return String(value||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase().replace(/[\u0430-\u044f\u0451\u0454\u0456\u0457\u0491]/g,latin).replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+}
+// At most one letter added, removed or changed.
+function nearly(a,b){
+  if(a===b)return true;if(Math.abs(a.length-b.length)>1)return false;
+  let i=0;while(i<a.length&&i<b.length&&a[i]===b[i])i++;
+  return a.slice(i+1)===b.slice(i+1)||a.slice(i)===b.slice(i+1)||a.slice(i+1)===b.slice(i);
+}
+const wordMatches=(token,word)=>word.startsWith(token)||token.length>=4&&(nearly(token,word)||word.length>token.length&&nearly(token,word.slice(0,token.length)));
+// How well [query] names [item] by its title or artists: 100 exact, 80 start, 60 words in any order,
+// 45 inside, 30 with one slip per long word, 0 not at all.
+export function matchScore(query,item){
+  const q=foldSearch(query);if(!q||!item)return 0;
+  const tokens=q.split(' ');const names=[item.title,...(item.artists||[])].map(foldSearch).filter(Boolean);
+  let best=0;
+  for(const name of names){
+    if(name===q)return 100;
+    if(name.startsWith(q))best=Math.max(best,80);
+    const words=name.split(' ');
+    if(tokens.every(token=>words.some(word=>word.startsWith(token))))best=Math.max(best,60);
+    if(name.includes(q))best=Math.max(best,45);
+  }
+  if(best)return best;
+  // Title and artist words together, so "believer imagine" finds Believer by Imagine Dragons.
+  const words=names.join(' ').split(' ');
+  if(tokens.every(token=>words.some(word=>word.startsWith(token))))return 55;
+  if(tokens.every(token=>words.some(word=>wordMatches(token,word))))return 30;
+  return 0;
 }
 export function rememberSearch(history,query){const value=String(query||'').trim().slice(0,120);if(!value)return history;return [value,...history.filter(item=>typeof item==='string'&&item.toLocaleLowerCase()!==value.toLocaleLowerCase())].slice(0,8);}
 export function creditArtistCards(sections){return sections.map(section=>{let artist='';return {...section,items:section.items.map(item=>{if(item?.kind==='artist'){artist=item.title||'';return item;}if(item?.kind!=='song'||item.artists?.length){artist='';return item;}return artist?{...item,artists:[artist]}:item;})};});}

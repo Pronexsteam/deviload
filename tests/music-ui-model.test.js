@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {panelLayout,searchSuggestions,rememberSearch,collectionFacts,creditAlbumArtist,creditAlbumTracks,creditArtistCards,songAlbum,suggestionRows} from '../src/music-ui-model.js';
+import {nearestInDirection} from "../src/music-results-keys.js";
+import {matchScore,foldSearch,panelLayout,searchSuggestions,rememberSearch,collectionFacts,creditAlbumArtist,creditAlbumTracks,creditArtistCards,songAlbum,suggestionRows} from '../src/music-ui-model.js';
 test('panels protect content when app navigation reduces the actual workspace width',()=>{
  for(const width of [540,720,766,800,880,1000,1002,1120,1440]){const p=panelLayout(width,330,380,true);if(p.preview)assert.ok(width-p.library-p.playing-32>=560);else if(!p.overlay)assert.ok(width-p.library-16>=560);assert.equal(p.overlay,width<766);}
  assert.equal(panelLayout(880,240,280,false).preview,true);assert.equal(panelLayout(880,240,280,true).preview,false);
@@ -43,4 +44,30 @@ test('search suggestions lead with artists and covers, without repeating them as
 test('an empty search offers recent queries and recently played tracks',()=>{
  const rows=suggestionRows('',{history:['one','two'],recent:[{id:'a',kind:'song',title:'Song'}],local:[{id:'b',kind:'song',title:'Hidden'}]});
  assert.deepEqual(rows.map(row=>[row.kind,row.text]),[['recent','one'],['recent','two'],['song','Song']]);
+});
+
+test('search matches forgive case, accents, alphabet, word order and one slip',()=>{
+ const maneskin={id:'m',kind:'artist',title:'Måneskin'},kino={id:'k',kind:'artist',title:'\u041a\u0438\u043d\u043e'},believer={id:'b',kind:'song',title:'Believer',artists:['Imagine Dragons']};
+ assert.equal(foldSearch('  Måneskin — \u0401\u041b\u041a\u0410!  '),'maneskin elka');
+ assert.equal(matchScore('maneskin',maneskin),100);
+ assert.equal(matchScore('kino',kino),100);
+ assert.equal(matchScore('beli',believer),80);
+ assert.equal(matchScore('dragons imagine',believer),60);
+ assert.equal(matchScore('believer imagine',believer),55);
+ assert.equal(matchScore('belever',believer),30);
+ assert.equal(matchScore('zzz',believer),0);
+});
+test('the closest catalog match leads and an artist leads only when named',()=>{
+ const song={id:'s',kind:'song',title:'Numb',artists:['Linkin Park']},artist={id:'a',kind:'artist',title:'Linkin Park'},cover={id:'c',kind:'song',title:'Numb (cover)',artists:['Someone']};
+ assert.deepEqual(suggestionRows('numb',{rich:[artist,cover,song]}).map(row=>row.item.id),['s','c','a']);
+ assert.deepEqual(suggestionRows('linkin park',{rich:[song,artist]}).map(row=>row.item.id)[0],'a');
+});
+
+test('arrow keys move to the nearest result in that direction',()=>{
+ const box=(left,top,width=100,height=40)=>({left,top,width,height,right:left+width,bottom:top+height});
+ const best=box(0,0,300,80),row1=box(0,100,600),row2=box(0,150,600),cardA=box(0,220,120,150),cardB=box(140,220,120,150);
+ const all=[['best',best],['row1',row1],['row2',row2],['cardA',cardA],['cardB',cardB]].map(([node,b])=>({node,box:b}));
+ const go=(from,dir)=>nearestInDirection(from,all.filter(entry=>entry.box!==from),dir);
+ assert.equal(go(best,'down'),'row1');assert.equal(go(row1,'down'),'row2');assert.equal(go(row2,'down'),'cardA');
+ assert.equal(go(cardA,'right'),'cardB');assert.equal(go(cardB,'left'),'cardA');assert.equal(go(best,'up'),null);
 });
