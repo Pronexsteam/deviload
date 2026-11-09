@@ -63,49 +63,234 @@ void main(){
 }`;
 
 export class BurnProgress {
- constructor(){
-  this.canvas=document.createElement('canvas');this.canvas.className='combustion-canvas';this.canvas.setAttribute('aria-hidden','true');
-  this.gl=this.canvas.getContext('webgl',{alpha:true,antialias:false,premultipliedAlpha:true,powerPreference:'low-power'});
-  this.reduced=matchMedia('(prefers-reduced-motion: reduce)');this.progress=0;this.burning=false;this.visible=false;this.raf=0;this.time=0;this.last=0;
-  if(this.gl){const gl=this.gl;const compile=(type,source)=>{const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;};
-   this.program=gl.createProgram();const vs=compile(gl.VERTEX_SHADER,vertex),fs=compile(gl.FRAGMENT_SHADER,fragment);gl.attachShader(this.program,vs);gl.attachShader(this.program,fs);gl.linkProgram(this.program);gl.deleteShader(vs);gl.deleteShader(fs);if(!gl.getProgramParameter(this.program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(this.program));gl.useProgram(this.program);
-   const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);const attr=gl.getAttribLocation(this.program,'a_position');gl.enableVertexAttribArray(attr);gl.vertexAttribPointer(attr,2,gl.FLOAT,false,0,0);this.uniform={};for(const name of ['size','time','progress','burning','release'])this.uniform[name]=gl.getUniformLocation(this.program,'u_'+name);
+  constructor() {
+    this.canvas = document.createElement("canvas");
+    this.canvas.className = "combustion-canvas";
+    this.canvas.setAttribute("aria-hidden", "true");
+    this.gl = this.canvas.getContext("webgl", {
+      alpha: true,
+      antialias: false,
+      premultipliedAlpha: true,
+      powerPreference: "low-power",
+    });
+    this.reduced = matchMedia("(prefers-reduced-motion: reduce)");
+    this.progress = 0;
+    this.burning = false;
+    this.visible = false;
+    this.raf = 0;
+    this.time = 0;
+    this.last = 0;
+    if (this.gl) {
+      const gl = this.gl;
+      const compile = (type, source) => {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, source);
+        gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw Error(gl.getShaderInfoLog(s));
+        return s;
+      };
+      this.program = gl.createProgram();
+      const vs = compile(gl.VERTEX_SHADER, vertex),
+        fs = compile(gl.FRAGMENT_SHADER, fragment);
+      gl.attachShader(this.program, vs);
+      gl.attachShader(this.program, fs);
+      gl.linkProgram(this.program);
+      gl.deleteShader(vs);
+      gl.deleteShader(fs);
+      if (!gl.getProgramParameter(this.program, gl.LINK_STATUS))
+        throw Error(gl.getProgramInfoLog(this.program));
+      gl.useProgram(this.program);
+      const buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
+        gl.STATIC_DRAW,
+      );
+      const attr = gl.getAttribLocation(this.program, "a_position");
+      gl.enableVertexAttribArray(attr);
+      gl.vertexAttribPointer(attr, 2, gl.FLOAT, false, 0, 0);
+      this.uniform = {};
+      for (const name of ["size", "time", "progress", "burning", "release"])
+        this.uniform[name] = gl.getUniformLocation(this.program, "u_" + name);
+    }
+    this.observer = new IntersectionObserver(([entry]) => {
+      this.visible = entry.isIntersecting;
+      this.schedule();
+    });
+    this.resize = new ResizeObserver(() => {
+      this.size();
+      this.paint();
+    });
+    this.resize.observe(this.canvas);
+    this.onVisibilityChange = () => {
+      this.last = 0;
+      this.lastPaint = performance.now();
+      this.schedule();
+    };
+    this.onMotionChange = () => {
+      if (this.destroyed) return;
+      cancelAnimationFrame(this.raf);
+      this.raf = 0;
+      this.last = 0;
+      this.lastPaint = performance.now();
+      if (this.finishing) this.burning = false;
+      this.finishing = 0;
+      this.visual = this.progress;
+      this.velocity = 0;
+      this.canvas.hidden = !this.gl || this.calm();
+      this.host?.classList.toggle("has-combustion", !!this.gl && !this.calm());
+      this.size();
+      this.paint();
+      this.schedule();
+    };
+    this.onContextLost = event => {
+      event.preventDefault();
+      cancelAnimationFrame(this.raf);
+      this.raf = 0;
+      this.canvas.hidden = true;
+      this.gl = null;
+      this.host?.classList.remove("has-combustion");
+    };
+    document.addEventListener("visibilitychange", this.onVisibilityChange);
+    this.reduced.addEventListener("change", this.onMotionChange);
+    document.addEventListener("deviload-motion-change", this.onMotionChange);
+    this.canvas.addEventListener("webglcontextlost", this.onContextLost);
   }
-  this.observer=new IntersectionObserver(([entry])=>{this.visible=entry.isIntersecting;this.schedule();});
-  this.resize=new ResizeObserver(()=>{this.size();this.paint();});this.resize.observe(this.canvas);
-  this.onVisibilityChange=()=>{this.last=0;this.lastPaint=performance.now();this.schedule();};
-  this.onMotionChange=()=>{
-   if(this.destroyed)return;
-   cancelAnimationFrame(this.raf);this.raf=0;this.last=0;this.lastPaint=performance.now();
-   if(this.finishing)this.burning=false;
-   this.finishing=0;this.visual=this.progress;this.velocity=0;
-   this.canvas.hidden=!this.gl||this.calm();this.host?.classList.toggle('has-combustion',!!this.gl&&!this.calm());
-   this.size();this.paint();this.schedule();
-  };
-  this.onContextLost=event=>{event.preventDefault();cancelAnimationFrame(this.raf);this.raf=0;this.canvas.hidden=true;this.gl=null;this.host?.classList.remove('has-combustion');};
-  document.addEventListener('visibilitychange',this.onVisibilityChange);this.reduced.addEventListener('change',this.onMotionChange);
-  document.addEventListener('deviload-motion-change',this.onMotionChange);
-  this.canvas.addEventListener('webglcontextlost',this.onContextLost);
- }
- calm(){return document.documentElement.dataset.motion==='reduced';}
- mount(host,progress,burning){if(this.destroyed)return;this.observer.disconnect();this.host=host;this.finishing=0;this.visual=progress;this.velocity=0;this.lastPaint=performance.now();this.progress=progress;this.burning=burning;this.last=0;cancelAnimationFrame(this.raf);this.raf=0;if(!host){this.visible=false;return;}host.append(this.canvas);host.classList.toggle('has-combustion',!!this.gl&&!this.calm());this.canvas.hidden=!this.gl||this.calm();host.setAttribute('role','progressbar');host.setAttribute('aria-label','Download progress');host.setAttribute('aria-valuemin','0');host.setAttribute('aria-valuemax','100');this.setProgress(progress);this.observer.observe(host);this.size();this.paint();this.schedule();}
- setProgress(progress){
-  const target=Math.max(0,Math.min(1,Number(progress)||0));
-  this.progress=target;
-  if(this.host){this.host.setAttribute('aria-valuenow',String(Math.round(target*100)));this.host.style.setProperty('--progress',(target*100)+'%');}
-  if(this.reduced.matches||!this.visible)this.paint();this.schedule();
- }
- finish(){this.finishing=this.calm()?0:performance.now();this.burning=!this.calm();this.setProgress(1);this.schedule();}
- size(){if(this.destroyed||this.calm()||!this.gl)return;const bounds=this.canvas.getBoundingClientRect();if(!bounds.width||!bounds.height)return;this.width=bounds.width;this.height=bounds.height;const dpr=Math.min(devicePixelRatio,1.25);this.canvas.width=Math.round(bounds.width*dpr);this.canvas.height=Math.round(bounds.height*dpr);this.gl.viewport(0,0,this.canvas.width,this.canvas.height);}
- paint(){if(this.destroyed||this.calm()||!this.gl||!this.width||!this.host)return;const now=performance.now(),dt=Math.min(.05,Math.max(0,(now-(this.lastPaint??now))/1000));this.lastPaint=now;
-  if(this.reduced.matches){this.visual=this.progress;this.velocity=0;}
-  else {
-   const displacement=(this.visual??this.progress)-this.progress,velocity=this.velocity||0,omega=16,decay=Math.exp(-omega*dt),spring=velocity+omega*displacement;
-   this.visual=Math.max(0,Math.min(1,this.progress+(displacement+spring*dt)*decay));
-   this.velocity=(velocity-omega*spring*dt)*decay;
-   if(Math.abs(this.visual-this.progress)<.0001&&Math.abs(this.velocity)<.001){this.visual=this.progress;this.velocity=0;}
+  calm() {
+    return document.documentElement.dataset.motion === "reduced";
   }
-  const heat=this.finishing?Math.max(0,1-Math.max(0,now-this.finishing-550)/650):1;if((this.finishing&&heat===0)||(!this.finishing&&this.progress===1&&this.visual>.999))this.burning=false;const gl=this.gl;gl.useProgram(this.program);gl.uniform2f(this.uniform.size,this.width,this.height);gl.uniform1f(this.uniform.time,this.reduced.matches?0:this.time);gl.uniform1f(this.uniform.progress,this.visual);gl.uniform1f(this.uniform.burning,this.burning&&!this.reduced.matches?heat:0);gl.uniform1f(this.uniform.release,this.finishing&&!this.reduced.matches?(now-this.finishing)/1000:-1);gl.drawArrays(gl.TRIANGLES,0,6);}
- schedule(){if(this.destroyed||this.calm()||!this.gl||!this.host||!this.visible||document.hidden||(!this.burning&&Math.abs(this.progress-(this.visual??this.progress))<.001)||this.reduced.matches){cancelAnimationFrame(this.raf);this.raf=0;this.last=0;return;}if(this.raf)return;this.raf=requestAnimationFrame(now=>{this.raf=0;if(this.last)this.time+=Math.min((now-this.last)/1000,.06);this.last=now;this.paint();this.schedule();});}
- destroy(){if(this.destroyed)return;this.destroyed=true;cancelAnimationFrame(this.raf);this.raf=0;this.observer.disconnect();this.resize.disconnect();document.removeEventListener('visibilitychange',this.onVisibilityChange);document.removeEventListener('deviload-motion-change',this.onMotionChange);this.reduced.removeEventListener('change',this.onMotionChange);this.canvas.removeEventListener('webglcontextlost',this.onContextLost);this.canvas.remove();this.host?.classList.remove('has-combustion');this.host=null;}
+  mount(host, progress, burning) {
+    if (this.destroyed) return;
+    this.observer.disconnect();
+    this.host = host;
+    this.finishing = 0;
+    this.visual = progress;
+    this.velocity = 0;
+    this.lastPaint = performance.now();
+    this.progress = progress;
+    this.burning = burning;
+    this.last = 0;
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    if (!host) {
+      this.visible = false;
+      return;
+    }
+    host.append(this.canvas);
+    host.classList.toggle("has-combustion", !!this.gl && !this.calm());
+    this.canvas.hidden = !this.gl || this.calm();
+    host.setAttribute("role", "progressbar");
+    host.setAttribute("aria-label", "Download progress");
+    host.setAttribute("aria-valuemin", "0");
+    host.setAttribute("aria-valuemax", "100");
+    this.setProgress(progress);
+    this.observer.observe(host);
+    this.size();
+    this.paint();
+    this.schedule();
+  }
+  setProgress(progress) {
+    const target = Math.max(0, Math.min(1, Number(progress) || 0));
+    this.progress = target;
+    if (this.host) {
+      this.host.setAttribute("aria-valuenow", String(Math.round(target * 100)));
+      this.host.style.setProperty("--progress", target * 100 + "%");
+    }
+    if (this.reduced.matches || !this.visible) this.paint();
+    this.schedule();
+  }
+  finish() {
+    this.finishing = this.calm() ? 0 : performance.now();
+    this.burning = !this.calm();
+    this.setProgress(1);
+    this.schedule();
+  }
+  size() {
+    if (this.destroyed || this.calm() || !this.gl) return;
+    const bounds = this.canvas.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) return;
+    this.width = bounds.width;
+    this.height = bounds.height;
+    const dpr = Math.min(devicePixelRatio, 1.25);
+    this.canvas.width = Math.round(bounds.width * dpr);
+    this.canvas.height = Math.round(bounds.height * dpr);
+    this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+  }
+  paint() {
+    if (this.destroyed || this.calm() || !this.gl || !this.width || !this.host) return;
+    const now = performance.now(),
+      dt = Math.min(0.05, Math.max(0, (now - (this.lastPaint ?? now)) / 1000));
+    this.lastPaint = now;
+    if (this.reduced.matches) {
+      this.visual = this.progress;
+      this.velocity = 0;
+    } else {
+      const displacement = (this.visual ?? this.progress) - this.progress,
+        velocity = this.velocity || 0,
+        omega = 16,
+        decay = Math.exp(-omega * dt),
+        spring = velocity + omega * displacement;
+      this.visual = Math.max(0, Math.min(1, this.progress + (displacement + spring * dt) * decay));
+      this.velocity = (velocity - omega * spring * dt) * decay;
+      if (Math.abs(this.visual - this.progress) < 0.0001 && Math.abs(this.velocity) < 0.001) {
+        this.visual = this.progress;
+        this.velocity = 0;
+      }
+    }
+    const heat = this.finishing ? Math.max(0, 1 - Math.max(0, now - this.finishing - 550) / 650) : 1;
+    if ((this.finishing && heat === 0) || (!this.finishing && this.progress === 1 && this.visual > 0.999))
+      this.burning = false;
+    const gl = this.gl;
+    gl.useProgram(this.program);
+    gl.uniform2f(this.uniform.size, this.width, this.height);
+    gl.uniform1f(this.uniform.time, this.reduced.matches ? 0 : this.time);
+    gl.uniform1f(this.uniform.progress, this.visual);
+    gl.uniform1f(this.uniform.burning, this.burning && !this.reduced.matches ? heat : 0);
+    gl.uniform1f(
+      this.uniform.release,
+      this.finishing && !this.reduced.matches ? (now - this.finishing) / 1000 : -1,
+    );
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+  schedule() {
+    if (
+      this.destroyed ||
+      this.calm() ||
+      !this.gl ||
+      !this.host ||
+      !this.visible ||
+      document.hidden ||
+      (!this.burning && Math.abs(this.progress - (this.visual ?? this.progress)) < 0.001) ||
+      this.reduced.matches
+    ) {
+      cancelAnimationFrame(this.raf);
+      this.raf = 0;
+      this.last = 0;
+      return;
+    }
+    if (this.raf) return;
+    this.raf = requestAnimationFrame(now => {
+      this.raf = 0;
+      if (this.last) this.time += Math.min((now - this.last) / 1000, 0.06);
+      this.last = now;
+      this.paint();
+      this.schedule();
+    });
+  }
+  destroy() {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    this.observer.disconnect();
+    this.resize.disconnect();
+    document.removeEventListener("visibilitychange", this.onVisibilityChange);
+    document.removeEventListener("deviload-motion-change", this.onMotionChange);
+    this.reduced.removeEventListener("change", this.onMotionChange);
+    this.canvas.removeEventListener("webglcontextlost", this.onContextLost);
+    this.canvas.remove();
+    this.host?.classList.remove("has-combustion");
+    this.host = null;
+  }
 }

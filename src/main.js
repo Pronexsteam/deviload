@@ -1,35 +1,69 @@
 import "./ui-motion.js";
-import {wireAppMode} from "./app-mode.js";
-import {orderDownloads, orderLibrary} from "./download-order.js";
-import {createCinema} from "./cinema-player.js";
-import {wireCinemaControls} from "./cinema-controls.js";
-import {wireCinemaHome} from "./cinema-home.js";
-import {CompletionScene} from './completion-scene.js';
+import { wireAppMode } from "./app-mode.js";
+import { orderDownloads, orderLibrary } from "./download-order.js";
+import { createCinema } from "./cinema-player.js";
+import { wireCinemaControls } from "./cinema-controls.js";
+import { wireCinemaHome } from "./cinema-home.js";
+import { CompletionScene } from "./completion-scene.js";
 const completionScene = new CompletionScene();
-import {MediaPulse} from "./media-pulse.js";
-import {wireDownloadProfiles} from "./download-profiles.js";
-import {wireQueueSelection} from "./queue-selection.js";
-import {wireSettingsBackup} from "./settings-backup.js";
-import {DevilMascot} from "./devil-mascot.js";
-import {FireAnimation} from "./fire-animation.js";
-import {wireTour} from "./tour.js";
-import {createCutHome} from "./devil-cut.js";
-import {pop, wireMotion} from "./motion.js";
-import {hydrateMascots, mascotSpot, setPose} from "./mascot-spot.js";
-import {labels, actions, counts, orbState, pollDelay, mediaPreview, visibleJobs, playlistSelection, diagnoseError, signInSite, isVideoJob, isLibraryAudio, inLibrary, mediaIdentity, isProcessing, hostCooldown} from "./view-model.js";
-import {t, tn, errorText, translateMessage, translateDom, setLanguage, onLanguageChange, language, locale, languageNames} from "./i18n.js";
-import {createEngineUpdater} from "./engine-update.js";
-import {createAppUpdateScheduler,isAppUpdateDismissed,dismissAppUpdate,clearAppUpdateDismissal,updateDownloadProgress} from "./app-update-prompt.js";
-import {createMusic} from "./devil-music.js";
-import {initializeMusic} from "./music-profile-startup.js";
-import {wireReleaseNotes} from "./app-release-notes.js";
-import {wireSupporters} from "./supporters.js";
-import {wireAppearance, applyTheme} from "./appearance.js";
-import {wireCustomTheme} from "./custom-theme.js";
-import {downloadAuthView} from "./account-status.js";
-import {wireGalleryDownloads} from "./gallery-download.js";
-import {downloadMusic} from "./music-download.js";
-import {wireDownloadDetails,inspectionKey,sourceEstimate} from "./download-options.js";
+import { MediaPulse } from "./media-pulse.js";
+import { wireDownloadProfiles } from "./download-profiles.js";
+import { wireQueueSelection } from "./queue-selection.js";
+import { wireSettingsBackup } from "./settings-backup.js";
+import { DevilMascot } from "./devil-mascot.js";
+import { FireAnimation } from "./fire-animation.js";
+import { wireTour } from "./tour.js";
+import { createCutHome } from "./devil-cut.js";
+import { pop, wireMotion } from "./motion.js";
+import { hydrateMascots, mascotSpot, setPose } from "./mascot-spot.js";
+import {
+  labels,
+  actions,
+  counts,
+  orbState,
+  pollDelay,
+  mediaPreview,
+  visibleJobs,
+  playlistSelection,
+  diagnoseError,
+  signInSite,
+  isVideoJob,
+  isLibraryAudio,
+  inLibrary,
+  mediaIdentity,
+  isProcessing,
+  hostCooldown,
+} from "./view-model.js";
+import {
+  t,
+  tn,
+  errorText,
+  translateMessage,
+  translateDom,
+  setLanguage,
+  onLanguageChange,
+  language,
+  locale,
+  languageNames,
+} from "./i18n.js";
+import { createEngineUpdater } from "./engine-update.js";
+import {
+  createAppUpdateScheduler,
+  isAppUpdateDismissed,
+  dismissAppUpdate,
+  clearAppUpdateDismissal,
+  updateDownloadProgress,
+} from "./app-update-prompt.js";
+import { createMusic } from "./devil-music.js";
+import { initializeMusic } from "./music-profile-startup.js";
+import { wireReleaseNotes } from "./app-release-notes.js";
+import { wireSupporters } from "./supporters.js";
+import { wireAppearance, applyTheme } from "./appearance.js";
+import { wireCustomTheme } from "./custom-theme.js";
+import { downloadAuthView } from "./account-status.js";
+import { wireGalleryDownloads } from "./gallery-download.js";
+import { downloadMusic } from "./music-download.js";
+import { wireDownloadDetails, inspectionKey, sourceEstimate } from "./download-options.js";
 
 const $ = id => document.getElementById(id);
 const invoke = window.__TAURI__?.core?.invoke;
@@ -39,24 +73,70 @@ const brandMascot = new DevilMascot($("brand-scene"));
 hydrateMascots();
 const liveFire = new FireAnimation($("live-download"));
 const taskOrbs = new Map();
-const stateNames = {idle:"Ready to download",running:"Downloading",queued:"Tasks in the queue",done:"All done",error:"There are errors",interrupted:"Can be resumed",cancelling:"Stopping…",pausing:"Pausing…",paused:"The queue is paused"};
-const filters = {all:["all-tab","All tasks"],active:["active-tab","Current tasks"],scheduled:["scheduled-tab","Scheduled"],issues:["issues-tab","Problems"]};
-const pageTabs = {downloads:"downloads-tab",library:"library-tab",cinema:"cinema-tab",editor:"devilcut-tab",music:"music-tab"};
-const pageTitles = {downloads:"Downloads",library:"Devil Library",cinema:"Devil Cinema",editor:"Devil Cut",music:"Devil Music"};
-const devilMusic = initializeMusic({createMusic,invoke,onDownload:async item=>{
-  const count=await downloadMusic(invoke,item,{
-    folder:$("folder").value.trim(),cookiesMode:$("cookies-mode").value,cookies:$("cookies").value.trim(),signedInPath,
-    sponsorblock:$("sponsorblock").checked,archive:$("archive").checked,rateMbps:Number($("rate").value),
-    folderRule:$("folder-rule").value,nameRule:$("name-rule").value,parallel:Number($("parallel").value),autoRetry:$("auto-retry").checked
-  });
-  refresh().catch(error=>message(errorText(error),true));
-  return count;
-}});
+const stateNames = {
+  idle: "Ready to download",
+  running: "Downloading",
+  queued: "Tasks in the queue",
+  done: "All done",
+  error: "There are errors",
+  interrupted: "Can be resumed",
+  cancelling: "Stopping…",
+  pausing: "Pausing…",
+  paused: "The queue is paused",
+};
+const filters = {
+  all: ["all-tab", "All tasks"],
+  active: ["active-tab", "Current tasks"],
+  scheduled: ["scheduled-tab", "Scheduled"],
+  issues: ["issues-tab", "Problems"],
+};
+const pageTabs = {
+  downloads: "downloads-tab",
+  library: "library-tab",
+  cinema: "cinema-tab",
+  editor: "devilcut-tab",
+  music: "music-tab",
+};
+const pageTitles = {
+  downloads: "Downloads",
+  library: "Devil Library",
+  cinema: "Devil Cinema",
+  editor: "Devil Cut",
+  music: "Devil Music",
+};
+const devilMusic = initializeMusic({
+  createMusic,
+  invoke,
+  onDownload: async item => {
+    const count = await downloadMusic(invoke, item, {
+      folder: $("folder").value.trim(),
+      cookiesMode: $("cookies-mode").value,
+      cookies: $("cookies").value.trim(),
+      signedInPath,
+      sponsorblock: $("sponsorblock").checked,
+      archive: $("archive").checked,
+      rateMbps: Number($("rate").value),
+      folderRule: $("folder-rule").value,
+      nameRule: $("name-rule").value,
+      parallel: Number($("parallel").value),
+      autoRetry: $("auto-retry").checked,
+    });
+    refresh().catch(error => message(errorText(error), true));
+    return count;
+  },
+});
 $("music-tab").addEventListener("click", () => navigate("music"));
-let quality = "1080", currentFilter = "all", search = "", mediaFilter = "all", mediaSearch = "", jobs = [], currentAudioId = null;
+let quality = "1080",
+  currentFilter = "all",
+  search = "",
+  mediaFilter = "all",
+  mediaSearch = "",
+  jobs = [],
+  currentAudioId = null;
 let rateLimits = [];
 let cinemaIds = [];
-let cinemaPositions = {}, libraryMeta = {};
+let cinemaPositions = {},
+  libraryMeta = {};
 // Tasks hidden while their Undo is on screen, each with the timer that removes it for real.
 const REMOVE_DELAY = 6000;
 const pendingRemovals = new Map();
@@ -64,21 +144,35 @@ const storeTimers = {};
 function persistSection(section, value) {
   if (!invoke) return;
   clearTimeout(storeTimers[section]);
-  storeTimers[section] = setTimeout(() => invoke("save_ui_store", {section, value}).catch(error => message(errorText(error), true)),
-    section === "positions" ? 1500 : 150);
+  storeTimers[section] = setTimeout(
+    () => invoke("save_ui_store", { section, value }).catch(error => message(errorText(error), true)),
+    section === "positions" ? 1500 : 150,
+  );
 }
 // Earlier versions kept these in WebView storage; move them once.
 async function loadStore() {
-  const legacy = {library:"deviload-library-v1", projects:"deviload-studio-projects-v1", positions:"deviload-cinema-positions-v1"};
+  const legacy = {
+    library: "deviload-library-v1",
+    projects: "deviload-studio-projects-v1",
+    positions: "deviload-cinema-positions-v1",
+  };
   const store = await invoke("ui_store");
   for (const [section, key] of Object.entries(legacy)) {
     let old = null;
-    try { old = JSON.parse(localStorage.getItem(key) || "null"); } catch { old = null; }
+    try {
+      old = JSON.parse(localStorage.getItem(key) || "null");
+    } catch {
+      old = null;
+    }
     if (!store[section] && old && typeof old === "object") {
       store[section] = old;
-      await invoke("save_ui_store", {section, value:old});
+      await invoke("save_ui_store", { section, value: old });
     }
-    try { localStorage.removeItem(key); } catch { /* storage unavailable */ }
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* storage unavailable */
+    }
   }
   libraryMeta = store.library || {};
   $("proxy").value = store.network?.proxy || "";
@@ -93,113 +187,168 @@ let trayShown = "";
 function syncTray(state, running) {
   if (!invoke) return;
   const look = running ? "working" : state === "error" ? "error" : "idle";
-  const tooltip = running ? tn("Deviload · {count} download", "Deviload · {count} downloads", running)
-    : look === "error" ? t("Deviload · a download failed") : "Deviload";
+  const tooltip = running
+    ? tn("Deviload · {count} download", "Deviload · {count} downloads", running)
+    : look === "error"
+      ? t("Deviload · a download failed")
+      : "Deviload";
   if (trayShown === look + tooltip) return;
   trayShown = look + tooltip;
-  invoke("set_tray_state", {state:look, tooltip}).catch(() => {});
+  invoke("set_tray_state", { state: look, tooltip }).catch(() => {});
 }
 function processingLabel(job) {
-  const stages = {merging:"Merging streams", remuxing:"Changing container", converting:"Converting media", saving:"Saving file"};
+  const stages = {
+    merging: "Merging streams",
+    remuxing: "Changing container",
+    converting: "Converting media",
+    saving: "Saving file",
+  };
   return t(stages[job.stage] || "Processing the file");
 }
-function statusLabel(status) { return labels[status] ? t(labels[status]) : status; }
+function statusLabel(status) {
+  return labels[status] ? t(labels[status]) : status;
+}
 function speedText(value) {
-  return /^\d+(?:\.\d+)?$/.test(value || "") ? t("{speed} MB/s", {speed:value}) : (value || "");
+  return /^\d+(?:\.\d+)?$/.test(value || "") ? t("{speed} MB/s", { speed: value }) : value || "";
 }
 function bigSizeText(bytes) {
-  return bytes >= 1073741824 ? t("{size} GB", {size:(bytes / 1073741824).toFixed(1)}) : sizeText(bytes);
+  return bytes >= 1073741824 ? t("{size} GB", { size: (bytes / 1073741824).toFixed(1) }) : sizeText(bytes);
 }
 function lengthText(seconds) {
-  const whole = Math.round(seconds), hours = Math.floor(whole / 3600), minutes = Math.floor(whole % 3600 / 60), rest = String(whole % 60).padStart(2, "0");
+  const whole = Math.round(seconds),
+    hours = Math.floor(whole / 3600),
+    minutes = Math.floor((whole % 3600) / 60),
+    rest = String(whole % 60).padStart(2, "0");
   return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${rest}` : `${minutes}:${rest}`;
 }
 // A live recording: how long it has been going, its limit and its size so far.
 function recordingText(job) {
   if (job.stopRequested) return t("Saving the recording…");
   const elapsed = job.liveSince ? Math.max(0, Date.now() / 1000 - job.liveSince) : 0;
-  return [t("Recording"), lengthText(elapsed) + (job.liveLimit ? " / " + lengthText(job.liveLimit) : ""), job.bytes > 0 ? bigSizeText(job.bytes) : ""].filter(Boolean).join(" · ");
+  return [
+    t("Recording"),
+    lengthText(elapsed) + (job.liveLimit ? " / " + lengthText(job.liveLimit) : ""),
+    job.bytes > 0 ? bigSizeText(job.bytes) : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 const recordingLimits = [0, 900, 1800, 3600, 7200, 10800, 14400, 21600, 43200, 86400];
 function durationText(seconds) {
-  return seconds < 3600 ? t("{count} min", {count:seconds / 60}) : t("{count} h", {count:seconds / 3600});
+  return seconds < 3600
+    ? t("{count} min", { count: seconds / 60 })
+    : t("{count} h", { count: seconds / 3600 });
 }
 // The length a live stream is recorded for, picked before it starts.
 function fillRecordLength() {
-  const select = $("record-length"), value = select.value || "0";
-  select.replaceChildren(new Option(t("Until stopped"), "0"), ...recordingLimits.slice(1).map(seconds => new Option(durationText(seconds), String(seconds))));
+  const select = $("record-length"),
+    value = select.value || "0";
+  select.replaceChildren(
+    new Option(t("Until stopped"), "0"),
+    ...recordingLimits.slice(1).map(seconds => new Option(durationText(seconds), String(seconds))),
+  );
   select.value = value;
 }
 function recordingLimitText(seconds) {
   if (!seconds) return t("No limit");
-  return t("Limit: {time}", {time:durationText(seconds)});
+  return t("Limit: {time}", { time: durationText(seconds) });
 }
 function sizeText(bytes) {
-  return bytes < 1048576 ? t("{size} KB", {size:Math.max(1, Math.ceil(bytes / 1024))}) : t("{size} MB", {size:(bytes / 1048576).toFixed(1)});
+  return bytes < 1048576
+    ? t("{size} KB", { size: Math.max(1, Math.ceil(bytes / 1024)) })
+    : t("{size} MB", { size: (bytes / 1048576).toFixed(1) });
 }
 function renderEngines() {
   if (missingComponents === null) return;
-  $("engines").textContent = missingComponents.length ? t("Missing: {names}", {names:missingComponents.join(", ")}) : t("Components ready");
+  $("engines").textContent = missingComponents.length
+    ? t("Missing: {names}", { names: missingComponents.join(", ") })
+    : t("Components ready");
 }
 function navigate(page, focus = false) {
   // "Only Devil Music" keeps every route on the music page.
   if (document.documentElement.classList.contains("music-only")) page = "music";
   if (!pageTabs[page]) return;
-  const entering=document.querySelector("main").dataset.page!==page;
+  const entering = document.querySelector("main").dataset.page !== page;
   document.querySelector("main").dataset.page = page;
   // A class, not body:has(main[data-page]): a :has() on the body makes every text change restyle the page.
   document.body.classList.toggle("music-page", page === "music");
   setMusicFocus(page === "music");
   if (page === "music") devilMusic.open(entering);
   syncTitle();
-  for (const [name,id] of Object.entries(pageTabs)) {
+  for (const [name, id] of Object.entries(pageTabs)) {
     const active = name === page;
     $(id).classList.toggle("active", active);
     if (active) $(id).setAttribute("aria-current", "page");
     else $(id).removeAttribute("aria-current");
   }
-  window.scrollTo({top:0,behavior:"instant"});
-  if (focus) (page === "cinema" ? $("cinema-home-url") : page === "downloads" ? $("urls") : null)?.focus({preventScroll:true});
+  window.scrollTo({ top: 0, behavior: "instant" });
+  if (focus)
+    (page === "cinema" ? $("cinema-home-url") : page === "downloads" ? $("urls") : null)?.focus({
+      preventScroll: true,
+    });
 }
 function syncTitle() {
   document.title = "Deviload — " + t(pageTitles[document.querySelector("main").dataset.page] || "Downloads");
-  $("workspace-title").textContent=t(pageTitles[document.querySelector("main").dataset.page] || "Downloads");
-  $("workspace-location").textContent=$("workspace-title").textContent;
+  $("workspace-title").textContent = t(
+    pageTitles[document.querySelector("main").dataset.page] || "Downloads",
+  );
+  $("workspace-location").textContent = $("workspace-title").textContent;
 }
 function showDownloads(focus = false) {
   if (currentFilter === "all") navigate("downloads", focus);
   else {
     $("all-tab").click();
-    if (focus) $("urls").focus({preventScroll:true});
+    if (focus) $("urls").focus({ preventScroll: true });
   }
 }
-let selectedFormat = null, inspectedAddress = "";
-function clearSelectedFormat(clearAudio=true) {
-  if(clearAudio)downloadDetails.clearStream();
+let selectedFormat = null,
+  inspectedAddress = "";
+function clearSelectedFormat(clearAudio = true) {
+  if (clearAudio) downloadDetails.clearStream();
   if (!selectedFormat) return;
   selectedFormat = null;
   document.querySelectorAll(".inspect-format").forEach(button => button.classList.remove("selected"));
   $("format-hint").textContent = t("Stream choice cleared. The quality selected above will be used.");
 }
-const downloadDetails=wireDownloadDetails({t,onChange:()=>{
-  const details=downloadDetails.read();
-  if(selectedFormat?.hasAudio&&(details.audioFormatId||details.audioLanguage))clearSelectedFormat(false);
-  $("profile").value="custom";$("preflight-status").hidden=true;
-  if(inspectedInfo&&inspectedAddress)renderInspect(inspectedInfo,inspectedAddress);
-}});
-let notices = [], unreadNotices = 0, knownJobStates = new Map(), noticeReady = false, reactionTimer = 0;
+const downloadDetails = wireDownloadDetails({
+  t,
+  onChange: () => {
+    const details = downloadDetails.read();
+    if (selectedFormat?.hasAudio && (details.audioFormatId || details.audioLanguage))
+      clearSelectedFormat(false);
+    $("profile").value = "custom";
+    $("preflight-status").hidden = true;
+    if (inspectedInfo && inspectedAddress) renderInspect(inspectedInfo, inspectedAddress);
+  },
+});
+let notices = [],
+  unreadNotices = 0,
+  knownJobStates = new Map(),
+  noticeReady = false,
+  reactionTimer = 0;
 function renderNotices() {
   const list = $("notice-list");
   list.replaceChildren();
-  if (!notices.length) { list.append(node("p", "notice-empty", t("No events yet."))); return; }
+  if (!notices.length) {
+    list.append(node("p", "notice-empty", t("No events yet.")));
+    return;
+  }
   for (const notice of [...notices].reverse()) {
     const row = node("article", "notice-item");
-    row.append(node("strong", "", notice.title), node("p", "", notice.detail), node("small", "", notice.time));
+    row.append(
+      node("strong", "", notice.title),
+      node("p", "", notice.detail),
+      node("small", "", notice.time),
+    );
     list.append(row);
   }
 }
 function addNotice(title, detail) {
-  notices.push({title,detail,time:new Date().toLocaleTimeString(locale(),{hour:"2-digit",minute:"2-digit"})});
+  notices.push({
+    title,
+    detail,
+    time: new Date().toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" }),
+  });
   if (notices.length > 50) notices.shift();
   if ($("notice-dialog").open) renderNotices();
   else unreadNotices++;
@@ -207,13 +356,23 @@ function addNotice(title, detail) {
   $("notice-count").hidden = unreadNotices === 0;
 }
 $("notice-button").addEventListener("click", () => {
-  unreadNotices = 0; $("notice-count").hidden = true; renderNotices(); $("notice-dialog").showModal();
+  unreadNotices = 0;
+  $("notice-count").hidden = true;
+  renderNotices();
+  $("notice-dialog").showModal();
 });
 $("notice-close").addEventListener("click", () => $("notice-dialog").close());
-$("notice-clear").addEventListener("click", () => { notices = []; unreadNotices = 0; $("notice-count").hidden = true; renderNotices(); });
+$("notice-clear").addEventListener("click", () => {
+  notices = [];
+  unreadNotices = 0;
+  $("notice-count").hidden = true;
+  renderNotices();
+});
 wireAppearance();
-wireCustomTheme({invoke,convertFileSrc,applyTheme});
-function syncSwitch(id, on) { $(id).setAttribute("aria-checked", String(on)); }
+wireCustomTheme({ invoke, convertFileSrc, applyTheme });
+function syncSwitch(id, on) {
+  $(id).setAttribute("aria-checked", String(on));
+}
 function syncSystemPreferences() {
   syncSwitch("tray-toggle", localStorage.getItem("deviload-tray") === "true");
   syncSwitch("os-notify-toggle", localStorage.getItem("deviload-os-notify") === "true");
@@ -224,7 +383,9 @@ let settingsGroups = [];
 const settingsNav = node("nav", "settings-nav");
 settingsNav.setAttribute("aria-label", t("Settings"));
 function selectSettings(index) {
-  settingsGroups.forEach((group, i) => { group.hidden = i !== index; });
+  settingsGroups.forEach((group, i) => {
+    group.hidden = i !== index;
+  });
   [...settingsNav.children].forEach((button, i) => button.setAttribute("aria-pressed", String(i === index)));
 }
 function rebuildSettingsNavigation() {
@@ -247,23 +408,41 @@ function showSettingsFor(id) {
   if (index >= 0) selectSettings(index);
   if (!$("app-settings-dialog").open) $("app-settings-dialog").showModal();
 }
-const musicNavigation=document.createElement("button");musicNavigation.type="button";musicNavigation.className="music-navigation-toggle";musicNavigation.hidden=true;
-const appNavigation=document.querySelector(".sidebar");appNavigation.id="deviload-navigation";musicNavigation.setAttribute("aria-controls",appNavigation.id);
+const musicNavigation = document.createElement("button");
+musicNavigation.type = "button";
+musicNavigation.className = "music-navigation-toggle";
+musicNavigation.hidden = true;
+const appNavigation = document.querySelector(".sidebar");
+appNavigation.id = "deviload-navigation";
+musicNavigation.setAttribute("aria-controls", appNavigation.id);
 document.querySelector(".workspace-breadcrumb").prepend(musicNavigation);
 // Keep a single search form and its listeners when switching app sections.
 document.querySelector(".workspace-breadcrumb").after($("music-search"));
-function labelMusicNavigation(){musicNavigation.textContent="";musicNavigation.title=musicNavigation.ariaLabel=t("Deviload sections");}
-function setMusicFocus(enabled){
-  document.body.classList.toggle("music-focus",enabled);musicNavigation.hidden=document.querySelector("main").dataset.page!=="music";
-  document.body.classList.toggle("music-navigation-layout",!musicNavigation.hidden);
-  appNavigation.inert=enabled;appNavigation.setAttribute("aria-hidden",String(enabled));
-  musicNavigation.setAttribute("aria-expanded",String(!enabled));labelMusicNavigation();
+function labelMusicNavigation() {
+  musicNavigation.textContent = "";
+  musicNavigation.title = musicNavigation.ariaLabel = t("Deviload sections");
 }
-musicNavigation.addEventListener("click",()=>setMusicFocus(!document.body.classList.contains("music-focus")));
+function setMusicFocus(enabled) {
+  document.body.classList.toggle("music-focus", enabled);
+  musicNavigation.hidden = document.querySelector("main").dataset.page !== "music";
+  document.body.classList.toggle("music-navigation-layout", !musicNavigation.hidden);
+  appNavigation.inert = enabled;
+  appNavigation.setAttribute("aria-hidden", String(enabled));
+  musicNavigation.setAttribute("aria-expanded", String(!enabled));
+  labelMusicNavigation();
+}
+musicNavigation.addEventListener("click", () =>
+  setMusicFocus(!document.body.classList.contains("music-focus")),
+);
 onLanguageChange(labelMusicNavigation);
 wireReleaseNotes(document.querySelector("main"));
 const toolbar = document.querySelector(".topbar-actions");
-const overflowControls = [document.querySelector(".lang-menu"), $("open-youtube-view"), $("notice-button"), $("open-folder")];
+const overflowControls = [
+  document.querySelector(".lang-menu"),
+  $("open-youtube-view"),
+  $("notice-button"),
+  $("open-folder"),
+];
 const narrowToolbar = matchMedia("(max-width: 1100px)");
 function arrangeToolbar() {
   const narrow = narrowToolbar.matches;
@@ -276,12 +455,12 @@ function arrangeToolbar() {
 }
 narrowToolbar.addEventListener("change", arrangeToolbar);
 arrangeToolbar();
-document.querySelector('.queue-tools-menu').addEventListener('click', event => {
-  if (event.target.closest('button')) event.currentTarget.open = false;
+document.querySelector(".queue-tools-menu").addEventListener("click", event => {
+  if (event.target.closest("button")) event.currentTarget.open = false;
 });
-document.addEventListener('pointerdown', event => {
-  const menu=document.querySelector('.queue-tools-menu');
-  if(!menu.contains(event.target))menu.open=false;
+document.addEventListener("pointerdown", event => {
+  const menu = document.querySelector(".queue-tools-menu");
+  if (!menu.contains(event.target)) menu.open = false;
 });
 function labelNavigation() {
   for (const button of document.querySelectorAll(".sidebar .nav")) {
@@ -293,54 +472,80 @@ onLanguageChange(labelNavigation);
 document.addEventListener("pointerdown", event => {
   if (!$("toolbar-more").contains(event.target)) $("toolbar-more").open = false;
 });
-document.addEventListener("keydown", event => { if (event.key === "Escape") $("toolbar-more").open = false; });
-$("settings-open").addEventListener("click", () => {setMusicFocus(false);$("app-settings-dialog").showModal();});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") $("toolbar-more").open = false;
+});
+$("settings-open").addEventListener("click", () => {
+  setMusicFocus(false);
+  $("app-settings-dialog").showModal();
+});
 $("settings-close").addEventListener("click", () => $("app-settings-dialog").close());
 $("tray-toggle").addEventListener("click", async () => {
   if (!invoke) return;
   const enabled = localStorage.getItem("deviload-tray") !== "true";
   try {
-    await invoke("set_close_to_tray", {enabled});
+    await invoke("set_close_to_tray", { enabled });
     localStorage.setItem("deviload-tray", String(enabled));
     syncSystemPreferences();
-    message(enabled ? t("The close button now hides the window to the tray. To quit, choose “Quit Deviload” in the tray icon menu.") : t("The close button quits the app again."));
-  } catch (error) { message(errorText(error), true); }
+    message(
+      enabled
+        ? t(
+            "The close button now hides the window to the tray. To quit, choose “Quit Deviload” in the tray icon menu.",
+          )
+        : t("The close button quits the app again."),
+    );
+  } catch (error) {
+    message(errorText(error), true);
+  }
 });
 $("os-notify-toggle").addEventListener("click", async () => {
   const notification = window.__TAURI__?.notification;
-  if (!notification) { message(t("OS notifications are available in the installed app."), true); return; }
+  if (!notification) {
+    message(t("OS notifications are available in the installed app."), true);
+    return;
+  }
   const enabled = localStorage.getItem("deviload-os-notify") !== "true";
   try {
     if (enabled && !(await notification.isPermissionGranted())) {
-      if ((await notification.requestPermission()) !== "granted") throw new Error(t("The system did not allow notifications."));
+      if ((await notification.requestPermission()) !== "granted")
+        throw new Error(t("The system did not allow notifications."));
     }
     localStorage.setItem("deviload-os-notify", String(enabled));
     syncSystemPreferences();
-    message(enabled ? t("Notifications about finished and failed downloads are on.") : t("OS notifications are off."));
-  } catch (error) { message(errorText(error), true); }
+    message(
+      enabled
+        ? t("Notifications about finished and failed downloads are on.")
+        : t("OS notifications are off."),
+    );
+  } catch (error) {
+    message(errorText(error), true);
+  }
 });
 const STALE_DAYS = 14;
 let ytdlpVersion = "";
 let engineUpdateBusy = false;
 let engineUpdateError = "";
 const engineButtonContents = new Map();
-const runEngineUpdate = createEngineUpdater(command => invoke(command), busy => {
-  engineUpdateBusy = busy;
-  if (busy) engineUpdateError = "";
-  for (const button of [$("engine-update"), $("update-ytdlp")]) {
-    button.disabled = busy;
-    button.classList.toggle("is-busy", busy);
-    button.setAttribute("aria-busy", String(busy));
-    if (busy) {
-      engineButtonContents.set(button, button.innerHTML);
-      button.textContent = t("Updating…");
-    } else if (engineButtonContents.has(button)) {
-      button.innerHTML = engineButtonContents.get(button);
-      engineButtonContents.delete(button);
+const runEngineUpdate = createEngineUpdater(
+  command => invoke(command),
+  busy => {
+    engineUpdateBusy = busy;
+    if (busy) engineUpdateError = "";
+    for (const button of [$("engine-update"), $("update-ytdlp")]) {
+      button.disabled = busy;
+      button.classList.toggle("is-busy", busy);
+      button.setAttribute("aria-busy", String(busy));
+      if (busy) {
+        engineButtonContents.set(button, button.innerHTML);
+        button.textContent = t("Updating…");
+      } else if (engineButtonContents.has(button)) {
+        button.innerHTML = engineButtonContents.get(button);
+        engineButtonContents.delete(button);
+      }
     }
-  }
-  renderEngineInfo();
-});
+    renderEngineInfo();
+  },
+);
 function ytdlpAgeDays(version) {
   const match = /^(\d{4})\.(\d{2})\.(\d{2})/.exec(version || "");
   if (!match) return null;
@@ -350,27 +555,54 @@ function renderEngineInfo() {
   const days = ytdlpAgeDays(ytdlpVersion);
   const age = days === null ? "" : tn("{count} day", "{count} days", days);
   $("ytdlp-version").textContent = ytdlpVersion ? "yt-dlp " + ytdlpVersion : "yt-dlp";
-  $("ytdlp-age").textContent = days === null ? t("YouTube changes often; a fresh yt-dlp fixes most failed downloads.")
-    : days === 0 ? t("Built today.") : t("Built {days} ago.", {days:age});
+  $("ytdlp-age").textContent =
+    days === null
+      ? t("YouTube changes often; a fresh yt-dlp fixes most failed downloads.")
+      : days === 0
+        ? t("Built today.")
+        : t("Built {days} ago.", { days: age });
   let snoozed = false;
-  try { snoozed = Number(localStorage.getItem("deviload-engine-later") || 0) > Date.now(); } catch { snoozed = false; }
+  try {
+    snoozed = Number(localStorage.getItem("deviload-engine-later") || 0) > Date.now();
+  } catch {
+    snoozed = false;
+  }
   const stale = days !== null && days >= STALE_DAYS;
   $("engine-notice").hidden = !stale || snoozed;
-  $("engine-notice-text").textContent = engineUpdateBusy ? t("Checking and updating yt-dlp. Please wait…")
-    : engineUpdateError || (stale ? t("This yt-dlp was built {days} ago. YouTube changes often, and an old yt-dlp is the most common reason downloads fail.", {days:age}) : "");
+  $("engine-notice-text").textContent = engineUpdateBusy
+    ? t("Checking and updating yt-dlp. Please wait…")
+    : engineUpdateError ||
+      (stale
+        ? t(
+            "This yt-dlp was built {days} ago. YouTube changes often, and an old yt-dlp is the most common reason downloads fail.",
+            { days: age },
+          )
+        : "");
 }
 async function refreshEngineInfo() {
-  try { ytdlpVersion = await invoke("ytdlp_info"); } catch { ytdlpVersion = ""; }
+  try {
+    ytdlpVersion = await invoke("ytdlp_info");
+  } catch {
+    ytdlpVersion = "";
+  }
   renderEngineInfo();
 }
 // yt-dlp follows YouTube's changes almost daily, so it updates itself quietly.
 function ytdlpAuto() {
-  try { return localStorage.getItem("deviload-ytdlp-auto") !== "false"; } catch { return true; }
+  try {
+    return localStorage.getItem("deviload-ytdlp-auto") !== "false";
+  } catch {
+    return true;
+  }
 }
 $("ytdlp-auto-toggle").setAttribute("aria-checked", String(ytdlpAuto()));
 $("ytdlp-auto-toggle").addEventListener("click", () => {
   const next = !ytdlpAuto();
-  try { localStorage.setItem("deviload-ytdlp-auto", String(next)); } catch { /* storage unavailable */ }
+  try {
+    localStorage.setItem("deviload-ytdlp-auto", String(next));
+  } catch {
+    /* storage unavailable */
+  }
   $("ytdlp-auto-toggle").setAttribute("aria-checked", String(next));
 });
 async function autoUpdateYtdlp() {
@@ -378,49 +610,77 @@ async function autoUpdateYtdlp() {
   try {
     if (Number(localStorage.getItem("deviload-ytdlp-auto-at") || 0) > Date.now() - 86400000) return;
     localStorage.setItem("deviload-ytdlp-auto-at", String(Date.now()));
-  } catch { return; }
+  } catch {
+    return;
+  }
   try {
     const result = await runEngineUpdate();
     ytdlpVersion = result.after;
     renderEngineInfo();
-    if (result.after !== result.before) message(t("yt-dlp updated: {before} → {after}", {before:result.before, after:result.after}));
-  } catch { /* the manual button and the stale notice still work */ }
+    if (result.after !== result.before)
+      message(t("yt-dlp updated: {before} → {after}", { before: result.before, after: result.after }));
+  } catch {
+    /* the manual button and the stale notice still work */
+  }
 }
 async function updateYtdlp(button) {
-  if (!invoke) { message(t("Updates are available in the installed app."), true); return; }
+  if (!invoke) {
+    message(t("Updates are available in the installed app."), true);
+    return;
+  }
   button.disabled = true;
   button.classList.add("is-busy");
   message(t("Updating yt-dlp to the nightly build…"));
   try {
     const result = await runEngineUpdate();
     ytdlpVersion = result.after;
-    try { localStorage.removeItem("deviload-engine-later"); } catch { /* storage unavailable */ }
+    try {
+      localStorage.removeItem("deviload-engine-later");
+    } catch {
+      /* storage unavailable */
+    }
     renderEngineInfo();
-    message(result.after === result.before ? t("yt-dlp is up to date: {version}", {version:result.after})
-      : t("yt-dlp updated: {before} → {after}", {before:result.before, after:result.after}));
+    message(
+      result.after === result.before
+        ? t("yt-dlp is up to date: {version}", { version: result.after })
+        : t("yt-dlp updated: {before} → {after}", { before: result.before, after: result.after }),
+    );
   } catch (error) {
     engineUpdateError = errorText(error);
     renderEngineInfo();
     message(engineUpdateError, true);
+  } finally {
+    button.disabled = false;
+    button.classList.remove("is-busy");
   }
-  finally { button.disabled = false; button.classList.remove("is-busy"); }
 }
 $("update-ytdlp").addEventListener("click", () => updateYtdlp($("update-ytdlp")));
 $("engine-update").addEventListener("click", () => updateYtdlp($("engine-update")));
 $("engine-later").addEventListener("click", () => {
-  try { localStorage.setItem("deviload-engine-later", String(Date.now() + 86400000)); } catch { /* storage unavailable */ }
+  try {
+    localStorage.setItem("deviload-engine-later", String(Date.now() + 86400000));
+  } catch {
+    /* storage unavailable */
+  }
   renderEngineInfo();
 });
 async function saveProxy() {
   if (!invoke) return;
   try {
-    const proxy = await invoke("set_proxy", {proxy:$("proxy").value});
+    const proxy = await invoke("set_proxy", { proxy: $("proxy").value });
     $("proxy").value = proxy;
     message(t(proxy ? "Proxy saved" : "Proxy turned off"));
-  } catch (error) { message(errorText(error), true); }
+  } catch (error) {
+    message(errorText(error), true);
+  }
 }
 $("proxy-save").addEventListener("click", saveProxy);
-$("proxy").addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); saveProxy(); } });
+$("proxy").addEventListener("keydown", event => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    saveProxy();
+  }
+});
 function openProxySettings() {
   showSettingsFor("proxy");
   $("proxy").focus();
@@ -428,33 +688,55 @@ function openProxySettings() {
 // Deviload 1.x kept its data next to its own files.
 let legacyFolder = "";
 function legacyDone() {
-  try { localStorage.setItem("deviload-legacy-done", "1"); } catch { /* storage unavailable */ }
+  try {
+    localStorage.setItem("deviload-legacy-done", "1");
+  } catch {
+    /* storage unavailable */
+  }
   $("legacy-notice").hidden = true;
 }
 async function importLegacy(folder) {
   try {
-    const result = await invoke("import_legacy", {folder});
+    const result = await invoke("import_legacy", { folder });
     legacyDone();
-    const data = await invoke("snapshot"), options = data.options;
+    const data = await invoke("snapshot"),
+      options = data.options;
     $("folder").value = options.folder;
     $("rate").value = options.rateMbps;
     $("parallel").value = data.parallel;
-    for (const key of ["playlist","subtitles","sponsorblock","archive"]) $(key).checked = options[key];
+    for (const key of ["playlist", "subtitles", "sponsorblock", "archive"]) $(key).checked = options[key];
     $("split-chapters").checked = !!options.splitChapters;
     setQuality(options.quality);
-    syncPlaylist(); syncOptionsSummary();
+    syncPlaylist();
+    syncOptionsSummary();
     render(data);
     if (result.language && result.language !== language()) setLanguage(result.language);
-    message(result.files ? tn("Moved {count} file from the previous Deviload", "Moved {count} files from the previous Deviload", result.files)
-      : t("Settings moved from the previous Deviload"));
+    message(
+      result.files
+        ? tn(
+            "Moved {count} file from the previous Deviload",
+            "Moved {count} files from the previous Deviload",
+            result.files,
+          )
+        : t("Settings moved from the previous Deviload"),
+    );
     brandMascot.celebrate();
-  } catch (error) { message(errorText(error), true); }
+  } catch (error) {
+    message(errorText(error), true);
+  }
 }
 async function checkLegacy() {
-  try { if (localStorage.getItem("deviload-legacy-done")) return; } catch { return; }
-  legacyFolder = await invoke("find_legacy").catch(() => null) || "";
+  try {
+    if (localStorage.getItem("deviload-legacy-done")) return;
+  } catch {
+    return;
+  }
+  legacyFolder = (await invoke("find_legacy").catch(() => null)) || "";
   if (!legacyFolder) return;
-  $("legacy-notice-text").textContent = t("Deviload 1.x is in {folder}. Move its history, settings and the list of downloaded videos here?", {folder:legacyFolder});
+  $("legacy-notice-text").textContent = t(
+    "Deviload 1.x is in {folder}. Move its history, settings and the list of downloaded videos here?",
+    { folder: legacyFolder },
+  );
   $("legacy-notice").hidden = false;
 }
 $("legacy-move").addEventListener("click", () => importLegacy(legacyFolder));
@@ -463,23 +745,36 @@ $("legacy-import").addEventListener("click", async () => {
   const open = window.__TAURI__?.dialog?.open;
   if (!open) return;
   try {
-    const folder = await open({multiple:false, directory:true, title:t("Folder of Deviload 1.x")});
-    if (typeof folder === "string" && folder) { $("app-settings-dialog").close(); await importLegacy(folder); }
-  } catch (error) { message(errorText(error), true); }
+    const folder = await open({ multiple: false, directory: true, title: t("Folder of Deviload 1.x") });
+    if (typeof folder === "string" && folder) {
+      $("app-settings-dialog").close();
+      await importLegacy(folder);
+    }
+  } catch (error) {
+    message(errorText(error), true);
+  }
 });
 // A new Deviload: the installed copy updates itself, the portable one opens the releases page.
-let appUpdate = null, appVersion = "";
+let appUpdate = null,
+  appVersion = "";
 let updateStorage = null;
-try { updateStorage = localStorage; } catch { /* Storage can be disabled. */ }
+try {
+  updateStorage = localStorage;
+} catch {
+  /* Storage can be disabled. */
+}
 const appUpdateScheduler = createAppUpdateScheduler({
-  check:() => invoke("check_app_update"),
-  onUpdate:update => { appUpdate = update; showAppUpdate(); },
-  onState:state => {
+  check: () => invoke("check_app_update"),
+  onUpdate: update => {
+    appUpdate = update;
+    showAppUpdate();
+  },
+  onState: state => {
     $("check-updates").disabled = state.checking || state.installing;
-    $("check-updates").classList.toggle("is-busy",state.checking);
+    $("check-updates").classList.toggle("is-busy", state.checking);
     $("app-update-install").disabled = state.checking || state.installing;
     $("app-update-later").disabled = state.installing;
-  }
+  },
 });
 // The Windows installer, the Mac app and the AppImage update themselves; the portable
 // zip and the .deb package show where to download the new version.
@@ -487,98 +782,145 @@ const onMac = navigator.userAgent.includes("Mac");
 const onLinux = navigator.userAgent.includes("Linux");
 function showAppUpdate() {
   const installing = appUpdateScheduler.state.installing;
-  const snoozed = isAppUpdateDismissed(updateStorage,appUpdate?.version);
+  const snoozed = isAppUpdateDismissed(updateStorage, appUpdate?.version);
   $("app-update-notice").hidden = !appUpdate || (!installing && snoozed);
   if (!appUpdate || installing) return;
-  $("app-update-title").textContent = t("Deviload {version} is out", {version:appUpdate.version});
+  $("app-update-title").textContent = t("Deviload {version} is out", { version: appUpdate.version });
   $("app-update-text").textContent = appUpdate.installable
     ? t("The update takes a few seconds, then Deviload restarts. Active downloads can be resumed afterwards.")
-    : onMac ? t("Download the new Mac zip from the releases page and replace Deviload in Applications, the same way as the first time.")
-    : onLinux ? t("Download the new .deb from the releases page and install it over the old one.")
-    : t("This is the portable version: download the new zip from the releases page and unpack it over the old one.");
+    : onMac
+      ? t(
+          "Download the new Mac zip from the releases page and replace Deviload in Applications, the same way as the first time.",
+        )
+      : onLinux
+        ? t("Download the new .deb from the releases page and install it over the old one.")
+        : t(
+            "This is the portable version: download the new zip from the releases page and unpack it over the old one.",
+          );
   $("app-update-install-label").textContent = t(appUpdate.installable ? "Update" : "Download");
 }
 async function checkAppUpdate(manual = false) {
-  if (!invoke) { if (manual) message(t("Update checks are available in the app."), true); return; }
-  if(appUpdateScheduler.state.installing)return;
+  if (!invoke) {
+    if (manual) message(t("Update checks are available in the app."), true);
+    return;
+  }
+  if (appUpdateScheduler.state.installing) return;
   try {
-    await appUpdateScheduler.check({manual});
+    await appUpdateScheduler.check({ manual });
     if (manual) {
       clearAppUpdateDismissal(updateStorage);
-      if (!appUpdate) message(t("You have the latest version: {version}", {version:appVersion}));
+      if (!appUpdate) message(t("You have the latest version: {version}", { version: appVersion }));
       else $("app-settings-dialog").close();
     }
     showAppUpdate();
-  } catch (error) { if (manual) message(errorText(error), true); }
+  } catch (error) {
+    if (manual) message(errorText(error), true);
+  }
 }
 function openSupport() {
   if (invoke) invoke("open_support").catch(error => message(errorText(error), true));
 }
 $("open-support").addEventListener("click", openSupport);
 $("support-float").addEventListener("click", openSupport);
-wireSupporters({onSupport:openSupport});
+wireSupporters({ onSupport: openSupport });
 $("check-updates").addEventListener("click", async () => {
   const button = $("check-updates");
   button.disabled = true;
   button.classList.add("is-busy");
-  try { await checkAppUpdate(true); } finally { button.disabled = false; button.classList.remove("is-busy"); }
+  try {
+    await checkAppUpdate(true);
+  } finally {
+    button.disabled = false;
+    button.classList.remove("is-busy");
+  }
 });
 $("app-update-later").addEventListener("click", () => {
-  dismissAppUpdate(updateStorage,appUpdate?.version);
+  dismissAppUpdate(updateStorage, appUpdate?.version);
   showAppUpdate();
 });
 $("app-update-install").addEventListener("click", async () => {
   if (!appUpdate) return;
-  if (!appUpdate.installable) { invoke("open_releases").catch(error => message(errorText(error), true)); return; }
+  if (!appUpdate.installable) {
+    invoke("open_releases").catch(error => message(errorText(error), true));
+    return;
+  }
   if (!(await appUpdateScheduler.holdInstall())) return;
-  let started=false,failed=false;
+  let started = false,
+    failed = false;
   try {
     if (!appUpdate?.installable) return;
-    const ask=window.__TAURI__?.dialog?.ask;
-    const active=jobs.some(job=>job.status==="running");
-    if(active&&ask&&!(await ask(t("Downloads in progress will stop. You can resume them after the update. Update now?"),{title:"Deviload",kind:"warning"})))return;
-    $("app-update-progress").hidden=false;
-    $("app-update-progress").querySelector("span").style.width="0%";
-    $("app-update-progress").setAttribute("aria-valuenow","0");
-    $("app-update-text").textContent=t("Downloading the update…");
-    started=true;
+    const ask = window.__TAURI__?.dialog?.ask;
+    const active = jobs.some(job => job.status === "running");
+    if (
+      active &&
+      ask &&
+      !(await ask(t("Downloads in progress will stop. You can resume them after the update. Update now?"), {
+        title: "Deviload",
+        kind: "warning",
+      }))
+    )
+      return;
+    $("app-update-progress").hidden = false;
+    $("app-update-progress").querySelector("span").style.width = "0%";
+    $("app-update-progress").setAttribute("aria-valuenow", "0");
+    $("app-update-text").textContent = t("Downloading the update…");
+    started = true;
     await invoke("install_app_update");
-  } catch(error) { failed=true;message(errorText(error),true); }
-  finally {
-    if(!started||failed){
-      if(failed){appUpdate=null;$("app-update-progress").hidden=true;}
-      appUpdateScheduler.releaseInstall({recheck:failed});
-      if(failed){try{await appUpdateScheduler.check({manual:true});}catch{/* The installation error is already shown. */}}
+  } catch (error) {
+    failed = true;
+    message(errorText(error), true);
+  } finally {
+    if (!started || failed) {
+      if (failed) {
+        appUpdate = null;
+        $("app-update-progress").hidden = true;
+      }
+      appUpdateScheduler.releaseInstall({ recheck: failed });
+      if (failed) {
+        try {
+          await appUpdateScheduler.check({ manual: true });
+        } catch {
+          /* The installation error is already shown. */
+        }
+      }
       showAppUpdate();
     }
   }
 });
 window.__TAURI__?.event?.listen?.("app-update-progress", event => {
-  const {percent,phase}=updateDownloadProgress(event.payload);
-  $("app-update-progress").querySelector("span").style.width=percent+"%";
-  $("app-update-progress").setAttribute("aria-valuenow",String(percent));
-  if(phase==="installing")$("app-update-text").textContent=t("Installing the update…");
+  const { percent, phase } = updateDownloadProgress(event.payload);
+  $("app-update-progress").querySelector("span").style.width = percent + "%";
+  $("app-update-progress").setAttribute("aria-valuenow", String(percent));
+  if (phase === "installing") $("app-update-text").textContent = t("Installing the update…");
 });
 onLanguageChange(showAppUpdate);
 function systemNotice(title, detail) {
   if (localStorage.getItem("deviload-os-notify") !== "true") return;
   const notification = window.__TAURI__?.notification;
   if (!notification) return;
-  Promise.resolve(notification.sendNotification({title, body:detail.slice(0,180)})).catch(() => {});
+  Promise.resolve(notification.sendNotification({ title, body: detail.slice(0, 180) })).catch(() => {});
 }
 
 document.addEventListener("keydown", event => {
   if (event.defaultPrevented) return;
   const modifier = event.ctrlKey || event.metaKey;
   if (modifier && event.key.toLowerCase() === "l") {
-    event.preventDefault(); showDownloads(true); return;
+    event.preventDefault();
+    showDownloads(true);
+    return;
   }
   if (modifier && event.key.toLowerCase() === "k") {
     if (document.querySelector("dialog[open]")) return;
-    event.preventDefault(); showDownloads(); $("job-search").focus(); return;
+    event.preventDefault();
+    showDownloads();
+    $("job-search").focus();
+    return;
   }
   if (modifier && event.key === "Enter" && !$("add").disabled) {
-    event.preventDefault(); showDownloads(); $("add").click(); return;
+    event.preventDefault();
+    showDownloads();
+    $("add").click();
+    return;
   }
   if (event.key === "Escape") {
     for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
@@ -611,9 +953,14 @@ document.addEventListener("drop", async event => {
     if (/\.(txt|url)$/i.test(file.name) && file.size <= 131072) value = await file.text();
   }
   // Windows .url shortcuts keep the address on a URL= line.
-  const links = value.split(/\r?\n/).map(line => line.replace(/^URL=/i, "").trim())
+  const links = value
+    .split(/\r?\n/)
+    .map(line => line.replace(/^URL=/i, "").trim())
     .filter(line => line && !line.startsWith("#") && !line.startsWith("["));
-  if (!links.length) { message(t("Drop a link or a small .txt/.url file with links."), true); return; }
+  if (!links.length) {
+    message(t("Drop a link or a small .txt/.url file with links."), true);
+    return;
+  }
   addLinks(links.join(" "));
   message(t("Links added by drag and drop."));
 });
@@ -633,7 +980,9 @@ function dismissToast(toast) {
 function message(value, error = false, action = null) {
   if (!value) return;
   const box = $("toasts");
-  const same = [...box.children].find(toast => toast.dataset.text === value && !toast.classList.contains("leaving"));
+  const same = [...box.children].find(
+    toast => toast.dataset.text === value && !toast.classList.contains("leaving"),
+  );
   if (same) same.remove();
   const toast = node("div", "toast" + (error ? " error" : ""));
   toast.dataset.text = value;
@@ -650,7 +999,10 @@ function message(value, error = false, action = null) {
   if (action) {
     const button = node("button", "toast-action", action.label);
     button.type = "button";
-    button.addEventListener("click", () => { action.run(); dismissToast(toast); });
+    button.addEventListener("click", () => {
+      action.run();
+      dismissToast(toast);
+    });
     toast.append(button);
   }
   toast.append(close);
@@ -661,9 +1013,13 @@ function message(value, error = false, action = null) {
     if (box.matches(":popover-open")) box.hidePopover();
     box.showPopover();
   }
-  toast.dataset.timer = String(setTimeout(() => dismissToast(toast), action ? REMOVE_DELAY : error ? 9000 : 4500));
+  toast.dataset.timer = String(
+    setTimeout(() => dismissToast(toast), action ? REMOVE_DELAY : error ? 9000 : 4500),
+  );
 }
-function clearToasts() { $("toasts").replaceChildren(); }
+function clearToasts() {
+  $("toasts").replaceChildren();
+}
 function setQuality(value) {
   quality = value;
   $("quality-select").value = value;
@@ -678,27 +1034,50 @@ function setQuality(value) {
   heroOrb.bump();
 }
 function syncFormatHint() {
-  $("format-hint").textContent = selectedFormat ? t("Stream {id} selected for this link.", {id:selectedFormat.id})
-    : ["mp3","flac","wav"].includes(quality) ? t("Audio extraction. FLAC and WAV cannot restore quality the source never had.")
-    : $("profile").value === "mobile" ? t("For phone: the result is an MP4, re-encoded when needed.")
-    : $("container-select").value === "mp4" ? t("MP4 plays everywhere: H.264 and AAC are taken when the site has them.")
-    : $("container-select").value === "webm" ? t("WebM is the open format of browsers. Streams that do not fit it are saved as MKV.")
-    : t("Video is merged into MKV without re-encoding.");
-  $("container-field").hidden = ["mp3","flac","wav"].includes(quality);
+  $("format-hint").textContent = selectedFormat
+    ? t("Stream {id} selected for this link.", { id: selectedFormat.id })
+    : ["mp3", "flac", "wav"].includes(quality)
+      ? t("Audio extraction. FLAC and WAV cannot restore quality the source never had.")
+      : $("profile").value === "mobile"
+        ? t("For phone: the result is an MP4, re-encoded when needed.")
+        : $("container-select").value === "mp4"
+          ? t("MP4 plays everywhere: H.264 and AAC are taken when the site has them.")
+          : $("container-select").value === "webm"
+            ? t("WebM is the open format of browsers. Streams that do not fit it are saved as MKV.")
+            : t("Video is merged into MKV without re-encoding.");
+  $("container-field").hidden = ["mp3", "flac", "wav"].includes(quality);
 }
 function syncModeButtons() {
-  const audio = ["mp3","flac","wav"].includes(quality);
-  for (const [id,selected] of [["mode-video",!audio],["mode-audio",audio],
-      ["mode-playlist",$("playlist").checked],["mode-subtitles",$("subtitles").checked]]) {
+  const audio = ["mp3", "flac", "wav"].includes(quality);
+  for (const [id, selected] of [
+    ["mode-video", !audio],
+    ["mode-audio", audio],
+    ["mode-playlist", $("playlist").checked],
+    ["mode-subtitles", $("subtitles").checked],
+  ]) {
     const button = $(id);
     button.classList.toggle("selected", selected);
     button.setAttribute("aria-pressed", String(selected));
   }
 }
-$("mode-video").addEventListener("click", () => { clearSelectedFormat(); $("profile").value = "custom"; setQuality("1080"); });
-$("mode-audio").addEventListener("click", () => { clearSelectedFormat(); $("profile").value = "custom"; setQuality("mp3"); });
-$("mode-playlist").addEventListener("click", () => { $("playlist").click(); syncModeButtons(); });
-$("mode-subtitles").addEventListener("click", () => { $("subtitles").click(); syncModeButtons(); });
+$("mode-video").addEventListener("click", () => {
+  clearSelectedFormat();
+  $("profile").value = "custom";
+  setQuality("1080");
+});
+$("mode-audio").addEventListener("click", () => {
+  clearSelectedFormat();
+  $("profile").value = "custom";
+  setQuality("mp3");
+});
+$("mode-playlist").addEventListener("click", () => {
+  $("playlist").click();
+  syncModeButtons();
+});
+$("mode-subtitles").addEventListener("click", () => {
+  $("subtitles").click();
+  syncModeButtons();
+});
 $("playlist").addEventListener("change", syncModeButtons);
 $("subtitles").addEventListener("change", syncModeButtons);
 const linkField = $("urls");
@@ -713,37 +1092,70 @@ function addLinks(text) {
   linkField.value = links.join(" ");
   linkField.dispatchEvent(new Event("input"));
   showDownloads();
-  linkField.focus({preventScroll:true});
+  linkField.focus({ preventScroll: true });
   pop(linkField.closest(".quick-link"), 6);
 }
-linkField.addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); $("add").click(); } });
-$("quick-clear").addEventListener("click", () => { linkField.value = ""; linkField.dispatchEvent(new Event("input")); linkField.focus(); });
-let clipboardCandidate = "", dismissedClipboard = "";
-function clipboardEnabled() { return localStorage.getItem("deviload-clipboard") !== "false"; }
-function syncClipboardToggle() { syncSwitch("clipboard-toggle", clipboardEnabled()); }
+linkField.addEventListener("keydown", event => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    $("add").click();
+  }
+});
+$("quick-clear").addEventListener("click", () => {
+  linkField.value = "";
+  linkField.dispatchEvent(new Event("input"));
+  linkField.focus();
+});
+let clipboardCandidate = "",
+  dismissedClipboard = "";
+function clipboardEnabled() {
+  return localStorage.getItem("deviload-clipboard") !== "false";
+}
+function syncClipboardToggle() {
+  syncSwitch("clipboard-toggle", clipboardEnabled());
+}
 syncClipboardToggle();
 async function scanClipboard() {
-  if (!clipboardEnabled() || document.documentElement.classList.contains("music-only") || document.visibilityState !== "visible" || !document.hasFocus()) return;
+  if (
+    !clipboardEnabled() ||
+    document.documentElement.classList.contains("music-only") ||
+    document.visibilityState !== "visible" ||
+    !document.hasFocus()
+  )
+    return;
   const api = window.__TAURI__?.clipboardManager;
   if (!api?.readText) return;
   try {
-    const text = (await api.readText() || "").trim();
+    const text = ((await api.readText()) || "").trim();
     const url = text.length <= 2048 && !/\s/.test(text) ? new URL(text) : null;
-    if (!url || !["http:", "https:"].includes(url.protocol) || !url.hostname || url.username || url.password ||
-        text === dismissedClipboard || linkField.value.includes(text)) {
-      $("clipboard-suggestion").hidden = true; return;
+    if (
+      !url ||
+      !["http:", "https:"].includes(url.protocol) ||
+      !url.hostname ||
+      url.username ||
+      url.password ||
+      text === dismissedClipboard ||
+      linkField.value.includes(text)
+    ) {
+      $("clipboard-suggestion").hidden = true;
+      return;
     }
     clipboardCandidate = text;
     $("clipboard-host").textContent = url.hostname.replace(/^www\./, "");
     $("clipboard-suggestion").hidden = false;
-  } catch { $("clipboard-suggestion").hidden = true; }
+  } catch {
+    $("clipboard-suggestion").hidden = true;
+  }
 }
 $("clipboard-toggle").addEventListener("click", () => {
   const enabled = !clipboardEnabled();
   localStorage.setItem("deviload-clipboard", String(enabled));
   syncClipboardToggle();
   if (enabled) scanClipboard();
-  else { clipboardCandidate = ""; $("clipboard-suggestion").hidden = true; }
+  else {
+    clipboardCandidate = "";
+    $("clipboard-suggestion").hidden = true;
+  }
 });
 $("clipboard-use").addEventListener("click", () => {
   if (!clipboardCandidate) return;
@@ -774,62 +1186,112 @@ function parsePlaylistSelection(spec, entries) {
   if (/^\d+$/.test(spec)) return new Set(all.filter(index => index <= Number(spec)));
   const selected = new Set();
   for (const part of spec.split(",")) {
-    const [first,last] = part.split("-").map(Number);
+    const [first, last] = part.split("-").map(Number);
     for (const index of all) if (index >= first && index <= (last || first)) selected.add(index);
   }
   return selected;
 }
 $("playlist-browse").addEventListener("click", async () => {
-  if (!invoke) { message(t("The track list is available in the installed app."), true); return; }
+  if (!invoke) {
+    message(t("The track list is available in the installed app."), true);
+    return;
+  }
   const address = $("urls").value.trim().split(/\s+/)[0];
-  if (!address) { $("urls").focus(); message(t("Paste a playlist link first."), true); return; }
+  if (!address) {
+    $("urls").focus();
+    message(t("Paste a playlist link first."), true);
+    return;
+  }
   const dialog = $("playlist-dialog");
   dialog.showModal();
   $("playlist-list").replaceChildren();
   $("playlist-status").textContent = t("Reading the playlist…");
   try {
-    const info = await invoke("playlist_entries", {address, options:buildDownloadRequest().options});
+    const info = await invoke("playlist_entries", { address, options: buildDownloadRequest().options });
     const selected = parsePlaylistSelection($("playlist-items").value.trim(), info.entries);
     const playlistTitle = info.title || t("Playlist");
-    $("playlist-status").textContent = info.total && info.total > info.entries.length
-      ? t("{title} · showing {shown} of {total} (first 100)", {title:playlistTitle, shown:info.entries.length, total:info.total})
-      : t("{title} · showing {shown}", {title:playlistTitle, shown:info.entries.length});
+    $("playlist-status").textContent =
+      info.total && info.total > info.entries.length
+        ? t("{title} · showing {shown} of {total} (first 100)", {
+            title: playlistTitle,
+            shown: info.entries.length,
+            total: info.total,
+          })
+        : t("{title} · showing {shown}", { title: playlistTitle, shown: info.entries.length });
     for (const item of info.entries) {
       const label = node("label", "playlist-entry");
-      const input = node("input"); input.type = "checkbox"; input.value = item.index; input.checked = selected.has(item.index);
+      const input = node("input");
+      input.type = "checkbox";
+      input.value = item.index;
+      input.checked = selected.has(item.index);
       label.append(input, node("span", "", item.index + ". " + (item.title || t("Untitled"))));
-      if (item.duration) label.append(node("small", "", Math.floor(item.duration/60) + ":" + String(Math.round(item.duration%60)).padStart(2,"0")));
+      if (item.duration)
+        label.append(
+          node(
+            "small",
+            "",
+            Math.floor(item.duration / 60) + ":" + String(Math.round(item.duration % 60)).padStart(2, "0"),
+          ),
+        );
       $("playlist-list").append(label);
     }
     if (!info.entries.length) $("playlist-status").textContent = t("The playlist has no available items.");
-  } catch (error) { $("playlist-status").textContent = errorText(error); }
+  } catch (error) {
+    $("playlist-status").textContent = errorText(error);
+  }
 });
 $("playlist-close").addEventListener("click", () => $("playlist-dialog").close());
-$("playlist-all").addEventListener("click", () => $("playlist-list").querySelectorAll("input").forEach(input => { input.checked = true; }));
-$("playlist-none").addEventListener("click", () => $("playlist-list").querySelectorAll("input").forEach(input => { input.checked = false; }));
+$("playlist-all").addEventListener("click", () =>
+  $("playlist-list")
+    .querySelectorAll("input")
+    .forEach(input => {
+      input.checked = true;
+    }),
+);
+$("playlist-none").addEventListener("click", () =>
+  $("playlist-list")
+    .querySelectorAll("input")
+    .forEach(input => {
+      input.checked = false;
+    }),
+);
 $("playlist-apply").addEventListener("click", () => {
   const indices = [...$("playlist-list").querySelectorAll("input:checked")].map(input => Number(input.value));
-  if (!indices.length) { $("playlist-status").textContent = t("Select at least one track."); return; }
+  if (!indices.length) {
+    $("playlist-status").textContent = t("Select at least one track.");
+    return;
+  }
   const spec = playlistSelection(indices);
-  if (spec.length > 80) { $("playlist-status").textContent = t("Too many scattered tracks; select fewer groups."); return; }
+  if (spec.length > 80) {
+    $("playlist-status").textContent = t("Too many scattered tracks; select fewer groups.");
+    return;
+  }
   $("playlist-items").value = spec;
   $("playlist-dialog").close();
-  message(t("Tracks selected: {count}. Range: {range}", {count:indices.length, range:spec}));
-});let signedInPath = null;
-let savedAuthSource = {mode:"account", path:""};
+  message(t("Tracks selected: {count}. Range: {range}", { count: indices.length, range: spec }));
+});
+let signedInPath = null;
+let savedAuthSource = { mode: "account", path: "" };
 function syncSavedAuthSource(options) {
   const next = {
-    mode:options.cookiesAccount || (options.cookies && options.cookies === signedInPath) ? "account"
-      : options.cookiesBrowser || (options.cookies ? "file" : "none"),
-    path:options.cookies || "",
+    mode:
+      options.cookiesAccount || (options.cookies && options.cookies === signedInPath)
+        ? "account"
+        : options.cookiesBrowser || (options.cookies ? "file" : "none"),
+    path: options.cookies || "",
   };
   if (next.mode === savedAuthSource.mode && next.path === savedAuthSource.path) return;
   savedAuthSource = next;
   renderAccount();
 }
 function accountView() {
-  return downloadAuthView({mode:$("cookies-mode").value, cookiePath:$("cookies").value,
-    savedMode:savedAuthSource.mode, savedPath:savedAuthSource.path, hasEmbeddedSession:Boolean(signedInPath)});
+  return downloadAuthView({
+    mode: $("cookies-mode").value,
+    cookiePath: $("cookies").value,
+    savedMode: savedAuthSource.mode,
+    savedPath: savedAuthSource.path,
+    hasEmbeddedSession: Boolean(signedInPath),
+  });
 }
 if (!navigator.userAgent.includes("Mac")) {
   // Chromium browsers on Windows encrypt cookies so yt-dlp cannot read them.
@@ -838,15 +1300,21 @@ if (!navigator.userAgent.includes("Mac")) {
 function syncAuth() {
   const mode = $("cookies-mode").value;
   $("cookies-file-wrap").hidden = mode !== "file";
-  $("auth-hint").textContent = mode === "account"
-    ? (signedInPath ? t("Downloads use your Deviload sign-in.") : t("Sign in above; until then downloads run without an account."))
-    : mode === "file" ? t("Pick a Netscape cookies.txt file. It stays on your computer only.")
-    : mode === "none" ? t("Downloads run without an account. Private and age-restricted videos will fail.")
-    : t("Sign in to YouTube in the selected browser. yt-dlp reads its cookies only while downloading.");
+  $("auth-hint").textContent =
+    mode === "account"
+      ? signedInPath
+        ? t("Downloads use your Deviload sign-in.")
+        : t("Sign in above; until then downloads run without an account.")
+      : mode === "file"
+        ? t("Pick a Netscape cookies.txt file. It stays on your computer only.")
+        : mode === "none"
+          ? t("Downloads run without an account. Private and age-restricted videos will fail.")
+          : t("Sign in to YouTube in the selected browser. yt-dlp reads its cookies only while downloading.");
   $("account-hint").textContent = !["account", "none"].includes(mode)
     ? t("Downloads use the selected cookies source. A separate Deviload sign-in is not needed.")
-    : signedInPath ? t("Signed in. Links from {site} use this session.", {site:"YouTube"})
-    : t("Not signed in. Needed for age-restricted, private and members-only videos.");
+    : signedInPath
+      ? t("Signed in. Links from {site} use this session.", { site: "YouTube" })
+      : t("Not signed in. Needed for age-restricted, private and members-only videos.");
 }
 function renderAccount() {
   const signed = Boolean(signedInPath);
@@ -868,22 +1336,37 @@ async function refreshAccount() {
   renderAccount();
 }
 async function signIn() {
-  if (!invoke) { message(t("The YouTube window is available in the Deviload app."), true); return; }
+  if (!invoke) {
+    message(t("The YouTube window is available in the Deviload app."), true);
+    return;
+  }
   if (onLinux) {
     showSettingsFor("cookies-mode");
     if (["none", "account"].includes($("cookies-mode").value)) {
       $("cookies-mode").value = "firefox";
       $("cookies-mode").dispatchEvent(new Event("change"));
     }
-    try { await invoke("open_site_browser", {site:"youtube"}); }
-    catch (error) { message(errorText(error), true); return; }
-    message(t("On Linux, sign in in Firefox and select Firefox cookies here, or import a cookies.txt file. Opening the browser alone does not import a session."));
+    try {
+      await invoke("open_site_browser", { site: "youtube" });
+    } catch (error) {
+      message(errorText(error), true);
+      return;
+    }
+    message(
+      t(
+        "On Linux, sign in in Firefox and select Firefox cookies here, or import a cookies.txt file. Opening the browser alone does not import a session.",
+      ),
+    );
     return;
   }
   try {
-    await invoke("open_youtube", {signIn:true});
-    message(t("Sign in to your Google account in the window that opened. Deviload saves the sign-in by itself."));
-  } catch (error) { message(errorText(error), true); }
+    await invoke("open_youtube", { signIn: true });
+    message(
+      t("Sign in to your Google account in the window that opened. Deviload saves the sign-in by itself."),
+    );
+  } catch (error) {
+    message(errorText(error), true);
+  }
 }
 $("cookies-mode").addEventListener("change", () => {
   $("cookies-status").textContent = t("Not saved yet. Press Apply cookies to use this source.");
@@ -895,25 +1378,48 @@ $("cookies").addEventListener("input", () => {
 });
 $("apply-cookies").addEventListener("click", async () => {
   if (!invoke) return;
-  const mode = $("cookies-mode").value, path = $("cookies").value.trim();
+  const mode = $("cookies-mode").value,
+    path = $("cookies").value.trim();
   const controls = ["apply-cookies", "cookies-mode", "cookies", "browse-cookies"].map($);
-  controls.forEach(control => { control.disabled = true; });
+  controls.forEach(control => {
+    control.disabled = true;
+  });
   $("cookies-status").textContent = t("Checking cookies…");
   try {
-    const count = await invoke("apply_download_auth", {mode, path});
-    savedAuthSource = {mode, path:mode === "file" ? path : ""};
-    try { localStorage.setItem("deviload-cookies-mode", mode); } catch { /* storage unavailable */ }
-    $("cookies-status").textContent = mode === "file"
-      ? t("Saved: {count} unexpired cookies. Site access is checked when downloading.", {count})
-      : t("Cookies source saved for new downloads.");
+    const count = await invoke("apply_download_auth", { mode, path });
+    savedAuthSource = { mode, path: mode === "file" ? path : "" };
+    try {
+      localStorage.setItem("deviload-cookies-mode", mode);
+    } catch {
+      /* storage unavailable */
+    }
+    $("cookies-status").textContent =
+      mode === "file"
+        ? t("Saved: {count} unexpired cookies. Site access is checked when downloading.", { count })
+        : t("Cookies source saved for new downloads.");
     renderAccount();
-  } catch (error) { $("cookies-status").textContent = errorText(error); }
-  finally { controls.forEach(control => { control.disabled = false; }); }
+  } catch (error) {
+    $("cookies-status").textContent = errorText(error);
+  } finally {
+    controls.forEach(control => {
+      control.disabled = false;
+    });
+  }
 });
 $("account-action").addEventListener("click", async () => {
-  if (!signedInPath) { signIn(); return; }
+  if (!signedInPath) {
+    signIn();
+    return;
+  }
   const ask = window.__TAURI__?.dialog?.ask;
-  if (ask && !(await ask(t("Sign out of YouTube? The saved session will be deleted from this computer."), {title:"Deviload", kind:"warning"}))) return;
+  if (
+    ask &&
+    !(await ask(t("Sign out of YouTube? The saved session will be deleted from this computer."), {
+      title: "Deviload",
+      kind: "warning",
+    }))
+  )
+    return;
   const button = $("account-action");
   button.disabled = true;
   try {
@@ -921,44 +1427,76 @@ $("account-action").addEventListener("click", async () => {
     signedInPath = null;
     renderAccount();
     message(t("Signed out of YouTube. The saved session was deleted."));
-  } catch (error) { message(errorText(error), true); }
-  finally { button.disabled = false; }
+  } catch (error) {
+    message(errorText(error), true);
+  } finally {
+    button.disabled = false;
+  }
 });
 $("browse-cookies").addEventListener("click", async () => {
   const open = window.__TAURI__?.dialog?.open;
   if (!open) return;
   try {
-    const path = await open({multiple:false, directory:false, filters:[{name:"cookies.txt", extensions:["txt"]}]});
+    const path = await open({
+      multiple: false,
+      directory: false,
+      filters: [{ name: "cookies.txt", extensions: ["txt"] }],
+    });
     if (typeof path === "string" && path) {
       $("cookies").value = path;
       $("cookies").dispatchEvent(new Event("input"));
     }
-  } catch (error) { message(errorText(error), true); }
+  } catch (error) {
+    message(errorText(error), true);
+  }
 });
 window.__TAURI__?.event?.listen?.("youtube-session", async event => {
   const before = Boolean(signedInPath);
   await refreshAccount();
   if (event.payload && signedInPath && !before) {
-    if ($("cookies-mode").value === "none") { $("cookies-mode").value = "account"; renderAccount(); }
+    if ($("cookies-mode").value === "none") {
+      $("cookies-mode").value = "account";
+      renderAccount();
+    }
     message(t("Signed in to YouTube. Downloads now use your account."));
     brandMascot.celebrate();
   }
 });
 // Instagram, TikTok and X: each keeps its own sign-in, and a link uses the one of its own site.
-const SIGN_IN_SITES = [["instagram", "Instagram"], ["tiktok", "TikTok"], ["x", "X"]];
+const SIGN_IN_SITES = [
+  ["instagram", "Instagram"],
+  ["tiktok", "TikTok"],
+  ["x", "X"],
+];
 let siteSessions = [];
-function siteName(key) { return SIGN_IN_SITES.find(([id]) => id === key)?.[1] || key; }
+function siteName(key) {
+  return SIGN_IN_SITES.find(([id]) => id === key)?.[1] || key;
+}
 function renderSites() {
-  $("site-accounts").replaceChildren(...SIGN_IN_SITES.map(([key, name]) => {
-    const signed = siteSessions.includes(key);
-    const row = node("div", "setting-row"), text = node("div");
-    text.append(node("strong", "", name), node("p", "", signed ? t("Signed in. Links from {site} use this session.", {site:name}) : t("Not signed in")));
-    const button = node("button", signed ? "outline small" : "primary small", signed ? t("Sign out") : t("Sign in"));
-    button.type = "button";
-    button.addEventListener("click", () => signed ? siteSignOut(key) : siteSignIn(key));
-    row.append(text, button);
-    return row;
-  }));
+  $("site-accounts").replaceChildren(
+    ...SIGN_IN_SITES.map(([key, name]) => {
+      const signed = siteSessions.includes(key);
+      const row = node("div", "setting-row"),
+        text = node("div");
+      text.append(
+        node("strong", "", name),
+        node(
+          "p",
+          "",
+          signed ? t("Signed in. Links from {site} use this session.", { site: name }) : t("Not signed in"),
+        ),
+      );
+      const button = node(
+        "button",
+        signed ? "outline small" : "primary small",
+        signed ? t("Sign out") : t("Sign in"),
+      );
+      button.type = "button";
+      button.addEventListener("click", () => (signed ? siteSignOut(key) : siteSignIn(key)));
+      row.append(text, button);
+      return row;
+    }),
+  );
 }
 async function refreshSites() {
   siteSessions = invoke ? await invoke("site_sessions").catch(() => []) : [];
@@ -967,34 +1505,63 @@ async function refreshSites() {
 const pendingAccountJobs = new Map();
 async function siteSignIn(key, jobId = null) {
   if (jobId !== null) pendingAccountJobs.set(key, jobId);
-  if (!invoke) { message(t("The sign-in window is available in the Deviload app."), true); return; }
+  if (!invoke) {
+    message(t("The sign-in window is available in the Deviload app."), true);
+    return;
+  }
   try {
-    await invoke("site_sign_in", {site:key});
-    message(t("Sign in to {site} in the window that opened. Deviload saves the sign-in by itself.", {site:siteName(key)}));
-  } catch (error) { message(errorText(error), true); }
+    await invoke("site_sign_in", { site: key });
+    message(
+      t("Sign in to {site} in the window that opened. Deviload saves the sign-in by itself.", {
+        site: siteName(key),
+      }),
+    );
+  } catch (error) {
+    message(errorText(error), true);
+  }
 }
 async function siteSignOut(key) {
   const ask = window.__TAURI__?.dialog?.ask;
-  if (ask && !(await ask(t("Sign out of {site}? The saved session will be deleted from this computer.", {site:siteName(key)}), {title:"Deviload", kind:"warning"}))) return;
+  if (
+    ask &&
+    !(await ask(
+      t("Sign out of {site}? The saved session will be deleted from this computer.", { site: siteName(key) }),
+      { title: "Deviload", kind: "warning" },
+    ))
+  )
+    return;
   try {
-    await invoke("site_sign_out", {site:key});
+    await invoke("site_sign_out", { site: key });
     await refreshSites();
-    message(t("Signed out of {site}. The saved session was deleted.", {site:siteName(key)}));
-  } catch (error) { message(errorText(error), true); }
+    message(t("Signed out of {site}. The saved session was deleted.", { site: siteName(key) }));
+  } catch (error) {
+    message(errorText(error), true);
+  }
 }
 window.__TAURI__?.event?.listen?.("site-session", async event => {
   await refreshSites();
   if (!event.payload) return;
   const jobId = pendingAccountJobs.get(event.payload);
   if (jobId !== undefined) {
-    try { await invoke("change_job", {id:jobId, action:"use-account"}); }
-    catch (error) { message(errorText(error), true); }
+    try {
+      await invoke("change_job", { id: jobId, action: "use-account" });
+    } catch (error) {
+      message(errorText(error), true);
+    }
     pendingAccountJobs.delete(event.payload);
   }
   $("cookies-mode").value = "account";
-  try { localStorage.setItem("deviload-cookies-mode", "account"); } catch { /* Storage unavailable. */ }
+  try {
+    localStorage.setItem("deviload-cookies-mode", "account");
+  } catch {
+    /* Storage unavailable. */
+  }
   renderAccount();
-  message(t("Signed in to {site}. Links from it now download with your account.", {site:siteName(event.payload)}));
+  message(
+    t("Signed in to {site}. Links from it now download with your account.", {
+      site: siteName(event.payload),
+    }),
+  );
   brandMascot.celebrate();
 });
 refreshSites();
@@ -1004,11 +1571,16 @@ syncAuth();
 for (const button of document.querySelectorAll("[data-folder]")) {
   button.addEventListener("click", () => {
     const path = folderPaths[button.dataset.folder];
-    if (!path) { message(t("This system folder is not available on this computer."), true); return; }
+    if (!path) {
+      message(t("This system folder is not available on this computer."), true);
+      return;
+    }
     $("folder").value = path;
     syncOptionsSummary();
-    document.querySelectorAll("[data-folder]").forEach(item => item.classList.toggle("active", item === button));
-    message(t("Save folder: {path}", {path}));
+    document
+      .querySelectorAll("[data-folder]")
+      .forEach(item => item.classList.toggle("active", item === button));
+    message(t("Save folder: {path}", { path }));
   });
 }
 function showDefaultFolder(folder) {
@@ -1018,34 +1590,65 @@ function showDefaultFolder(folder) {
 }
 async function setDefaultFolder(folder) {
   try {
-    const saved = await invoke("set_default_folder", {folder});
+    const saved = await invoke("set_default_folder", { folder });
     showDefaultFolder(saved);
-    if (saved) { $("folder").value = saved; $("folder").dispatchEvent(new Event("input", {bubbles:true})); }
-    message(saved ? t("New downloads go to {path} by default.", {path:saved}) : t("Downloads go to the folder of the last download again."));
-  } catch (error) { message(errorText(error), true); }
+    if (saved) {
+      $("folder").value = saved;
+      $("folder").dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    message(
+      saved
+        ? t("New downloads go to {path} by default.", { path: saved })
+        : t("Downloads go to the folder of the last download again."),
+    );
+  } catch (error) {
+    message(errorText(error), true);
+  }
 }
 $("default-folder-pick").addEventListener("click", async () => {
   const open = window.__TAURI__?.dialog?.open;
-  if (!open) { message(t("Folder selection is available in the Deviload app."), true); return; }
-  const path = await open({directory:true,multiple:false,defaultPath:$("folder").value.trim() || undefined,title:t("Choose the default save folder")}).catch(() => null);
+  if (!open) {
+    message(t("Folder selection is available in the Deviload app."), true);
+    return;
+  }
+  const path = await open({
+    directory: true,
+    multiple: false,
+    defaultPath: $("folder").value.trim() || undefined,
+    title: t("Choose the default save folder"),
+  }).catch(() => null);
   if (typeof path === "string" && path) await setDefaultFolder(path);
 });
 $("default-folder-reset").addEventListener("click", () => setDefaultFolder(""));
-$("folder").addEventListener("input", () => { document.querySelectorAll("[data-folder]").forEach(item => item.classList.remove("active")); syncOptionsSummary(); });
+$("folder").addEventListener("input", () => {
+  document.querySelectorAll("[data-folder]").forEach(item => item.classList.remove("active"));
+  syncOptionsSummary();
+});
 $("browse-folder").addEventListener("click", async () => {
   const open = window.__TAURI__?.dialog?.open;
-  if (!open) { message(t("Folder selection is available in the Deviload app."), true); return; }
+  if (!open) {
+    message(t("Folder selection is available in the Deviload app."), true);
+    return;
+  }
   const button = $("browse-folder");
   button.disabled = true;
   try {
-    const path = await open({directory:true,multiple:false,defaultPath:$("folder").value.trim() || undefined,title:t("Choose a folder for downloads")});
+    const path = await open({
+      directory: true,
+      multiple: false,
+      defaultPath: $("folder").value.trim() || undefined,
+      title: t("Choose a folder for downloads"),
+    });
     if (typeof path === "string" && path) {
       $("folder").value = path;
-      $("folder").dispatchEvent(new Event("input", {bubbles:true}));
-      message(t("Save folder: {path}", {path}));
+      $("folder").dispatchEvent(new Event("input", { bubbles: true }));
+      message(t("Save folder: {path}", { path }));
     }
-  } catch (error) { message(t("Could not choose the folder: {error}", {error:errorText(error)}), true); }
-  finally { button.disabled = false; }
+  } catch (error) {
+    message(t("Could not choose the folder: {error}", { error: errorText(error) }), true);
+  } finally {
+    button.disabled = false;
+  }
 });
 $("profile").addEventListener("change", () => {
   const profile = $("profile").value;
@@ -1053,86 +1656,177 @@ $("profile").addEventListener("change", () => {
   if (profile === "music") {
     setQuality("mp3");
     if (folderPaths.music) $("folder").value = folderPaths.music;
-    $("subtitles").checked = false; $("sponsorblock").checked = false;
+    $("subtitles").checked = false;
+    $("sponsorblock").checked = false;
   } else if (profile === "archive") {
     $("container-select").value = "mkv";
     setQuality("best");
-    $("subtitles").checked = true; $("sponsorblock").checked = false;
+    $("subtitles").checked = true;
+    $("sponsorblock").checked = false;
   } else if (profile === "mobile") {
     $("container-select").value = "mp4";
     setQuality("720");
-    $("subtitles").checked = false; $("sponsorblock").checked = false;
+    $("subtitles").checked = false;
+    $("sponsorblock").checked = false;
   } else if (profile === "maximum") {
     $("container-select").value = "mkv";
     setQuality("best");
-    $("subtitles").checked = false; $("sponsorblock").checked = false;
+    $("subtitles").checked = false;
+    $("sponsorblock").checked = false;
   }
   $("archive").checked = true;
-  const description = {music:"MP3 with cover art and tags",archive:"Best source and subtitles",mobile:"720p and a final MP4",maximum:"Best available quality"}[profile];
-  message(t("Profile: {description}.", {description:t(description)}));
+  const description = {
+    music: "MP3 with cover art and tags",
+    archive: "Best source and subtitles",
+    mobile: "720p and a final MP4",
+    maximum: "Best available quality",
+  }[profile];
+  message(t("Profile: {description}.", { description: t(description) }));
 });
-const downloadProfiles=wireDownloadProfiles({invoke,notify:message,
-  read:()=>({quality,profile:$("profile").value,container:$("container-select").value,folderRule:$("folder-rule").value,nameRule:$("name-rule").value,
-    playlist:$("playlist").checked,splitChapters:$("split-chapters").checked,subtitles:$("subtitles").checked,sponsorblock:$("sponsorblock").checked,
-    archive:$("archive").checked,autoRetry:$("auto-retry").checked,parallel:Number($("parallel").value),rateMbps:Number($("rate").value),...downloadDetails.read()}),
-  apply:options=>{
+const downloadProfiles = wireDownloadProfiles({
+  invoke,
+  notify: message,
+  read: () => ({
+    quality,
+    profile: $("profile").value,
+    container: $("container-select").value,
+    folderRule: $("folder-rule").value,
+    nameRule: $("name-rule").value,
+    playlist: $("playlist").checked,
+    splitChapters: $("split-chapters").checked,
+    subtitles: $("subtitles").checked,
+    sponsorblock: $("sponsorblock").checked,
+    archive: $("archive").checked,
+    autoRetry: $("auto-retry").checked,
+    parallel: Number($("parallel").value),
+    rateMbps: Number($("rate").value),
+    ...downloadDetails.read(),
+  }),
+  apply: options => {
     clearSelectedFormat();
-    for(const [key,id] of Object.entries({profile:'profile',container:'container-select',folderRule:'folder-rule',nameRule:'name-rule',parallel:'parallel',rateMbps:'rate'}))$(id).value=String(options[key]);
-    for(const [key,id] of Object.entries({playlist:'playlist',splitChapters:'split-chapters',subtitles:'subtitles',sponsorblock:'sponsorblock',archive:'archive',autoRetry:'auto-retry'}))$(id).checked=options[key];
-    $("playlist-items").value='';$("clip-enabled").checked=false;
+    for (const [key, id] of Object.entries({
+      profile: "profile",
+      container: "container-select",
+      folderRule: "folder-rule",
+      nameRule: "name-rule",
+      parallel: "parallel",
+      rateMbps: "rate",
+    }))
+      $(id).value = String(options[key]);
+    for (const [key, id] of Object.entries({
+      playlist: "playlist",
+      splitChapters: "split-chapters",
+      subtitles: "subtitles",
+      sponsorblock: "sponsorblock",
+      archive: "archive",
+      autoRetry: "auto-retry",
+    }))
+      $(id).checked = options[key];
+    $("playlist-items").value = "";
+    $("clip-enabled").checked = false;
     downloadDetails.load(options);
-    setQuality(options.quality);syncPlaylist();syncClip();syncModeButtons();syncOptionsSummary();
-  }
+    setQuality(options.quality);
+    syncPlaylist();
+    syncClip();
+    syncModeButtons();
+    syncOptionsSummary();
+  },
 });
-wireSettingsBackup({invoke, notify:message, read:() => ({parallel:Number($("parallel").value), options:{
-  folder:$("folder").value.trim(),quality,profile:$("profile").value,container:$("container-select").value,
-  playlist:$("playlist").checked,splitChapters:$("split-chapters").checked,subtitles:$("subtitles").checked,
-  sponsorblock:$("sponsorblock").checked,archive:$("archive").checked,rateMbps:Number($("rate").value),
-  folderRule:$("folder-rule").value,nameRule:$("name-rule").value,...downloadDetails.read(),
-}})});
+wireSettingsBackup({
+  invoke,
+  notify: message,
+  read: () => ({
+    parallel: Number($("parallel").value),
+    options: {
+      folder: $("folder").value.trim(),
+      quality,
+      profile: $("profile").value,
+      container: $("container-select").value,
+      playlist: $("playlist").checked,
+      splitChapters: $("split-chapters").checked,
+      subtitles: $("subtitles").checked,
+      sponsorblock: $("sponsorblock").checked,
+      archive: $("archive").checked,
+      rateMbps: Number($("rate").value),
+      folderRule: $("folder-rule").value,
+      nameRule: $("name-rule").value,
+      ...downloadDetails.read(),
+    },
+  }),
+});
 rebuildSettingsNavigation();
 function setDrawer(open) {
   $("download-drawer").hidden = !open;
   $("options-toggle").setAttribute("aria-expanded", String(open));
-  try { localStorage.setItem("deviload-drawer", open ? "open" : "closed"); } catch { /* storage unavailable */ }
+  try {
+    localStorage.setItem("deviload-drawer", open ? "open" : "closed");
+  } catch {
+    /* storage unavailable */
+  }
 }
 function syncOptionsSummary() {
   const folder = $("folder").value.trim();
   $("destination-quick").title = folder;
   $("destination-name").textContent = folder.split(/[\\/]/).filter(Boolean).pop() || t("Save folder");
   const name = folder.split(/[\\/]/).filter(Boolean).pop() || folder;
-  $("options-summary").textContent = [name, t("{count} at a time", {count:$("parallel").value})].filter(Boolean).join(" · ");
+  $("options-summary").textContent = [name, t("{count} at a time", { count: $("parallel").value })]
+    .filter(Boolean)
+    .join(" · ");
 }
 $("destination-quick").addEventListener("click", () => $("browse-folder").click());
 $("options-toggle").addEventListener("click", () => setDrawer($("download-drawer").hidden));
 $("download-drawer").addEventListener("change", event => {
-  if(event.target.closest('.saved-profiles'))return;
-  if(event.target.id==="playlist"&&$("playlist").checked)downloadDetails.clearStream();
-  if (event.target.id === "profile") { clearSelectedFormat(); return; }
-  if (["folder", "parallel"].includes(event.target.id)) { syncOptionsSummary(); return; }
+  if (event.target.closest(".saved-profiles")) return;
+  if (event.target.id === "playlist" && $("playlist").checked) downloadDetails.clearStream();
+  if (event.target.id === "profile") {
+    clearSelectedFormat();
+    return;
+  }
+  if (["folder", "parallel"].includes(event.target.id)) {
+    syncOptionsSummary();
+    return;
+  }
   $("profile").value = "custom";
   setQuality(quality);
 });
-$("container-select").addEventListener("change", () => { $("profile").value = "custom"; syncFormatHint(); });
-$("quality-select").addEventListener("change", event => { clearSelectedFormat(); $("profile").value = "custom"; setQuality(event.target.value); });
+$("container-select").addEventListener("change", () => {
+  $("profile").value = "custom";
+  syncFormatHint();
+});
+$("quality-select").addEventListener("change", event => {
+  clearSelectedFormat();
+  $("profile").value = "custom";
+  setQuality(event.target.value);
+});
 for (const button of document.querySelectorAll("[data-quality]")) {
-  button.addEventListener("click", () => { clearSelectedFormat(); $("profile").value = "custom"; setQuality(button.dataset.quality); });
+  button.addEventListener("click", () => {
+    clearSelectedFormat();
+    $("profile").value = "custom";
+    setQuality(button.dataset.quality);
+  });
 }
 function parseClipTime(value) {
   const parts = value.trim().split(":");
   if (parts.length < 1 || parts.length > 3 || parts.some(part => !/^\d+(?:\.\d+)?$/.test(part))) return NaN;
   const numbers = parts.map(Number);
   if (numbers.length > 1 && numbers.slice(1).some(number => number >= 60)) return NaN;
-  return numbers.reduce((total,number) => total * 60 + number, 0);
+  return numbers.reduce((total, number) => total * 60 + number, 0);
 }
 function syncClip() {
   const enabled = $("clip-enabled").checked;
-  for (const id of ["clip-start","clip-end","clip-output"]) $(id).disabled = !enabled;
-  if (enabled && $("playlist").checked) { $("playlist").checked = false; syncPlaylist(); syncModeButtons(); }
+  for (const id of ["clip-start", "clip-end", "clip-output"]) $(id).disabled = !enabled;
+  if (enabled && $("playlist").checked) {
+    $("playlist").checked = false;
+    syncPlaylist();
+    syncModeButtons();
+  }
 }
 $("clip-enabled").addEventListener("change", syncClip);
 $("playlist").addEventListener("change", () => {
-  if ($("playlist").checked && $("clip-enabled").checked) { $("clip-enabled").checked = false; syncClip(); }
+  if ($("playlist").checked && $("clip-enabled").checked) {
+    $("clip-enabled").checked = false;
+    syncClip();
+  }
 });
 function isAudioJob(job) {
   return job.status === "done" && /\.(mp3|flac|wav)$/i.test(job.file || "");
@@ -1142,7 +1836,10 @@ function audioStatus(value, error = false) {
   $("audio-status").classList.toggle("error", error);
 }
 async function openAudioTools(id) {
-  if (!invoke) { message(t("Audio tools are available in the Deviload app."), true); return; }
+  if (!invoke) {
+    message(t("Audio tools are available in the Deviload app."), true);
+    return;
+  }
   const job = jobs.find(item => item.id === id && isAudioJob(item));
   if (!job) return;
   currentAudioId = id;
@@ -1153,28 +1850,42 @@ async function openAudioTools(id) {
   $("audio-normalize").disabled = true;
   audioStatus(t("Reading tags…"));
   try {
-    const info = await invoke("audio_info", {id});
+    const info = await invoke("audio_info", { id });
     if (!dialog.open || currentAudioId !== id) return;
     for (const field of ["title", "artist", "album", "track"]) $("audio-" + field).value = info[field] || "";
-    audioStatus(info.duration ? t("Duration: {seconds} s", {seconds:info.duration.toFixed(1)}) : t("Duration: unknown"));
+    audioStatus(
+      info.duration
+        ? t("Duration: {seconds} s", { seconds: info.duration.toFixed(1) })
+        : t("Duration: unknown"),
+    );
     $("audio-save").disabled = false;
     $("audio-normalize").disabled = false;
-  } catch (error) { audioStatus(errorText(error), true); }
+  } catch (error) {
+    audioStatus(errorText(error), true);
+  }
 }
 $("audio-close").addEventListener("click", () => $("audio-dialog").close());
-$("audio-dialog").addEventListener("close", () => { currentAudioId = null; });
+$("audio-dialog").addEventListener("close", () => {
+  currentAudioId = null;
+});
 $("audio-save").addEventListener("click", async () => {
   if (currentAudioId === null) return;
   const id = currentAudioId;
   $("audio-save").disabled = true;
   audioStatus(t("Saving a new tagged copy…"));
-  const tags = Object.fromEntries(["title","artist","album","track"].map(key => [key,$("audio-" + key).value]));
+  const tags = Object.fromEntries(
+    ["title", "artist", "album", "track"].map(key => [key, $("audio-" + key).value]),
+  );
   try {
-    const file = await invoke("audio_save_tags", {id,tags});
-    if (currentAudioId === id) audioStatus(t("Done: {file} · next to the original", {file:file.split(/[\\/]/).pop()}));
+    const file = await invoke("audio_save_tags", { id, tags });
+    if (currentAudioId === id)
+      audioStatus(t("Done: {file} · next to the original", { file: file.split(/[\\/]/).pop() }));
     addNotice(t("Tags saved"), file.split(/[\\/]/).pop());
-  } catch (error) { if (currentAudioId === id) audioStatus(errorText(error), true); }
-  finally { if (currentAudioId === id) $("audio-save").disabled = false; }
+  } catch (error) {
+    if (currentAudioId === id) audioStatus(errorText(error), true);
+  } finally {
+    if (currentAudioId === id) $("audio-save").disabled = false;
+  }
 });
 $("audio-normalize").addEventListener("click", async () => {
   if (currentAudioId === null) return;
@@ -1182,51 +1893,113 @@ $("audio-normalize").addEventListener("click", async () => {
   $("audio-normalize").disabled = true;
   audioStatus(t("FFmpeg is normalizing the loudness…"));
   try {
-    const file = await invoke("audio_normalize", {id});
-    if (currentAudioId === id) audioStatus(t("Done: {file} · next to the original", {file:file.split(/[\\/]/).pop()}));
+    const file = await invoke("audio_normalize", { id });
+    if (currentAudioId === id)
+      audioStatus(t("Done: {file} · next to the original", { file: file.split(/[\\/]/).pop() }));
     addNotice(t("Loudness normalized"), file.split(/[\\/]/).pop());
-  } catch (error) { if (currentAudioId === id) audioStatus(errorText(error), true); }
-  finally { if (currentAudioId === id) $("audio-normalize").disabled = false; }
-});const cinema = createCinema({invoke,convertFileSrc,t,errorText,getJobs:()=>jobs,getIds:()=>cinemaIds,
-  getPositions:()=>cinemaPositions,persistPositions:()=>persistSection("positions",cinemaPositions),
-  onCut:id=>devilCut.open(id),onShare:id=>startShare(id),
-  onSearch:value=>cinemaHome.search(value),onCurrent:item=>cinemaHome.current(item),onClose:()=>cinemaHome.close(),
-  onActivity:active=>{brandMascot.setActivity(active?"cinema":$("share-dialog").open?"share":"idle");if(active)brandMascot.reactCinema();}});
-function openPlayer(id){cinema.openLocal(id);}
-wireCinemaControls({dialog:$("player-dialog"),video:$("player-video"),audio:$("player-audio"),invoke,t,onLanguageChange});
-$("cinema-open").addEventListener("click",()=>cinema.open());
-const cinemaHome=wireCinemaHome({invoke,t,errorText,player:cinema,onLibrary:()=>navigate("library"),onHome:()=>navigate("cinema")});
+  } catch (error) {
+    if (currentAudioId === id) audioStatus(errorText(error), true);
+  } finally {
+    if (currentAudioId === id) $("audio-normalize").disabled = false;
+  }
+});
+const cinema = createCinema({
+  invoke,
+  convertFileSrc,
+  t,
+  errorText,
+  getJobs: () => jobs,
+  getIds: () => cinemaIds,
+  getPositions: () => cinemaPositions,
+  persistPositions: () => persistSection("positions", cinemaPositions),
+  onCut: id => devilCut.open(id),
+  onShare: id => startShare(id),
+  onSearch: value => cinemaHome.search(value),
+  onCurrent: item => cinemaHome.current(item),
+  onClose: () => cinemaHome.close(),
+  onActivity: active => {
+    brandMascot.setActivity(active ? "cinema" : $("share-dialog").open ? "share" : "idle");
+    if (active) brandMascot.reactCinema();
+  },
+});
+function openPlayer(id) {
+  cinema.openLocal(id);
+}
+wireCinemaControls({
+  dialog: $("player-dialog"),
+  video: $("player-video"),
+  audio: $("player-audio"),
+  invoke,
+  t,
+  onLanguageChange,
+});
+$("cinema-open").addEventListener("click", () => cinema.open());
+const cinemaHome = wireCinemaHome({
+  invoke,
+  t,
+  errorText,
+  player: cinema,
+  onLibrary: () => navigate("library"),
+  onHome: () => navigate("cinema"),
+});
 // Devil Cut opens in its own window; this page lists its projects.
-const devilCut = createCutHome({t, tn, locale, node, getJobs:() => jobs, isVideoJob,
-  openEditor:request => invoke ? invoke("open_devil_cut", request).catch(error => message(errorText(error), true)) : message(t("Devil Cut works in the installed Deviload app."), true),
-  deleteProject:id => invoke("save_ui_project", {id, project:null})});
+const devilCut = createCutHome({
+  t,
+  tn,
+  locale,
+  node,
+  getJobs: () => jobs,
+  isVideoJob,
+  openEditor: request =>
+    invoke
+      ? invoke("open_devil_cut", request).catch(error => message(errorText(error), true))
+      : message(t("Devil Cut works in the installed Deviload app."), true),
+  deleteProject: id => invoke("save_ui_project", { id, project: null }),
+});
 $("open-editor").addEventListener("click", () => devilCut.open());
 window.__TAURI__?.event?.listen?.("devilcut-projects", async () => {
-  try { devilCut.setProjects((await invoke("ui_store")).projects || {}); } catch { /* keep the current list */ }
+  try {
+    devilCut.setProjects((await invoke("ui_store")).projects || {});
+  } catch {
+    /* keep the current list */
+  }
 });
 $("devilcut-tab").addEventListener("click", () => navigate("editor"));
 function openConverter(files = []) {
-  if (!invoke) { message(t("The converter works in the Deviload app."), true); return; }
-  invoke("open_converter", {files}).catch(error => message(errorText(error), true));
+  if (!invoke) {
+    message(t("The converter works in the Deviload app."), true);
+    return;
+  }
+  invoke("open_converter", { files }).catch(error => message(errorText(error), true));
 }
 $("converter-tab").addEventListener("click", () => openConverter());
 // "More" menus open upwards near the bottom of the window, and close on a click elsewhere or when another opens.
-document.addEventListener("toggle", event => {
-  const menu = event.target;
-  if (!menu.classList?.contains("library-more") || !menu.open) return;
-  document.querySelectorAll(".library-more[open]").forEach(other => { if (other !== menu) other.open = false; });
-  const list = menu.querySelector(".library-more-actions");
-  menu.classList.remove("up");
-  if (list && list.getBoundingClientRect().bottom > innerHeight - 8) menu.classList.add("up");
-}, true);
+document.addEventListener(
+  "toggle",
+  event => {
+    const menu = event.target;
+    if (!menu.classList?.contains("library-more") || !menu.open) return;
+    document.querySelectorAll(".library-more[open]").forEach(other => {
+      if (other !== menu) other.open = false;
+    });
+    const list = menu.querySelector(".library-more-actions");
+    menu.classList.remove("up");
+    if (list && list.getBoundingClientRect().bottom > innerHeight - 8) menu.classList.add("up");
+  },
+  true,
+);
 document.addEventListener("pointerdown", event => {
-  document.querySelectorAll(".library-more[open]").forEach(menu => { if (!menu.contains(event.target)) menu.open = false; });
+  document.querySelectorAll(".library-more[open]").forEach(menu => {
+    if (!menu.contains(event.target)) menu.open = false;
+  });
 });
 // The Jellyfin / Plex layout names files itself, so the file name choice does not apply.
 function syncNameRule() {
   const server = $("folder-rule").value === "server";
   $("name-rule").disabled = server;
-  $("name-rule").title = server ? t("Jellyfin and Plex need the channel, the date and the title in the name") : "";
+  $("name-rule").title = server
+    ? t("Jellyfin and Plex need the channel, the date and the title in the name")
+    : "";
 }
 $("folder-rule").addEventListener("change", syncNameRule);
 function showMediaServer(server = {}) {
@@ -1235,29 +2008,53 @@ function showMediaServer(server = {}) {
   $("server-token").value = server.token || "";
   for (const id of ["server-url", "server-token"]) $(id).disabled = !$("server-kind").value;
 }
-$("server-kind").addEventListener("change", () => { for (const id of ["server-url", "server-token"]) $(id).disabled = !$("server-kind").value; });
+$("server-kind").addEventListener("change", () => {
+  for (const id of ["server-url", "server-token"]) $(id).disabled = !$("server-kind").value;
+});
 $("server-save").addEventListener("click", async () => {
   const button = $("server-save");
-  const server = {kind:$("server-kind").value, url:$("server-url").value.trim(), token:$("server-token").value.trim()};
+  const server = {
+    kind: $("server-kind").value,
+    url: $("server-url").value.trim(),
+    token: $("server-token").value.trim(),
+  };
   button.disabled = true;
   try {
-    await invoke("set_media_server", {server});
-    if (!server.kind) { message(t("The media server is off.")); return; }
+    await invoke("set_media_server", { server });
+    if (!server.kind) {
+      message(t("The media server is off."));
+      return;
+    }
     await invoke("check_media_server");
     message(t("Connected: the server is looking for new files."));
-  } catch (error) { message(errorText(error), true); }
-  finally { button.disabled = false; }
+  } catch (error) {
+    message(errorText(error), true);
+  } finally {
+    button.disabled = false;
+  }
 });
 // Sleep or shut down after the downloads: Rust waits for the queue and counts down a minute.
 $("after-downloads").addEventListener("change", async () => {
   const action = $("after-downloads").value;
   try {
-    await invoke("set_after_downloads", {action});
+    await invoke("set_after_downloads", { action });
     const busy = jobs.some(job => ["running", "queued"].includes(job.status));
-    if (action !== "none") message(t(action === "sleep"
-      ? (busy ? "The computer goes to sleep when the current downloads finish." : "The computer goes to sleep after the next downloads.")
-      : (busy ? "The computer shuts down when the current downloads finish." : "The computer shuts down after the next downloads.")));
-  } catch (error) { $("after-downloads").value = "none"; message(errorText(error), true); }
+    if (action !== "none")
+      message(
+        t(
+          action === "sleep"
+            ? busy
+              ? "The computer goes to sleep when the current downloads finish."
+              : "The computer goes to sleep after the next downloads."
+            : busy
+              ? "The computer shuts down when the current downloads finish."
+              : "The computer shuts down after the next downloads.",
+        ),
+      );
+  } catch (error) {
+    $("after-downloads").value = "none";
+    message(errorText(error), true);
+  }
 });
 let powerTimer = 0;
 function closePower() {
@@ -1266,28 +2063,61 @@ function closePower() {
   if ($("power-dialog").open) $("power-dialog").close();
 }
 window.__TAURI__?.event?.listen?.("power-countdown", event => {
-  const {action, seconds} = event.payload;
+  const { action, seconds } = event.payload;
   let left = seconds;
-  const text = () => t(action === "sleep" ? "The computer goes to sleep in {seconds} s." : "The computer shuts down in {seconds} s.", {seconds:left});
+  const text = () =>
+    t(
+      action === "sleep"
+        ? "The computer goes to sleep in {seconds} s."
+        : "The computer shuts down in {seconds} s.",
+      { seconds: left },
+    );
   $("power-text").textContent = text();
   clearInterval(powerTimer);
-  powerTimer = setInterval(() => { left = Math.max(0, left - 1); $("power-text").textContent = text(); }, 1000);
+  powerTimer = setInterval(() => {
+    left = Math.max(0, left - 1);
+    $("power-text").textContent = text();
+  }, 1000);
   if (!$("power-dialog").open) $("power-dialog").showModal();
 });
-window.__TAURI__?.event?.listen?.("power-cancelled", () => { closePower(); message(t("Cancelled. The computer stays on.")); });
-window.__TAURI__?.event?.listen?.("power-simulated", () => { closePower(); message(t("Test copy: the computer was not turned off.")); });
-window.__TAURI__?.event?.listen?.("power-failed", event => { closePower(); message(errorText(event.payload), true); });
+window.__TAURI__?.event?.listen?.("power-cancelled", () => {
+  closePower();
+  message(t("Cancelled. The computer stays on."));
+});
+window.__TAURI__?.event?.listen?.("power-simulated", () => {
+  closePower();
+  message(t("Test copy: the computer was not turned off."));
+});
+window.__TAURI__?.event?.listen?.("power-failed", event => {
+  closePower();
+  message(errorText(event.payload), true);
+});
 $("power-cancel").addEventListener("click", () => invoke("cancel_power").catch(() => {}));
-$("power-dialog").addEventListener("cancel", event => { event.preventDefault(); invoke("cancel_power").catch(() => {}); });
-let inspectTimer = 0, inspectSerial = 0, inspectedInfo = null, inspectedOptionsKey="", inspectedAt=0, inspectPending=Promise.resolve(),pendingInspectAddress="",pendingInspectKey="";
+$("power-dialog").addEventListener("cancel", event => {
+  event.preventDefault();
+  invoke("cancel_power").catch(() => {});
+});
+let inspectTimer = 0,
+  inspectSerial = 0,
+  inspectedInfo = null,
+  inspectedOptionsKey = "",
+  inspectedAt = 0,
+  inspectPending = Promise.resolve(),
+  pendingInspectAddress = "",
+  pendingInspectKey = "";
 function linksIn(text) {
-  return text.trim().split(/\s+/).filter(item => /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i.test(item));
+  return text
+    .trim()
+    .split(/\s+/)
+    .filter(item => /^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i.test(item));
 }
 function renderLinkCount(count) {
   const card = $("inspect-card");
   const body = node("div", "inspect-body");
-  body.append(node("strong", "", t("{count} links ready", {count})),
-    node("span", "", t("They go to the queue with the format selected above.")));
+  body.append(
+    node("strong", "", t("{count} links ready", { count })),
+    node("span", "", t("They go to the queue with the format selected above.")),
+  );
   const icon = node("span", "inspect-glyph icon");
   icon.dataset.icon = "list";
   card.replaceChildren(icon, body);
@@ -1300,7 +2130,8 @@ function renderInspect(info, address) {
   card.dataset.state = "ready";
   if (info.thumbnail) {
     const picture = node("img", "inspect-cover");
-    picture.src = info.thumbnail; picture.alt = "";
+    picture.src = info.thumbnail;
+    picture.alt = "";
     picture.referrerPolicy = "no-referrer";
     card.append(picture);
   }
@@ -1309,19 +2140,28 @@ function renderInspect(info, address) {
   const parts = [info.channel];
   if (info.duration) {
     const seconds = Math.round(info.duration);
-    parts.push(Math.floor(seconds/60) + ":" + String(seconds%60).padStart(2,"0"));
+    parts.push(Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0"));
   }
-  if (info.itemCount) parts.push(t("Items: {count}", {count:info.itemCount}));
-  if (info.chapterCount) parts.push(t("Chapters: {count}", {count:info.chapterCount}));
+  if (info.itemCount) parts.push(t("Items: {count}", { count: info.itemCount }));
+  if (info.chapterCount) parts.push(t("Chapters: {count}", { count: info.chapterCount }));
   body.append(node("span", "", parts.filter(Boolean).join(" · ")));
-  const identity=mediaIdentity(address);
-  const downloaded=!info.isList&&identity&&jobs.find(job=>inLibrary(job)&&mediaIdentity(job.url)===identity);
-  if(downloaded){
-    const prior=node('div','inspect-existing');
-    prior.append(node('span','',t('Already in your library')));
-    const reveal=node('button','outline small',t('Show in folder'));reveal.type='button';
-    reveal.onclick=async()=>{try{await invoke('reveal_download',{id:downloaded.id});}catch(error){message(errorText(error),true);}};
-    prior.append(reveal);body.append(prior);
+  const identity = mediaIdentity(address);
+  const downloaded =
+    !info.isList && identity && jobs.find(job => inLibrary(job) && mediaIdentity(job.url) === identity);
+  if (downloaded) {
+    const prior = node("div", "inspect-existing");
+    prior.append(node("span", "", t("Already in your library")));
+    const reveal = node("button", "outline small", t("Show in folder"));
+    reveal.type = "button";
+    reveal.onclick = async () => {
+      try {
+        await invoke("reveal_download", { id: downloaded.id });
+      } catch (error) {
+        message(errorText(error), true);
+      }
+    };
+    prior.append(reveal);
+    body.append(prior);
   }
   card.append(body);
   if (info.isList) {
@@ -1333,26 +2173,57 @@ function renderInspect(info, address) {
   if (info.formats?.length) {
     const formats = node("details", "inspect-formats");
     formats.open = false;
-    formats.append(node("summary", "", t("Pick an exact stream ({count})", {count:info.formats.length})));
-    formats.append(node("p", "", t("Pick a video stream here. Choose its audio track and subtitles in Download settings.")));
+    formats.append(node("summary", "", t("Pick an exact stream ({count})", { count: info.formats.length })));
+    formats.append(
+      node(
+        "p",
+        "",
+        t("Pick a video stream here. Choose its audio track and subtitles in Download settings."),
+      ),
+    );
     const list = node("div", "inspect-format-list");
     for (const format of info.formats) {
       const button = node("button", "inspect-format" + (selectedFormat?.id === format.id ? " selected" : ""));
       button.type = "button";
-      const audioChoice=downloadDetails.read();
-      button.disabled=!!(format.hasVideo&&format.hasAudio&&(audioChoice.audioLanguage||audioChoice.audioFormatId));
+      const audioChoice = downloadDetails.read();
+      button.disabled = !!(
+        format.hasVideo &&
+        format.hasAudio &&
+        (audioChoice.audioLanguage || audioChoice.audioFormatId)
+      );
       const resolution = format.hasVideo ? (format.height ? format.height + "p" : t("Video")) : t("Audio");
-      const codecs = [format.videoCodec !== "none" ? format.videoCodec.split(".")[0] : "",
-        format.audioCodec !== "none" ? format.audioCodec.split(".")[0] : ""].filter(Boolean).join(" + ");
-      const size = format.bytes ? " · " + (format.approximate?"≈":"") + sizeText(format.bytes) : "";
-      button.textContent = resolution + (format.fps ? " · " + Math.round(format.fps) + " FPS" : "") +
-        " · " + format.extension.toUpperCase() + " · " + codecs + (format.language?" · "+format.language:"") + size;
-      button.title = t("Stream {id}", {id:format.id});
+      const codecs = [
+        format.videoCodec !== "none" ? format.videoCodec.split(".")[0] : "",
+        format.audioCodec !== "none" ? format.audioCodec.split(".")[0] : "",
+      ]
+        .filter(Boolean)
+        .join(" + ");
+      const size = format.bytes ? " · " + (format.approximate ? "≈" : "") + sizeText(format.bytes) : "";
+      button.textContent =
+        resolution +
+        (format.fps ? " · " + Math.round(format.fps) + " FPS" : "") +
+        " · " +
+        format.extension.toUpperCase() +
+        " · " +
+        codecs +
+        (format.language ? " · " + format.language : "") +
+        size;
+      button.title = t("Stream {id}", { id: format.id });
       button.addEventListener("click", () => {
-        selectedFormat = {url:address,id:format.id,hasAudio:format.hasAudio,hasVideo:format.hasVideo,bytes:format.bytes};
-        if (!format.hasVideo) {downloadDetails.selectStream(format);setQuality("mp3");}
-        else if (["mp3","flac","wav"].includes(quality)) setQuality("best");
-        document.querySelectorAll(".inspect-format").forEach(peer => peer.classList.toggle("selected", peer === button));
+        selectedFormat = {
+          url: address,
+          id: format.id,
+          hasAudio: format.hasAudio,
+          hasVideo: format.hasVideo,
+          bytes: format.bytes,
+        };
+        if (!format.hasVideo) {
+          downloadDetails.selectStream(format);
+          setQuality("mp3");
+        } else if (["mp3", "flac", "wav"].includes(quality)) setQuality("best");
+        document
+          .querySelectorAll(".inspect-format")
+          .forEach(peer => peer.classList.toggle("selected", peer === button));
         syncFormatHint();
       });
       list.append(button);
@@ -1365,51 +2236,108 @@ function renderInspect(info, address) {
 async function inspectLink(address) {
   if (!invoke) return;
   let requestedKey;
-  try{requestedKey=inspectionKey(buildDownloadRequest().options);}catch{return;}
-  if(pendingInspectAddress===address&&pendingInspectKey===requestedKey)return inspectPending;
-  const serial = ++inspectSerial;pendingInspectAddress=address;pendingInspectKey=requestedKey;
-  const work=inspectPending.catch(()=>{}).then(async()=>{
-    if(serial!==inspectSerial)return;
-    const card=$("inspect-card"),loading=node("div","inspect-loading");
-    const indicator=node("span","download-loading-indicator");indicator.setAttribute("aria-hidden","true");
-    loading.append(indicator,node("span","",t("Loading the preview…")));
-    card.replaceChildren(loading);card.dataset.state="loading";card.hidden=false;
-    try{
-      const options=buildDownloadRequest().options,key=inspectionKey(options);
-      const info=await invoke("inspect_media",{address,options});
-      if(serial!==inspectSerial)return;
-      inspectedAddress=address;inspectedInfo=info;inspectedOptionsKey=key;inspectedAt=Date.now();
-      downloadDetails.update(info,address);renderInspect(info,address);
-    }catch(error){
-      if(serial!==inspectSerial)return;
-      inspectedOptionsKey="";inspectedInfo=null;
-      card.dataset.state="error";card.replaceChildren(node("p","inspect-error",t("No preview for this link: {error}",{error:errorText(error)})));
+  try {
+    requestedKey = inspectionKey(buildDownloadRequest().options);
+  } catch {
+    return;
+  }
+  if (pendingInspectAddress === address && pendingInspectKey === requestedKey) return inspectPending;
+  const serial = ++inspectSerial;
+  pendingInspectAddress = address;
+  pendingInspectKey = requestedKey;
+  const work = inspectPending
+    .catch(() => {})
+    .then(async () => {
+      if (serial !== inspectSerial) return;
+      const card = $("inspect-card"),
+        loading = node("div", "inspect-loading");
+      const indicator = node("span", "download-loading-indicator");
+      indicator.setAttribute("aria-hidden", "true");
+      loading.append(indicator, node("span", "", t("Loading the preview…")));
+      card.replaceChildren(loading);
+      card.dataset.state = "loading";
+      card.hidden = false;
+      try {
+        const options = buildDownloadRequest().options,
+          key = inspectionKey(options);
+        const info = await invoke("inspect_media", { address, options });
+        if (serial !== inspectSerial) return;
+        inspectedAddress = address;
+        inspectedInfo = info;
+        inspectedOptionsKey = key;
+        inspectedAt = Date.now();
+        downloadDetails.update(info, address);
+        renderInspect(info, address);
+      } catch (error) {
+        if (serial !== inspectSerial) return;
+        inspectedOptionsKey = "";
+        inspectedInfo = null;
+        card.dataset.state = "error";
+        card.replaceChildren(
+          node("p", "inspect-error", t("No preview for this link: {error}", { error: errorText(error) })),
+        );
+      }
+    });
+  const nextPending = work.finally(() => {
+    if (inspectPending === nextPending) {
+      pendingInspectAddress = "";
+      pendingInspectKey = "";
     }
   });
-  const nextPending=work.finally(()=>{if(inspectPending===nextPending){pendingInspectAddress="";pendingInspectKey="";}});
-  inspectPending=nextPending;return nextPending;
+  inspectPending = nextPending;
+  return nextPending;
 }
 linkField.addEventListener("input", () => {
   syncLinkTools();
   clearTimeout(inspectTimer);
   const links = linksIn(linkField.value);
-  if(links.length!==1||links[0]!==inspectedAddress){downloadDetails.clearLink();inspectedOptionsKey="";inspectedInfo=null;inspectedAddress="";pendingInspectAddress="";pendingInspectKey="";}
-  if (selectedFormat && (links.length !== 1 || links[0] !== selectedFormat.url)) { selectedFormat = null; syncFormatHint(); }
+  if (links.length !== 1 || links[0] !== inspectedAddress) {
+    downloadDetails.clearLink();
+    inspectedOptionsKey = "";
+    inspectedInfo = null;
+    inspectedAddress = "";
+    pendingInspectAddress = "";
+    pendingInspectKey = "";
+  }
+  if (selectedFormat && (links.length !== 1 || links[0] !== selectedFormat.url)) {
+    selectedFormat = null;
+    syncFormatHint();
+  }
   const card = $("inspect-card");
-  if (!links.length) { inspectSerial++; inspectedAddress = ""; inspectedInfo = null; card.hidden = true; card.replaceChildren(); return; }
-  if (links.length > 1) { inspectSerial++; inspectedAddress = ""; inspectedInfo = null; renderLinkCount(links.length); return; }
+  if (!links.length) {
+    inspectSerial++;
+    inspectedAddress = "";
+    inspectedInfo = null;
+    card.hidden = true;
+    card.replaceChildren();
+    return;
+  }
+  if (links.length > 1) {
+    inspectSerial++;
+    inspectedAddress = "";
+    inspectedInfo = null;
+    renderLinkCount(links.length);
+    return;
+  }
   if (links[0] === inspectedAddress) return;
   inspectTimer = setTimeout(() => inspectLink(links[0]), 450);
 });
 syncLinkTools();
 $("paste").addEventListener("click", async () => {
   try {
-    const readText = window.__TAURI__?.clipboardManager?.readText || navigator.clipboard?.readText?.bind(navigator.clipboard);
+    const readText =
+      window.__TAURI__?.clipboardManager?.readText ||
+      navigator.clipboard?.readText?.bind(navigator.clipboard);
     if (!readText) throw new Error(t("The clipboard is unavailable"));
-    const text = (await readText() || "").trim();
-    if (!text) { message(t("The clipboard is empty.")); return; }
+    const text = ((await readText()) || "").trim();
+    if (!text) {
+      message(t("The clipboard is empty."));
+      return;
+    }
     addLinks(text);
-  } catch { message(t("Could not read the clipboard. Paste the link with Ctrl+V / ⌘V."), true); }
+  } catch {
+    message(t("Could not read the clipboard. Paste the link with Ctrl+V / ⌘V."), true);
+  }
 });
 $("open-youtube-view").addEventListener("click", async () => {
   if (accountView().action === "accounts") {
@@ -1417,14 +2345,26 @@ $("open-youtube-view").addEventListener("click", async () => {
     $("cookies-mode").focus();
     return;
   }
-  if (!signedInPath) { signIn(); return; }
-  try { await invoke("open_youtube", {signIn:false}); }
-  catch (error) { message(errorText(error), true); }
+  if (!signedInPath) {
+    signIn();
+    return;
+  }
+  try {
+    await invoke("open_youtube", { signIn: false });
+  } catch (error) {
+    message(errorText(error), true);
+  }
 });
 $("open-folder").addEventListener("click", async () => {
-  if (!invoke) { message(t("The folder opens in the installed Deviload app."), true); return; }
-  try { await invoke("open_downloads", {folder:$("folder").value.trim() || null}); }
-  catch (error) { message(errorText(error), true); }
+  if (!invoke) {
+    message(t("The folder opens in the installed Deviload app."), true);
+    return;
+  }
+  try {
+    await invoke("open_downloads", { folder: $("folder").value.trim() || null });
+  } catch (error) {
+    message(errorText(error), true);
+  }
 });
 function changeStatus(row, status) {
   const previous = row.dataset.status;
@@ -1436,19 +2376,27 @@ function changeStatus(row, status) {
   }
 }
 const queueSelection = wireQueueSelection({
-  root:$("queue-title").closest("section"), rows:$("jobs"), t, getJobs:() => jobs,
-  execute:async (job, action) => {
+  root: $("queue-title").closest("section"),
+  rows: $("jobs"),
+  t,
+  getJobs: () => jobs,
+  execute: async (job, action) => {
     if (!invoke) throw new Error(t("Open Deviload to manage downloads."));
-    if (action === "phone") await invoke("phone_send", {id:job.id, page:phonePageText()});
-    else await invoke("change_job", {id:job.id, action, auth:action === "retry" ? retryAuth(job) : null});
+    if (action === "phone") await invoke("phone_send", { id: job.id, page: phonePageText() });
+    else await invoke("change_job", { id: job.id, action, auth: action === "retry" ? retryAuth(job) : null });
   },
-  refresh, report:error => message(errorText(error), true), afterPhone:() => openPhone(),
+  refresh,
+  report: error => message(errorText(error), true),
+  afterPhone: () => openPhone(),
 });
 function retryAuth(job) {
   const mode = $("cookies-mode").value;
-  return {...job.options, cookiesAccount:mode === "account",
-    cookies:mode === "file" ? $("cookies").value.trim() : "",
-    cookiesBrowser:["chrome","edge","firefox","brave","safari"].includes(mode) ? mode : ""};
+  return {
+    ...job.options,
+    cookiesAccount: mode === "account",
+    cookies: mode === "file" ? $("cookies").value.trim() : "",
+    cookiesBrowser: ["chrome", "edge", "firefox", "brave", "safari"].includes(mode) ? mode : "",
+  };
 }
 function createCard(job) {
   const row = node("article", "job");
@@ -1462,7 +2410,10 @@ function createCard(job) {
     img.alt = "";
     img.loading = "lazy";
     img.referrerPolicy = "no-referrer";
-    img.addEventListener("error", () => { cover.classList.remove("has-preview"); cover.classList.add("no-preview"); });
+    img.addEventListener("error", () => {
+      cover.classList.remove("has-preview");
+      cover.classList.add("no-preview");
+    });
     cover.append(img);
   } else cover.classList.add("no-preview");
   const icon = node("div", "cover-orb media-pulse");
@@ -1481,7 +2432,12 @@ function createCard(job) {
 }
 function addAction(controls, label, className, handler, title = "", iconName = "") {
   const button = node("button", className, label);
-  if (iconName) { const icon = node("span", "icon"); icon.dataset.icon = iconName; icon.setAttribute("aria-hidden", "true"); button.prepend(icon); }
+  if (iconName) {
+    const icon = node("span", "icon");
+    icon.dataset.icon = iconName;
+    icon.setAttribute("aria-hidden", "true");
+    button.prepend(icon);
+  }
   button.type = "button";
   if (title) button.title = title;
   button.addEventListener("click", handler);
@@ -1489,18 +2445,36 @@ function addAction(controls, label, className, handler, title = "", iconName = "
   return button;
 }
 function addJobAction(controls, job, action) {
-  const title = {retry:"Retry",cancel:"Cancel",pause:"Pause",resume:"Resume",stop:"Stop recording"}[action];
-  const icon = {retry:"arrow-clockwise",cancel:"x-circle",pause:"pause",resume:"play",stop:"stop"}[action];
-  addAction(controls, t(title), "quiet", async event => {
-    const button = event.currentTarget;
-    button.disabled = true;
-    try {
-      const auth = action === "retry" ? retryAuth(job) : null;
-      await invoke("change_job", {id:job.id,action,auth}); await refresh();
-    }
-    catch (error) { message(errorText(error), true); }
-    finally { button.disabled = false; }
-  }, "", icon);
+  const title = {
+    retry: "Retry",
+    cancel: "Cancel",
+    pause: "Pause",
+    resume: "Resume",
+    stop: "Stop recording",
+  }[action];
+  const icon = { retry: "arrow-clockwise", cancel: "x-circle", pause: "pause", resume: "play", stop: "stop" }[
+    action
+  ];
+  addAction(
+    controls,
+    t(title),
+    "quiet",
+    async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        const auth = action === "retry" ? retryAuth(job) : null;
+        await invoke("change_job", { id: job.id, action, auth });
+        await refresh();
+      } catch (error) {
+        message(errorText(error), true);
+      } finally {
+        button.disabled = false;
+      }
+    },
+    "",
+    icon,
+  );
 }
 function recordingLimitSelect(job) {
   const limit = node("select", "recording-limit");
@@ -1509,8 +2483,12 @@ function recordingLimitSelect(job) {
   for (const seconds of recordingLimits) limit.add(new Option(recordingLimitText(seconds), String(seconds)));
   limit.value = String(job.liveLimit || 0);
   limit.addEventListener("change", async () => {
-    try { await invoke("set_recording_limit", {id:job.id, seconds:Number(limit.value)}); await refresh(); }
-    catch (error) { message(errorText(error), true); }
+    try {
+      await invoke("set_recording_limit", { id: job.id, seconds: Number(limit.value) });
+      await refresh();
+    } catch (error) {
+      message(errorText(error), true);
+    }
   });
   return limit;
 }
@@ -1520,7 +2498,8 @@ function syncRecordingLimit(controls, job) {
 }
 function showJobLog(id) {
   logJobId = id;
-  $("log-content").textContent = jobs.find(item => item.id === id)?.log.join("\n") || t("The log is empty so far");
+  $("log-content").textContent =
+    jobs.find(item => item.id === id)?.log.join("\n") || t("The log is empty so far");
   $("log-dialog").showModal();
 }
 function showReaction(kind, detail, jobId) {
@@ -1528,11 +2507,11 @@ function showReaction(kind, detail, jobId) {
   clearTimeout(reactionTimer);
   overlay.hidden = false;
   overlay.dataset.kind = kind;
-  if (kind === 'success') {
+  if (kind === "success") {
     requestAnimationFrame(() => {
       const row = document.querySelector('[data-id="' + jobId + '"]');
       const live = $("live-download");
-      const target = live.dataset.complete === 'true' ? live : row;
+      const target = live.dataset.complete === "true" ? live : row;
       completionScene.play(target);
     });
   } else completionScene.stop();
@@ -1542,7 +2521,10 @@ function showReaction(kind, detail, jobId) {
   overlay.classList.remove("reaction-appear");
   void overlay.offsetWidth;
   overlay.classList.add("reaction-appear");
-  reactionTimer = setTimeout(() => { overlay.hidden = true; delete document.body.dataset.reaction; }, 3200);
+  reactionTimer = setTimeout(() => {
+    overlay.hidden = true;
+    delete document.body.dataset.reaction;
+  }, 3200);
 }
 
 function render(data) {
@@ -1552,28 +2534,44 @@ function render(data) {
   if (data.options) syncSavedAuthSource(data.options);
   // A task being removed is hidden at once; it is really removed only once its Undo is gone.
   jobs = (data.jobs || []).filter(job => !pendingRemovals.has(job.id));
-  if (noticeReady) for (const job of jobs) {
-    const old = knownJobStates.get(job.id);
-    if (old && old !== job.status && job.status === "running") { brandMascot.setSource(job.url); brandMascot.reactStart(); }
-    if (old !== job.status && ["done","error"].includes(job.status)) {
-      const detail = job.status === "error" ? t(diagnoseError(job.log, signInSite(job.url) ? siteSessions.includes(signInSite(job.url).key) : Boolean(signedInPath), job.url).title) : (job.file.split(/[\\/]/).pop() || job.url);
-      const title = t(job.status === "done" ? "Download ready" : "Download failed");
-      addNotice(title, detail);
-      systemNotice("Deviload · " + title, detail);
-      brandMascot.setSource(job.url);
-      if (job.status === "done") {
-        brandMascot.celebrate();
-        if (liveFire.jobId === job.id) {
-          liveFire.complete(job.id);
-          $("live-percent").textContent = "100%";
-          $("live-more").textContent = t("Download ready");
-          $("live-download").querySelector(".track").setAttribute("aria-valuetext", t("Download ready"));
-        }
-      } else brandMascot.fail();
-      showReaction(job.status === "done" ? "success" : "error", detail, job.id);
+  if (noticeReady)
+    for (const job of jobs) {
+      const old = knownJobStates.get(job.id);
+      if (old && old !== job.status && job.status === "running") {
+        brandMascot.setSource(job.url);
+        brandMascot.reactStart();
+      }
+      if (old !== job.status && ["done", "error"].includes(job.status)) {
+        const detail =
+          job.status === "error"
+            ? t(
+                diagnoseError(
+                  job.log,
+                  signInSite(job.url)
+                    ? siteSessions.includes(signInSite(job.url).key)
+                    : Boolean(signedInPath),
+                  job.url,
+                ).title,
+              )
+            : job.file.split(/[\\/]/).pop() || job.url;
+        const title = t(job.status === "done" ? "Download ready" : "Download failed");
+        addNotice(title, detail);
+        systemNotice("Deviload · " + title, detail);
+        brandMascot.setSource(job.url);
+        if (job.status === "done") {
+          brandMascot.celebrate();
+          if (liveFire.jobId === job.id) {
+            liveFire.complete(job.id);
+            $("live-percent").textContent = "100%";
+            $("live-more").textContent = t("Download ready");
+            $("live-download").querySelector(".track").setAttribute("aria-valuetext", t("Download ready"));
+          }
+        } else brandMascot.fail();
+        showReaction(job.status === "done" ? "success" : "error", detail, job.id);
+      }
     }
-  }
-  knownJobStates = new Map(jobs.map(job => [job.id,job.status])); noticeReady = true;
+  knownJobStates = new Map(jobs.map(job => [job.id, job.status]));
+  noticeReady = true;
   const state = orbState(jobs);
   syncTray(state, jobs.filter(job => job.status === "running").length);
   heroOrb.setState(state);
@@ -1591,21 +2589,35 @@ function render(data) {
   $("library-count").textContent = jobs.filter(inLibrary).length;
   $("issue-count").textContent = visibleJobs(jobs, "issues", "").length;
   $("stat-total").textContent = totals.total;
-  $("stat-active").textContent = jobs.filter(job => ["queued","running","cancelling","pausing"].includes(job.status)).length;
+  $("stat-active").textContent = jobs.filter(job =>
+    ["queued", "running", "cancelling", "pausing"].includes(job.status),
+  ).length;
   $("stat-done").textContent = totals.done;
-  $("counts").textContent = t("{active} active · {done} finished", {active:totals.active, done:totals.done});
+  $("counts").textContent = t("{active} active · {done} finished", {
+    active: totals.active,
+    done: totals.done,
+  });
   $("queue-title").textContent = t(filters[currentFilter][1]);
   const visible = orderDownloads(visibleJobs(jobs, currentFilter, search));
   $("empty").hidden = visible.length > 0;
-  const emptyTitle = search ? "Nothing found" :
-    currentFilter === "active" ? "No current tasks" :
-    currentFilter === "scheduled" ? "No scheduled tasks" :
-    currentFilter === "issues" ? "Everything is on track" : "Your media will appear here";
+  const emptyTitle = search
+    ? "Nothing found"
+    : currentFilter === "active"
+      ? "No current tasks"
+      : currentFilter === "scheduled"
+        ? "No scheduled tasks"
+        : currentFilter === "issues"
+          ? "Everything is on track"
+          : "Your media will appear here";
   $("empty").querySelector("h3").textContent = t(emptyTitle);
   setPose($("empty-mascot"), search ? "look" : currentFilter === "issues" ? "victory" : "front");
-  $("empty").querySelector("p").textContent = t(search ? "Try a different search query." :
-    currentFilter === "all" ? "Add a link above and the first card appears here." :
-    "Cards appear here when task states change.");
+  $("empty").querySelector("p").textContent = t(
+    search
+      ? "Try a different search query."
+      : currentFilter === "all"
+        ? "Add a link above and the first card appears here."
+        : "Cards appear here when task states change.",
+  );
   const existing = new Map([...$("jobs").children].map(row => [Number(row.dataset.id), row]));
   let slot = 0;
   for (const job of visible) {
@@ -1627,56 +2639,146 @@ function render(data) {
     const title = row.querySelector(".job-title");
     title.textContent = name;
     title.title = shown || job.url;
-    try { row.querySelector(".job-source").textContent = new URL(job.url).hostname.replace(/^www\./, "") + " · " + job.url; }
-    catch { row.querySelector(".job-source").textContent = job.url; }
+    try {
+      row.querySelector(".job-source").textContent =
+        new URL(job.url).hostname.replace(/^www\./, "") + " · " + job.url;
+    } catch {
+      row.querySelector(".job-source").textContent = job.url;
+    }
     const meta = row.querySelector(".job-meta");
-    const nextRun = job.status === "queued" && job.scheduledAt && job.scheduledAt * 1000 > Date.now()
-      ? t(job.retryAttempts ? "Retry {attempt}/2 · {time}" : "Starts · {time}", {attempt:job.retryAttempts,
-        time:new Date(job.scheduledAt * 1000).toLocaleString(locale(), {day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})})
-      : null;
+    const nextRun =
+      job.status === "queued" && job.scheduledAt && job.scheduledAt * 1000 > Date.now()
+        ? t(job.retryAttempts ? "Retry {attempt}/2 · {time}" : "Starts · {time}", {
+            attempt: job.retryAttempts,
+            time: new Date(job.scheduledAt * 1000).toLocaleString(locale(), {
+              day: "2-digit",
+              month: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          })
+        : null;
     const repeatText = nextRun && job.repeatAt ? " · " + t("every day") : "";
-    const cooldown = hostCooldown(job,rateLimits);
-    const wait = cooldown ? t("Waiting for {site} · retry in {minutes} min",{site:cooldown.host,minutes:cooldown.minutes}) : "";
-    meta.replaceChildren(node("span", "", job.options.downloadEngine === "gallery-dl" ? t("Gallery") : job.options.quality.toUpperCase()),
-      node("span", recording && !job.stopRequested ? "recording" : "", nextRun && nextRun + repeatText || wait || recording && recordingText(job) || (job.status === "running" ? (isProcessing(job) ? processingLabel(job) : [Math.round(job.percent) + "%", speedText(job.speed)].filter(Boolean).join(" · ")) : statusLabel(job.status))));
+    const cooldown = hostCooldown(job, rateLimits);
+    const wait = cooldown
+      ? t("Waiting for {site} · retry in {minutes} min", { site: cooldown.host, minutes: cooldown.minutes })
+      : "";
+    meta.replaceChildren(
+      node(
+        "span",
+        "",
+        job.options.downloadEngine === "gallery-dl" ? t("Gallery") : job.options.quality.toUpperCase(),
+      ),
+      node(
+        "span",
+        recording && !job.stopRequested ? "recording" : "",
+        (nextRun && nextRun + repeatText) ||
+          wait ||
+          (recording && recordingText(job)) ||
+          (job.status === "running"
+            ? isProcessing(job)
+              ? processingLabel(job)
+              : [Math.round(job.percent) + "%", speedText(job.speed)].filter(Boolean).join(" · ")
+            : statusLabel(job.status)),
+      ),
+    );
     let reveal = row.querySelector(".job-reveal");
     if (job.status === "done" && job.file) {
       if (!reveal) {
-        reveal = addAction(row.querySelector(".job-status-row"), t("Show in folder"), "quiet small job-reveal", async () => {
-          try { await invoke("reveal_download", {id:job.id}); }
-          catch (error) { message(errorText(error), true); }
-        }, "", "folder-open");
+        reveal = addAction(
+          row.querySelector(".job-status-row"),
+          t("Show in folder"),
+          "quiet small job-reveal",
+          async () => {
+            try {
+              await invoke("reveal_download", { id: job.id });
+            } catch (error) {
+              message(errorText(error), true);
+            }
+          },
+          "",
+          "folder-open",
+        );
       }
       reveal.title = job.file;
     } else reveal?.remove();
-    const issue = job.status === "error" ? diagnoseError(job.log, signInSite(job.url) ? siteSessions.includes(signInSite(job.url).key) : Boolean(signedInPath), job.url) : null;
+    const issue =
+      job.status === "error"
+        ? diagnoseError(
+            job.log,
+            signInSite(job.url) ? siteSessions.includes(signInSite(job.url).key) : Boolean(signedInPath),
+            job.url,
+          )
+        : null;
     // yt-dlp skips what the download archive lists, even when the file was deleted since.
     const skipped = ["done", "skipped"].includes(job.status) && job.archived > 0 ? job.archived : 0;
     // After a failure Deviload may be trying a fix by itself.
     const healing = ["queued", "running"].includes(job.status) && job.healed?.length ? job.healed.at(-1) : "";
     const help = row.querySelector(".job-help");
-    const helpKey = issue ? issue.title + issue.message + language() : skipped ? "archived" + skipped + (job.file ? "+" : "") + language()
-      : healing ? "healing" + healing + language() : "";
+    const helpKey = issue
+      ? issue.title + issue.message + language()
+      : skipped
+        ? "archived" + skipped + (job.file ? "+" : "") + language()
+        : healing
+          ? "healing" + healing + language()
+          : "";
     if (help.dataset.key !== helpKey) {
       help.dataset.key = helpKey;
       const text = node("div", "job-help-text");
-      if (issue) text.append(node("strong", "", t(issue.title)), node("span", "", t(issue.message, issue.params)));
-      else if (skipped) text.append(node("strong", "", t(job.file ? "Some items were downloaded before" : "Nothing new: downloaded before")),
-        node("span", "", tn("{count} item was skipped because it was downloaded before, even if its file was deleted since. “Download again” brings back what is missing.",
-          "{count} items were skipped because they were downloaded before, even if their files were deleted since. “Download again” brings back what is missing.", skipped)));
-      else if (healing) text.append(node("strong", "", t("Deviload is fixing it")), node("span", "", t({
-        "sign-in":"YouTube asked to sign in, so the download runs again with your account.",
-        format:"The chosen stream is gone, so the download runs again with the usual quality choice.",
-        update:"yt-dlp looked outdated. Deviload updates it when the current downloads finish, then tries again.",
-        wait:"The site asked to slow down. The download tries again in 10 minutes.",
-      }[healing] || "The download runs again.")));
-      help.replaceChildren(...(issue ? [mascotSpot("error", "help-mascot"), text] : skipped || healing ? [mascotSpot(healing ? "working" : "look", "help-mascot"), text] : []));
+      if (issue)
+        text.append(node("strong", "", t(issue.title)), node("span", "", t(issue.message, issue.params)));
+      else if (skipped)
+        text.append(
+          node(
+            "strong",
+            "",
+            t(job.file ? "Some items were downloaded before" : "Nothing new: downloaded before"),
+          ),
+          node(
+            "span",
+            "",
+            tn(
+              "{count} item was skipped because it was downloaded before, even if its file was deleted since. “Download again” brings back what is missing.",
+              "{count} items were skipped because they were downloaded before, even if their files were deleted since. “Download again” brings back what is missing.",
+              skipped,
+            ),
+          ),
+        );
+      else if (healing)
+        text.append(
+          node("strong", "", t("Deviload is fixing it")),
+          node(
+            "span",
+            "",
+            t(
+              {
+                "sign-in": "YouTube asked to sign in, so the download runs again with your account.",
+                format:
+                  "The chosen stream is gone, so the download runs again with the usual quality choice.",
+                update:
+                  "yt-dlp looked outdated. Deviload updates it when the current downloads finish, then tries again.",
+                wait: "The site asked to slow down. The download tries again in 10 minutes.",
+              }[healing] || "The download runs again.",
+            ),
+          ),
+        );
+      help.replaceChildren(
+        ...(issue
+          ? [mascotSpot("error", "help-mascot"), text]
+          : skipped || healing
+            ? [mascotSpot(healing ? "working" : "look", "help-mascot"), text]
+            : []),
+      );
     }
     help.hidden = !issue && !skipped && !healing;
     const controls = row.querySelector(".job-controls");
     // A live recording has one way to end: stop and keep what was recorded.
     const jobActions = recording ? (job.stopRequested ? [] : ["stop"]) : actions(job.status);
-    const key = jobActions.join(",") + (skipped ? "|again" : "") + (issue?.action || "") + (isVideoJob(job) ? "|video" : job.status === "done" && job.file ? "|file" : "");
+    const key =
+      jobActions.join(",") +
+      (skipped ? "|again" : "") +
+      (issue?.action || "") +
+      (isVideoJob(job) ? "|video" : job.status === "done" && job.file ? "|file" : "");
     if (controls.dataset.actions !== key) {
       controls.dataset.actions = key;
       controls.replaceChildren();
@@ -1686,52 +2788,152 @@ function render(data) {
       more.append(node("summary", "", t("More")), menu);
       for (const action of jobActions) addJobAction(controls, job, action);
       if (jobActions.includes("stop")) controls.append(recordingLimitSelect(job));
-      if (["queued","paused"].includes(job.status)) {
-        for (const [direction,title,icon] of [["up","Move up","arrow-up"],["down","Move down","arrow-down"]]) {
-          addAction(menu, t(title), "quiet", async event => {
-            const button = event.currentTarget;
-            button.disabled = true;
-            try { await invoke("move_job", {id:job.id,direction}); await refresh(); }
-            catch (error) { message(errorText(error), true); }
-            finally { button.disabled = false; }
-          }, "", icon);
+      if (["queued", "paused"].includes(job.status)) {
+        for (const [direction, title, icon] of [
+          ["up", "Move up", "arrow-up"],
+          ["down", "Move down", "arrow-down"],
+        ]) {
+          addAction(
+            menu,
+            t(title),
+            "quiet",
+            async event => {
+              const button = event.currentTarget;
+              button.disabled = true;
+              try {
+                await invoke("move_job", { id: job.id, direction });
+                await refresh();
+              } catch (error) {
+                message(errorText(error), true);
+              } finally {
+                button.disabled = false;
+              }
+            },
+            "",
+            icon,
+          );
         }
       }
-      if (issue?.action === "login") addAction(controls, t(signedInPath ? "Sign in again" : "Sign in to YouTube"), "quiet fix-action", signIn, "", "play");
-      if (issue?.action === "update") addAction(controls, t("Update yt-dlp"), "quiet fix-action", event => updateYtdlp(event.currentTarget), "", "arrow-clockwise");
-      if (issue?.action === "proxy") addAction(controls, t("Proxy settings"), "quiet fix-action", openProxySettings, "", "gear");
-      if (issue?.action === "cookies") addAction(controls, t("Cookies settings"), "quiet fix-action", () => {
-        showSettingsFor("cookies-mode");
-        $("cookies-mode").scrollIntoView({block:"center"});
-        $("cookies-mode").focus();
-      }, "", "gear");
-      if (issue?.action === "site-login") addAction(controls, t("Sign in to {site}", issue.params), "quiet fix-action", () => siteSignIn(issue.site, job.id), "", "play");
+      if (issue?.action === "login")
+        addAction(
+          controls,
+          t(signedInPath ? "Sign in again" : "Sign in to YouTube"),
+          "quiet fix-action",
+          signIn,
+          "",
+          "play",
+        );
+      if (issue?.action === "update")
+        addAction(
+          controls,
+          t("Update yt-dlp"),
+          "quiet fix-action",
+          event => updateYtdlp(event.currentTarget),
+          "",
+          "arrow-clockwise",
+        );
+      if (issue?.action === "proxy")
+        addAction(controls, t("Proxy settings"), "quiet fix-action", openProxySettings, "", "gear");
+      if (issue?.action === "cookies")
+        addAction(
+          controls,
+          t("Cookies settings"),
+          "quiet fix-action",
+          () => {
+            showSettingsFor("cookies-mode");
+            $("cookies-mode").scrollIntoView({ block: "center" });
+            $("cookies-mode").focus();
+          },
+          "",
+          "gear",
+        );
+      if (issue?.action === "site-login")
+        addAction(
+          controls,
+          t("Sign in to {site}", issue.params),
+          "quiet fix-action",
+          () => siteSignIn(issue.site, job.id),
+          "",
+          "play",
+        );
       if (job.status === "done" && job.file) {
-        addAction(controls, t("Watch"), "quiet", () => openPlayer(job.id), t("Play the finished file in Deviload."), "play");
-        addAction(controls, t("To phone"), "transfer-button", () => startShare(job.id), t("Send this file to a phone with a QR code."), "phone-transfer");
-        if (isAudioJob(job)) addAction(menu, t("Audio"), "quiet", () => openAudioTools(job.id), t("Edit tags or normalize loudness."), "music-notes");
-        if (isVideoJob(job)) addAction(menu, "Devil Cut", "quiet", () => devilCut.open(job.id), t("Trim the video or make a GIF locally."), "scissors");
+        addAction(
+          controls,
+          t("Watch"),
+          "quiet",
+          () => openPlayer(job.id),
+          t("Play the finished file in Deviload."),
+          "play",
+        );
+        addAction(
+          controls,
+          t("To phone"),
+          "transfer-button",
+          () => startShare(job.id),
+          t("Send this file to a phone with a QR code."),
+          "phone-transfer",
+        );
+        if (isAudioJob(job))
+          addAction(
+            menu,
+            t("Audio"),
+            "quiet",
+            () => openAudioTools(job.id),
+            t("Edit tags or normalize loudness."),
+            "music-notes",
+          );
+        if (isVideoJob(job))
+          addAction(
+            menu,
+            "Devil Cut",
+            "quiet",
+            () => devilCut.open(job.id),
+            t("Trim the video or make a GIF locally."),
+            "scissors",
+          );
       }
       if (skipped) {
-        addAction(controls, t("Download again"), "quiet", async event => {
-          event.currentTarget.disabled = true;
-          try { await invoke("change_job", {id:job.id, action:"again"}); await refresh(); }
-          catch (error) { message(errorText(error), true); }
-        }, t("Download without the archive check; files still on the disk are not downloaded twice."), "arrow-clockwise");
+        addAction(
+          controls,
+          t("Download again"),
+          "quiet",
+          async event => {
+            event.currentTarget.disabled = true;
+            try {
+              await invoke("change_job", { id: job.id, action: "again" });
+              await refresh();
+            } catch (error) {
+              message(errorText(error), true);
+            }
+          },
+          t("Download without the archive check; files still on the disk are not downloaded twice."),
+          "arrow-clockwise",
+        );
       }
       if (["done", "skipped", "error", "cancelled", "interrupted"].includes(job.status)) {
         // Tidying a finished file is occasional; a failed or cancelled task is mostly there to be removed.
-        addAction(job.status === "done" ? menu : controls, t("Remove"), "quiet", () => {
-          if (job.status === "done" && job.file) askRemove(job, "queue");
-          else removeLater(job.id, "queue", false);
-        }, t("Remove from the queue."), "x-circle");
+        addAction(
+          job.status === "done" ? menu : controls,
+          t("Remove"),
+          "quiet",
+          () => {
+            if (job.status === "done" && job.file) askRemove(job, "queue");
+            else removeLater(job.id, "queue", false);
+          },
+          t("Remove from the queue."),
+          "x-circle",
+        );
       }
       addAction(menu, t("Log"), "quiet", () => showJobLog(job.id), "", "list");
       controls.append(more);
     }
     syncRecordingLimit(controls, job);
   }
-  existing.forEach((row,id) => { taskOrbs.get(id)?.destroy(); taskOrbs.delete(id); row.remove(); });
+  existing.forEach((row, id) => {
+    taskOrbs.get(id)?.destroy();
+    taskOrbs.delete(id);
+    row.remove();
+  });
   queueSelection.update(visible);
   renderMediaLibrary();
   devilCut.refresh();
@@ -1766,32 +2968,60 @@ function renderLiveDownload(runningJobs) {
   if (current.live) {
     // A recording has no percent: the time recorded, its size and, with a limit, how much of it is done.
     const elapsed = current.liveSince ? Math.max(0, Date.now() / 1000 - current.liveSince) : 0;
-    $("live-more").textContent = current.stopRequested ? t("Saving the recording…") : [lengthText(elapsed), current.bytes > 0 ? bigSizeText(current.bytes) : ""].filter(Boolean).join(" · ");
+    $("live-more").textContent = current.stopRequested
+      ? t("Saving the recording…")
+      : [lengthText(elapsed), current.bytes > 0 ? bigSizeText(current.bytes) : ""]
+          .filter(Boolean)
+          .join(" · ");
     $("live-percent").textContent = t("REC");
     track.setAttribute("aria-valuetext", t("Recording"));
-    liveFire.setProgress(current.liveLimit ? 100 * elapsed / current.liveLimit : 0);
+    liveFire.setProgress(current.liveLimit ? (100 * elapsed) / current.liveLimit : 0);
     return;
   }
   const finalizing = isProcessing(current);
   const recentLog = (current.log || []).slice(-12).join("\n");
-  const phase = current.stage ? processingLabel(current) : t(/Creating a GIF/i.test(recentLog) ? "Creating a GIF" :
-    /\[Merger\]/i.test(recentLog) ? "Merging video and audio" :
-    /\[ExtractAudio\]/i.test(recentLog) ? "Creating the audio file" :
-    /\[VideoConvertor\]/i.test(recentLog) ? "Converting the video" :
-    /\[(?:EmbedThumbnail|Metadata|EmbedSubtitle|MoveFiles)\]/i.test(recentLog) ? "Saving metadata" :
-    "Finishing the file");
-  $("live-more").textContent = finalizing ? phase : runningJobs.length > 1 ? t("+{count} more", {count:runningJobs.length - 1}) : speedText(current.speed);
+  const phase = current.stage
+    ? processingLabel(current)
+    : t(
+        /Creating a GIF/i.test(recentLog)
+          ? "Creating a GIF"
+          : /\[Merger\]/i.test(recentLog)
+            ? "Merging video and audio"
+            : /\[ExtractAudio\]/i.test(recentLog)
+              ? "Creating the audio file"
+              : /\[VideoConvertor\]/i.test(recentLog)
+                ? "Converting the video"
+                : /\[(?:EmbedThumbnail|Metadata|EmbedSubtitle|MoveFiles)\]/i.test(recentLog)
+                  ? "Saving metadata"
+                  : "Finishing the file",
+      );
+  $("live-more").textContent = finalizing
+    ? phase
+    : runningJobs.length > 1
+      ? t("+{count} more", { count: runningJobs.length - 1 })
+      : speedText(current.speed);
   $("live-percent").textContent = finalizing ? t("PROCESSING") : Math.round(percent) + "%";
   if (finalizing) track.setAttribute("aria-valuetext", phase);
   else track.removeAttribute("aria-valuetext");
   liveFire.setProgress(finalizing ? 100 : percent);
 }
 let libraryEditingId = null;
-function saveLibraryMeta() { persistSection("library", libraryMeta); }
-function libraryEntry(job) { return libraryMeta[job.file] || {favorite:false,collection:"",tags:[]}; }
+function saveLibraryMeta() {
+  persistSection("library", libraryMeta);
+}
+function libraryEntry(job) {
+  return libraryMeta[job.file] || { favorite: false, collection: "", tags: [] };
+}
 function refreshCollections() {
-  const select = $("library-collection"), current = select.value;
-  const names = [...new Set(Object.values(libraryMeta).map(item => item.collection).filter(Boolean))].sort();
+  const select = $("library-collection"),
+    current = select.value;
+  const names = [
+    ...new Set(
+      Object.values(libraryMeta)
+        .map(item => item.collection)
+        .filter(Boolean),
+    ),
+  ].sort();
   select.replaceChildren(new Option(t("All collections"), ""));
   for (const name of names) select.add(new Option(name, name));
   select.value = names.includes(current) ? current : "";
@@ -1810,9 +3040,16 @@ $("library-edit-save").addEventListener("click", () => {
   const job = jobs.find(item => item.id === libraryEditingId);
   if (!job) return;
   libraryMeta[job.file] = {
-    favorite:$("library-edit-favorite").checked,
-    collection:$("library-edit-collection").value.trim().slice(0,40),
-    tags:[...new Set($("library-edit-tags").value.split(",").map(value => value.trim().slice(0,30)).filter(Boolean))].slice(0,10)
+    favorite: $("library-edit-favorite").checked,
+    collection: $("library-edit-collection").value.trim().slice(0, 40),
+    tags: [
+      ...new Set(
+        $("library-edit-tags")
+          .value.split(",")
+          .map(value => value.trim().slice(0, 30))
+          .filter(Boolean),
+      ),
+    ].slice(0, 10),
   };
   saveLibraryMeta();
   $("library-edit-dialog").close();
@@ -1820,7 +3057,11 @@ $("library-edit-save").addEventListener("click", () => {
   renderMediaLibrary();
 });
 $("library-collection").addEventListener("change", renderMediaLibrary);
-try { $("library-sort").value = localStorage.getItem("deviload-library-sort") || "new"; } catch { /* storage unavailable */ }
+try {
+  $("library-sort").value = localStorage.getItem("deviload-library-sort") || "new";
+} catch {
+  /* storage unavailable */
+}
 // Large tiles, small tiles or a list: the same cards, laid out by CSS.
 function setLibraryView(view) {
   $("media-library-grid").dataset.view = view;
@@ -1829,16 +3070,31 @@ function setLibraryView(view) {
     button.setAttribute("aria-pressed", String(button.dataset.libraryView === view));
   }
 }
-try { setLibraryView(["large", "small", "list"].includes(localStorage.getItem("deviload-library-view")) ? localStorage.getItem("deviload-library-view") : "large"); }
-catch { setLibraryView("large"); }
+try {
+  setLibraryView(
+    ["large", "small", "list"].includes(localStorage.getItem("deviload-library-view"))
+      ? localStorage.getItem("deviload-library-view")
+      : "large",
+  );
+} catch {
+  setLibraryView("large");
+}
 for (const button of document.querySelectorAll("[data-library-view]")) {
   button.addEventListener("click", () => {
     setLibraryView(button.dataset.libraryView);
-    try { localStorage.setItem("deviload-library-view", button.dataset.libraryView); } catch { /* storage unavailable */ }
+    try {
+      localStorage.setItem("deviload-library-view", button.dataset.libraryView);
+    } catch {
+      /* storage unavailable */
+    }
   });
 }
 $("library-sort").addEventListener("change", () => {
-  try { localStorage.setItem("deviload-library-sort", $("library-sort").value); } catch { /* storage unavailable */ }
+  try {
+    localStorage.setItem("deviload-library-sort", $("library-sort").value);
+  } catch {
+    /* storage unavailable */
+  }
   renderMediaLibrary();
 });
 // Files finished before sizes were recorded get measured once, the first time the library opens.
@@ -1846,7 +3102,11 @@ let libraryMeasured = false;
 $("library-tab").addEventListener("click", async () => {
   if (libraryMeasured || !invoke) return;
   libraryMeasured = true;
-  try { if (await invoke("measure_library")) await refresh(); } catch { libraryMeasured = false; }
+  try {
+    if (await invoke("measure_library")) await refresh();
+  } catch {
+    libraryMeasured = false;
+  }
 });
 refreshCollections();
 let libraryKey = "";
@@ -1860,58 +3120,110 @@ function renderMediaLibrary() {
     const entry = libraryEntry(job);
     if (mediaFilter === "favorite" && !entry.favorite) return false;
     if ($("library-collection").value && entry.collection !== $("library-collection").value) return false;
-    return [job.file, job.url, entry.collection, ...(entry.tags || [])].join(" ").toLocaleLowerCase().includes(mediaSearch);
+    return [job.file, job.url, entry.collection, ...(entry.tags || [])]
+      .join(" ")
+      .toLocaleLowerCase()
+      .includes(mediaSearch);
   });
   const order = $("library-sort").value;
   const name = job => job.file.split(/[\\/]/).pop().toLocaleLowerCase();
   // Grouped by channel: channels A to Z, files without one last, newest first inside a channel.
   const channelOf = job => (job.channel || "").trim();
-  const byChannel = (a, b) => (!channelOf(a) - !channelOf(b)) || channelOf(a).localeCompare(channelOf(b)) || b.id - a.id;
-  const compare = {new:(a, b) => b.id - a.id, old:(a, b) => a.id - b.id, size:(a, b) => (b.bytes || 0) - (a.bytes || 0),
-    length:(a, b) => (b.duration || 0) - (a.duration || 0), playlist:(a,b) => (b.libraryParent || b.id) - (a.libraryParent || a.id) || a.id - b.id, name:(a, b) => name(a).localeCompare(name(b)), channel:byChannel}[order] || ((a, b) => b.id - a.id);
+  const byChannel = (a, b) =>
+    !channelOf(a) - !channelOf(b) || channelOf(a).localeCompare(channelOf(b)) || b.id - a.id;
+  const compare =
+    {
+      new: (a, b) => b.id - a.id,
+      old: (a, b) => a.id - b.id,
+      size: (a, b) => (b.bytes || 0) - (a.bytes || 0),
+      length: (a, b) => (b.duration || 0) - (a.duration || 0),
+      playlist: (a, b) => (b.libraryParent || b.id) - (a.libraryParent || a.id) || a.id - b.id,
+      name: (a, b) => name(a).localeCompare(name(b)),
+      channel: byChannel,
+    }[order] || ((a, b) => b.id - a.id);
   visible = ["new", "playlist"].includes(order) ? orderLibrary(visible, jobs, order) : visible.sort(compare);
   const total = done.reduce((sum, job) => sum + (job.bytes > 1 ? job.bytes : 0), 0);
-  $("media-library-size").textContent = total ? t("Takes {size}.", {size:bigSizeText(total)}) : "";
+  $("media-library-size").textContent = total ? t("Takes {size}.", { size: bigSizeText(total) }) : "";
   cinemaIds = visible.map(job => job.id);
   // The queue is polled every second; rebuilding unchanged cards resets hover and closes open menus.
-  const key = JSON.stringify([t("More"), done.length, order, visible.map(job => [job.id, job.file, job.url, job.bytes, job.duration, job.channel, libraryEntry(job)])]);
+  const key = JSON.stringify([
+    t("More"),
+    done.length,
+    order,
+    visible.map(job => [job.id, job.file, job.url, job.bytes, job.duration, job.channel, libraryEntry(job)]),
+  ]);
   if (key === libraryKey) return;
   libraryKey = key;
   const grid = $("media-library-grid");
   grid.replaceChildren();
   $("media-library-empty").hidden = visible.length > 0;
-  $("media-library-empty-text").textContent = done.length ? t("Nothing matches your search.") : t("Files appear here once downloads finish.");
+  $("media-library-empty-text").textContent = done.length
+    ? t("Nothing matches your search.")
+    : t("Files appear here once downloads finish.");
   setPose($("library-mascot"), done.length ? "look" : "front");
-  let group = null, groupNumber = 0, destination = grid;
+  let group = null,
+    groupNumber = 0,
+    destination = grid;
   for (const job of visible) {
-    if (["channel", "playlist"].includes(order) && (order === "playlist" ? String(job.libraryParent || job.id) : channelOf(job)) !== group) {
+    if (
+      ["channel", "playlist"].includes(order) &&
+      (order === "playlist" ? String(job.libraryParent || job.id) : channelOf(job)) !== group
+    ) {
       group = order === "playlist" ? String(job.libraryParent || job.id) : channelOf(job);
-      const count = visible.filter(item => (order === "playlist" ? String(item.libraryParent || item.id) : channelOf(item)) === group).length;
-      const heading = node(order === "playlist" ? "summary" : "h3", "library-group", order === "playlist" ? t("Download group {id}", {id:++groupNumber}) : group || t("No channel"));
+      const count = visible.filter(
+        item => (order === "playlist" ? String(item.libraryParent || item.id) : channelOf(item)) === group,
+      ).length;
+      const heading = node(
+        order === "playlist" ? "summary" : "h3",
+        "library-group",
+        order === "playlist" ? t("Download group {id}", { id: ++groupNumber }) : group || t("No channel"),
+      );
       heading.append(node("span", "", String(count)));
       if (order === "playlist") {
-        const section = node("details", "library-playlist"); section.open = true;
+        const section = node("details", "library-playlist");
+        section.open = true;
         destination = node("div", "library-playlist-files");
-        section.append(heading, destination); grid.append(section);
-      } else { destination = grid; grid.append(heading); }
+        section.append(heading, destination);
+        grid.append(section);
+      } else {
+        destination = grid;
+        grid.append(heading);
+      }
     }
     const card = node("article", "media-library-item");
     const art = node("div", "media-library-art");
     const fallback = node("span", "media-art-symbol", isLibraryAudio(job) ? "♫" : "▶");
-    fallback.setAttribute("aria-hidden", "true"); art.append(fallback);
+    fallback.setAttribute("aria-hidden", "true");
+    art.append(fallback);
     const preview = mediaPreview(job.url);
     if (preview) {
-      const image = node("img"); image.src = preview; image.alt = ""; image.loading = "lazy"; image.referrerPolicy = "no-referrer";
+      const image = node("img");
+      image.src = preview;
+      image.alt = "";
+      image.loading = "lazy";
+      image.referrerPolicy = "no-referrer";
       image.addEventListener("error", () => image.remove());
       art.append(image);
     }
-    const type = node("span", "media-library-type", isLibraryAudio(job) ? t("AUDIO") : /\.gif$/i.test(job.file) ? "GIF" : t("VIDEO"));
+    const type = node(
+      "span",
+      "media-library-type",
+      isLibraryAudio(job) ? t("AUDIO") : /\.gif$/i.test(job.file) ? "GIF" : t("VIDEO"),
+    );
     art.append(type);
     const info = node("div", "media-library-info");
-    const name = node("h3", "", job.file.split(/[\\/]/).pop()); name.title = job.file;
+    const name = node("h3", "", job.file.split(/[\\/]/).pop());
+    name.title = job.file;
     let source = job.url;
-    try { source = new URL(job.url).hostname.replace(/^www\./, ""); } catch { /* Keep original source. */ }
-    const facts = [job.duration > 0 ? lengthText(job.duration) : "", job.bytes > 1 ? bigSizeText(job.bytes) : ""].filter(Boolean);
+    try {
+      source = new URL(job.url).hostname.replace(/^www\./, "");
+    } catch {
+      /* Keep original source. */
+    }
+    const facts = [
+      job.duration > 0 ? lengthText(job.duration) : "",
+      job.bytes > 1 ? bigSizeText(job.bytes) : "",
+    ].filter(Boolean);
     info.append(name, node("p", "", [source, ...facts].filter(Boolean).join(" · ")));
     const entry = libraryEntry(job);
     const tags = [entry.favorite ? "★" : "", entry.collection, ...(entry.tags || [])].filter(Boolean);
@@ -1921,16 +3233,47 @@ function renderMediaLibrary() {
     const more = node("details", "library-more");
     const moreActions = node("div", "library-more-actions");
     more.append(node("summary", "", t("More")), moreActions);
-    more.addEventListener("keydown",event=>{if(event.key==="Escape"){event.stopPropagation();more.open=false;more.querySelector("summary").focus();}});
-    addAction(moreActions, t("To phone · QR"), "quiet", () => startShare(job.id), t("Open a QR code to send this file to a phone"), "phone-transfer");
+    more.addEventListener("keydown", event => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        more.open = false;
+        more.querySelector("summary").focus();
+      }
+    });
+    addAction(
+      moreActions,
+      t("To phone · QR"),
+      "quiet",
+      () => startShare(job.id),
+      t("Open a QR code to send this file to a phone"),
+      "phone-transfer",
+    );
     addAction(moreActions, t("Organize"), "quiet", () => openLibraryEdit(job));
-    addAction(moreActions, t("Show in folder"), "quiet", async () => {
-      try { await invoke("reveal_download", {id:job.id}); }
-      catch (error) { message(errorText(error), true); }
-    }, "", "folder-open");
-    addAction(moreActions, t("Convert"), "quiet", () => openConverter([job.file]), t("MP4, MP3, GIF or a smaller file"), "arrows-left-right");
+    addAction(
+      moreActions,
+      t("Show in folder"),
+      "quiet",
+      async () => {
+        try {
+          await invoke("reveal_download", { id: job.id });
+        } catch (error) {
+          message(errorText(error), true);
+        }
+      },
+      "",
+      "folder-open",
+    );
+    addAction(
+      moreActions,
+      t("Convert"),
+      "quiet",
+      () => openConverter([job.file]),
+      t("MP4, MP3, GIF or a smaller file"),
+      "arrows-left-right",
+    );
     if (isAudioJob(job)) addAction(moreActions, t("Audio"), "quiet", () => openAudioTools(job.id));
-    else if (isVideoJob(job)) addAction(moreActions, "Devil Cut", "quiet", () => devilCut.open(job.id), "", "scissors");
+    else if (isVideoJob(job))
+      addAction(moreActions, "Devil Cut", "quiet", () => devilCut.open(job.id), "", "scissors");
     addAction(moreActions, t("Remove from library"), "quiet", () => askRemove(job, "library"), "", "trash");
     buttons.append(more);
     info.append(buttons);
@@ -1940,13 +3283,23 @@ function renderMediaLibrary() {
 }
 // Removing a finished file asks once whether it leaves the disk too. The task disappears at once
 // and can be brought back for a few seconds; only then is it removed and its file sent to the trash.
-function jobFileCount(job) { return new Set([job.file, ...(job.downloads || []).map(([, file]) => file)].filter(Boolean)).size; }
+function jobFileCount(job) {
+  return new Set([job.file, ...(job.downloads || []).map(([, file]) => file)].filter(Boolean)).size;
+}
 function askRemove(job, from) {
-  document.querySelectorAll(".library-more[open]").forEach(menu => { menu.open = false; });
+  document.querySelectorAll(".library-more[open]").forEach(menu => {
+    menu.open = false;
+  });
   const dialog = $("remove-dialog");
-  $("remove-title").textContent = t(from === "library" ? "Remove from the library?" : "Remove from the queue?");
+  $("remove-title").textContent = t(
+    from === "library" ? "Remove from the library?" : "Remove from the queue?",
+  );
   $("remove-file").textContent = job.file.split(/[\\/]/).pop();
-  $("remove-disk-label").textContent = tn("Also delete the file from the disk", "Also delete {count} files from the disk", from === "library" ? 1 : jobFileCount(job));
+  $("remove-disk-label").textContent = tn(
+    "Also delete the file from the disk",
+    "Also delete {count} files from the disk",
+    from === "library" ? 1 : jobFileCount(job),
+  );
   $("remove-disk").checked = false;
   dialog.dataset.jobId = String(job.id);
   dialog.dataset.from = from;
@@ -1960,51 +3313,100 @@ $("remove-confirm").addEventListener("click", () => {
 });
 function removeLater(id, from, deleteFile) {
   if (pendingRemovals.has(id)) return;
-  pendingRemovals.set(id, setTimeout(async () => {
-    pendingRemovals.delete(id);
-    try { await invoke(from === "library" ? "remove_from_library" : "remove_job", {id, deleteFile}); }
-    catch (error) { message(errorText(error), true); }
-    await refresh();
-  }, REMOVE_DELAY));
-  render({jobs});
-  const text = deleteFile ? t("Removed. The file goes to the trash.") : from === "library" ? t("Removed from the library. The file stays on the disk.") : t("Removed from the queue.");
-  message(text, false, {label:t("Undo"), run:() => {
-    clearTimeout(pendingRemovals.get(id));
-    pendingRemovals.delete(id);
-    refresh();
-  }});
+  pendingRemovals.set(
+    id,
+    setTimeout(async () => {
+      pendingRemovals.delete(id);
+      try {
+        await invoke(from === "library" ? "remove_from_library" : "remove_job", { id, deleteFile });
+      } catch (error) {
+        message(errorText(error), true);
+      }
+      await refresh();
+    }, REMOVE_DELAY),
+  );
+  render({ jobs });
+  const text = deleteFile
+    ? t("Removed. The file goes to the trash.")
+    : from === "library"
+      ? t("Removed from the library. The file stays on the disk.")
+      : t("Removed from the queue.");
+  message(text, false, {
+    label: t("Undo"),
+    run: () => {
+      clearTimeout(pendingRemovals.get(id));
+      pendingRemovals.delete(id);
+      refresh();
+    },
+  });
 }
 $("clear-library").addEventListener("click", async () => {
   const ask = window.__TAURI__?.dialog?.ask;
-  if (ask && !(await ask(t("Clear the library? The files stay on the disk, only the list is emptied."), {title:"Deviload", kind:"warning"}))) return;
-  try { await invoke("clear_library"); await refresh(); message(t("The library is empty. The files stay on the disk.")); }
-  catch (error) { message(errorText(error), true); }
+  if (
+    ask &&
+    !(await ask(t("Clear the library? The files stay on the disk, only the list is emptied."), {
+      title: "Deviload",
+      kind: "warning",
+    }))
+  )
+    return;
+  try {
+    await invoke("clear_library");
+    await refresh();
+    message(t("The library is empty. The files stay on the disk."));
+  } catch (error) {
+    message(errorText(error), true);
+  }
 });
 $("find-duplicates").addEventListener("click", async () => {
   if (!invoke) return;
-  const button = $("find-duplicates"), results = $("duplicate-results");
-  button.disabled = true; results.hidden = false; results.replaceChildren(node("p", "", t("Comparing finished files byte by byte…")));
+  const button = $("find-duplicates"),
+    results = $("duplicate-results");
+  button.disabled = true;
+  results.hidden = false;
+  results.replaceChildren(node("p", "", t("Comparing finished files byte by byte…")));
   try {
     const groups = await invoke("find_duplicates");
     results.replaceChildren();
-    if (!groups.length) { results.append(node("p", "", t("The library has no identical files."))); return; }
-    results.append(node("strong", "", t("Duplicate groups: {count}. No files are deleted.", {count:groups.length})));
+    if (!groups.length) {
+      results.append(node("p", "", t("The library has no identical files.")));
+      return;
+    }
+    results.append(
+      node("strong", "", t("Duplicate groups: {count}. No files are deleted.", { count: groups.length })),
+    );
     for (const group of groups) {
       const article = node("div", "duplicate-group");
-      article.append(node("p", "", t("{count} files · {size} MB each", {count:group.files.length, size:(group.bytes / 1048576).toFixed(1)})));
+      article.append(
+        node(
+          "p",
+          "",
+          t("{count} files · {size} MB each", {
+            count: group.files.length,
+            size: (group.bytes / 1048576).toFixed(1),
+          }),
+        ),
+      );
       const list = node("ul");
       for (const file of group.files) list.append(node("li", "", file));
-      article.append(list); results.append(article);
+      article.append(list);
+      results.append(article);
     }
-  } catch (error) { results.replaceChildren(node("p", "", errorText(error))); }
-  finally { button.disabled = false; }
+  } catch (error) {
+    results.replaceChildren(node("p", "", errorText(error)));
+  } finally {
+    button.disabled = false;
+  }
 });
 function openMediaLibrary() {
   navigate("library");
   pop($("media-library-title"));
 }
 $("library-tab").addEventListener("click", openMediaLibrary);
-$("media-library-search").addEventListener("input", event => { mediaSearch = event.target.value.toLocaleLowerCase().trim(); renderMediaLibrary(); });
+$("media-library-search").addEventListener("input", event => {
+  mediaSearch = event.target.value.toLocaleLowerCase().trim();
+  renderMediaLibrary();
+});
 for (const button of document.querySelectorAll("[data-media-filter]")) {
   button.addEventListener("click", () => {
     mediaFilter = button.dataset.mediaFilter;
@@ -2015,7 +3417,11 @@ for (const button of document.querySelectorAll("[data-media-filter]")) {
     renderMediaLibrary();
   });
 }
-window.addEventListener("scroll", () => document.documentElement.classList.toggle("is-scrolled", scrollY > 4), {passive:true});
+window.addEventListener(
+  "scroll",
+  () => document.documentElement.classList.toggle("is-scrolled", scrollY > 4),
+  { passive: true },
+);
 // Windows draws its own window buttons; on macOS the system buttons sit over the page. Both move
 // the window by the strip on top.
 const macWindow = Boolean(invoke) && navigator.userAgent.includes("Mac OS X");
@@ -2024,9 +3430,15 @@ if (invoke && (navigator.userAgent.includes("Windows") || macWindow)) {
   if (macWindow) document.documentElement.classList.add("mac-window");
   else {
     $("window-chrome").hidden = false;
-    const controls = {"window-minimize":"minimize","window-maximize":"toggle_maximize","window-close":"close"};
+    const controls = {
+      "window-minimize": "minimize",
+      "window-maximize": "toggle_maximize",
+      "window-close": "close",
+    };
     for (const [id, action] of Object.entries(controls)) {
-      $(id).addEventListener("click", () => invoke("window_action", {action}).catch(error => message(errorText(error), true)));
+      $(id).addEventListener("click", () =>
+        invoke("window_action", { action }).catch(error => message(errorText(error), true)),
+      );
     }
   }
   // Moving the window must not start a text selection: on macOS the page never sees the button
@@ -2036,46 +3448,71 @@ if (invoke && (navigator.userAgent.includes("Windows") || macWindow)) {
     event.preventDefault();
     // macOS zooms on the double click itself.
     if (macWindow && event.detail === 2) return;
-    invoke("window_action", {action:"start_dragging"}).catch(() => {});
+    invoke("window_action", { action: "start_dragging" }).catch(() => {});
   };
   document.querySelector(".window-drag-strip")?.addEventListener("mousedown", dragWindow);
-  document.querySelector(".window-drag-strip")?.addEventListener("dblclick", () => invoke("window_action", {action:"toggle_maximize"}).catch(() => {}));
+  document
+    .querySelector(".window-drag-strip")
+    ?.addEventListener("dblclick", () =>
+      invoke("window_action", { action: "toggle_maximize" }).catch(() => {}),
+    );
   // Any empty part of the top bar moves the window, not just the bar element itself.
   // Controls, the search field and menus that open from the bar keep their own clicks.
   const topbar = document.querySelector(".topbar");
-  const interactive = "button,a,input,select,textarea,label,summary,form,[role=button],[role=menu],[role=menuitem],[role=menuitemradio],[popover],dialog,[contenteditable]";
+  const interactive =
+    "button,a,input,select,textarea,label,summary,form,[role=button],[role=menu],[role=menuitem],[role=menuitemradio],[popover],dialog,[contenteditable]";
   const draggable = event => topbar.contains(event.target) && !event.target.closest(interactive);
-  topbar.addEventListener("mousedown", event => { if (draggable(event)) dragWindow(event); });
-  topbar.addEventListener("dblclick", event => { if (draggable(event)) invoke("window_action", {action:"toggle_maximize"}).catch(() => {}); });
+  topbar.addEventListener("mousedown", event => {
+    if (draggable(event)) dragWindow(event);
+  });
+  topbar.addEventListener("dblclick", event => {
+    if (draggable(event)) invoke("window_action", { action: "toggle_maximize" }).catch(() => {});
+  });
   // An open dialog covers the top bar; its header and the dimmed area around it move the window.
   document.addEventListener("mousedown", event => {
     const dialog = event.button === 0 ? event.target.closest?.("dialog[open]") : null;
     if (!dialog) return;
     const box = dialog.getBoundingClientRect();
-    const outside = event.target === dialog && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom);
-    const header = event.target.closest(".dialog-head, .music-stage-header") && !event.target.closest("button, input, select, textarea, a, summary, label");
+    const outside =
+      event.target === dialog &&
+      (event.clientX < box.left ||
+        event.clientX > box.right ||
+        event.clientY < box.top ||
+        event.clientY > box.bottom);
+    const header =
+      event.target.closest(".dialog-head, .music-stage-header") &&
+      !event.target.closest("button, input, select, textarea, a, summary, label");
     if (outside || header) dragWindow(event);
   });
 }
 async function refresh() {
   if (!invoke) return;
-  try { render(await invoke("snapshot")); }
-  catch (error) { message(errorText(error), true); }
+  try {
+    render(await invoke("snapshot"));
+  } catch (error) {
+    message(errorText(error), true);
+  }
 }
-$("job-search").addEventListener("input", event => { search = event.target.value; render({jobs}); });
-for (const [filter,[id]] of Object.entries(filters)) {
+$("job-search").addEventListener("input", event => {
+  search = event.target.value;
+  render({ jobs });
+});
+for (const [filter, [id]] of Object.entries(filters)) {
   $(id).addEventListener("click", () => {
     navigate("downloads");
-    if (currentFilter === filter) { heroOrb.bump(); return; }
+    if (currentFilter === filter) {
+      heroOrb.bump();
+      return;
+    }
     currentFilter = filter;
-    for (const [name,[buttonId]] of Object.entries(filters)) {
+    for (const [name, [buttonId]] of Object.entries(filters)) {
       $(buttonId).classList.toggle("selected", name === filter);
       $(buttonId).setAttribute("aria-pressed", String(name === filter));
     }
     taskOrbs.forEach(orb => orb.destroy());
     taskOrbs.clear();
     $("jobs").replaceChildren();
-    render({jobs});
+    render({ jobs });
     pop($("queue-title"));
     if (!$("empty").hidden) pop($("empty"), 12);
   });
@@ -2085,32 +3522,71 @@ function buildDownloadRequest() {
   const clipEnabled = $("clip-enabled").checked;
   const clipStart = clipEnabled ? parseClipTime($("clip-start").value) : null;
   const clipEnd = clipEnabled ? parseClipTime($("clip-end").value) : null;
-  if (clipEnabled && (!Number.isFinite(clipStart) || !Number.isFinite(clipEnd) || clipEnd - clipStart < .1 || clipStart < 0)) throw new Error(t("Enter valid clip boundaries, for example from 00:30 to 01:15."));
-  if (clipEnabled && $("clip-output").value === "gif" && (clipEnd - clipStart > 60 || ["mp3","flac","wav"].includes(quality))) throw new Error(t("GIF: pick video and a clip of up to 60 seconds."));
+  if (
+    clipEnabled &&
+    (!Number.isFinite(clipStart) || !Number.isFinite(clipEnd) || clipEnd - clipStart < 0.1 || clipStart < 0)
+  )
+    throw new Error(t("Enter valid clip boundaries, for example from 00:30 to 01:15."));
+  if (
+    clipEnabled &&
+    $("clip-output").value === "gif" &&
+    (clipEnd - clipStart > 60 || ["mp3", "flac", "wav"].includes(quality))
+  )
+    throw new Error(t("GIF: pick video and a clip of up to 60 seconds."));
   const inputUrls = $("urls").value.trim().split(/\s+/).filter(Boolean);
-  if ((selectedFormat || downloadDetails.read().audioFormatId) && (inputUrls.length !== 1 || inputUrls[0] !== (selectedFormat?.url || inspectedAddress))) {
-    throw new Error(t("The selected stream belongs to one checked link. Check the link again or clear the choice."));
+  if (
+    (selectedFormat || downloadDetails.read().audioFormatId) &&
+    (inputUrls.length !== 1 || inputUrls[0] !== (selectedFormat?.url || inspectedAddress))
+  ) {
+    throw new Error(
+      t("The selected stream belongs to one checked link. Check the link again or clear the choice."),
+    );
   }
-  const options = {folder:$("folder").value.trim(),quality,profile:$("profile").value,playlist:$("playlist").checked,container:$("container-select").value,
-    playlistItems:$("playlist").checked ? $("playlist-items").value.trim() : "",splitChapters:$("split-chapters").checked,
-    subtitles:$("subtitles").checked,sponsorblock:$("sponsorblock").checked,
-    archive:$("archive").checked,cookies:mode === "file" ? $("cookies").value.trim() : mode === "account" ? (signedInPath || "") : "",cookiesAccount:mode === "account",
-    cookiesBrowser:["chrome","edge","firefox","brave","safari"].includes(mode) ? mode : "",rateMbps:Number($("rate").value),
-    clipStart,clipEnd,clipFormat:clipEnabled ? $("clip-output").value : "source",
-    folderRule:$("folder-rule").value,nameRule:$("name-rule").value,
-    formatId:selectedFormat?.id || "",formatHasAudio:!!selectedFormat?.hasAudio,...downloadDetails.read()};
-  options.sourceSize=inputUrls.length===1&&inputUrls[0]===inspectedAddress&&Date.now()-inspectedAt<600000?sourceEstimate(inspectedInfo,options,inspectedAddress,inspectedOptionsKey):null;
+  const options = {
+    folder: $("folder").value.trim(),
+    quality,
+    profile: $("profile").value,
+    playlist: $("playlist").checked,
+    container: $("container-select").value,
+    playlistItems: $("playlist").checked ? $("playlist-items").value.trim() : "",
+    splitChapters: $("split-chapters").checked,
+    subtitles: $("subtitles").checked,
+    sponsorblock: $("sponsorblock").checked,
+    archive: $("archive").checked,
+    cookies: mode === "file" ? $("cookies").value.trim() : mode === "account" ? signedInPath || "" : "",
+    cookiesAccount: mode === "account",
+    cookiesBrowser: ["chrome", "edge", "firefox", "brave", "safari"].includes(mode) ? mode : "",
+    rateMbps: Number($("rate").value),
+    clipStart,
+    clipEnd,
+    clipFormat: clipEnabled ? $("clip-output").value : "source",
+    folderRule: $("folder-rule").value,
+    nameRule: $("name-rule").value,
+    formatId: selectedFormat?.id || "",
+    formatHasAudio: !!selectedFormat?.hasAudio,
+    ...downloadDetails.read(),
+  };
+  options.sourceSize =
+    inputUrls.length === 1 && inputUrls[0] === inspectedAddress && Date.now() - inspectedAt < 600000
+      ? sourceEstimate(inspectedInfo, options, inspectedAddress, inspectedOptionsKey)
+      : null;
   const startValue = $("start-at").value;
   const scheduledAt = startValue ? Math.floor(new Date(startValue).getTime() / 1000) : null;
   if (startValue && (!Number.isFinite(scheduledAt) || scheduledAt <= Date.now() / 1000)) {
     throw new Error(t("Pick a time in the future."));
   }
-  const liveLimit = Number($("record-length").value), repeatDaily = $("repeat-daily").checked;
+  const liveLimit = Number($("record-length").value),
+    repeatDaily = $("repeat-daily").checked;
   if (repeatDaily && !liveLimit) throw new Error(t("A daily recording needs a recording length"));
   return {
-    text:$("urls").value, options, parallel:Number($("parallel").value),
-    scheduledAt, autoRetry:$("auto-retry").checked, liveLimit, repeatDaily,
-    estimatedBytes:null
+    text: $("urls").value,
+    options,
+    parallel: Number($("parallel").value),
+    scheduledAt,
+    autoRetry: $("auto-retry").checked,
+    liveLimit,
+    repeatDaily,
+    estimatedBytes: null,
   };
 }
 function showPreflight(report) {
@@ -2118,43 +3594,123 @@ function showPreflight(report) {
   panel.replaceChildren();
   panel.hidden = false;
   panel.classList.toggle("blocked", !report.ready);
-  const free = report.availableBytes === null ? t("unknown") : t("{size} GB", {size:(report.availableBytes / 1073741824).toFixed(1)});
-  panel.append(node("strong", "", report.ready ? t("Ready to download · {free} free", {free}) : t("Needs fixes")));
-  if(report.estimatedBytes)panel.append(node("p","",t("Source download: {size}",{size:(report.approximate?"≈":"")+sizeText(report.estimatedBytes)})));
-  if(report.queueBytes)panel.append(node("p","",t("Existing queue on this disk: {size}",{size:"≈"+sizeText(report.queueBytes)})));
-  if(report.estimatedBytes||report.queueBytes)panel.append(node("p","",t("Working disk budget for known sizes: {size}",{size:"≈"+sizeText(report.requiredBytes)})));
-  if(report.unknownItems)panel.append(node("p","",t("Items or playlists with unknown size: {count}",{count:report.unknownItems})));
-  for (const item of [...report.blockers, ...report.warnings]) panel.append(node("p", "", translateMessage(item)));
+  const free =
+    report.availableBytes === null
+      ? t("unknown")
+      : t("{size} GB", { size: (report.availableBytes / 1073741824).toFixed(1) });
+  panel.append(
+    node("strong", "", report.ready ? t("Ready to download · {free} free", { free }) : t("Needs fixes")),
+  );
+  if (report.estimatedBytes)
+    panel.append(
+      node(
+        "p",
+        "",
+        t("Source download: {size}", {
+          size: (report.approximate ? "≈" : "") + sizeText(report.estimatedBytes),
+        }),
+      ),
+    );
+  if (report.queueBytes)
+    panel.append(
+      node("p", "", t("Existing queue on this disk: {size}", { size: "≈" + sizeText(report.queueBytes) })),
+    );
+  if (report.estimatedBytes || report.queueBytes)
+    panel.append(
+      node(
+        "p",
+        "",
+        t("Working disk budget for known sizes: {size}", { size: "≈" + sizeText(report.requiredBytes) }),
+      ),
+    );
+  if (report.unknownItems)
+    panel.append(
+      node("p", "", t("Items or playlists with unknown size: {count}", { count: report.unknownItems })),
+    );
+  for (const item of [...report.blockers, ...report.warnings])
+    panel.append(node("p", "", translateMessage(item)));
 }
 async function preflightRequest(request) {
-  const links=linksIn(request.text);
-  if(links.length===1&&!request.options.playlist&&(links[0]!==inspectedAddress||inspectionKey(request.options)!==inspectedOptionsKey||Date.now()-inspectedAt>=600000))await inspectLink(links[0]);
-  if(links.length===1&&links[0]===inspectedAddress&&inspectionKey(request.options)===inspectedOptionsKey&&inspectedInfo&&!inspectedInfo.isList){
-    if(request.options.audioFormatId&&!inspectedInfo.formats.some(format=>format.id===request.options.audioFormatId))
-      throw Error(t('Stream {id} is unavailable in this preview',{id:request.options.audioFormatId}));
-    if(request.options.audioLanguage&&!request.options.audioFormatId&&inspectedInfo.formats.length&&!inspectedInfo.formats.some(format=>format.hasAudio&&
-      (format.language===request.options.audioLanguage||format.language?.startsWith(request.options.audioLanguage+'-'))))
-      throw Error(t('This preview has no audio track in the preferred language. Choose another language before downloading.'));
+  const links = linksIn(request.text);
+  if (
+    links.length === 1 &&
+    !request.options.playlist &&
+    (links[0] !== inspectedAddress ||
+      inspectionKey(request.options) !== inspectedOptionsKey ||
+      Date.now() - inspectedAt >= 600000)
+  )
+    await inspectLink(links[0]);
+  if (
+    links.length === 1 &&
+    links[0] === inspectedAddress &&
+    inspectionKey(request.options) === inspectedOptionsKey &&
+    inspectedInfo &&
+    !inspectedInfo.isList
+  ) {
+    if (
+      request.options.audioFormatId &&
+      !inspectedInfo.formats.some(format => format.id === request.options.audioFormatId)
+    )
+      throw Error(t("Stream {id} is unavailable in this preview", { id: request.options.audioFormatId }));
+    if (
+      request.options.audioLanguage &&
+      !request.options.audioFormatId &&
+      inspectedInfo.formats.length &&
+      !inspectedInfo.formats.some(
+        format =>
+          format.hasAudio &&
+          (format.language === request.options.audioLanguage ||
+            format.language?.startsWith(request.options.audioLanguage + "-")),
+      )
+    )
+      throw Error(
+        t(
+          "This preview has no audio track in the preferred language. Choose another language before downloading.",
+        ),
+      );
   }
-  request.options.sourceSize=links.length===1&&links[0]===inspectedAddress?sourceEstimate(inspectedInfo,request.options,links[0],inspectedOptionsKey):null;
+  request.options.sourceSize =
+    links.length === 1 && links[0] === inspectedAddress
+      ? sourceEstimate(inspectedInfo, request.options, links[0], inspectedOptionsKey)
+      : null;
   const report = await invoke("preflight_download", {
-    text:request.text, options:request.options, estimatedBytes:request.estimatedBytes
+    text: request.text,
+    options: request.options,
+    estimatedBytes: request.estimatedBytes,
   });
   showPreflight(report);
   return report;
 }
 $("preflight").addEventListener("click", async () => {
-  if (!invoke) { message(t("The check is available in the app."), true); return; }
-  const button = $("preflight"); button.disabled = true;
+  if (!invoke) {
+    message(t("The check is available in the app."), true);
+    return;
+  }
+  const button = $("preflight");
+  button.disabled = true;
   try {
     const report = await preflightRequest(buildDownloadRequest());
-    message(report.ready ? t("Check passed.") : report.blockers.map(translateMessage).join(" "), !report.ready);
-  } catch (error) { $("preflight-status").hidden = true; message(errorText(error), true); }
-  finally { button.disabled = false; }
+    message(
+      report.ready ? t("Check passed.") : report.blockers.map(translateMessage).join(" "),
+      !report.ready,
+    );
+  } catch (error) {
+    $("preflight-status").hidden = true;
+    message(errorText(error), true);
+  } finally {
+    button.disabled = false;
+  }
 });
 $("add").addEventListener("click", async () => {
-  if (!invoke) { message(t("Open the installed Deviload app to download."), true); return; }
-  if (!linkField.value.trim()) { linkField.focus(); message(t("Paste a link first."), true); return; }
+  if (!invoke) {
+    message(t("Open the installed Deviload app to download."), true);
+    return;
+  }
+  if (!linkField.value.trim()) {
+    linkField.focus();
+    message(t("Paste a link first."), true);
+    return;
+  }
   showDownloads();
   const button = $("add");
   button.disabled = true;
@@ -2162,62 +3718,102 @@ $("add").addEventListener("click", async () => {
   try {
     const request = buildDownloadRequest();
     const report = await preflightRequest(request);
-    if (!report.ready) { setDrawer(true); throw new Error(report.blockers.map(translateMessage).join(" ")); }
+    if (!report.ready) {
+      setDrawer(true);
+      throw new Error(report.blockers.map(translateMessage).join(" "));
+    }
     const count = await invoke("enqueue", {
-      text:request.text, options:request.options, parallel:request.parallel,
-      scheduledAt:request.scheduledAt, autoRetry:request.autoRetry, liveLimit:request.liveLimit, repeatDaily:request.repeatDaily
+      text: request.text,
+      options: request.options,
+      parallel: request.parallel,
+      scheduledAt: request.scheduledAt,
+      autoRetry: request.autoRetry,
+      liveLimit: request.liveLimit,
+      repeatDaily: request.repeatDaily,
     });
-    message(count ? t("Tasks added: {count}", {count}) : t("These links are already in the queue."));
+    message(count ? t("Tasks added: {count}", { count }) : t("These links are already in the queue."));
     if (count) {
       setDrawer(false);
-      $("start-at").value = ""; selectedFormat = null; $("preflight-status").hidden = true;
-      $("record-length").value = "0"; $("repeat-daily").checked = false;
-      linkField.value = ""; linkField.dispatchEvent(new Event("input"));
+      $("start-at").value = "";
+      selectedFormat = null;
+      $("preflight-status").hidden = true;
+      $("record-length").value = "0";
+      $("repeat-daily").checked = false;
+      linkField.value = "";
+      linkField.dispatchEvent(new Event("input"));
     }
     await refresh();
-  } catch (error) { message(errorText(error), true); }
-  finally { button.disabled = false; button.classList.remove("is-busy"); }
+  } catch (error) {
+    message(errorText(error), true);
+  } finally {
+    button.disabled = false;
+    button.classList.remove("is-busy");
+  }
 });
 $("clear").addEventListener("click", async () => {
   if (!invoke) return;
-  try { await invoke("clear_finished"); await refresh(); message(t("Finished and cancelled tasks left the queue. Finished files stay in the library.")); }
-  catch (error) { message(errorText(error), true); }
+  try {
+    await invoke("clear_finished");
+    await refresh();
+    message(t("Finished and cancelled tasks left the queue. Finished files stay in the library."));
+  } catch (error) {
+    message(errorText(error), true);
+  }
 });
 $("close-log").addEventListener("click", () => $("log-dialog").close());
 // Log tools: the log itself and the exact yt-dlp call, for bug reports.
 let logJobId = null;
 async function copyText(text, done) {
   try {
-    const writeText = window.__TAURI__?.clipboardManager?.writeText || navigator.clipboard?.writeText?.bind(navigator.clipboard);
+    const writeText =
+      window.__TAURI__?.clipboardManager?.writeText ||
+      navigator.clipboard?.writeText?.bind(navigator.clipboard);
     if (!writeText) throw new Error(t("The clipboard is unavailable"));
     await writeText(text);
     message(done);
-  } catch (error) { message(errorText(error), true); }
+  } catch (error) {
+    message(errorText(error), true);
+  }
 }
 $("copy-log").addEventListener("click", () => copyText($("log-content").textContent, t("Log copied")));
 $("copy-command").addEventListener("click", async () => {
   if (!invoke || logJobId === null) return;
-  try { await copyText(await invoke("job_command", {id:logJobId}), t("yt-dlp command copied")); }
-  catch (error) { message(errorText(error), true); }
+  try {
+    await copyText(await invoke("job_command", { id: logJobId }), t("yt-dlp command copied"));
+  } catch (error) {
+    message(errorText(error), true);
+  }
 });
 // A text file with links, for example a list saved from a browser.
 $("load-links").addEventListener("click", async () => {
   const open = window.__TAURI__?.dialog?.open;
   if (!open || !invoke) return;
   try {
-    const path = await open({multiple:false, directory:false, filters:[{name:t("Text files"), extensions:["txt", "csv", "m3u", "m3u8"]}]});
+    const path = await open({
+      multiple: false,
+      directory: false,
+      filters: [{ name: t("Text files"), extensions: ["txt", "csv", "m3u", "m3u8"] }],
+    });
     if (typeof path !== "string" || !path) return;
-    const text = await invoke("read_link_list", {path});
+    const text = await invoke("read_link_list", { path });
     const found = [...new Set(text.match(/https?:\/\/[^\s"'<>,;]+/gi) || [])].slice(0, 500);
-    if (!found.length) { message(t("No links found in the file"), true); return; }
+    if (!found.length) {
+      message(t("No links found in the file"), true);
+      return;
+    }
     addLinks(found.join(" "));
     message(tn("Loaded {count} link", "Loaded {count} links", found.length));
-  } catch (error) { message(errorText(error), true); }
+  } catch (error) {
+    message(errorText(error), true);
+  }
 });
 // Start with the system, in the tray. The switch is named the way each system names it.
 function syncAutostartLabel() {
-  const label = navigator.userAgent.includes("Mac OS X") ? t("Open at login")
-    : navigator.userAgent.includes("Windows") ? t("Start with Windows") : t("Start at login");
+  const label = navigator.userAgent.includes("Mac OS X")
+    ? t("Open at login")
+    : navigator.userAgent.includes("Windows")
+      ? t("Start with Windows")
+      : t("Start at login");
   $("autostart-label").textContent = label;
   $("autostart-toggle").setAttribute("aria-label", label);
 }
@@ -2225,25 +3821,31 @@ syncAutostartLabel();
 onLanguageChange(syncAutostartLabel);
 async function syncAutostart() {
   if (!invoke) return;
-  try { $("autostart-toggle").setAttribute("aria-checked", String(await invoke("autostart_status"))); } catch { /* not available */ }
+  try {
+    $("autostart-toggle").setAttribute("aria-checked", String(await invoke("autostart_status")));
+  } catch {
+    /* not available */
+  }
 }
 $("autostart-toggle").addEventListener("click", async () => {
   const next = $("autostart-toggle").getAttribute("aria-checked") !== "true";
   try {
-    const enabled = await invoke("set_autostart", {enabled:next});
+    const enabled = await invoke("set_autostart", { enabled: next });
     $("autostart-toggle").setAttribute("aria-checked", String(enabled));
     if (enabled) {
       // In the tray, closing the window keeps Deviload running.
       if ($("tray-toggle").getAttribute("aria-checked") !== "true") $("tray-toggle").click();
     }
-  } catch (error) { message(errorText(error), true); }
+  } catch (error) {
+    message(errorText(error), true);
+  }
 });
 syncAutostart();
 // Watched channels and playlists
 let watches = [];
 function agoText(seconds) {
   const minutes = Math.round((Date.now() / 1000 - seconds) / 60);
-  const format = new Intl.RelativeTimeFormat(locale(), {numeric:"auto"});
+  const format = new Intl.RelativeTimeFormat(locale(), { numeric: "auto" });
   if (minutes < 60) return format.format(-Math.max(0, minutes), "minute");
   if (minutes < 48 * 60) return format.format(-Math.round(minutes / 60), "hour");
   return format.format(-Math.round(minutes / 1440), "day");
@@ -2252,50 +3854,73 @@ function renderWatches() {
   $("watch-count").textContent = String(watches.length);
   $("watch-count").hidden = !watches.length;
   const list = $("watch-list");
-  list.replaceChildren(...watches.map(watch => {
-    const row = node("div", "watch-item" + (watch.error ? " has-error" : ""));
-    const text = node("div");
-    text.append(node("strong", "", watch.title));
-    text.title = watch.url;
-    const quality = labelFor(watch.quality);
-    const artist = watch.kind === "artist";
-    const meta = [artist ? t("Artist") + " · " + quality : quality, watch.checkedAt ? t("checked {time}", {time:agoText(watch.checkedAt)}) : t("not checked yet"),
-      artist ? tn("{count} album in the queue", "{count} albums in the queue", watch.queued) : tn("{count} new video downloaded", "{count} new videos downloaded", watch.queued)];
-    text.append(node("small", "", meta.join(" · ")));
-    if (watch.error) text.append(node("small", "watch-error", translateMessage(watch.error)));
-    const check = node("button", "quiet small", t("Check now"));
-    check.type = "button";
-    check.addEventListener("click", async () => {
-      check.disabled = true;
-      check.classList.add("is-busy");
-      try {
-        setPose($("watch-mascot"), "working");
-        const count = await invoke("watch_check", {id:watch.id});
-        setPose($("watch-mascot"), count ? "victory" : "look", count ? "look" : null);
-        if (artist) message(count ? tn("Queued {count} new album", "Queued {count} new albums", count) : t("No new albums"));
-        else message(count ? tn("Queued {count} new video", "Queued {count} new videos", count) : t("No new videos"));
-      } catch (error) { message(errorText(error), true); }
-      finally { check.disabled = false; check.classList.remove("is-busy"); }
-    });
-    const remove = node("button", "quiet small icon-only");
-    remove.type = "button";
-    remove.setAttribute("aria-label", t("Stop watching"));
-    remove.title = t("Stop watching");
-    const icon = node("span", "icon");
-    icon.dataset.icon = "trash";
-    remove.append(icon);
-    remove.addEventListener("click", () => invoke("watch_remove", {id:watch.id}).catch(error => message(errorText(error), true)));
-    row.append(text, check, remove);
-    return row;
-  }));
+  list.replaceChildren(
+    ...watches.map(watch => {
+      const row = node("div", "watch-item" + (watch.error ? " has-error" : ""));
+      const text = node("div");
+      text.append(node("strong", "", watch.title));
+      text.title = watch.url;
+      const quality = labelFor(watch.quality);
+      const artist = watch.kind === "artist";
+      const meta = [
+        artist ? t("Artist") + " · " + quality : quality,
+        watch.checkedAt ? t("checked {time}", { time: agoText(watch.checkedAt) }) : t("not checked yet"),
+        artist
+          ? tn("{count} album in the queue", "{count} albums in the queue", watch.queued)
+          : tn("{count} new video downloaded", "{count} new videos downloaded", watch.queued),
+      ];
+      text.append(node("small", "", meta.join(" · ")));
+      if (watch.error) text.append(node("small", "watch-error", translateMessage(watch.error)));
+      const check = node("button", "quiet small", t("Check now"));
+      check.type = "button";
+      check.addEventListener("click", async () => {
+        check.disabled = true;
+        check.classList.add("is-busy");
+        try {
+          setPose($("watch-mascot"), "working");
+          const count = await invoke("watch_check", { id: watch.id });
+          setPose($("watch-mascot"), count ? "victory" : "look", count ? "look" : null);
+          if (artist)
+            message(
+              count ? tn("Queued {count} new album", "Queued {count} new albums", count) : t("No new albums"),
+            );
+          else
+            message(
+              count ? tn("Queued {count} new video", "Queued {count} new videos", count) : t("No new videos"),
+            );
+        } catch (error) {
+          message(errorText(error), true);
+        } finally {
+          check.disabled = false;
+          check.classList.remove("is-busy");
+        }
+      });
+      const remove = node("button", "quiet small icon-only");
+      remove.type = "button";
+      remove.setAttribute("aria-label", t("Stop watching"));
+      remove.title = t("Stop watching");
+      const icon = node("span", "icon");
+      icon.dataset.icon = "trash";
+      remove.append(icon);
+      remove.addEventListener("click", () =>
+        invoke("watch_remove", { id: watch.id }).catch(error => message(errorText(error), true)),
+      );
+      row.append(text, check, remove);
+      return row;
+    }),
+  );
 }
 async function refreshWatches() {
   if (!invoke) return;
-  try { watches = await invoke("watch_list"); } catch { watches = []; }
+  try {
+    watches = await invoke("watch_list");
+  } catch {
+    watches = [];
+  }
   renderWatches();
 }
 function labelFor(value) {
-  return {best:t("Best quality"), mp3:"MP3", flac:"FLAC", wav:"WAV"}[value] || (value + "p");
+  return { best: t("Best quality"), mp3: "MP3", flac: "FLAC", wav: "WAV" }[value] || value + "p";
 }
 let watchMode = "list";
 function setWatchMode(mode) {
@@ -2312,39 +3937,83 @@ function setWatchMode(mode) {
   $("watch-url").placeholder = label;
   $("watch-url").setAttribute("aria-label", label);
 }
-for (const button of document.querySelectorAll("[data-watch-mode]")) button.addEventListener("click", () => setWatchMode(button.dataset.watchMode));
+for (const button of document.querySelectorAll("[data-watch-mode]"))
+  button.addEventListener("click", () => setWatchMode(button.dataset.watchMode));
 onLanguageChange(() => setWatchMode(watchMode));
 async function addWatch(address, button, artist = false) {
   if (!invoke) return;
   let options;
-  try { options = buildDownloadRequest().options; } catch (error) { message(errorText(error), true); return; }
+  try {
+    options = buildDownloadRequest().options;
+  } catch (error) {
+    message(errorText(error), true);
+    return;
+  }
   button.disabled = true;
   button.classList.add("is-busy");
   try {
-    const watch = await invoke("watch_add", {url:address, options, artist, backfill:artist && $("watch-backfill").checked});
-    if (artist) message(watch.queued
-      ? tn("Following {title}: {count} album is in the queue.", "Following {title}: {count} albums are in the queue.", watch.queued, {title:watch.title})
-      : t("Following {title}. New albums will download by themselves.", {title:watch.title}));
-    else message(t("Watching “{title}”. New videos will download by themselves.", {title:watch.title}));
+    const watch = await invoke("watch_add", {
+      url: address,
+      options,
+      artist,
+      backfill: artist && $("watch-backfill").checked,
+    });
+    if (artist)
+      message(
+        watch.queued
+          ? tn(
+              "Following {title}: {count} album is in the queue.",
+              "Following {title}: {count} albums are in the queue.",
+              watch.queued,
+              { title: watch.title },
+            )
+          : t("Following {title}. New albums will download by themselves.", { title: watch.title }),
+      );
+    else message(t("Watching “{title}”. New videos will download by themselves.", { title: watch.title }));
     await refreshWatches();
     return watch;
-  } catch (error) { message(errorText(error), true); }
-  finally { button.disabled = false; button.classList.remove("is-busy"); }
+  } catch (error) {
+    message(errorText(error), true);
+  } finally {
+    button.disabled = false;
+    button.classList.remove("is-busy");
+  }
 }
-$("watch-open").addEventListener("click", () => { refreshWatches(); $("watch-dialog").showModal(); });
+$("watch-open").addEventListener("click", () => {
+  refreshWatches();
+  $("watch-dialog").showModal();
+});
 $("watch-close").addEventListener("click", () => $("watch-dialog").close());
 $("watch-add").addEventListener("click", async () => {
   const address = $("watch-url").value.trim();
-  if (!address) { $("watch-url").focus(); return; }
+  if (!address) {
+    $("watch-url").focus();
+    return;
+  }
   if (await addWatch(address, $("watch-add"), watchMode === "artist")) $("watch-url").value = "";
 });
-$("watch-url").addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); $("watch-add").click(); } });
+$("watch-url").addEventListener("keydown", event => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    $("watch-add").click();
+  }
+});
 window.__TAURI__?.event?.listen?.("watches-changed", refreshWatches);
 window.__TAURI__?.event?.listen?.("watch-found", event => {
-  const {title, count, artist} = event.payload || {};
+  const { title, count, artist } = event.payload || {};
   const text = artist
-    ? tn("{count} new album by {title} is in the queue", "{count} new albums by {title} are in the queue", count, {title})
-    : tn("{count} new video from “{title}” is in the queue", "{count} new videos from “{title}” are in the queue", count, {title});
+    ? tn(
+        "{count} new album by {title} is in the queue",
+        "{count} new albums by {title} are in the queue",
+        count,
+        { title },
+      )
+    : tn(
+        "{count} new video from “{title}” is in the queue",
+        "{count} new videos from “{title}” are in the queue",
+        count,
+        { title },
+      );
   message(text);
   systemNotice(t(artist ? "New albums" : "New videos"), text);
   brandMascot.celebrate();
@@ -2353,9 +4022,15 @@ window.__TAURI__?.event?.listen?.("watch-found", event => {
 onLanguageChange(renderWatches);
 setQuality("1080");
 async function init() {
-  if (!invoke) { $("engines").textContent = ""; $("add").disabled = true; await downloadProfiles.load(); return; }
+  if (!invoke) {
+    $("engines").textContent = "";
+    $("add").disabled = true;
+    await downloadProfiles.load();
+    return;
+  }
   try {
-    const data = await invoke("snapshot"), options = data.options;
+    const data = await invoke("snapshot"),
+      options = data.options;
     $("folder").value = data.defaultFolder || options.folder;
     showDefaultFolder(data.defaultFolder);
     $("profile").value = options.profile || "custom";
@@ -2363,13 +4038,22 @@ async function init() {
     signedInPath = await invoke("youtube_login_status");
     const modes = [...$("cookies-mode").options].map(option => option.value);
     let savedMode = null;
-    try { savedMode = localStorage.getItem("deviload-cookies-mode"); } catch { savedMode = null; }
-    $("cookies-mode").value = modes.includes(savedMode) ? savedMode
-      : options.cookiesBrowser && modes.includes(options.cookiesBrowser) ? options.cookiesBrowser
-      : options.cookies && options.cookies !== signedInPath ? "file" : "account";
+    try {
+      savedMode = localStorage.getItem("deviload-cookies-mode");
+    } catch {
+      savedMode = null;
+    }
+    $("cookies-mode").value = modes.includes(savedMode)
+      ? savedMode
+      : options.cookiesBrowser && modes.includes(options.cookiesBrowser)
+        ? options.cookiesBrowser
+        : options.cookies && options.cookies !== signedInPath
+          ? "file"
+          : "account";
     $("cookies").value = options.cookies && options.cookies !== signedInPath ? options.cookies : "";
     syncSavedAuthSource(options);
-    if ($("cookies-mode").value === "file" && $("cookies").value) $("cookies-status").textContent = t("Saved cookies file. Press Apply cookies to check it again.");
+    if ($("cookies-mode").value === "file" && $("cookies").value)
+      $("cookies-status").textContent = t("Saved cookies file. Press Apply cookies to check it again.");
     $("playlist-items").value = options.playlistItems || "";
     $("split-chapters").checked = !!options.splitChapters;
     $("rate").value = options.rateMbps;
@@ -2379,13 +4063,22 @@ async function init() {
     syncNameRule();
     showMediaServer(data.mediaServer);
     $("clip-enabled").checked = Number.isFinite(options.clipStart) && Number.isFinite(options.clipEnd);
-    if ($("clip-enabled").checked) { $("clip-start").value = String(options.clipStart); $("clip-end").value = String(options.clipEnd); }
+    if ($("clip-enabled").checked) {
+      $("clip-start").value = String(options.clipStart);
+      $("clip-end").value = String(options.clipEnd);
+    }
     $("clip-output").value = options.clipFormat || "source";
     syncClip();
-    for (const key of ["playlist","subtitles","sponsorblock","archive"]) $(key).checked = options[key];
+    for (const key of ["playlist", "subtitles", "sponsorblock", "archive"]) $(key).checked = options[key];
     downloadDetails.load(options);
-    syncPlaylist(); renderAccount(); syncOptionsSummary();
-    try { setDrawer(localStorage.getItem("deviload-drawer") === "open"); } catch { setDrawer(false); }
+    syncPlaylist();
+    renderAccount();
+    syncOptionsSummary();
+    try {
+      setDrawer(localStorage.getItem("deviload-drawer") === "open");
+    } catch {
+      setDrawer(false);
+    }
     folderPaths = Object.fromEntries((await invoke("common_folders")) || []);
     await loadStore();
     refreshCollections();
@@ -2397,46 +4090,78 @@ async function init() {
     // At every start, and every 6 hours for a copy that stays open in the tray.
     appUpdateScheduler.start();
     setTimeout(autoUpdateYtdlp, 20000);
-    window.__TAURI__?.app?.getVersion?.().then(version => { appVersion = version; $("app-version").textContent = "Deviload " + version; }).catch(() => {});
-    await invoke("set_close_to_tray", {enabled:localStorage.getItem("deviload-tray") === "true"});
+    window.__TAURI__?.app
+      ?.getVersion?.()
+      .then(version => {
+        appVersion = version;
+        $("app-version").textContent = "Deviload " + version;
+      })
+      .catch(() => {});
+    await invoke("set_close_to_tray", { enabled: localStorage.getItem("deviload-tray") === "true" });
     const deps = await invoke("diagnostics");
-    missingComponents = deps.filter(([,ok]) => !ok).map(([name]) => name);
+    missingComponents = deps.filter(([, ok]) => !ok).map(([name]) => name);
     renderEngines();
     const mac = navigator.userAgent.includes("Mac");
-    if (missingComponents.length) message(t(mac
-      ? "Components are missing. On a Mac run: brew install yt-dlp ffmpeg deno"
-      : "Components are missing. Put yt-dlp, ffmpeg, ffprobe and deno into the bin folder next to Deviload."), true);
-  } catch (error) { message(errorText(error), true); }
-  const poll = async () => { await refresh(); setTimeout(poll, pollDelay(jobs, {page:document.querySelector("main").dataset.page, hidden:document.hidden})); };
+    if (missingComponents.length)
+      message(
+        t(
+          mac
+            ? "Components are missing. On a Mac run: brew install yt-dlp ffmpeg deno"
+            : "Components are missing. Put yt-dlp, ffmpeg, ffprobe and deno into the bin folder next to Deviload.",
+        ),
+        true,
+      );
+  } catch (error) {
+    message(errorText(error), true);
+  }
+  const poll = async () => {
+    await refresh();
+    setTimeout(
+      poll,
+      pollDelay(jobs, { page: document.querySelector("main").dataset.page, hidden: document.hidden }),
+    );
+  };
   setTimeout(poll, 900);
 }
 function syncLanguageButtons() {
   $("lang-current").textContent = language().toUpperCase();
-  for (const option of document.querySelectorAll("[data-lang]")) option.setAttribute("aria-checked", String(option.dataset.lang === language()));
+  for (const option of document.querySelectorAll("[data-lang]"))
+    option.setAttribute("aria-checked", String(option.dataset.lang === language()));
 }
 function syncTrayLabels() {
-  invoke?.("set_tray_labels", {open:t("Open Deviload"), quit:t("Quit Deviload")}).catch(() => {});
+  invoke?.("set_tray_labels", { open: t("Open Deviload"), quit: t("Quit Deviload") }).catch(() => {});
 }
-for (const option of document.querySelectorAll("[data-lang]")) option.textContent = languageNames[option.dataset.lang];
+for (const option of document.querySelectorAll("[data-lang]"))
+  option.textContent = languageNames[option.dataset.lang];
 fillRecordLength();
 onLanguageChange(fillRecordLength);
-for (const option of document.querySelectorAll("[data-lang]")) option.addEventListener("click", () => {
-  option.closest("details").open = false;
-  setLanguage(option.dataset.lang);
-});
+for (const option of document.querySelectorAll("[data-lang]"))
+  option.addEventListener("click", () => {
+    option.closest("details").open = false;
+    setLanguage(option.dataset.lang);
+  });
 onLanguageChange(() => {
-  syncLanguageButtons(); syncTitle(); syncSystemPreferences(); syncClipboardToggle(); syncAuth(); syncFormatHint();
+  syncLanguageButtons();
+  syncTitle();
+  syncSystemPreferences();
+  syncClipboardToggle();
+  syncAuth();
+  syncFormatHint();
   clearToasts();
-  renderAccount(); renderEngineInfo(); syncOptionsSummary();downloadDetails.translate();
+  renderAccount();
+  renderEngineInfo();
+  syncOptionsSummary();
+  downloadDetails.translate();
   if (inspectedInfo && inspectedAddress) renderInspect(inspectedInfo, inspectedAddress);
   else if (linksIn(linkField.value).length > 1) renderLinkCount(linksIn(linkField.value).length);
-  renderEngines(); syncTrayLabels();
+  renderEngines();
+  syncTrayLabels();
   if ($("notice-dialog").open) renderNotices();
   taskOrbs.forEach(orb => orb.destroy());
   taskOrbs.clear();
   $("jobs").replaceChildren();
   delete $("live-controls").dataset.job;
-  render({jobs});
+  render({ jobs });
   refreshCollections();
   devilCut.relabel();
 });
@@ -2447,14 +4172,20 @@ syncTitle();
 syncTrayLabels();
 init();
 // Someone who has neither seen the tour nor played music is new, and is asked once how they will use the app.
-const newcomer = !localStorage.getItem("deviload-tour-v1") && !localStorage.getItem("deviload-music-session-v1");
-wireAppMode({navigate, host: $("music-preferences"), isNewcomer: () => newcomer});
+const newcomer =
+  !localStorage.getItem("deviload-tour-v1") && !localStorage.getItem("deviload-music-session-v1");
+wireAppMode({ navigate, host: $("music-preferences"), isNewcomer: () => newcomer });
 wireTour(navigate);
 
-
 // Phone link: one QR code, files both ways and links into the queue.
-let phoneOn = false, phoneUrl = "", phoneTimer = 0, phoneQrFor = "", phoneShown = "";
-function syncPhoneButton() { $("phone-open").classList.toggle("is-live", phoneOn); }
+let phoneOn = false,
+  phoneUrl = "",
+  phoneTimer = 0,
+  phoneQrFor = "",
+  phoneShown = "";
+function syncPhoneButton() {
+  $("phone-open").classList.toggle("is-live", phoneOn);
+}
 function phoneRow(title, detail, share = null) {
   const row = node("div", "phone-item");
   const text = node("div");
@@ -2473,29 +4204,60 @@ function renderPhone(status) {
   const signature = JSON.stringify(status) + language();
   if (signature === phoneShown) return;
   phoneShown = signature;
-  $("share-name").textContent = !status ? t("The phone link is off.")
-    : status.connected ? t("Connected: {device}", {device:status.device}) : t("Waiting for the phone…");
-  const busy = status && (status.offers.some(offer => offer.state === "receiving") || status.files.some(file => file.sent > 0 && !file.done));
-  const finished = status && (status.offers.some(offer => offer.state === "done") || status.files.some(file => file.done));
+  $("share-name").textContent = !status
+    ? t("The phone link is off.")
+    : status.connected
+      ? t("Connected: {device}", { device: status.device })
+      : t("Waiting for the phone…");
+  const busy =
+    status &&
+    (status.offers.some(offer => offer.state === "receiving") ||
+      status.files.some(file => file.sent > 0 && !file.done));
+  const finished =
+    status && (status.offers.some(offer => offer.state === "done") || status.files.some(file => file.done));
   const phase = busy ? "sending" : finished ? "complete" : "waiting";
   if ($("share-dialog").dataset.phase !== phase) {
     $("share-dialog").dataset.phase = phase;
-    if (phase === "sending") { brandMascot.setActivity("sending"); brandMascot.reactSending(); }
-    if (phase === "complete") { brandMascot.setActivity("share"); brandMascot.reactTransferDone(); }
+    if (phase === "sending") {
+      brandMascot.setActivity("sending");
+      brandMascot.reactSending();
+    }
+    if (phase === "complete") {
+      brandMascot.setActivity("share");
+      brandMascot.reactTransferDone();
+    }
   }
   const offers = $("phone-offers");
   offers.replaceChildren();
   if (status?.offers.length) offers.append(node("h3", "", t("From the phone")));
   for (const offer of status?.offers || []) {
-    const labels = {waiting:t("Wants to send · {size}", {size:sizeText(offer.size)}), accepted:t("Starting…"), declined:t("Declined"),
-      receiving:t("Receiving · {percent}%", {percent:Math.round(offer.received / offer.size * 100)}), done:t("Saved to the library"), failed:t("Failed")};
-    const row = phoneRow(offer.name, `${offer.device || t("Phone")} · ${labels[offer.state]}`, offer.state === "receiving" ? offer.received / offer.size : null);
+    const labels = {
+      waiting: t("Wants to send · {size}", { size: sizeText(offer.size) }),
+      accepted: t("Starting…"),
+      declined: t("Declined"),
+      receiving: t("Receiving · {percent}%", { percent: Math.round((offer.received / offer.size) * 100) }),
+      done: t("Saved to the library"),
+      failed: t("Failed"),
+    };
+    const row = phoneRow(
+      offer.name,
+      `${offer.device || t("Phone")} · ${labels[offer.state]}`,
+      offer.state === "receiving" ? offer.received / offer.size : null,
+    );
     if (offer.state === "waiting") {
       const accept = node("button", "primary small", t("Accept"));
       const decline = node("button", "quiet small", t("Decline"));
       accept.type = decline.type = "button";
-      accept.addEventListener("click", () => invoke("phone_answer", {id:offer.id, accept:true}).then(pollPhone).catch(error => message(errorText(error), true)));
-      decline.addEventListener("click", () => invoke("phone_answer", {id:offer.id, accept:false}).then(pollPhone).catch(error => message(errorText(error), true)));
+      accept.addEventListener("click", () =>
+        invoke("phone_answer", { id: offer.id, accept: true })
+          .then(pollPhone)
+          .catch(error => message(errorText(error), true)),
+      );
+      decline.addEventListener("click", () =>
+        invoke("phone_answer", { id: offer.id, accept: false })
+          .then(pollPhone)
+          .catch(error => message(errorText(error), true)),
+      );
       row.append(accept, decline);
     }
     offers.append(row);
@@ -2504,50 +4266,108 @@ function renderPhone(status) {
   files.replaceChildren();
   if (status?.files.length) files.append(node("h3", "", t("Sent to the phone")));
   for (const file of status?.files || []) {
-    const state = file.done ? t("On the phone") : file.sent > 0 ? t("Downloading · {percent}%", {percent:Math.round(file.sent / file.size * 100)}) : t("Ready on the phone page");
-    files.append(phoneRow(file.name, `${sizeText(file.size)} · ${state}`, file.sent > 0 && !file.done ? file.sent / file.size : null));
+    const state = file.done
+      ? t("On the phone")
+      : file.sent > 0
+        ? t("Downloading · {percent}%", { percent: Math.round((file.sent / file.size) * 100) })
+        : t("Ready on the phone page");
+    files.append(
+      phoneRow(
+        file.name,
+        `${sizeText(file.size)} · ${state}`,
+        file.sent > 0 && !file.done ? file.sent / file.size : null,
+      ),
+    );
   }
 }
 async function pollPhone() {
   clearTimeout(phoneTimer);
   if (!invoke || !phoneOn) return;
   let status = null;
-  try { status = await invoke("phone_status"); } catch { status = null; }
-  if (!status) { phoneOn = false; syncPhoneButton(); renderPhone(null); return; }
+  try {
+    status = await invoke("phone_status");
+  } catch {
+    status = null;
+  }
+  if (!status) {
+    phoneOn = false;
+    syncPhoneButton();
+    renderPhone(null);
+    return;
+  }
   renderPhone(status);
   phoneTimer = setTimeout(pollPhone, $("share-dialog").open ? 700 : 4000);
 }
 function phonePageText() {
-  return {lang:language(), strings:{heading:t("Phone link"), fromComputer:t("From the computer"),
-    nothingYet:t("Nothing yet. In Deviload press “To phone” next to a file."), download:t("Save to phone"), open:t("Open"),
-    toComputer:t("To the computer"), sendFiles:t("Send files"), waiting:t("Waiting for the computer to accept"),
-    accepted:t("Starting…"), declined:t("Declined on the computer"), sending:t("Sending"), sent:t("Sent"), failed:t("Failed"),
-    linkTitle:t("Download by link"), linkPlaceholder:t("Paste a video link"), linkButton:t("Add to downloads"),
-    linkAdded:t("Added to the downloads on the computer"), homeHint:t("Add this page to the home screen to open it in one tap."),
-    kilobytes:t("{size} KB"), megabytes:t("{size} MB"), offline:t("The computer does not answer. Deviload must be open with the phone link on.")}};
+  return {
+    lang: language(),
+    strings: {
+      heading: t("Phone link"),
+      fromComputer: t("From the computer"),
+      nothingYet: t("Nothing yet. In Deviload press “To phone” next to a file."),
+      download: t("Save to phone"),
+      open: t("Open"),
+      toComputer: t("To the computer"),
+      sendFiles: t("Send files"),
+      waiting: t("Waiting for the computer to accept"),
+      accepted: t("Starting…"),
+      declined: t("Declined on the computer"),
+      sending: t("Sending"),
+      sent: t("Sent"),
+      failed: t("Failed"),
+      linkTitle: t("Download by link"),
+      linkPlaceholder: t("Paste a video link"),
+      linkButton: t("Add to downloads"),
+      linkAdded: t("Added to the downloads on the computer"),
+      homeHint: t("Add this page to the home screen to open it in one tap."),
+      kilobytes: t("{size} KB"),
+      megabytes: t("{size} MB"),
+      offline: t("The computer does not answer. Deviload must be open with the phone link on."),
+    },
+  };
 }
 async function openPhone(sendId = null) {
-  if (!invoke) { message(t("Sending to a phone is available in the Deviload app."), true); return; }
+  if (!invoke) {
+    message(t("Sending to a phone is available in the Deviload app."), true);
+    return;
+  }
   const dialog = $("share-dialog");
   if (!dialog.open) dialog.showModal();
-  brandMascot.setActivity("share"); brandMascot.reactShare();
+  brandMascot.setActivity("share");
+  brandMascot.reactShare();
   if (!phoneOn) $("share-status").textContent = t("Looking for the local network…");
   try {
-    const link = sendId === null ? await invoke("phone_start", {page:phonePageText()}) : await invoke("phone_send", {id:sendId, page:phonePageText()});
+    const link =
+      sendId === null
+        ? await invoke("phone_start", { page: phonePageText() })
+        : await invoke("phone_send", { id: sendId, page: phonePageText() });
     phoneOn = true;
     phoneUrl = link.url;
     syncPhoneButton();
     if (phoneQrFor !== link.url) {
       if (!window.QRCode) throw new Error(t("The QR code generator is unavailable"));
       $("share-qr").replaceChildren();
-      new window.QRCode($("share-qr"), {text:link.url, width:230, height:230, colorDark:"#14191e", colorLight:"#ffffff", correctLevel:window.QRCode.CorrectLevel.M});
+      new window.QRCode($("share-qr"), {
+        text: link.url,
+        width: 230,
+        height: 230,
+        colorDark: "#14191e",
+        colorLight: "#ffffff",
+        correctLevel: window.QRCode.CorrectLevel.M,
+      });
       phoneQrFor = link.url;
     }
     $("share-url").textContent = link.url;
     $("share-url").href = link.url;
-    $("share-status").textContent = t("The link turns off by itself after 30 minutes without the phone, or when you close Deviload.");
+    $("share-status").textContent = t(
+      "The link turns off by itself after 30 minutes without the phone, or when you close Deviload.",
+    );
     $("share-network-warning").hidden = !link.publicNetwork;
-    $("share-network-warning").textContent = link.publicNetwork ? t("This Windows network is marked as public. The firewall may block the phone from the QR link. For a home network switch the profile to “Private” and allow Deviload on local networks.") : "";
+    $("share-network-warning").textContent = link.publicNetwork
+      ? t(
+          "This Windows network is marked as public. The firewall may block the phone from the QR link. For a home network switch the profile to “Private” and allow Deviload on local networks.",
+        )
+      : "";
     $("share-network-settings").hidden = !link.publicNetwork;
     phoneShown = "";
     pollPhone();
@@ -2555,41 +4375,63 @@ async function openPhone(sendId = null) {
     $("share-status").textContent = errorText(error);
   }
 }
-function startShare(id) { return openPhone(id); }
+function startShare(id) {
+  return openPhone(id);
+}
 $("phone-open").addEventListener("click", () => openPhone());
 $("share-close").addEventListener("click", () => $("share-dialog").close());
-$("share-dialog").addEventListener("close", () => { brandMascot.setActivity($("player-dialog").open ? "cinema" : "idle"); pollPhone(); });
+$("share-dialog").addEventListener("close", () => {
+  brandMascot.setActivity($("player-dialog").open ? "cinema" : "idle");
+  pollPhone();
+});
 $("phone-stop").addEventListener("click", async () => {
   await invoke?.("phone_stop").catch(() => {});
-  phoneOn = false; phoneQrFor = "";
+  phoneOn = false;
+  phoneQrFor = "";
   $("share-qr").replaceChildren();
   $("share-url").textContent = "";
-  $("share-status").textContent = t("The phone link is off. The phone page stops working until you turn it on again.");
+  $("share-status").textContent = t(
+    "The phone link is off. The phone page stops working until you turn it on again.",
+  );
   syncPhoneButton();
   renderPhone(null);
 });
 $("phone-forget").addEventListener("click", async () => {
   const ask = window.__TAURI__?.dialog?.ask;
-  if (ask && !(await ask(t("Make a new link? The old QR code, bookmark and home-screen icon on the phone will stop working."), {title:"Deviload", kind:"warning"}))) return;
+  if (
+    ask &&
+    !(await ask(
+      t("Make a new link? The old QR code, bookmark and home-screen icon on the phone will stop working."),
+      { title: "Deviload", kind: "warning" },
+    ))
+  )
+    return;
   try {
     await invoke("phone_forget");
-    phoneOn = false; phoneQrFor = "";
+    phoneOn = false;
+    phoneQrFor = "";
     await openPhone();
-  } catch (error) { message(errorText(error), true); }
+  } catch (error) {
+    message(errorText(error), true);
+  }
 });
 window.__TAURI__?.event?.listen?.("phone-offer", event => {
-  const {name = "", device = ""} = event.payload || {};
+  const { name = "", device = "" } = event.payload || {};
   if (!$("share-dialog").open) $("share-dialog").showModal();
   phoneShown = "";
   pollPhone();
-  systemNotice(t("File from the phone"), t("{device} wants to send {name}", {device:device || t("Phone"), name}));
+  systemNotice(
+    t("File from the phone"),
+    t("{device} wants to send {name}", { device: device || t("Phone"), name }),
+  );
 });
 window.__TAURI__?.event?.listen?.("phone-received", event => {
-  message(t("Received from the phone: {name}", {name:event.payload?.name || ""}));
+  message(t("Received from the phone: {name}", { name: event.payload?.name || "" }));
   refresh();
 });
 window.__TAURI__?.event?.listen?.("phone-stopped", () => {
-  phoneOn = false; phoneQrFor = "";
+  phoneOn = false;
+  phoneQrFor = "";
   $("share-qr").replaceChildren();
   $("share-url").textContent = "";
   $("share-status").textContent = t("The phone link turned itself off after 30 minutes without the phone.");
@@ -2600,19 +4442,47 @@ window.__TAURI__?.event?.listen?.("phone-link", () => {
   message(t("The phone added a link to the downloads"));
   refresh();
 });
-onLanguageChange(() => { phoneShown = ""; if (phoneOn) { invoke?.("phone_start", {page:phonePageText()}).catch(() => {}); pollPhone(); } });
+onLanguageChange(() => {
+  phoneShown = "";
+  if (phoneOn) {
+    invoke?.("phone_start", { page: phonePageText() }).catch(() => {});
+    pollPhone();
+  }
+});
 $("share-network-settings").addEventListener("click", async () => {
-  try { await invoke("open_network_settings"); }
-  catch (error) { $("share-status").textContent = t("Could not open the network settings: {error}", {error:errorText(error)}); }
+  try {
+    await invoke("open_network_settings");
+  } catch (error) {
+    $("share-status").textContent = t("Could not open the network settings: {error}", {
+      error: errorText(error),
+    });
+  }
 });
 $("share-copy").addEventListener("click", async () => {
   if (!phoneUrl || !phoneOn) return;
   try {
-    const writeText = window.__TAURI__?.clipboardManager?.writeText || navigator.clipboard?.writeText?.bind(navigator.clipboard);
+    const writeText =
+      window.__TAURI__?.clipboardManager?.writeText ||
+      navigator.clipboard?.writeText?.bind(navigator.clipboard);
     if (!writeText) throw new Error(t("The clipboard is unavailable"));
     await writeText(phoneUrl);
     $("share-status").textContent = t("Link copied. It only works in your local network.");
-  } catch (error) { $("share-status").textContent = t("Could not copy the link: {error}", {error:errorText(error)}); }
+  } catch (error) {
+    $("share-status").textContent = t("Could not copy the link: {error}", { error: errorText(error) });
+  }
 });
 
-wireGalleryDownloads({button:$("gallery-open"),invoke,getSettings:()=>({folder:$("folder").value.trim(),cookiesMode:$("cookies-mode").value,cookies:$("cookies").value.trim(),signedInPath,rateMbps:Number($("rate").value),parallel:Number($("parallel").value)}),onQueued:()=>refresh().catch(error=>message(errorText(error),true)),onMessage:message});
+wireGalleryDownloads({
+  button: $("gallery-open"),
+  invoke,
+  getSettings: () => ({
+    folder: $("folder").value.trim(),
+    cookiesMode: $("cookies-mode").value,
+    cookies: $("cookies").value.trim(),
+    signedInPath,
+    rateMbps: Number($("rate").value),
+    parallel: Number($("parallel").value),
+  }),
+  onQueued: () => refresh().catch(error => message(errorText(error), true)),
+  onMessage: message,
+});

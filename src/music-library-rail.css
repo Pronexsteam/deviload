@@ -1,51 +1,312 @@
 /* A closed library on a wide window: a narrow rail with section icons, Create and playlist covers. */
-:root{--music-rail-width:72px}
+:root {
+  --music-rail-width: 72px;
+}
 /* Side panels always own a grid track, sized to zero when closed, so opening and closing can glide.
    Each panel's gap to the content is part of its own track. */
-:root[data-theme] body main[data-page="music"] #devil-music.has-playing-preview:not(.music-library-overlay){--lib-track:0px;--play-track:0px;grid-template-columns:var(--lib-track) minmax(0,1fr) var(--play-track)!important;column-gap:0!important}
-:root[data-theme] body main[data-page="music"] #devil-music.has-playing-preview.library-panel-open:not(.music-library-overlay){--lib-track:calc(var(--music-library-width,240px) + 16px)}
-:root[data-theme] body main[data-page="music"] #devil-music.has-playing-preview.music-library-rail:not(.music-library-overlay){--lib-track:calc(var(--music-rail-width) + 16px)}
-:root[data-theme] body main[data-page="music"] #devil-music.has-playing-preview.music-preview-fits:not(.music-library-overlay){--play-track:calc(var(--music-playing-width,280px) + 16px)}
-:root[data-theme] body main[data-page="music"] #devil-music.has-playing-preview:not(.music-library-overlay)>.music-main-content{grid-column:2!important;grid-row:1}
-:root[data-theme] body main[data-page="music"] #devil-music.has-playing-preview:not(.music-library-overlay)>.music-library-sidebar{grid-column:1!important;grid-row:1;justify-self:start;width:calc(100% - 16px);min-width:0;box-sizing:border-box}
-:root[data-theme] body main[data-page="music"] #devil-music.has-playing-preview:not(.music-library-overlay)>.music-playing-preview{grid-column:3!important;justify-self:end;width:calc(100% - 16px);min-width:0;box-sizing:border-box}
-:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail>.music-library-sidebar{grid-column:1;grid-row:1;align-self:stretch;max-height:none;margin:0;padding:12px 6px;overflow-x:hidden!important;overflow-y:auto!important;scrollbar-width:none}
-:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail>.music-library-sidebar::-webkit-scrollbar{display:none}
-:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail>.music-panel-resizer-library,:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-panel-toggle{display:none!important}
+:root[data-theme] body main[data-page="music"] #devil-music.has-playing-preview:not(.music-library-overlay) {
+  --lib-track: 0px;
+  --play-track: 0px;
+  grid-template-columns: var(--lib-track) minmax(0, 1fr) var(--play-track) !important;
+  column-gap: 0 !important;
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music.has-playing-preview.library-panel-open:not(.music-library-overlay) {
+  --lib-track: calc(var(--music-library-width, 240px) + 16px);
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music.has-playing-preview.music-library-rail:not(.music-library-overlay) {
+  --lib-track: calc(var(--music-rail-width) + 16px);
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music.has-playing-preview.music-preview-fits:not(.music-library-overlay) {
+  --play-track: calc(var(--music-playing-width, 280px) + 16px);
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music.has-playing-preview:not(.music-library-overlay)
+  > .music-main-content {
+  grid-column: 2 !important;
+  grid-row: 1;
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music.has-playing-preview:not(.music-library-overlay)
+  > .music-library-sidebar {
+  grid-column: 1 !important;
+  grid-row: 1;
+  justify-self: start;
+  width: calc(100% - 16px);
+  min-width: 0;
+  box-sizing: border-box;
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music.has-playing-preview:not(.music-library-overlay)
+  > .music-playing-preview {
+  grid-column: 3 !important;
+  justify-self: end;
+  width: calc(100% - 16px);
+  min-width: 0;
+  box-sizing: border-box;
+}
+:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail > .music-library-sidebar {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: stretch;
+  max-height: none;
+  margin: 0;
+  padding: 12px 6px;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  scrollbar-width: none;
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music.music-library-rail
+  > .music-library-sidebar::-webkit-scrollbar {
+  display: none;
+}
+:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail > .music-panel-resizer-library,
+:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-panel-toggle {
+  display: none !important;
+}
 
 /* Everything stacks in one centred column of square buttons. */
-:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-primary-nav,:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-body,:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-sidebar-controls,:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-tabs,:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-sidebar-list{display:flex!important;flex-direction:column!important;align-items:center;gap:6px;width:100%;min-width:0;margin:0;padding:0;border:0}
-:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-primary-nav{flex-direction:column-reverse!important;padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--surf-line,#ffffff14)}
-:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-sidebar-controls{padding-bottom:10px;margin-bottom:6px;border-bottom:1px solid var(--surf-line,#ffffff14)}
-:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail :is(.music-primary-nav-link,.music-tabs>button:not([data-music-view="home"]),.music-primary-nav>.music-icon-button){display:grid!important;place-items:center;width:44px!important;height:44px!important;min-width:0;margin:0;padding:0;font-size:0!important;gap:0;border-radius:12px}
-:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail :is(.music-primary-nav-link,.music-tabs>button) .icon{width:20px;height:20px;margin:0}
-:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-primary-nav-link>span:not(.icon){display:none}
-:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail :is(.music-heading-actions,.music-library-sidebar-search,.music-library-body>.music-sidebar-stats,.music-library-sidebar-empty,.music-library-nav-copy,#music-library-panel-title){display:none!important}
-:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-sidebar-head{display:flex!important;justify-content:center;width:100%;min-height:0;margin:0 0 4px;padding:0}
-:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-sidebar-actions{margin:0}
-:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-sidebar-actions>.music-icon-button{width:44px!important;height:44px!important;border-radius:12px}
-:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-nav-item{display:grid!important;place-items:center;width:50px;height:50px;min-height:0;margin:0;padding:4px;border-radius:12px;gap:0}
-:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-nav-art{width:42px!important;height:42px!important;margin:0;border-radius:9px}
-:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-nav-art .music-playlist-art{width:100%;height:100%;border-radius:9px}
-:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-nav-item.selected{box-shadow:inset 0 0 0 2px var(--player-primary,#ffffff55)}
-:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-body{overflow:visible!important;max-height:none;padding:0!important;flex:none}
-:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-sidebar-list{overflow:visible!important;max-height:none}
+:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-primary-nav,
+:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-body,
+:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-sidebar-controls,
+:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-tabs,
+:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-sidebar-list {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-primary-nav {
+  flex-direction: column-reverse !important;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--surf-line, #ffffff14);
+}
+:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-sidebar-controls {
+  padding-bottom: 10px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--surf-line, #ffffff14);
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music.music-library-rail
+  :is(
+    .music-primary-nav-link,
+    .music-tabs > button:not([data-music-view="home"]),
+    .music-primary-nav > .music-icon-button
+  ) {
+  display: grid !important;
+  place-items: center;
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  font-size: 0 !important;
+  gap: 0;
+  border-radius: 12px;
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music.music-library-rail
+  :is(.music-primary-nav-link, .music-tabs > button)
+  .icon {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music.music-library-rail
+  .music-primary-nav-link
+  > span:not(.icon) {
+  display: none;
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music.music-library-rail
+  :is(
+    .music-heading-actions,
+    .music-library-sidebar-search,
+    .music-library-body > .music-sidebar-stats,
+    .music-library-sidebar-empty,
+    .music-library-nav-copy,
+    #music-library-panel-title
+  ) {
+  display: none !important;
+}
+:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-sidebar-head {
+  display: flex !important;
+  justify-content: center;
+  width: 100%;
+  min-height: 0;
+  margin: 0 0 4px;
+  padding: 0;
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music.music-library-rail
+  .music-library-sidebar-actions {
+  margin: 0;
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music.music-library-rail
+  .music-library-sidebar-actions
+  > .music-icon-button {
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 12px;
+}
+:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-nav-item {
+  display: grid !important;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  min-height: 0;
+  margin: 0;
+  padding: 4px;
+  border-radius: 12px;
+  gap: 0;
+}
+:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-nav-art {
+  width: 42px !important;
+  height: 42px !important;
+  margin: 0;
+  border-radius: 9px;
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music.music-library-rail
+  .music-library-nav-art
+  .music-playlist-art {
+  width: 100%;
+  height: 100%;
+  border-radius: 9px;
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music.music-library-rail
+  .music-library-nav-item.selected {
+  box-shadow: inset 0 0 0 2px var(--player-primary, #ffffff55);
+}
+:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-body {
+  overflow: visible !important;
+  max-height: none;
+  padding: 0 !important;
+  flex: none;
+}
+:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-sidebar-list {
+  overflow: visible !important;
+  max-height: none;
+}
 
 /* The library never scrolls sideways: its rows shrink and ellipsize to fit any width. */
-:root body main[data-page="music"] #devil-music>.music-library-sidebar,:root body main[data-page="music"] #devil-music>.music-library-sidebar .music-library-body{overflow-x:hidden!important}
-:root body main[data-page="music"] #devil-music>.music-library-sidebar :is(.music-library-body,.music-library-sidebar-list,.music-library-nav-item,.music-library-nav-copy,.music-sidebar-controls,.music-sidebar-stats){min-width:0;max-width:100%}
-:root body main[data-page="music"] #devil-music .music-sidebar-controls>.music-heading-actions{box-sizing:border-box;max-width:calc(100% - 12px);min-width:0;justify-content:space-between}
-:root[data-theme] body main[data-page="music"] #devil-music .music-sidebar-controls>.music-heading-actions>button{flex:0 1 auto!important;min-width:26px!important}
+:root body main[data-page="music"] #devil-music > .music-library-sidebar,
+:root body main[data-page="music"] #devil-music > .music-library-sidebar .music-library-body {
+  overflow-x: hidden !important;
+}
+:root
+  body
+  main[data-page="music"]
+  #devil-music
+  > .music-library-sidebar
+  :is(
+    .music-library-body,
+    .music-library-sidebar-list,
+    .music-library-nav-item,
+    .music-library-nav-copy,
+    .music-sidebar-controls,
+    .music-sidebar-stats
+  ) {
+  min-width: 0;
+  max-width: 100%;
+}
+:root body main[data-page="music"] #devil-music .music-sidebar-controls > .music-heading-actions {
+  box-sizing: border-box;
+  max-width: calc(100% - 12px);
+  min-width: 0;
+  justify-content: space-between;
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music
+  .music-sidebar-controls
+  > .music-heading-actions
+  > button {
+  flex: 0 1 auto !important;
+  min-width: 26px !important;
+}
 
 /* Folding the library: the column glides and the new contents fade in. */
-:root body main[data-page="music"] #devil-music.music-library-animating>.music-library-sidebar>*{animation:music-library-fold var(--panel-time,.56s) var(--panel-ease,ease) both}
-@keyframes music-library-fold{from{opacity:0;translate:calc(-14px * var(--panel-dir,1)) 0}30%{opacity:0}}
-@media(prefers-reduced-motion:reduce){:root body main[data-page="music"] #devil-music.music-library-animating{transition:none}:root body main[data-page="music"] #devil-music.music-library-animating>.music-library-sidebar>*{animation:none}}
+:root body main[data-page="music"] #devil-music.music-library-animating > .music-library-sidebar > * {
+  animation: music-library-fold var(--panel-time, 0.56s) var(--panel-ease, ease) both;
+}
+@keyframes music-library-fold {
+  from {
+    opacity: 0;
+    translate: calc(-14px * var(--panel-dir, 1)) 0;
+  }
+  30% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root body main[data-page="music"] #devil-music.music-library-animating {
+    transition: none;
+  }
+  :root body main[data-page="music"] #devil-music.music-library-animating > .music-library-sidebar > * {
+    animation: none;
+  }
+}
 
 /* Top bar: music settings sit next to the bell while Devil Music is open; the sidebar tray no longer repeats them. */
-:root body main:not([data-page="music"]) .music-settings-top{display:none}
-:root[data-theme] body main[data-page="music"] .music-sidebar-controls #music-settings-open{display:none!important}
+:root body main:not([data-page="music"]) .music-settings-top {
+  display: none;
+}
+:root[data-theme] body main[data-page="music"] .music-sidebar-controls #music-settings-open {
+  display: none !important;
+}
 /* Over the folded rail the menu button sits on the rail's centre line, gliding with the fold. */
-:root body main[data-page="music"] .music-navigation-toggle{transition:margin-inline-start .38s var(--open-ease,ease)}
-:root body.music-rail-start main[data-page="music"] .music-navigation-toggle{margin-inline-start:calc((var(--music-rail-width) - 42px) / 2)}
-@media(prefers-reduced-motion:reduce){:root body main[data-page="music"] .music-navigation-toggle{transition:none}}
+:root body main[data-page="music"] .music-navigation-toggle {
+  transition: margin-inline-start 0.38s var(--open-ease, ease);
+}
+:root body.music-rail-start main[data-page="music"] .music-navigation-toggle {
+  margin-inline-start: calc((var(--music-rail-width) - 42px) / 2);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root body main[data-page="music"] .music-navigation-toggle {
+    transition: none;
+  }
+}

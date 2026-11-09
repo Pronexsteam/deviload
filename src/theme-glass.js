@@ -1,7 +1,8 @@
 // Static wallpaper optics for the two glass skins. The normal CSS material is
 // always underneath this optional layer, including on devices without WebGL.
 const GLASS_THEMES = new Set(["glass-light"]);
-const SURFACES = ".sidebar, .topbar, .supporters-board, .download-composer, .library, .media-library, .discover, .editor-card, .music-library-sidebar, .music-hero, .music-dock, .convert-drop, .convert-options, .convert-list-wrap, .cut-head, .cut-media, .cut-inspector";
+const SURFACES =
+  ".sidebar, .topbar, .supporters-board, .download-composer, .library, .media-library, .discover, .editor-card, .music-library-sidebar, .music-hero, .music-dock, .convert-drop, .convert-options, .convert-list-wrap, .cut-head, .cut-media, .cut-inspector";
 const MAX_SURFACES = 6;
 const wired = new WeakMap();
 const wallpaper = new URL("./assets/themes/coast.png", import.meta.url).href;
@@ -74,18 +75,34 @@ void main() {
 export function glassCover(viewportWidth, viewportHeight, imageWidth, imageHeight) {
   const dimensions = [viewportWidth, viewportHeight, imageWidth, imageHeight];
   if (!dimensions.every(value => Number.isFinite(value) && value > 0)) return [1, 1, 0, 0];
-  const relativeAspect = (viewportWidth / viewportHeight) / (imageWidth / imageHeight);
-  const x = Math.min(1, relativeAspect), y = Math.min(1, 1 / relativeAspect);
+  const relativeAspect = viewportWidth / viewportHeight / (imageWidth / imageHeight);
+  const x = Math.min(1, relativeAspect),
+    y = Math.min(1, 1 / relativeAspect);
   return [x, y, (1 - x) / 2, (1 - y) / 2];
 }
 
 /** Cull offscreen panels without moving the rounded edge of a scrolled panel. */
 export function glassSurfaceRect(bounds, viewportWidth, viewportHeight, radius = 0) {
-  const x = bounds?.left, y = bounds?.top, width = bounds?.width, height = bounds?.height;
-  if (![x, y, width, height, viewportWidth, viewportHeight].every(Number.isFinite)
-    || width <= 0 || height <= 0 || viewportWidth <= 0 || viewportHeight <= 0
-    || x >= viewportWidth || y >= viewportHeight || x + width <= 0 || y + height <= 0) return null;
-  return {rect:[x, y, width, height], radius:Math.max(0, Math.min(Number(radius) || 0, width / 2, height / 2))};
+  const x = bounds?.left,
+    y = bounds?.top,
+    width = bounds?.width,
+    height = bounds?.height;
+  if (
+    ![x, y, width, height, viewportWidth, viewportHeight].every(Number.isFinite) ||
+    width <= 0 ||
+    height <= 0 ||
+    viewportWidth <= 0 ||
+    viewportHeight <= 0 ||
+    x >= viewportWidth ||
+    y >= viewportHeight ||
+    x + width <= 0 ||
+    y + height <= 0
+  )
+    return null;
+  return {
+    rect: [x, y, width, height],
+    radius: Math.max(0, Math.min(Number(radius) || 0, width / 2, height / 2)),
+  };
 }
 
 function compile(gl, type, source, state) {
@@ -99,13 +116,22 @@ function compile(gl, type, source, state) {
 }
 
 /** Returns an idempotent cleanup function. No animation loop or remote assets. */
-export function wireGlassMaterial({document = globalThis.document, window = globalThis.window} = {}) {
-  const root = document?.documentElement, body = document?.body;
+export function wireGlassMaterial({ document = globalThis.document, window = globalThis.window } = {}) {
+  const root = document?.documentElement,
+    body = document?.body;
   if (!root || !body || !window) return () => {};
   if (wired.has(root)) return wired.get(root);
-  let state = null, frame = null, disposed = false, suspended = false, failedTheme = null;
+  let state = null,
+    frame = null,
+    disposed = false,
+    suspended = false,
+    failedTheme = null;
   let transparencyQuery = null;
-  try { transparencyQuery = window.matchMedia?.("(prefers-reduced-transparency: reduce)") || null; } catch { /* Older embedded browsers may not expose media queries. */ }
+  try {
+    transparencyQuery = window.matchMedia?.("(prefers-reduced-transparency: reduce)") || null;
+  } catch {
+    /* Older embedded browsers may not expose media queries. */
+  }
   const listeners = [];
   const listen = (target, type, handler, options) => {
     target.addEventListener(type, handler, options);
@@ -136,7 +162,9 @@ export function wireGlassMaterial({document = globalThis.document, window = glob
         if (previous.program) gl.deleteProgram(previous.program);
         for (const shader of previous.shaders) gl.deleteShader(shader);
         gl.getExtension("WEBGL_lose_context")?.loseContext();
-      } catch { /* A lost GPU context is already released by the browser. */ }
+      } catch {
+        /* A lost GPU context is already released by the browser. */
+      }
     }
   }
 
@@ -151,7 +179,11 @@ export function wireGlassMaterial({document = globalThis.document, window = glob
     if (!state?.ready || disposed || document.hidden || suspended || frame !== null) return;
     frame = window.requestAnimationFrame(() => {
       frame = null;
-      try { draw(); } catch { if (state) fail(state.theme); }
+      try {
+        draw();
+      } catch {
+        if (state) fail(state.theme);
+      }
     });
   }
 
@@ -164,8 +196,9 @@ export function wireGlassMaterial({document = globalThis.document, window = glob
     const pixelRatio = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(2500000 / (width * height)));
     const pixelWidth = Math.max(1, Math.round(width * pixelRatio));
     const pixelHeight = Math.max(1, Math.round(height * pixelRatio));
-    const {canvas, gl, uniforms} = current;
-    const rectangles = new Float32Array(MAX_SURFACES * 4), radii = new Float32Array(MAX_SURFACES);
+    const { canvas, gl, uniforms } = current;
+    const rectangles = new Float32Array(MAX_SURFACES * 4),
+      radii = new Float32Array(MAX_SURFACES);
     let count = 0;
     for (const panel of document.querySelectorAll(SURFACES)) {
       if (count === MAX_SURFACES) break;
@@ -174,7 +207,9 @@ export function wireGlassMaterial({document = globalThis.document, window = glob
       if (style.visibility === "hidden" || style.display === "none" || style.opacity === "0") continue;
       const bounds = panel.getBoundingClientRect();
       const rawRadius = style.borderTopLeftRadius || "0";
-      const radius = rawRadius.includes("%") ? parseFloat(rawRadius) * Math.min(bounds.width, bounds.height) / 100 : parseFloat(rawRadius);
+      const radius = rawRadius.includes("%")
+        ? (parseFloat(rawRadius) * Math.min(bounds.width, bounds.height)) / 100
+        : parseFloat(rawRadius);
       const surface = glassSurfaceRect(bounds, width, height, radius);
       if (!surface) continue;
       rectangles.set(surface.rect, count * 4);
@@ -195,12 +230,15 @@ export function wireGlassMaterial({document = globalThis.document, window = glob
     gl.uniform1i(uniforms.image, 0);
     gl.uniform2f(uniforms.resolution, pixelWidth, pixelHeight);
     gl.uniform2f(uniforms.viewport, width, height);
-    gl.uniform4fv(uniforms.cover, glassCover(width, height, current.image.naturalWidth, current.image.naturalHeight));
+    gl.uniform4fv(
+      uniforms.cover,
+      glassCover(width, height, current.image.naturalWidth, current.image.naturalHeight),
+    );
     gl.uniform4fv(uniforms.rects, rectangles);
     gl.uniform1fv(uniforms.radii, radii);
     gl.uniform1i(uniforms.count, count);
     gl.uniform1f(uniforms.brightness, 1);
-    gl.uniform1f(uniforms.saturation, .55);
+    gl.uniform1f(uniforms.saturation, 0.55);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     if (gl.isContextLost()) throw new Error("Glass context lost");
     current.layout = layout;
@@ -213,8 +251,25 @@ export function wireGlassMaterial({document = globalThis.document, window = glob
     canvas.className = "theme-glass-scene";
     canvas.setAttribute("aria-hidden", "true");
     // The canvas is decoration and must never capture window or content actions.
-    Object.assign(canvas.style, {position:"fixed", inset:"0", width:"100%", height:"100%", zIndex:"0", pointerEvents:"none"});
-    const current = {theme, canvas, gl:null, shaders:[], program:null, texture:null, buffer:null, image:null, ready:false};
+    Object.assign(canvas.style, {
+      position: "fixed",
+      inset: "0",
+      width: "100%",
+      height: "100%",
+      zIndex: "0",
+      pointerEvents: "none",
+    });
+    const current = {
+      theme,
+      canvas,
+      gl: null,
+      shaders: [],
+      program: null,
+      texture: null,
+      buffer: null,
+      image: null,
+      ready: false,
+    };
     state = current;
     current.onContextLost = event => {
       event.preventDefault();
@@ -222,7 +277,14 @@ export function wireGlassMaterial({document = globalThis.document, window = glob
     };
     canvas.addEventListener("webglcontextlost", current.onContextLost);
     try {
-      const gl = canvas.getContext("webgl", {alpha:false, antialias:false, depth:false, stencil:false, preserveDrawingBuffer:false, powerPreference:"low-power"});
+      const gl = canvas.getContext("webgl", {
+        alpha: false,
+        antialias: false,
+        depth: false,
+        stencil: false,
+        preserveDrawingBuffer: false,
+        powerPreference: "low-power",
+      });
       if (!gl) throw new Error("WebGL not available");
       current.gl = gl;
       const vertex = compile(gl, gl.VERTEX_SHADER, vertexSource, current);
@@ -240,12 +302,24 @@ export function wireGlassMaterial({document = globalThis.document, window = glob
       current.texture = gl.createTexture();
       if (!current.buffer || !current.texture) throw new Error("No glass resources");
       gl.bindBuffer(gl.ARRAY_BUFFER, current.buffer);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
-      current.uniforms = Object.fromEntries([
-        ["image", "u_image"], ["resolution", "u_resolution"], ["viewport", "u_viewport"],
-        ["cover", "u_cover"], ["rects", "u_rects[0]"], ["radii", "u_radii[0]"],
-        ["count", "u_count"], ["brightness", "u_brightness"], ["saturation", "u_saturation"]
-      ].map(([key, name]) => [key, gl.getUniformLocation(program, name)]));
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
+        gl.STATIC_DRAW,
+      );
+      current.uniforms = Object.fromEntries(
+        [
+          ["image", "u_image"],
+          ["resolution", "u_resolution"],
+          ["viewport", "u_viewport"],
+          ["cover", "u_cover"],
+          ["rects", "u_rects[0]"],
+          ["radii", "u_radii[0]"],
+          ["count", "u_count"],
+          ["brightness", "u_brightness"],
+          ["saturation", "u_saturation"],
+        ].map(([key, name]) => [key, gl.getUniformLocation(program, name)]),
+      );
       const image = new window.Image();
       current.image = image;
       image.onload = () => {
@@ -261,14 +335,20 @@ export function wireGlassMaterial({document = globalThis.document, window = glob
           gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
           current.ready = true;
           draw();
-        } catch { fail(theme); }
+        } catch {
+          fail(theme);
+        }
       };
-      image.onerror = () => { if (state === current) fail(theme); };
+      image.onerror = () => {
+        if (state === current) fail(theme);
+      };
       image.src = wallpaper;
-    } catch { fail(theme); }
+    } catch {
+      fail(theme);
+    }
   }
 
-  function update({retry = false} = {}) {
+  function update({ retry = false } = {}) {
     if (disposed) return;
     const theme = root.dataset.theme;
     if (retry || (failedTheme && failedTheme !== theme)) failedTheme = null;
@@ -286,7 +366,10 @@ export function wireGlassMaterial({document = globalThis.document, window = glob
       root.dataset.glassRenderer = "fallback";
       return;
     }
-    if (state?.theme === theme) { schedule();return; }
+    if (state?.theme === theme) {
+      schedule();
+      return;
+    }
     release();
     activate(theme);
   }
@@ -302,23 +385,45 @@ export function wireGlassMaterial({document = globalThis.document, window = glob
     wired.delete(root);
   }
 
-  const mutationObserver = window.MutationObserver ? new window.MutationObserver(records => {
-    // Current playback time and transfer sizes replace text nodes frequently;
-    // they do not move the material and must not keep the GPU drawing.
-    if (records.some(record => record.type === "attributes"
-      || [...(record.addedNodes || []), ...(record.removedNodes || [])].some(node => node.nodeType === 1))) schedule();
-  }) : null;
-  mutationObserver?.observe(body, {subtree:true, childList:true, attributes:true, attributeFilter:["class", "hidden", "open", "data-page", "data-view"]});
+  const mutationObserver = window.MutationObserver
+    ? new window.MutationObserver(records => {
+        // Current playback time and transfer sizes replace text nodes frequently;
+        // they do not move the material and must not keep the GPU drawing.
+        if (
+          records.some(
+            record =>
+              record.type === "attributes" ||
+              [...(record.addedNodes || []), ...(record.removedNodes || [])].some(
+                node => node.nodeType === 1,
+              ),
+          )
+        )
+          schedule();
+      })
+    : null;
+  mutationObserver?.observe(body, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ["class", "hidden", "open", "data-page", "data-view"],
+  });
   const resizeObserver = window.ResizeObserver ? new window.ResizeObserver(schedule) : null;
   resizeObserver?.observe(body);
   const main = document.querySelector("main");
   if (main) resizeObserver?.observe(main);
-  listen(document, "deviload-theme-change", () => update({retry:true}));
-  listen(window, "resize", schedule, {passive:true});
-  listen(document, "scroll", schedule, {passive:true, capture:true});
+  listen(document, "deviload-theme-change", () => update({ retry: true }));
+  listen(window, "resize", schedule, { passive: true });
+  listen(document, "scroll", schedule, { passive: true, capture: true });
   listen(document, "visibilitychange", update);
-  listen(window, "pagehide", () => { suspended = true;release();delete root.dataset.glassRenderer; });
-  listen(window, "pageshow", () => { suspended = false;update(); });
+  listen(window, "pagehide", () => {
+    suspended = true;
+    release();
+    delete root.dataset.glassRenderer;
+  });
+  listen(window, "pageshow", () => {
+    suspended = false;
+    update();
+  });
   if (transparencyQuery?.addEventListener) listen(transparencyQuery, "change", update);
   else if (transparencyQuery?.addListener) {
     transparencyQuery.addListener(update);

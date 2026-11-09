@@ -7,12 +7,21 @@
   --music-theme-error: #922b37;
 }
 
-:root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) {
+:root:is([data-theme="ambient"], [data-theme="aurora"], [data-theme="prism"]) {
   --music-theme-error: var(--theme-error);
 }
 
 /* Opaque materials do not need a blurred back layer. */
-:root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) :is(.music-dock, .music-queue-panel, .music-track-options, .music-library-dialog, .music-settings-dialog, .music-lyrics-dialog, .music-import-dialog) {
+:root:is([data-theme="ambient"], [data-theme="aurora"], [data-theme="prism"])
+  :is(
+    .music-dock,
+    .music-queue-panel,
+    .music-track-options,
+    .music-library-dialog,
+    .music-settings-dialog,
+    .music-lyrics-dialog,
+    .music-import-dialog
+  ) {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
@@ -68,7 +77,8 @@
   box-shadow: var(--theme-shadow);
 }
 
-:root[data-theme]:not([data-theme="classic"]) :is(.music-character, .music-character-halo, .music-hero-number),
+:root[data-theme]:not([data-theme="classic"])
+  :is(.music-character, .music-character-halo, .music-hero-number),
 :root[data-theme]:not([data-theme="classic"]) .music-hero::after {
   display: none;
 }
@@ -90,53 +100,96 @@
   color: var(--theme-text);
 }
 
-:root[data-theme]:not([data-theme="classic"]) :is(
-  .music-eyebrow, .music-hero-copy > p, .music-guest,
-  .music-content-heading .music-eyebrow, .music-session-note,
-  .music-discovery-controls, .music-profile, .music-profile .music-profile-limits,
-  .music-now-info > span, .music-progress, .music-attribution,
-  .music-card-subtitle, .music-track-number, .music-track-copy > span,
-  .music-library-intro p, .music-playlist-tile > span,
-  .music-playlist-banner > div,
-  .music-playlist-feature-copy > p, .music-playlist-count,
-  .music-library-nav-copy small, .music-library-sidebar-empty,
-  .music-library-nav-pin, .music-library-sidebar-search > .icon,
-  .music-smart-tile > .music-eyebrow, .music-smart-tile > small,
-  .music-smart-tile > span:last-child, .music-resume-card small,
-  .music-recommendation-reason, .music-interest-help,
-  .music-interest-copy > span, .music-interest-copy > small,
-  .music-interest-banner p, .music-interest-choice small,
-  .music-interest-count, .music-interest-choices legend,
-  .music-weekly-card p, .music-collection-banner p,
-  .music-empty p, .music-empty-copy, .music-empty > .icon,
-  .music-library-dialog-body p, .music-playlist-form label,
-  .music-settings-dialog p, .music-lyrics-dialog > p,
-  .music-catalog-context p, .music-catalog-context label,
-  .music-import-body > p, .music-import-preview > p,
-  .music-import-preview > label:not(.music-import-use),
-  .music-import-drop, .music-import-result small,
-  .music-import-archive summary, .music-duplicate-group > label,
-  .music-recording-dialog .music-artist-choice p,
-  .music-recording-dialog .music-artist-choice small,
-  .music-recording-dialog .music-duplicate-group > p,
-  .music-interest-form > label, .music-stage .music-now-info > span,
-  .music-stage-header > .music-eyebrow, .music-stage-details > .music-eyebrow
-) {
+:root[data-theme]:not([data-theme="classic"])
+  :is(
+    .music-eyebrow,
+    .music-hero-copy > p,
+    .music-guest,
+    .music-content-heading .music-eyebrow,
+    .music-session-note,
+    .music-discovery-controls,
+    .music-profile,
+    .music-profile .music-profile-limits,
+    .music-now-info > span,
+    .music-progress,
+    .music-attribution,
+    .music-card-subtitle,
+    .music-track-number,
+    .music-track-copy > span,
+    .music-library-intro p,
+    .music-playlist-tile > span,
+    .music-playlist-banner > div,
+    .music-playlist-feature-copy > p,
+    .music-playlist-count,
+    .music-library-nav-copy small,
+    .music-library-sidebar-empty,
+    .music-library-nav-pin,
+    .music-library-sidebar-search > .icon,
+    .music-smart-tile > .music-eyebrow,
+    .music-smart-tile > small,
+    .music-smart-tile > span:last-child,
+    .music-resume-card small,
+    .music-recommendation-reason,
+    .music-interest-help,
+    .music-interest-copy > span,
+    .music-interest-copy > small,
+    .music-interest-banner p,
+    .music-interest-choice small,
+    .music-interest-count,
+    .music-interest-choices legend,
+    .music-weekly-card p,
+    .music-collection-banner p,
+    .music-empty p,
+    .music-empty-copy,
+    .music-empty > .icon,
+    .music-library-dialog-body p,
+    .music-playlist-form label,
+    .music-settings-dialog p,
+    .music-lyrics-dialog > p,
+    .music-catalog-context p,
+    .music-catalog-context label,
+    .music-import-body > p,
+    .music-import-preview > p,
+    .music-import-preview > label:not(.music-import-use),
+    .music-import-drop,
+    .music-import-result small,
+    .music-import-archive summary,
+    .music-duplicate-group > label,
+    .music-recording-dialog .music-artist-choice p,
+    .music-recording-dialog .music-artist-choice small,
+    .music-recording-dialog .music-duplicate-group > p,
+    .music-interest-form > label,
+    .music-stage .music-now-info > span,
+    .music-stage-header > .music-eyebrow,
+    .music-stage-details > .music-eyebrow
+  ) {
   color: var(--theme-muted);
 }
 
-:root[data-theme]:not([data-theme="classic"]) :is(
-  .music-card-title, .music-shelf h4, .music-smart-library > h4,
-  .music-library-sidebar-head h3, .music-playlist-tile,
-  .music-resume-card strong, .music-interest-copy > strong,
-  .music-interest-choice strong, .music-weekly-card h4,
-  .music-duplicate-group > strong,
-  .music-recording-dialog .music-duplicate-group > strong,
-  .music-session-note strong, .music-profile summary,
-  .music-batch-actions > strong, .music-playlist-form > [role="status"],
-  .music-playlist-feature-copy h2, .music-library-create, .music-playlist-choice,
-  .music-settings-dialog label, .music-import-use, .music-artist-choice
-) {
+:root[data-theme]:not([data-theme="classic"])
+  :is(
+    .music-card-title,
+    .music-shelf h4,
+    .music-smart-library > h4,
+    .music-library-sidebar-head h3,
+    .music-playlist-tile,
+    .music-resume-card strong,
+    .music-interest-copy > strong,
+    .music-interest-choice strong,
+    .music-weekly-card h4,
+    .music-duplicate-group > strong,
+    .music-recording-dialog .music-duplicate-group > strong,
+    .music-session-note strong,
+    .music-profile summary,
+    .music-batch-actions > strong,
+    .music-playlist-form > [role="status"],
+    .music-playlist-feature-copy h2,
+    .music-library-create,
+    .music-playlist-choice,
+    .music-settings-dialog label,
+    .music-import-use,
+    .music-artist-choice
+  ) {
   color: var(--theme-text);
 }
 
@@ -152,39 +205,60 @@
 
 :root[data-theme]:not([data-theme="classic"]) .music-primary:hover {
   background: var(--theme-accent);
-  opacity: .88;
+  opacity: 0.88;
   transform: none;
 }
 
-:root[data-theme]:not([data-theme="classic"]) :is(
-  .music-tabs button, .music-icon-button, .music-card-add,
-  .music-card-next, .music-card-download, .music-card-save-playlist,
-  .music-search button, .music-search > .icon,
-  .music-filter-chip, .music-moods button, .music-volume-mark,
-  .music-navigation-toggle, .music-navigation button,
-  .music-library-panel-toggle, .music-library-nav-item,
-  .music-queue-track, .music-track-options button.music-menu-action,
-  .music-card-feedback .music-track-options button
-) {
+:root[data-theme]:not([data-theme="classic"])
+  :is(
+    .music-tabs button,
+    .music-icon-button,
+    .music-card-add,
+    .music-card-next,
+    .music-card-download,
+    .music-card-save-playlist,
+    .music-search button,
+    .music-search > .icon,
+    .music-filter-chip,
+    .music-moods button,
+    .music-volume-mark,
+    .music-navigation-toggle,
+    .music-navigation button,
+    .music-library-panel-toggle,
+    .music-library-nav-item,
+    .music-queue-track,
+    .music-track-options button.music-menu-action,
+    .music-card-feedback .music-track-options button
+  ) {
   color: var(--theme-muted);
 }
 
-:root[data-theme]:not([data-theme="classic"]) :is(
-  .music-tabs button.selected, .music-tabs button:hover,
-  .music-icon-button:hover, .music-icon-button[aria-pressed="true"],
-  .music-card-add[aria-pressed="true"], .music-card-add:hover,
-  .music-card-next:hover, .music-card-download:hover,
-  .music-card-save-playlist:hover, .music-track-actions [aria-pressed="true"],
-  .music-track-row.active .music-track-copy strong,
-  .music-track-row.active .music-track-number,
-  .music-track-row.selected .music-track-copy strong,
-  .music-library-panel-toggle[aria-expanded="true"],
-  .music-library-panel-toggle:hover, .music-library-nav-item.selected,
-  .music-queue-track.active, .music-track-options button.music-menu-action:hover,
-  .music-card-feedback .music-track-options button:hover,
-  .music-navigation-toggle:hover, .music-navigation button:hover:not(:disabled),
-  .music-playlist-choice span, .music-duplicate-group label:has(input:checked)
-) {
+:root[data-theme]:not([data-theme="classic"])
+  :is(
+    .music-tabs button.selected,
+    .music-tabs button:hover,
+    .music-icon-button:hover,
+    .music-icon-button[aria-pressed="true"],
+    .music-card-add[aria-pressed="true"],
+    .music-card-add:hover,
+    .music-card-next:hover,
+    .music-card-download:hover,
+    .music-card-save-playlist:hover,
+    .music-track-actions [aria-pressed="true"],
+    .music-track-row.active .music-track-copy strong,
+    .music-track-row.active .music-track-number,
+    .music-track-row.selected .music-track-copy strong,
+    .music-library-panel-toggle[aria-expanded="true"],
+    .music-library-panel-toggle:hover,
+    .music-library-nav-item.selected,
+    .music-queue-track.active,
+    .music-track-options button.music-menu-action:hover,
+    .music-card-feedback .music-track-options button:hover,
+    .music-navigation-toggle:hover,
+    .music-navigation button:hover:not(:disabled),
+    .music-playlist-choice span,
+    .music-duplicate-group label:has(input:checked)
+  ) {
   color: var(--theme-text);
 }
 
@@ -196,131 +270,186 @@
   border-bottom-color: var(--theme-accent);
 }
 
-:root[data-theme]:not([data-theme="classic"]) :is(
-  .music-search, .music-library-sidebar-search,
-  .music-moods button, .music-filter-chip, .music-library-panel-toggle,
-  .music-navigation-toggle, .music-navigation button,
-  .music-interest-form .music-interest-choice, .music-library-create,
-  .music-playlist-choice
-) {
+:root[data-theme]:not([data-theme="classic"])
+  :is(
+    .music-search,
+    .music-library-sidebar-search,
+    .music-moods button,
+    .music-filter-chip,
+    .music-library-panel-toggle,
+    .music-navigation-toggle,
+    .music-navigation button,
+    .music-interest-form .music-interest-choice,
+    .music-library-create,
+    .music-playlist-choice
+  ) {
   background: var(--theme-input);
   border-color: var(--theme-line);
 }
 
-:root[data-theme]:not([data-theme="classic"]) :is(
-  .music-moods button.selected, .music-filter-chip[aria-pressed="true"],
-  .music-filter-chip[aria-current="page"], .music-import-sources [aria-pressed="true"]
-) {
+:root[data-theme]:not([data-theme="classic"])
+  :is(
+    .music-moods button.selected,
+    .music-filter-chip[aria-pressed="true"],
+    .music-filter-chip[aria-current="page"],
+    .music-import-sources [aria-pressed="true"]
+  ) {
   color: var(--theme-accent-text);
   background: var(--theme-accent);
   border-color: var(--theme-accent);
 }
 
-:root[data-theme]:not([data-theme="classic"]) :is(
-  .music-track-row:hover, .music-track-row:focus-within,
-  .music-track-row.active, .music-track-row.selected,
-  .music-track-row.selected:hover, .music-track-row.selected:focus-within,
-  .music-library-nav-item:hover, .music-library-nav-item.selected,
-  .music-queue-track:hover, .music-queue-track.active,
-  .music-interest-choice:has(input:checked),
-  .music-library-panel-toggle:hover, .music-library-panel-toggle[aria-expanded="true"],
-  .music-icon-button:hover, .music-card-add:hover,
-  .music-card-next:hover, .music-card-download:hover, .music-card-save-playlist:hover,
-  .music-search button:hover, .music-track-options button.music-menu-action:hover,
-  .music-card-feedback .music-track-options button:hover,
-  .music-navigation-toggle:hover, .music-navigation button:hover:not(:disabled),
-  .music-playlist-choice:hover, .music-library-create:hover
-) {
+:root[data-theme]:not([data-theme="classic"])
+  :is(
+    .music-track-row:hover,
+    .music-track-row:focus-within,
+    .music-track-row.active,
+    .music-track-row.selected,
+    .music-track-row.selected:hover,
+    .music-track-row.selected:focus-within,
+    .music-library-nav-item:hover,
+    .music-library-nav-item.selected,
+    .music-queue-track:hover,
+    .music-queue-track.active,
+    .music-interest-choice:has(input:checked),
+    .music-library-panel-toggle:hover,
+    .music-library-panel-toggle[aria-expanded="true"],
+    .music-icon-button:hover,
+    .music-card-add:hover,
+    .music-card-next:hover,
+    .music-card-download:hover,
+    .music-card-save-playlist:hover,
+    .music-search button:hover,
+    .music-track-options button.music-menu-action:hover,
+    .music-card-feedback .music-track-options button:hover,
+    .music-navigation-toggle:hover,
+    .music-navigation button:hover:not(:disabled),
+    .music-playlist-choice:hover,
+    .music-library-create:hover
+  ) {
   background: var(--theme-input);
   border-color: var(--theme-line);
 }
 
-:root[data-theme]:not([data-theme="classic"]) :is(
-  .music-library-sidebar, .music-status, .music-catalog-context,
-  .music-playlist-tile, .music-playlist-banner, .music-playlist-feature,
-  .music-collection-banner, .music-batch-actions, .music-interest-card,
-  .music-interest-banner, .music-resume-card, .music-weekly-card,
-  .music-duplicate-group, .music-recording-dialog .music-duplicate-group,
-  .music-smart-tile, .music-smart-tile[data-mix], .music-queue-undo,
-  .music-stage-notice
-) {
+:root[data-theme]:not([data-theme="classic"])
+  :is(
+    .music-library-sidebar,
+    .music-status,
+    .music-catalog-context,
+    .music-playlist-tile,
+    .music-playlist-banner,
+    .music-playlist-feature,
+    .music-collection-banner,
+    .music-batch-actions,
+    .music-interest-card,
+    .music-interest-banner,
+    .music-resume-card,
+    .music-weekly-card,
+    .music-duplicate-group,
+    .music-recording-dialog .music-duplicate-group,
+    .music-smart-tile,
+    .music-smart-tile[data-mix],
+    .music-queue-undo,
+    .music-stage-notice
+  ) {
   color: var(--theme-text);
   background: var(--theme-surface);
   border-color: var(--theme-line);
 }
 
-:root[data-theme]:not([data-theme="classic"]) :is(
-  .music-playlist-tile:hover, .music-smart-tile:hover
-) {
+:root[data-theme]:not([data-theme="classic"]) :is(.music-playlist-tile:hover, .music-smart-tile:hover) {
   background: var(--theme-surface-strong);
   border-color: var(--theme-line);
   transform: none;
 }
 
-:root[data-theme]:not([data-theme="classic"]) :is(
-  .music-track-list, .music-profile, .music-profile [data-preview],
-  .music-preferences-dialog .music-catalog-context,
-  .music-import-preview, .music-import-archive, .music-import-result,
-  .music-artist-choice, .music-duplicate-group > label + label, .music-empty
-) {
+:root[data-theme]:not([data-theme="classic"])
+  :is(
+    .music-track-list,
+    .music-profile,
+    .music-profile [data-preview],
+    .music-preferences-dialog .music-catalog-context,
+    .music-import-preview,
+    .music-import-archive,
+    .music-import-result,
+    .music-artist-choice,
+    .music-duplicate-group > label + label,
+    .music-empty
+  ) {
   border-color: var(--theme-line);
 }
 
 /* Solid material behind text makes floating controls readable over any cover. */
-:root[data-theme]:not([data-theme="classic"]) :is(
-  .music-dock, .music-queue-panel, .music-stage .music-queue-panel,
-  .music-track-options, .music-card-feedback > .music-track-options,
-  .music-library-dialog, .music-settings-dialog, .music-lyrics-dialog,
-  .music-import-dialog,
-  .music-library-sidebar-list > .music-library-nav-item:first-child
-) {
+:root[data-theme]:not([data-theme="classic"])
+  :is(
+    .music-dock,
+    .music-queue-panel,
+    .music-stage .music-queue-panel,
+    .music-track-options,
+    .music-card-feedback > .music-track-options,
+    .music-library-dialog,
+    .music-settings-dialog,
+    .music-lyrics-dialog,
+    .music-import-dialog,
+    .music-library-sidebar-list > .music-library-nav-item:first-child
+  ) {
   background: var(--theme-surface-strong);
   border-color: var(--theme-line);
   color: var(--theme-text);
   box-shadow: var(--theme-shadow);
 }
 
-:root[data-theme]:not([data-theme="classic"]) .music-library-sidebar-list > .music-library-nav-item:first-child {
+:root[data-theme]:not([data-theme="classic"])
+  .music-library-sidebar-list
+  > .music-library-nav-item:first-child {
   box-shadow: none;
 }
 
-:root[data-theme]:not([data-theme="classic"]) :is(
-  .music-library-dialog, .music-settings-dialog,
-  .music-lyrics-dialog, .music-import-dialog
-)::backdrop {
+:root[data-theme]:not([data-theme="classic"])
+  :is(.music-library-dialog, .music-settings-dialog, .music-lyrics-dialog, .music-import-dialog)::backdrop {
   background: #0b102b66;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
 
-:root[data-theme]:not([data-theme="classic"]) :is(
-  .music-workspace, .music-library-dialog, .music-settings-dialog,
-  .music-lyrics-dialog, .music-import-dialog
-) :is(input:not([type="checkbox"]):not([type="range"]), select, textarea) {
+:root[data-theme]:not([data-theme="classic"])
+  :is(
+    .music-workspace,
+    .music-library-dialog,
+    .music-settings-dialog,
+    .music-lyrics-dialog,
+    .music-import-dialog
+  )
+  :is(input:not([type="checkbox"]):not([type="range"]), select, textarea) {
   background: var(--theme-input);
   color: var(--theme-text);
   border-color: var(--theme-line);
 }
 
-:root[data-theme]:not([data-theme="classic"]) .music-workspace :is(
-  .music-search, .music-library-sidebar-search
-) input[type="search"] {
+:root[data-theme]:not([data-theme="classic"])
+  .music-workspace
+  :is(.music-search, .music-library-sidebar-search)
+  input[type="search"] {
   background: transparent;
   color: var(--theme-text);
 }
 
-:root[data-theme]:not([data-theme="classic"]) :is(
-  .music-workspace, .music-library-dialog, .music-settings-dialog,
-  .music-lyrics-dialog, .music-import-dialog
-) :is(input, textarea)::placeholder {
+:root[data-theme]:not([data-theme="classic"])
+  :is(
+    .music-workspace,
+    .music-library-dialog,
+    .music-settings-dialog,
+    .music-lyrics-dialog,
+    .music-import-dialog
+  )
+  :is(input, textarea)::placeholder {
   color: var(--theme-muted);
   opacity: 1;
 }
 
-:root[data-theme]:not([data-theme="classic"]) :is(
-  .music-workspace, .music-library-dialog, .music-settings-dialog,
-  .music-import-dialog
-) input[type="checkbox"],
+:root[data-theme]:not([data-theme="classic"])
+  :is(.music-workspace, .music-library-dialog, .music-settings-dialog, .music-import-dialog)
+  input[type="checkbox"],
 :root[data-theme]:not([data-theme="classic"]) :is(.music-dock, .music-stage) input[type="range"] {
   accent-color: var(--theme-accent);
 }
@@ -329,10 +458,14 @@
   background: var(--theme-line);
 }
 
-:root[data-theme]:not([data-theme="classic"]) :is(
-  .music-art, .music-playlist-art, .music-playlist-edit-art,
-  .music-library-nav-art, .music-library-liked-art
-) {
+:root[data-theme]:not([data-theme="classic"])
+  :is(
+    .music-art,
+    .music-playlist-art,
+    .music-playlist-edit-art,
+    .music-library-nav-art,
+    .music-library-liked-art
+  ) {
   background: var(--theme-input);
   color: var(--theme-muted);
 }
@@ -373,7 +506,7 @@
 :root[data-theme]:not([data-theme="classic"]) .music-lyric-line.active {
   text-decoration: underline;
   text-decoration-thickness: 2px;
-  text-underline-offset: .18em;
+  text-underline-offset: 0.18em;
 }
 
 :root[data-theme]:not([data-theme="classic"]) .music-stage,
@@ -383,7 +516,7 @@
 }
 
 :root[data-theme]:not([data-theme="classic"]) .music-stage-background .music-art {
-  opacity: .1;
+  opacity: 0.1;
 }
 
 :root[data-theme]:not([data-theme="classic"]) .music-stage-background::after {
@@ -393,7 +526,10 @@
 :root[data-theme]:not([data-theme="classic"]) .music-status.error,
 :root[data-theme]:not([data-theme="classic"]) .music-import-warnings p,
 :root[data-theme]:not([data-theme="classic"]) .music-import-result .music-import-review,
-:root[data-theme]:not([data-theme="classic"]) .music-recording-dialog .music-duplicate-group > .music-import-review {
+:root[data-theme]:not([data-theme="classic"])
+  .music-recording-dialog
+  .music-duplicate-group
+  > .music-import-review {
   color: var(--music-theme-error);
   background: var(--theme-surface);
   border-color: var(--theme-line);
@@ -423,19 +559,25 @@
   background-size: 200% 100%;
 }
 
-:root[data-theme]:not([data-theme="classic"]) :is(
-  .music-workspace, .music-dock, .music-queue-panel, .music-stage,
-  .music-library-dialog, .music-settings-dialog, .music-lyrics-dialog,
-  .music-import-dialog, .music-library-sidebar
-) :is(button, input, select, textarea):focus-visible,
+:root[data-theme]:not([data-theme="classic"])
+  :is(
+    .music-workspace,
+    .music-dock,
+    .music-queue-panel,
+    .music-stage,
+    .music-library-dialog,
+    .music-settings-dialog,
+    .music-lyrics-dialog,
+    .music-import-dialog,
+    .music-library-sidebar
+  )
+  :is(button, input, select, textarea):focus-visible,
 :root[data-theme]:not([data-theme="classic"]) .music-library-panel-toggle:focus-visible,
 :root[data-theme]:not([data-theme="classic"]) .music-interest-choice:focus-within {
   outline-color: var(--theme-accent);
 }
 
-:root[data-theme]:not([data-theme="classic"]) :is(
-  .music-search, .music-library-sidebar-search
-):focus-within {
+:root[data-theme]:not([data-theme="classic"]) :is(.music-search, .music-library-sidebar-search):focus-within {
   border-color: var(--theme-accent);
 }
 
@@ -470,25 +612,39 @@
   color: var(--theme-accent-text);
   filter: brightness(1.08);
 }
-:root[data-theme]:not([data-theme="classic"]) .music-search button.music-search-submit:disabled {opacity: .55;filter: none}
+:root[data-theme]:not([data-theme="classic"]) .music-search button.music-search-submit:disabled {
+  opacity: 0.55;
+  filter: none;
+}
 :root[data-theme]:not([data-theme="classic"]) .music-search button:not(.music-search-submit) {
   color: var(--theme-text);
   background: transparent;
 }
-:root[data-theme]:not([data-theme="classic"]) .music-search button:not(.music-search-submit):hover {background: var(--theme-hover)}
-:root[data-theme]:not([data-theme="classic"]) .music-search kbd {color: var(--theme-muted);border-color: var(--theme-line)}
-:root[data-theme]:not([data-theme="classic"]) .music-search:focus-within {outline: 2px solid var(--theme-accent);outline-offset: 2px}
+:root[data-theme]:not([data-theme="classic"]) .music-search button:not(.music-search-submit):hover {
+  background: var(--theme-hover);
+}
+:root[data-theme]:not([data-theme="classic"]) .music-search kbd {
+  color: var(--theme-muted);
+  border-color: var(--theme-line);
+}
+:root[data-theme]:not([data-theme="classic"]) .music-search:focus-within {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+}
 
 /* Cover imagery must not become the text background. Glass remains visible in
    the space around sections; shelves and the reading panels have local plates. */
-:root[data-theme="glass-light"] .music-workspace {--theme-surface: rgba(249,252,254,.94)}
+:root[data-theme="glass-light"] .music-workspace {
+  --theme-surface: rgba(249, 252, 254, 0.94);
+}
 :root[data-theme="glass-light"] :is(.music-content-heading, .music-shelf) {
   padding: 18px;
   border: 1px solid var(--theme-line);
   border-radius: 14px;
   background: var(--theme-surface);
 }
-:root:is([data-theme="ambient"],[data-theme="aurora"],[data-theme="prism"]) :is(.music-library-dialog, .music-settings-dialog, .music-lyrics-dialog, .music-import-dialog)::backdrop {
+:root:is([data-theme="ambient"], [data-theme="aurora"], [data-theme="prism"])
+  :is(.music-library-dialog, .music-settings-dialog, .music-lyrics-dialog, .music-import-dialog)::backdrop {
   background: #050908b8;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -498,7 +654,9 @@
    functional accent for play and selected states, rather than a cover overlay. */
 
 @media (max-width: 760px) {
-  :root[data-theme="glass-light"] :is(.music-content-heading, .music-shelf) {padding: 14px}
+  :root[data-theme="glass-light"] :is(.music-content-heading, .music-shelf) {
+    padding: 14px;
+  }
 }
 
 @media (forced-colors: active) {

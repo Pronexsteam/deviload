@@ -7,7 +7,7 @@ import {insertNext,reorderTrack} from '../src/music-state.js';
 const source=readFileSync(new URL('../src/devil-music.js',import.meta.url),'utf8');
 const between=(a,b)=>source.slice(source.indexOf(a),source.indexOf(b));
 const code=between('  function toggleShuffle(','  function renderQueue(')+between('  function syncQueue(','  function removeTrack(')+between('  function miniQueue(','  function cancelResolution(');
-const miniControl=between('  window.__TAURI__?.event?.listen("music-mini-queue",','  return {open(');
+const miniControl=between('  window.__TAURI__?.event\n    ?.listen("music-mini-queue",','  return {\n    open(');
 const song=n=>({id:String(n).padStart(11,'0'),kind:'song',title:`Song ${n}`});
 function queueUI(){
  let miniHandler;const queue=Array.from({length:8},(_,n)=>song(n)),ctx={queue,current:queue[2],index:2,shuffle:true,repeat:'off',sourceRevision:0,nextPlan:null,

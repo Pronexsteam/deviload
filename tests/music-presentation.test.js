@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 const source=readFileSync(new URL('../src/music-presentation.js',import.meta.url),'utf8');
-const update=source.slice(source.indexOf('update(item,downloading=false,meta={}){'),source.indexOf('},notify(text,undo)'))+'}';
+const update=source.slice(source.indexOf('update(item, downloading = false, meta = {}) {'),source.indexOf('    notify(text, undo) {'));
 test('upgraded artwork for the same recording refreshes the open player without replaying arrival animations',()=>{
  const node=()=>({renders:0,replaceChildren(value){this.renders++;this.content=value;},setAttribute(){},classList:{toggle(){},remove(){},add(){}}});
  const ctx={motion:{update(){}},showMedia(){},current:null,currentImage:'',playing:false,stage:{open:true},cover:(item,_label,size)=>({image:item.image,size}),

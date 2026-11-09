@@ -1,24 +1,137 @@
 /* Only Devil Music: the rest of Deviload steps out of sight. */
-:root.music-only body .music-navigation-toggle,:root.music-only body .sidebar,:root.music-only body .topbar-actions :is(#open-youtube-view,#phone-open,#open-folder,#notice-button,#toolbar-more){display:none!important}
-:root.music-only body.music-navigation-layout .workspace-breadcrumb{gap:0}
-.app-mode-toggle{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;align-items:center;margin:0 0 14px;padding:12px 14px;border:1px solid var(--surf-line,#ffffff1c);border-radius:14px;background:var(--surf-fill,#ffffff08);cursor:pointer}
-.app-mode-toggle span{font-weight:650}
-.app-mode-toggle small{grid-column:2;font-size:12px;color:var(--workspace-muted,#b9bcc6)}
-dialog.app-mode-welcome{width:min(560px,calc(100vw - 32px));padding:28px;border:1px solid #ffffff26;border-radius:28px;color:var(--theme-text,#f4f4f6);
-  background:linear-gradient(155deg,#ffffff1f,#ffffff05 45%),color-mix(in srgb,var(--theme-surface-strong,#15171d) 70%,transparent);-webkit-backdrop-filter:blur(30px) saturate(1.6);backdrop-filter:blur(30px) saturate(1.6);box-shadow:0 30px 90px #0009,inset 0 1px 0 #ffffff33}
-dialog.app-mode-welcome h2{margin:0 0 6px;font-size:24px}
-dialog.app-mode-welcome>p{margin:0 0 18px;color:var(--workspace-muted,#b9bcc6)}
-.app-mode-choices{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.app-mode-choices button{display:grid;gap:6px;align-content:start;min-height:120px;margin:0;padding:18px;border:1px solid #ffffff22;border-radius:20px;background:#ffffff0c;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background-color .15s,translate .3s var(--open-spring,ease)}
-.app-mode-choices button:hover{background:#ffffff1a;translate:0 -2px}
-.app-mode-choices strong{font-size:16px}
-.app-mode-choices span{font-size:13px;line-height:1.5;color:var(--workspace-muted,#b9bcc6)}
-@media(max-width:560px){.app-mode-choices{grid-template-columns:1fr}}
-:root[data-theme] body #music-preferences .app-mode-toggle{display:grid!important;grid-template-columns:auto minmax(0,1fr);justify-content:stretch;text-align:left}
-:root[data-theme] body #music-preferences .app-mode-toggle input{margin:0}
+:root.music-only body .music-navigation-toggle,
+:root.music-only body .sidebar,
+:root.music-only
+  body
+  .topbar-actions
+  :is(#open-youtube-view, #phone-open, #open-folder, #notice-button, #toolbar-more) {
+  display: none !important;
+}
+:root.music-only body.music-navigation-layout .workspace-breadcrumb {
+  gap: 0;
+}
+.app-mode-toggle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 10px;
+  align-items: center;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--surf-line, #ffffff1c);
+  border-radius: 14px;
+  background: var(--surf-fill, #ffffff08);
+  cursor: pointer;
+}
+.app-mode-toggle span {
+  font-weight: 650;
+}
+.app-mode-toggle small {
+  grid-column: 2;
+  font-size: 12px;
+  color: var(--workspace-muted, #b9bcc6);
+}
+dialog.app-mode-welcome {
+  width: min(560px, calc(100vw - 32px));
+  padding: 28px;
+  border: 1px solid #ffffff26;
+  border-radius: 28px;
+  color: var(--theme-text, #f4f4f6);
+  background:
+    linear-gradient(155deg, #ffffff1f, #ffffff05 45%),
+    color-mix(in srgb, var(--theme-surface-strong, #15171d) 70%, transparent);
+  -webkit-backdrop-filter: blur(30px) saturate(1.6);
+  backdrop-filter: blur(30px) saturate(1.6);
+  box-shadow:
+    0 30px 90px #0009,
+    inset 0 1px 0 #ffffff33;
+}
+dialog.app-mode-welcome h2 {
+  margin: 0 0 6px;
+  font-size: 24px;
+}
+dialog.app-mode-welcome > p {
+  margin: 0 0 18px;
+  color: var(--workspace-muted, #b9bcc6);
+}
+.app-mode-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.app-mode-choices button {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  min-height: 120px;
+  margin: 0;
+  padding: 18px;
+  border: 1px solid #ffffff22;
+  border-radius: 20px;
+  background: #ffffff0c;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    translate 0.3s var(--open-spring, ease);
+}
+.app-mode-choices button:hover {
+  background: #ffffff1a;
+  translate: 0 -2px;
+}
+.app-mode-choices strong {
+  font-size: 16px;
+}
+.app-mode-choices span {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--workspace-muted, #b9bcc6);
+}
+@media (max-width: 560px) {
+  .app-mode-choices {
+    grid-template-columns: 1fr;
+  }
+}
+:root[data-theme] body #music-preferences .app-mode-toggle {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr);
+  justify-content: stretch;
+  text-align: left;
+}
+:root[data-theme] body #music-preferences .app-mode-toggle input {
+  margin: 0;
+}
 /* Pause while another app plays: two plain switches with a note, aligned like the rest of the panel. */
-:root[data-theme] body #music-preferences .music-yield{display:grid;gap:8px;margin:12px 0 4px;padding:12px 14px;border:1px solid var(--surf-line,#ffffff1c);border-radius:14px;background:var(--surf-fill,#ffffff06);min-width:0}
-:root[data-theme] body #music-preferences .music-yield label{display:flex!important;align-items:center;justify-content:flex-start!important;gap:10px;margin:0;text-align:left;font-weight:600;width:auto}
-:root[data-theme] body #music-preferences .music-yield input{flex:none;margin:0}
-:root[data-theme] body #music-preferences .music-yield input:disabled+span{opacity:.5}
-.music-yield-note{margin:0;font-size:12px;color:var(--workspace-muted,#b9bcc6)}
+:root[data-theme] body #music-preferences .music-yield {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--surf-line, #ffffff1c);
+  border-radius: 14px;
+  background: var(--surf-fill, #ffffff06);
+  min-width: 0;
+}
+:root[data-theme] body #music-preferences .music-yield label {
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-start !important;
+  gap: 10px;
+  margin: 0;
+  text-align: left;
+  font-weight: 600;
+  width: auto;
+}
+:root[data-theme] body #music-preferences .music-yield input {
+  flex: none;
+  margin: 0;
+}
+:root[data-theme] body #music-preferences .music-yield input:disabled + span {
+  opacity: 0.5;
+}
+.music-yield-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--workspace-muted, #b9bcc6);
+}
