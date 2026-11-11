@@ -29,6 +29,7 @@ import { wireMusicYield } from "./music-yield.js";
 import { wireMusicAccount } from "./music-account.js";
 import { createLikesSync, likesSyncControls } from "./music-likes-sync.js";
 import { createRecordingAlign } from "./music-recording-align.js";
+import { groupMusicSettings } from "./music-settings-groups.js";
 import { wireMusicControlApi } from "./music-control-api.js";
 import { wireMusicRecognize } from "./music-recognize.js";
 import { createMusicCast, isCasting } from "./music-cast.js";
@@ -3661,6 +3662,8 @@ export function createMusic({ invoke, onDownload, storage }) {
     view = next;
     musicSearch?.sync(next === "search" && !activeMood ? lastQuery.value : "");
     $("music-home-hero").hidden = next !== "home";
+    // The home already greets and names each shelf; a page title above "For you" only repeated it.
+    $("music-heading").hidden = next === "home";
     $("music-moods").hidden = next !== "home" && !(next === "search" && activeMood);
     document.querySelectorAll("[data-music-view]").forEach(b => {
       const selected = b.dataset.musicView === (["playlist", "interest"].includes(next) ? "library" : next);
@@ -5710,6 +5713,11 @@ export function createMusic({ invoke, onDownload, storage }) {
       (note || preferences).after ? note.after(replay) : preferences.append(replay);
       onLanguageChange(() => {
         replay.lastChild.textContent = t("Show the tour again");
+      });
+      // Under plain headings; again on every opening, for blocks added later.
+      groupMusicSettings(preferences);
+      preferences.addEventListener("toggle", () => {
+        if (preferences.open) groupMusicSettings(preferences);
       });
     }
   }

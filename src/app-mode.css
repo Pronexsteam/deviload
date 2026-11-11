@@ -313,3 +313,32 @@ dialog.app-mode-welcome > p {
   justify-content: flex-end;
   gap: 6px;
 }
+
+/* Music settings under plain headings: accounts, playback, suggestions, privacy, integrations, the app. */
+#music-preferences .music-settings-group {
+  display: grid;
+  gap: 10px;
+  margin-top: 26px;
+}
+#music-preferences .music-settings-group[hidden] {
+  display: none;
+}
+#music-preferences .music-settings-group > * {
+  margin-block: 0;
+}
+#music-preferences .music-settings-group-title {
+  margin: 0;
+  padding-inline: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+/* The group heading already says Accounts. */
+#music-preferences .music-settings-group .music-accounts-title {
+  display: none;
+}
+#music-preferences .music-settings-group .music-tour-replay {
+  justify-self: start;
+}
