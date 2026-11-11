@@ -516,6 +516,44 @@
 .music-import-reading[hidden] {
   display: none;
 }
+/* A bar with no end in sight: a light runs along it while the library is read. */
+.music-import-bar {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.music-import-bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 38%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #3ecf6e, var(--player-primary, #9ad0ff));
+  animation: music-import-slide 1.4s ease-in-out infinite;
+}
+@keyframes music-import-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(270%);
+  }
+}
+.music-import-hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+.music-import-hint[hidden] {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .music-import-bar > span {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
+  }
+}
 
 /* Find my music: a short summary, three buttons for where the songs go, a moving search and one line per song. */
 .music-import-coverage {

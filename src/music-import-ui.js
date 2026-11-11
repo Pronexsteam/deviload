@@ -262,9 +262,28 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
     meterText.setAttribute("role", "status");
     meter.hidden = true;
     meter.append(meterText, progress);
-    const foundCount = () => {
-      const keys = new Set(chosenEntries().map(entry => entry.key));
-      return rows.filter(row => row.item && keys.has(row.entry.key)).length;
+    // One tally of the chosen songs: the meter, the review heading and the hint beside Add all read it,
+    // so their numbers tell one story (checked, found, found but to check, not found).
+    const tally = () => {
+      const keys = new Set(chosenEntries().map(entry => entry.key)),
+        mine = rows.filter(row => keys.has(row.entry.key)),
+        found = mine.filter(row => row.item);
+      return {
+        total: keys.size,
+        found: found.length,
+        check: found.filter(row => row.confidence === "review" && !applied.has(row.entry.key)).length,
+        missing: mine.filter(row => !row.item).length,
+      };
+    };
+    const finalMeter = () => {
+      const now = tally();
+      return [
+        t("Found {found} of {total}", { found: now.found, total: now.total }),
+        now.check ? t("{count} to check", { count: now.check }) : "",
+        now.missing ? t("{count} not found", { count: now.missing }) : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
     };
     async function matchBatch(signal) {
       const ready = new Set([...applied, ...rows.filter(row => row.item).map(row => row.entry.key)]),
@@ -294,14 +313,15 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
         },
         onProgress: done => {
           progress.value = readyCount + done;
-          meterText.textContent = t("Searching YouTube Music… {done} of {total}", {
+          meterText.textContent = t("Searching YouTube Music… checked {done} of {total}, found {found}", {
             done: readyCount + done,
             total: progress.max,
+            found: tally().found,
           });
         },
       });
       meter.classList.remove("is-running");
-      meterText.textContent = t("Found {found} of {total}", { found: foundCount(), total: progress.max });
+      meterText.textContent = finalMeter();
       showRows();
     }
     const match = button(t("Find my music"), null, () => run(matchBatch), "outline small");
@@ -356,6 +376,8 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
       "music-primary",
     );
     apply.disabled = true;
+    const selectionHint = el("p", "music-import-caption music-import-hint");
+    selectionHint.hidden = true;
     const review = el("details", "music-import-review-details"),
       reviewTitle = el("summary", "", "");
     const selectionTools = el("div", "music-import-selection");
@@ -404,7 +426,18 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
         : t("Add selected songs");
       selectionCount.textContent = t("{count} selected", { count: selected.size });
       moreRows.hidden = rows.length <= shown;
-      reviewTitle.textContent = t("Review matches ({count})", { count: available.length });
+      const now = tally();
+      reviewTitle.textContent = t("Found songs ({count})", { count: available.length });
+      // Songs marked to check are left unticked: the hint says why Add counts fewer than were found.
+      const unticked = available.filter(row => !selected.has(row)).length;
+      selectionHint.textContent =
+        unticked && now.check
+          ? t("{count} songs marked to check are not selected. Tick them if the version is right.", {
+              count: Math.min(unticked, now.check),
+            })
+          : "";
+      selectionHint.hidden = !selectionHint.textContent;
+      if (!busy && rows.length && !meter.hidden) meterText.textContent = finalMeter();
       // Search again only for songs still missing; save to a file only what could not be found.
       const done = new Set([...applied, ...rows.filter(row => row.item).map(row => row.entry.key)]);
       const missing = batch ? chosenEntries().filter(entry => !done.has(entry.key)).length : 0;
@@ -791,7 +824,12 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
     // Libraries read through the person's own sign-in: no link or file, one button.
     const accountArea = el("div", "music-import-account-area"),
       accountState = el("span", "music-import-account-state"),
-      readingBar = el("progress", "music-import-progress music-import-reading");
+      readingBar = el("div", "music-import-meter is-running music-import-reading"),
+      readingText = el("span", "music-import-meter-text"),
+      readingTrack = el("div", "music-import-bar");
+    readingText.setAttribute("role", "status");
+    readingTrack.append(el("span", ""));
+    readingBar.append(readingText, readingTrack);
     readingBar.hidden = true;
     let accountSource = null,
       signedIn = false,
@@ -848,9 +886,10 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
           // A large library takes a minute or two: a moving bar and the time so far show it is still working.
           const started = performance.now();
           const tick = () =>
-            (notice.textContent = t("Reading your library… {time}", {
+            (readingText.textContent = t("Reading your library… {time}", {
               time: formatElapsed((performance.now() - started) / 1000),
             }));
+          notice.textContent = "";
           tick();
           readingBar.hidden = false;
           readAccount.disabled = true;
@@ -988,7 +1027,7 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
     completeFile.append(el("span", "", t("Choose an export for the full library")));
     completeFile.hidden = true;
     const actions = el("div", "music-import-actions");
-    actions.append(apply, report);
+    actions.append(apply, report, selectionHint);
     preview.append(
       coverage,
       completeFile,
