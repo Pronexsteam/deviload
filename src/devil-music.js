@@ -30,6 +30,7 @@ import { wireMusicAccount } from "./music-account.js";
 import { createLikesSync, likesSyncControls } from "./music-likes-sync.js";
 import { createRecordingAlign } from "./music-recording-align.js";
 import { groupMusicSettings } from "./music-settings-groups.js";
+import { createNewReleases } from "./music-new-releases.js";
 import { wireMusicControlApi } from "./music-control-api.js";
 import { wireMusicRecognize } from "./music-recognize.js";
 import { createMusicCast, isCasting } from "./music-cast.js";
@@ -196,6 +197,7 @@ function playableCover(item, glyph = "play", size = 320) {
 export function createMusic({ invoke, onDownload, storage }) {
   const diagnostics = createMusicDiagnostics();
   const loadArtistCatalog = createArtistCatalog(invoke);
+  const newReleases = createNewReleases({ loadArtist: loadArtistCatalog, storage });
   const decks = createMusicDecks();
   let audio = decks.current;
   document.body.append(...decks.nodes);
@@ -1680,6 +1682,24 @@ export function createMusic({ invoke, onDownload, storage }) {
         }
       },
     });
+  }
+  // Every song of a playlist into downloads in one go, so the playlist plays without a connection.
+  async function downloadPlaylist(list) {
+    const items = tracks(list.items || [])
+      .filter(item => !isLocalMusicId(item.id))
+      .map(item => resolveRecordingSource(item, saved.sourceBindings));
+    if (!items.length) return;
+    try {
+      if (!onDownload) throw new Error(t("Open the installed Deviload app to download."));
+      const count = await onDownload(items);
+      status(
+        count
+          ? t("Added to downloads: {count} songs. They will play offline once downloaded.", { count })
+          : t("These links are already in the queue."),
+      );
+    } catch (error) {
+      status(errorText(error), true);
+    }
   }
   async function downloadTrack(item) {
     if (!item || isLocalMusicId(item.id) || downloadsPending.has(item.id)) return;
@@ -3999,6 +4019,7 @@ export function createMusic({ invoke, onDownload, storage }) {
             [t("Edit playlist"), "pencil-simple", () => library.rename(playlist.id)],
             ...(hasTracks
               ? [
+                  [t("Download for offline"), "download-simple", () => downloadPlaylist(playlist)],
                   [t("Create interest mix"), "music-notes", () => interestUI.edit(null, playlist.id)],
                   [t("Review similar tracks"), "copy", () => library.duplicates(playlist.id)],
                   [
@@ -4353,6 +4374,9 @@ export function createMusic({ invoke, onDownload, storage }) {
     return [
       [t("Open {title}", { title: list.name }), "arrow-right", () => showPlaylist(list.id)],
       ...(list.items?.length ? [[t("Play"), "play", () => playItems(list.items)]] : []),
+      ...(list.items?.some(item => !isLocalMusicId(item.id))
+        ? [[t("Download for offline"), "download-simple", () => downloadPlaylist(list)]]
+        : []),
       null,
       [list.pinned ? t("Unpin playlist") : t("Pin playlist"), "push-pin", () => library.pin(list.id)],
       [t("Edit playlist"), "pencil-simple", () => library.rename(list.id)],
@@ -4989,11 +5013,16 @@ export function createMusic({ invoke, onDownload, storage }) {
     discoveryCandidates = items;
     sections = homeSections(base, items);
     if (!personal && items.length) sections[0].title = t("Explore with ListenBrainz");
-    if (albums.length)
-      sections.splice(items.length ? 1 : 0, 0, {
+    // Albums already on the new releases shelf are not repeated on the one after it.
+    const fresh = new Set(newReleases.cached(followedArtists(), language()).map(item => item.id)),
+      older = albums.filter(item => !fresh.has(item.id));
+    if (older.length) {
+      const releases = sections.findIndex(section => section.title === t("New from artists you follow"));
+      sections.splice(releases >= 0 ? releases + 1 : items.length ? 1 : 0, 0, {
         title: t("Albums from artists you follow"),
-        items: albums.slice(0, 12),
+        items: older.slice(0, 12),
       });
+    }
     render();
     prepareHomeSelection();
   }
@@ -5002,9 +5031,43 @@ export function createMusic({ invoke, onDownload, storage }) {
     const first = current || tracks(sections.flatMap(section => section.items))[0];
     if (first) intent.enter(first.id);
   }
+  const followedArtists = () => (saved.collections || []).filter(item => item.kind === "artist");
+  let releasesLoading = false;
+  // New albums and singles from followed artists: the last shelf at once, a fresh one when it is ready.
+  function refreshReleases() {
+    if (releasesLoading || !followedArtists().length) return;
+    releasesLoading = true;
+    newReleases
+      .load(followedArtists(), language())
+      .then(items => {
+        if (view !== "home") return;
+        const title = t("New from artists you follow"),
+          shelf = sections.find(section => section.title === title);
+        if ((shelf?.items || []).map(item => item.id).join() === items.map(item => item.id).join()) return;
+        const ids = new Set(items.map(item => item.id));
+        sections = sections
+          .filter(section => section.title !== title)
+          .map(section =>
+            section.title === t("Albums from artists you follow")
+              ? { ...section, items: section.items.filter(item => !ids.has(item.id)) }
+              : section,
+          )
+          .filter(section => section.items.length);
+        if (items.length) {
+          const after = sections.findIndex(section => section.title === t("For you"));
+          sections.splice(after + 1, 0, { title, items });
+        }
+        render();
+      })
+      .catch(() => {})
+      .finally(() => (releasesLoading = false));
+  }
   function homeSections(base, personal = []) {
     const result = [];
     if (personal.length) result.push({ title: t("For you"), items: personal });
+    const releases = newReleases.cached(followedArtists(), language());
+    if (releases.length) result.push({ title: t("New from artists you follow"), items: releases });
+    Promise.resolve().then(refreshReleases);
     if (saved.recent.length) result.push({ title: t("Recently played"), items: saved.recent.slice(0, 12) });
     // Cached or imported regional catalog sections must never enter discovery.
     return result;

@@ -26,7 +26,7 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
 const response=items=>({recordings:items.map((item,index)=>({mbid:`00000000-0000-0000-0000-${String(index+1).padStart(12,"0")}`,title:item.title,artists:item.artists,duration:item.duration}))});
 
 function music({discovery=async()=>response([song(11)]),extra=[song(11)],radioItems=[song(2)]}={}){
-  const calls=[],renders=[],controls=new Map(),ctx={isLocalMusicId,localPlaybackSource,
+  const calls=[],renders=[],controls=new Map(),ctx={newReleases:{cached:()=>[],load:async()=>[]},isLocalMusicId,localPlaybackSource,
     saved:{favorites:[song(1)],recent:[],collections:[],playlists:[],sourceBindings:[],interestMixes:[],publicDiscovery:true,showRegional:false},
     taste:readTaste(),queue:[],current:null,privateSession:false,navigator:{onLine:true},publicGeneration:0,sourceRevision:0,
     request:1,personalization:0,recommendationRevision:0,listeningRevision:0,homeListeningRevision:0,homeBuiltAt:0,distinctSongs,playRequest:1,contextRevision:0,homeSeedRotation:0,homeRefreshRevision:-1,nextHomeCandidates:[],
