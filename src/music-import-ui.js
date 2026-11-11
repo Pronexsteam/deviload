@@ -673,42 +673,6 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
         ],
       },
       {
-        key: "spotify",
-        brand: "spotify",
-        title: t("Spotify playlist or album"),
-        text: t("Paste a share link to a public playlist or album."),
-        placeholder: t("Spotify playlist or album link"),
-        steps: [
-          t("Open the playlist or album in Spotify."),
-          t("Click the three dots, then Share, then Copy link."),
-          t("Paste the link below."),
-        ],
-      },
-      {
-        key: "youtube",
-        brand: "youtubemusic",
-        title: t("YouTube Music playlist"),
-        text: t("Paste a link to a public YouTube Music or YouTube playlist."),
-        placeholder: t("YouTube Music or YouTube playlist link"),
-        steps: [
-          t("Open the playlist on YouTube Music or YouTube."),
-          t("Click Share, then Copy."),
-          t("Paste the link below."),
-        ],
-      },
-      {
-        key: "mix",
-        brand: "youtube",
-        title: t("YouTube Mix"),
-        text: t("Keep a Mix as a playlist, up to 100 songs."),
-        placeholder: t("YouTube Mix link"),
-        steps: [
-          t("Start a Mix on YouTube Music or YouTube."),
-          t("Copy its link from Share or the address bar."),
-          t("Paste it below. The songs are saved as they are now."),
-        ],
-      },
-      {
         key: "file",
         icon: "files",
         title: t("Your whole library from a file"),
@@ -722,7 +686,19 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
     ];
     const start = el("section", "music-import-start"),
       cards = el("div", "music-import-cards");
-    start.append(intro, resume, cards);
+    const linkStart = el("div", "music-import-link-start");
+    linkStart.append(el("p", "music-import-or", t("Or paste a link to a playlist, album or Mix")), linkForm);
+    const fileLink = button(
+      t("I have a data export file"),
+      "files",
+      () => {
+        if (busy || reading) return;
+        showStep(SOURCES.find(source => source.key === "file"));
+      },
+      "quiet small music-import-file-link",
+    );
+    fileLink.append(el("span", "", t("I have a data export file")));
+    start.append(intro, resume, cards, linkStart, fileLink);
     const step = el("section", "music-import-step"),
       back = button(
         t("All sources"),
@@ -740,7 +716,6 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
     stepHead.append(el("span", "music-import-art"), stepTitle);
     const linkArea = el("div", "music-import-link-area"),
       fileArea = el("div", "music-import-file-area");
-    linkArea.append(linkForm);
     fileArea.append(sources, guide, pick, file, drop, help);
     // Libraries read through the person's own sign-in: no link or file, one button.
     const accountArea = el("div", "music-import-account-area"),
@@ -863,45 +838,37 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
     // A sign-in or sign-out while the dialog is open, and every return to the sources, refreshes the cards' state.
     const chipUpdates = [];
     const refreshChips = () => chipUpdates.forEach(update => update());
-    const GROUPS = [
-      { title: t("Through your sign-in"), test: source => !!source.command },
-      { title: t("By link"), test: source => !source.command && source.key !== "file" },
-      { title: t("From a file"), test: source => source.key === "file" },
-    ];
-    for (const group of GROUPS) {
-      const grid = el("div", "music-import-card-grid");
-      for (const source of SOURCES.filter(group.test)) {
-        const card = el("button", "music-import-card");
-        card.type = "button";
-        const copy = el("span", "music-import-card-copy");
-        const name = el("strong", "", source.title);
-        copy.append(name, el("small", "", source.text));
-        if (source.signIn) {
-          // The account cards say at a glance whether a sign-in is ready.
-          const chip = el("span", "music-import-chip", "");
-          chip.hidden = true;
-          name.append(chip);
-          const update = () =>
-            Promise.resolve(invoke(source.signIn.status))
-              .then(value => {
-                chip.textContent = value ? t("Signed in") : t("Sign-in needed");
-                chip.dataset.signedIn = String(!!value);
-                chip.hidden = false;
-              })
-              .catch(() => {});
-          chipUpdates.push(update);
-          update();
-        }
-        const chevron = el("span", "icon music-import-chevron");
-        chevron.dataset.icon = "caret-down";
-        chevron.setAttribute("aria-hidden", "true");
-        card.append(art(source), copy, chevron);
-        card.addEventListener("click", () => showStep(source));
-        if (!cards.querySelector(".music-import-card")) card.autofocus = true;
-        grid.append(card);
+    for (const source of SOURCES.filter(source => source.command)) {
+      const card = el("button", "music-import-card");
+      card.type = "button";
+      const copy = el("span", "music-import-card-copy");
+      const name = el("strong", "", source.title);
+      copy.append(name, el("small", "", source.text));
+      if (source.signIn) {
+        // The account cards say at a glance whether a sign-in is ready.
+        const chip = el("span", "music-import-chip", "");
+        chip.hidden = true;
+        name.append(chip);
+        const update = () =>
+          Promise.resolve(invoke(source.signIn.status))
+            .then(value => {
+              chip.textContent = value ? t("Signed in") : t("Sign-in needed");
+              chip.dataset.signedIn = String(!!value);
+              chip.hidden = false;
+            })
+            .catch(() => {});
+        chipUpdates.push(update);
+        update();
       }
-      cards.append(el("h3", "music-import-group", group.title), grid);
+      const chevron = el("span", "icon music-import-chevron");
+      chevron.dataset.icon = "caret-down";
+      chevron.setAttribute("aria-hidden", "true");
+      card.append(art(source), copy, chevron);
+      card.addEventListener("click", () => showStep(source));
+      if (!cards.querySelector(".music-import-card")) card.autofocus = true;
+      cards.append(card);
     }
+
     function showStep(source) {
       start.hidden = true;
       step.hidden = false;
@@ -924,19 +891,6 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
         link.setAttribute("aria-label", source.placeholder);
         requestAnimationFrame(() => link.focus());
       }
-      // The first time, point at the field the directions lead to.
-      if (!isFile && !isAccount)
-        setTimeout(() => {
-          if (!step.hidden)
-            showTip({
-              key: "import-link",
-              target: linkForm,
-              title: t("Paste the link here"),
-              text: t(
-                "Copy the link as the steps above show, paste it here and press Read link. You can check the matches before anything is added.",
-              ),
-            });
-        }, 420);
     }
     function showStart() {
       refreshChips();
