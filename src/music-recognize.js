@@ -75,15 +75,20 @@ export function wireMusicRecognize({ invoke, form, input, notify = () => {}, rec
   const button = document.createElement("button"),
     icon = document.createElement("span");
   button.type = "button";
-  button.className = "music-recognize";
+  // Beside the search, not inside it, with a sound wave and a name: a microphone in a search field reads as
+  // voice search. The search form is moved into the top bar while the app starts, so the button follows it.
+  button.className = "music-recognize music-recognize-standalone";
   icon.className = "icon";
-  icon.dataset.icon = "microphone";
+  icon.dataset.icon = "waveform";
   icon.setAttribute("aria-hidden", "true");
-  button.append(icon);
-  form.insertBefore(button, form.querySelector(".music-search-submit"));
+  const text = document.createElement("span");
+  text.className = "music-recognize-text";
+  button.append(icon, text);
+  requestAnimationFrame(() => form.after(button));
   let controller = null;
   const label = () => {
     button.title = button.ariaLabel = controller ? t("Stop listening") : t("Recognize a song playing nearby");
+    text.textContent = controller ? t("Listening…") : t("Identify song");
   };
   label();
   onLanguageChange(label);

@@ -5,6 +5,7 @@ const LETTERS = {
   KeyF: "full",
   KeyS: "shuffle",
   KeyR: "repeat",
+  KeyW: "recognize",
   BracketLeft: "slower",
   BracketRight: "faster",
 };
@@ -21,6 +22,8 @@ export function musicShortcut(event) {
   if (event.isComposing || event.altKey || event.metaKey || isTyping(event.target)) return null;
   if (event.ctrlKey) return event.shiftKey ? null : ARROWS[event.code] || null;
   if (event.key === "?") return "help";
+  // F5 refreshes the music page instead of reloading the whole app.
+  if (event.code === "F5" && !event.ctrlKey && !event.shiftKey) return "refresh";
   if (event.shiftKey) return null;
   if (LETTERS[event.code]) return event.repeat ? null : LETTERS[event.code];
   if (ownsKeys(event.target)) return null;

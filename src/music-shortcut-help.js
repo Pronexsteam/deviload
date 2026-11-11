@@ -21,6 +21,8 @@ export function createShortcutHelp({ button }) {
     [t("Seek 5 seconds"), "← →"],
     [t("Change volume"), "Ctrl ↑ ↓"],
     [t("Slower or faster"), "[ ]"],
+    [t("Refresh music"), "F5"],
+    [t("Recognize a song playing nearby"), "W"],
     [t("Mute"), "M"],
     [t("Like this song"), "L"],
     [t("Shuffle"), "S"],

@@ -13,8 +13,10 @@ const element = tag => {
   node.setAttribute = (k, v) => (node.attributes[k] = v);
   node.removeAttribute = k => delete node.attributes[k];
   node.dispatchEvent = () => {};
+  node.after = item => (node.next = item);
   return node;
 };
+globalThis.requestAnimationFrame ??= fn => fn();
 globalThis.document ??= { documentElement: { lang: "en" }, createElement: element };
 const { wireMusicRecognize, resample, quiet } = await import("../src/music-recognize.js");
 const { t } = await import("../src/i18n.js");

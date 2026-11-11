@@ -205,7 +205,7 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
     destinationChips.setAttribute("role", "group");
     destinationChips.setAttribute("aria-label", t("Save songs to"));
     for (const [value, title] of [
-      ["export", t("As in export")],
+      ["export", t("As in the source")],
       ["favorites", t("Liked songs")],
       ["playlist", t("A separate playlist")],
     ]) {

@@ -842,7 +842,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     before: $("music-private-session").closest(".music-catalog-context"),
   });
   // "What's playing?" from the microphone, beside the search it fills in.
-  wireMusicRecognize({
+  const recognizer = wireMusicRecognize({
     invoke,
     form: $("music-search"),
     input: $("music-query"),
@@ -5138,6 +5138,10 @@ export function createMusic({ invoke, onDownload, storage }) {
       else $("music-expand")?.click();
     },
     help: () => shortcutHelp.open(),
+    recognize: () => recognizer.listen(),
+    refresh: () => {
+      if (!$("music-refresh").disabled) $("music-refresh").click();
+    },
     slower: () => quickSpeed.slower(),
     faster: () => quickSpeed.faster(),
   };
@@ -5463,18 +5467,19 @@ export function createMusic({ invoke, onDownload, storage }) {
     button,
     workspace: $("devil-music"),
     direct: [$("music-expand"), $("music-clip-open"), quickSpeed.badge, cast.badge],
-    shortcuts: [
-      { source: $("music-mini-open"), glyph: "arrows-in" },
-      { source: $("music-remote-open"), glyph: "phone-remote" },
-    ],
+    // The mini player and the phone remote live in the menu only: each action has one place, and the dock keeps
+    // what is used during a song.
+    shortcuts: [],
     items: [
       quickSpeed.row,
       saveToPlaylist,
       soundButton,
       sleepButton,
       downloadButton,
+      el("div", "music-dock-menu-sep"),
       ...["music-mini-open", "music-room-open", "music-remote-open"].map($),
       cast.trigger,
+      el("div", "music-dock-menu-sep"),
       desktopItem,
       // Edit layout lives in the Themes menu only.
       shortcutsOpen,

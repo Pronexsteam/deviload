@@ -1952,7 +1952,6 @@ export default {
   "Waiting for your phone…": "Ждём подключения телефона…",
   "The export also contains unidentified songs without enough metadata to match.": "В экспорте также есть песни без достаточных данных для поиска.",
   "Save songs to": "Куда сохранить песни",
-  "As in export": "Как в исходном файле",
   "A separate playlist": "Отдельный плейлист",
   "Liked songs influence recommendations. A separate playlist does not mark songs as liked.": "Любимые треки влияют на рекомендации. Отдельный плейлист не добавляет лайки.",
   "Add selected songs": "Добавить выбранные песни",
@@ -2392,4 +2391,8 @@ export default {
 "{count} not found": "{count} не найдено",
 "Found songs ({count})": "Найденные песни ({count})",
 "{count} songs marked to check are not selected. Tick them if the version is right.": "Песни с пометкой «проверить» не отмечены: {count}. Отметьте их, если версия подходит.",
+"Refresh music": "Обновить музыку",
+"Listening…": "Слушаю…",
+"Identify song": "Узнать песню",
+"As in the source": "Как в источнике",
 };

@@ -102,7 +102,33 @@ body.music-page #open-youtube-view {
 .music-search button[hidden] {
   display: none;
 }
-.music-search .music-recognize.is-listening {
+/* Song recognition: an accent pill named "Identify song" beside the search, shown on the music page only. */
+main:not([data-page="music"]) .music-recognize-standalone {
+  display: none !important;
+}
+:root[data-theme] body .music-recognize-standalone {
+  gap: 6px;
+  padding: 0 12px;
+  border-radius: 999px;
+  color: var(--player-primary, #9ad0ff);
+  background: color-mix(in srgb, var(--player-primary, #9ad0ff) 14%, transparent);
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+:root[data-theme] body .music-recognize-standalone:hover {
+  background: color-mix(in srgb, var(--player-primary, #9ad0ff) 24%, transparent);
+}
+:root[data-theme] body .music-recognize-standalone .icon {
+  width: 18px;
+  height: 18px;
+}
+@media (max-width: 900px) {
+  :root[data-theme] body .music-recognize-standalone .music-recognize-text {
+    display: none;
+  }
+}
+:root[data-theme] body .music-recognize-standalone.is-listening {
   color: #e8876b;
   animation: music-recognize-pulse 1.2s ease-in-out infinite;
 }
@@ -112,7 +138,7 @@ body.music-page #open-youtube-view {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .music-search .music-recognize.is-listening {
+  :root[data-theme] body .music-recognize-standalone.is-listening {
     animation: none;
     background: #e8876b26;
   }
@@ -2954,4 +2980,13 @@ body.music-focus .music-library-sidebar {
 }
 .icon[data-icon="users"] {
   --glyph: url("assets/icons/users.svg");
+}
+
+/* In the dock the heart follows the song's name instead of waiting at the far edge of the column. */
+:root body .music-dock > .music-now > .music-now-info {
+  flex: 0 1 auto;
+}
+:root body .music-dock > .music-now > .music-like {
+  flex: none;
+  margin-left: 2px;
 }

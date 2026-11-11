@@ -1902,7 +1902,6 @@ export default {
   "Waiting for your phone…": "Esperando a tu móvil…",
   "The export also contains unidentified songs without enough metadata to match.": "La exportación también contiene canciones sin datos suficientes para identificarlas.",
   "Save songs to": "Guardar canciones en",
-  "As in export": "Como en la exportación",
   "A separate playlist": "Una playlist independiente",
   "Liked songs influence recommendations. A separate playlist does not mark songs as liked.": "Las favoritas influyen en las recomendaciones. Una playlist independiente no marca canciones como favoritas.",
   "Add selected songs": "Añadir canciones seleccionadas",
@@ -2342,4 +2341,8 @@ export default {
 "{count} not found": "{count} sin encontrar",
 "Found songs ({count})": "Canciones encontradas ({count})",
 "{count} songs marked to check are not selected. Tick them if the version is right.": "{count} canciones marcadas para revisar no están seleccionadas. Márcalas si la versión es la correcta.",
+"Refresh music": "Actualizar música",
+"Listening…": "Escuchando…",
+"Identify song": "Identificar canción",
+"As in the source": "Como en el origen",
 };

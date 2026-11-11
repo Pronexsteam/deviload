@@ -420,11 +420,12 @@
   gap: 3px;
   opacity: 0.55;
 }
+/* The keys are a hint, not buttons: plain grey text. */
 .music-dock-menu .music-speed-keys kbd {
-  min-width: 18px;
-  padding: 1px 4px;
-  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
-  border-radius: 5px;
+  min-width: 0;
+  padding: 0 1px;
+  border: 0;
+  border-radius: 0;
   font: inherit;
   font-size: 11px;
   line-height: 1.3;
@@ -563,4 +564,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Groups in the More menu: the song, playing elsewhere, and the rest. */
+.music-dock-menu-sep {
+  height: 1px;
+  margin: 4px 10px;
+  background: color-mix(in srgb, currentColor 10%, transparent);
 }
