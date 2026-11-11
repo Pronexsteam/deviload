@@ -79,6 +79,29 @@ export function wireReleaseNotes(workspace) {
     // Every release with its notes, newest first.
     const releases = [
       {
+        version: "2.15.0",
+        changes: [
+          t(
+            "Lyrics are in time on every version of a song: Devil Music measures the recording that plays and shifts the words to it.",
+          ),
+          t(
+            "Identify a song from the microphone, this computer's sound or a file, and keep the songs found.",
+          ),
+          t("New YouTube Music likes come over to Liked songs once a day when you turn it on."),
+          t(
+            "New releases from artists you follow, moods that open at once and four new ones, and playlists downloaded for offline in one click.",
+          ),
+          t(
+            "An OBS overlay of the song playing, library export to CSV, M3U and JSON, and label videos in Cinema with their sound.",
+          ),
+        ],
+        fixes: [
+          t("Lyrics no longer flicker or jump, and the next line arrives as it is sung."),
+          t("The song menu opens beside its button instead of off the screen."),
+          t("Bringing your music skips songs already in your library and keeps everything in one scroll."),
+        ],
+      },
+      {
         version: "2.13.0",
         changes: [
           t(
