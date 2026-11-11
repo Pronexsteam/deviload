@@ -885,6 +885,9 @@ async fn youtube_sign_out(app: tauri::AppHandle, engine: tauri::State<'_, Engine
     #[cfg(target_os = "macos")]
     clear_site_cookies(&app, &SITES[0]).await?;
     if let Some(window) = app.get_webview_window("youtube") { let _ = window.destroy(); }
+    // The profile folder may stay locked a while; its sign-in cookies go now, so the next sign-in can choose another account.
+    #[cfg(not(target_os = "macos"))]
+    { let _ = clear_profile_cookies(&app, "youtube", youtube_profile(&app)?, SITES[0].hosts).await; }
     let file = session_file(&engine.dir);
     if file.exists() { fs::remove_file(&file).map_err(|e| format!("Could not remove the saved sign-in: {e}"))?; }
     let profile = youtube_profile(&app)?;
@@ -898,6 +901,26 @@ async fn youtube_sign_out(app: tauri::AppHandle, engine: tauri::State<'_, Engine
     }).await.map_err(|e| e.to_string())?;
     let _ = app.emit("youtube-session", false);
     Ok(())
+}
+
+// Deletes a sign-in profile's cookies for the given sites through WebView2 itself, which works while the profile
+// folder is still in use and cannot be removed. Without it a new sign-in finds the old account and closes at once.
+#[cfg(not(target_os = "macos"))]
+pub(crate) async fn clear_profile_cookies(app: &tauri::AppHandle, key: &str, profile: PathBuf, hosts: &[&str]) -> Result<(), String> {
+    let window = tauri::WebviewWindowBuilder::new(app, format!("signout-{key}"), tauri::WebviewUrl::External("about:blank".parse().unwrap()))
+        .visible(false).data_directory(profile).build().map_err(|e| e.to_string())?;
+    let hosts: Vec<String> = hosts.iter().map(|h| h.to_string()).collect();
+    let result = tauri::async_runtime::spawn_blocking({ let window = window.clone(); move || {
+        for host in &hosts {
+            for address in [format!("https://{host}/"), format!("https://www.{host}/"), format!("https://accounts.{host}/"), format!("https://music.{host}/"), format!("https://open.{host}/"), format!("https://myaccount.{host}/")] {
+                let Ok(url) = address.parse() else { continue };
+                for cookie in window.cookies_for_url(url).map_err(|e| e.to_string())? { let _ = window.delete_cookie(cookie); }
+            }
+        }
+        Ok::<(), String>(())
+    }}).await.map_err(|e| e.to_string());
+    let _ = window.destroy();
+    result?
 }
 
 // Older macOS versions share WKWebsiteDataStore. Delete only this site's cookies,

@@ -229,7 +229,7 @@ dialog.app-mode-welcome > p {
   background: #3ecf6e;
   vertical-align: middle;
 }
-:root[data-theme] body #music-preferences .music-account-in {
+:root[data-theme] body :is(#music-preferences, .music-import-dialog) .music-account-in {
   min-height: 34px;
   padding: 0 16px;
   border: 0;
@@ -242,19 +242,19 @@ dialog.app-mode-welcome > p {
     filter 150ms ease,
     transform 150ms ease;
 }
-:root[data-theme] body #music-preferences .music-account-in:not(:disabled):hover {
+:root[data-theme] body :is(#music-preferences, .music-import-dialog) .music-account-in:not(:disabled):hover {
   filter: brightness(1.08);
   transform: translateY(-1px);
 }
-:root[data-theme] body #music-preferences .music-account-in:disabled {
+:root[data-theme] body :is(#music-preferences, .music-import-dialog) .music-account-in:disabled {
   opacity: 0.6;
 }
 /* The services' own colours: YouTube red with white, Spotify green with black. */
-:root[data-theme] body #music-preferences .music-account-in-youtube {
+:root[data-theme] body :is(#music-preferences, .music-import-dialog) .music-account-in-youtube {
   background: #ff0033;
   color: #fff;
 }
-:root[data-theme] body #music-preferences .music-account-in-spotify {
+:root[data-theme] body :is(#music-preferences, .music-import-dialog) .music-account-in-spotify {
   background: #1ed760;
   color: #000;
 }

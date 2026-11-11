@@ -108,24 +108,48 @@ fn read(url: &str, session: &Path, limit: usize) -> Result<Value, String> {
     serde_json::from_slice(&output.stdout).map_err(|_| UNAVAILABLE.into())
 }
 
+// Lists read at the same time: each is its own yt-dlp process; three keep the account well inside YouTube's limits.
+const PARALLEL: usize = 3;
+
 fn read_library(session: &Path) -> Result<Value, String> {
     static ACTIVE: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _guard = ACTIVE.try_lock().map_err(|_| BUSY)?;
-    let liked = read("https://www.youtube.com/playlist?list=LM", session, MAX_SONGS)?;
-    let (mut lists, mut failed) = (Vec::new(), 0);
-    match read("https://www.youtube.com/feed/playlists", session, MAX_PLAYLISTS) {
-        Ok(page) => for (id, name) in playlists(&page) {
-            // A short pause between lists keeps the account clear of YouTube's request limits.
-            std::thread::sleep(Duration::from_millis(400));
-            // A Mix never ends; like a Mix imported by link, it keeps its first hundred songs.
-            let limit = if id.starts_with("RD") { 100 } else { MAX_SONGS };
-            match read(&list_url(&id), session, limit) {
-                Ok(list) => lists.push((name, list)),
-                Err(error) if error.contains("rate-limited") => { failed += 1; break; }
-                Err(_) => failed += 1,
-            }
-        },
-        Err(_) => failed += 1,
+    // Liked songs and the list of playlists are fetched together.
+    let (liked, page) = std::thread::scope(|scope| {
+        let liked = scope.spawn(|| read("https://www.youtube.com/playlist?list=LM", session, MAX_SONGS));
+        let page = read("https://www.youtube.com/feed/playlists", session, MAX_PLAYLISTS);
+        (liked.join().unwrap_or_else(|_| Err(UNAVAILABLE.into())), page)
+    });
+    let liked = liked?;
+    let found = page.as_ref().map(playlists).unwrap_or_default();
+    let mut failed = usize::from(page.is_err());
+    let results: Vec<std::sync::Mutex<Option<Result<Value, String>>>> = found.iter().map(|_| std::sync::Mutex::new(None)).collect();
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let limited = std::sync::atomic::AtomicBool::new(false);
+    std::thread::scope(|scope| {
+        for _ in 0..PARALLEL.min(found.len()) {
+            scope.spawn(|| loop {
+                use std::sync::atomic::Ordering;
+                let index = next.fetch_add(1, Ordering::Relaxed);
+                if index >= found.len() || limited.load(Ordering::Relaxed) { break; }
+                let id = &found[index].0;
+                // A Mix never ends; like a Mix imported by link, it keeps its first hundred songs.
+                let limit = if id.starts_with("RD") { 100 } else { MAX_SONGS };
+                let result = read(&list_url(id), session, limit);
+                if result.as_ref().is_err_and(|e| e.contains("rate-limited")) { limited.store(true, Ordering::Relaxed); }
+                *results[index].lock().unwrap() = Some(result);
+                // A short pause between lists of one reader keeps the account clear of request limits.
+                std::thread::sleep(Duration::from_millis(250));
+            });
+        }
+    });
+    // In the order of the library page, whatever order they finished in.
+    let mut lists = Vec::new();
+    for ((_, name), slot) in found.into_iter().zip(results) {
+        match slot.into_inner().unwrap() {
+            Some(Ok(list)) => lists.push((name, list)),
+            _ => failed += 1,
+        }
     }
     let result = library(&liked, lists, failed);
     if result["entries"].as_array().is_none_or(|e| e.is_empty()) { return Err("No importable music was found.".into()); }

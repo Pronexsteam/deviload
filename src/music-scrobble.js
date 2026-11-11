@@ -170,13 +170,15 @@ export function wireScrobbling({
         ),
       );
     }
+    lastfm.wrap.hidden = !state.lastfm && !state.lastfmAvailable;
     if (state.lastfm) {
       lastfm.text.textContent = t("Connected as {name}", { name: state.lastfm });
       lastfm.actions.replaceChildren(
         action(t("Disconnect"), "quiet small", () => invoke("scrobble_disconnect", { service: "lastfm" })),
       );
     } else if (!state.lastfmAvailable) {
-      lastfm.text.textContent = t("Last.fm arrives in a later update.");
+      // A build without the app's Last.fm keys cannot connect: the row stays out of sight instead of promising.
+      lastfm.text.textContent = "";
       lastfm.actions.replaceChildren();
     } else if (state.lastfmWaiting) {
       lastfm.text.textContent = t("Allow Deviload on the Last.fm page that opened, then press Done.");

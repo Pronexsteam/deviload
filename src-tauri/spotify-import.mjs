@@ -143,7 +143,7 @@ export function joinLibrary(liked,lists,failed){
     warnings:failed?[PARTIAL]:[],completeness:failed?'unknown':'complete'};
 }
 
-export async function readLibrary(cookie,{fetcher=fetch,signal=AbortSignal.timeout(600000),pause=150,maxPlaylists=200,maxLiked=10000,secrets=''}={}){
+export async function readLibrary(cookie,{fetcher=fetch,signal=AbortSignal.timeout(600000),pause=150,maxPlaylists=200,maxLiked=10000,secrets='',parallel=3}={}){
   if(!/^[A-Za-z0-9_-]{20,2048}$/.test(cookie||''))throw Error(SIGNED_OUT);
   const session=await webSession({fetcher,signal,cookie,secrets,maxRequests:2500,maxBytes:160*1024*1024});
   const wait=()=>new Promise(resolve=>setTimeout(resolve,pause));
@@ -167,18 +167,26 @@ export async function readLibrary(cookie,{fetcher=fetch,signal=AbortSignal.timeo
     if(!library.items.length)break;
     offset+=library.items.length;await wait();
   }
-  const lists=[],seen=new Set();let failed=0;
-  for(const {id,name} of found.slice(0,maxPlaylists)){
-    if(seen.has(id))continue;seen.add(id);
-    try{
-      const list=await collectPlaylist(id,(offset,limit)=>session.query('fetchPlaylist',{uri:'spotify:playlist:'+id,offset,limit,enableWatchFeedEntrypoint:false}),{signal});
-      lists.push({name,entries:list.entries});
-    }catch(error){
-      if(error?.message===LIMITED){failed++;break;}
-      failed++;
+  // Playlists are read three at a time, kept in library order; a rate limit stops new reads.
+  const unique=[],seen=new Set();
+  for(const list of found.slice(0,maxPlaylists))if(!seen.has(list.id)){seen.add(list.id);unique.push(list);}
+  const slots=new Array(unique.length).fill(null);let next=0,failed=0,limited=false;
+  async function reader(){
+    while(next<unique.length&&!limited){
+      const index=next++,{id,name}=unique[index];
+      try{
+        const list=await collectPlaylist(id,(offset,limit)=>session.query('fetchPlaylist',{uri:'spotify:playlist:'+id,offset,limit,enableWatchFeedEntrypoint:false}),{signal});
+        slots[index]={name,entries:list.entries};
+      }catch(error){
+        failed++;
+        if(error?.message===LIMITED)limited=true;
+      }
+      await wait();
     }
-    await wait();
   }
+  await Promise.all(Array.from({length:Math.min(parallel,unique.length)},reader));
+  failed+=slots.filter((slot,index)=>!slot&&index>=next).length;
+  const lists=slots.filter(Boolean);
   if(!liked.length&&!lists.some(l=>l.entries.length))throw Error(EMPTY);
   return joinLibrary(liked,lists,failed);
 }

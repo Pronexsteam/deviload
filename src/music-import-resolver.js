@@ -71,6 +71,57 @@ function caller(invoke, signal, delay) {
 }
 
 const matchCaches = new WeakMap();
+
+// Songs already matched stay matched: the next import of the same library, or one more playlist from it, asks
+// YouTube Music only about songs it has not seen. Only certain matches are kept, the oldest go first, and a full
+// browser storage simply stops the remembering.
+export const MATCH_MEMORY_KEY = "deviload.music.import-matches.v1";
+export function createMatchMemory(storage, { now = Date.now, limit = 2500, maxAge = 90 * 86400000 } = {}) {
+  let table = null,
+    dirty = false;
+  const load = () => {
+    if (table) return table;
+    try {
+      const value = JSON.parse(storage?.getItem(MATCH_MEMORY_KEY) || "{}");
+      table = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    } catch {
+      table = {};
+    }
+    return table;
+  };
+  return {
+    get(key) {
+      const row = load()[key];
+      if (!row || typeof row.at !== "number" || now() - row.at > maxAge) return null;
+      try {
+        return { item: sanitizeMusicTrack(row.item), confidence: "exact" };
+      } catch {
+        return null;
+      }
+    },
+    set(key, match) {
+      if (!match?.item || match.confidence !== "exact") return;
+      const rows = load();
+      rows[key] = { at: now(), item: match.item };
+      const keys = Object.keys(rows);
+      if (keys.length > limit)
+        keys
+          .sort((a, b) => rows[a].at - rows[b].at)
+          .slice(0, keys.length - limit)
+          .forEach(old => delete rows[old]);
+      dirty = true;
+    },
+    flush() {
+      if (!dirty) return;
+      dirty = false;
+      try {
+        storage?.setItem(MATCH_MEMORY_KEY, JSON.stringify(load()));
+      } catch {
+        /* Storage is full: matching still works, it is only not remembered. */
+      }
+    },
+  };
+}
 // Large libraries use the same bounded, paced resolver. A stopped batch must
 // not start hundreds of additional requests after a rate limit or cancellation.
 export async function resolveMusicImportLibrary(entries, options = {}) {
@@ -97,7 +148,8 @@ export async function resolveMusicImport(
     onProgress = () => {},
     onRow = () => {},
     delay = sleep,
-    concurrency = 3,
+    concurrency = 4,
+    memory = null,
   } = {},
 ) {
   if (!Array.isArray(entries)) throw Error("Invalid music import.");
@@ -120,7 +172,7 @@ export async function resolveMusicImport(
   async function request(args) {
     const turn = gate.then(async () => {
       check(signal);
-      if (requested) await wait(delay(150), signal);
+      if (requested) await wait(delay(110), signal);
       check(signal);
       requested = true;
     });
@@ -166,10 +218,13 @@ export async function resolveMusicImport(
             entry.album || "",
             entry.isrc || "",
           ]),
-          cached = cache.get(key);
+          cached = cache.get(key),
+          remembered = cached ? null : memory?.get(key);
         if (!validId(entry.videoId) && (!title || !artists.length)) row.error = "Invalid music import.";
         else if (cached && Date.now() - cached.at < 30 * 60 * 1000) {
           row = { entry, ...cached.match };
+        } else if (remembered) {
+          row = { entry, ...remembered };
         } else
           try {
             const args = validId(entry.videoId)
@@ -200,6 +255,7 @@ export async function resolveMusicImport(
             if (match.item) {
               if (cache.size >= 2000) cache.delete(cache.keys().next().value);
               cache.set(key, { at: Date.now(), match });
+              memory?.set(key, match);
             }
           } catch (error) {
             if (signal?.aborted || error?.name === "AbortError") throw canceled();
@@ -220,8 +276,13 @@ export async function resolveMusicImport(
       check(signal);
     }
   }
-  const count = Math.max(1, Math.min(3, Math.floor(Number(concurrency) || 3), entries.length || 1));
-  await Promise.all(Array.from({ length: count }, worker));
+  const count = Math.max(1, Math.min(4, Math.floor(Number(concurrency) || 4), entries.length || 1));
+  try {
+    await Promise.all(Array.from({ length: count }, worker));
+  } finally {
+    // Matches found before a stop or a limit are kept too.
+    memory?.flush();
+  }
   check(signal);
   if (fatal) throw fatal;
   return rows;

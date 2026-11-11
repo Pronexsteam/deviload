@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {resolveMusicImport,resolveMusicImportLibrary,readPlaylistLink} from "../src/music-import-resolver.js";
+import {resolveMusicImport,resolveMusicImportLibrary,readPlaylistLink,createMatchMemory,MATCH_MEMORY_KEY} from "../src/music-import-resolver.js";
 import {parseMusicImport} from "../src/music-import-format.js";
 const delay=()=>Promise.resolve(),song=(n=1)=>({kind:"song",id:String(n).padStart(11,"0"),title:"Song "+n,artists:["Artist"],subtitle:"Artist"}),entry=n=>({key:"source:"+n,title:"Song "+n,artists:["Artist"],liked:false,plays:0});
 const catalog=items=>({sections:[{items}]}),link="https://music.youtube.com/playlist?list=PLabcdefghijk123";
@@ -27,7 +27,7 @@ test("known YouTube songs need no requests; unknown IDs request radio and match 
 });
 test("Spotify matching with concurrency one is paced, language-aware and song-only",async()=>{
   const events=[],progress=[];let active=0;
-  const rows=await resolveMusicImport([entry(1),entry(2)],{language:"ru",concurrency:1,delay:async ms=>{assert.equal(ms,150);events.push("delay");},onProgress:(done,total)=>progress.push([done,total]),invoke:async(command,args)=>{assert.equal(++active,1);assert.equal(args.kind,"search");assert.equal(args.filter,"songs");assert.equal(args.language,"ru");assert.ok(args.value.length<=120);events.push(args.value);await Promise.resolve();active--;return catalog([song(events.length===1?1:2)]);}});
+  const rows=await resolveMusicImport([entry(1),entry(2)],{language:"ru",concurrency:1,delay:async ms=>{assert.equal(ms,110);events.push("delay");},onProgress:(done,total)=>progress.push([done,total]),invoke:async(command,args)=>{assert.equal(++active,1);assert.equal(args.kind,"search");assert.equal(args.filter,"songs");assert.equal(args.language,"ru");assert.ok(args.value.length<=120);events.push(args.value);await Promise.resolve();active--;return catalog([song(events.length===1?1:2)]);}});
   assert.deepEqual(events,["Song 1 Artist","delay","Song 2 Artist"]);assert.deepEqual(progress,[[1,2],[2,2]]);assert.ok(rows.every(row=>row.confidence==="exact"));
 });
 test("429 stops all subsequent requests and ordinary failures stop after three attempts",async()=>{
@@ -91,17 +91,17 @@ test("canceled Spotify reads cannot return late imports",async()=>{
  const pending=readPlaylistLink("https://open.spotify.com/playlist/37i9dQZF1DZ06evO3eIivx",{signal:controller.signal,invoke:()=>new Promise(resolve=>{finish=resolve;})});controller.abort();await assert.rejects(pending,{name:"AbortError"});finish({entries:[entry(1)]});
 });
 
-test("matching caps concurrency at three, streams progress, preserves order and caches repeated lookups",async()=>{
+test("matching caps concurrency at four, streams progress, preserves order and caches repeated lookups",async()=>{
  let active=0,peak=0,calls=0;const completed=[];
  const invoke=async(command,args)=>{calls++;active++;peak=Math.max(peak,active);await new Promise(r=>setTimeout(r,args.value.startsWith("Song 1 ")?30:5));active--;return catalog([song(Number(args.value.match(/Song (\d+)/)[1]))]);};
- const entries=[entry(1),entry(2),entry(3),entry(4)];
+ const entries=[entry(1),entry(2),entry(3),entry(4),entry(5)];
  const rows=await resolveMusicImport(entries,{invoke,delay,onRow:(row,index)=>completed.push(index)});
- assert.equal(peak,3);assert.equal(calls,4);assert.notEqual(completed[0],0);assert.deepEqual(rows.map(r=>r.entry.key),entries.map(r=>r.key));
- await resolveMusicImport(entries,{invoke,delay});assert.equal(calls,4);
+ assert.equal(peak,4);assert.equal(calls,5);assert.notEqual(completed[0],0);assert.deepEqual(rows.map(r=>r.entry.key),entries.map(r=>r.key));
+ await resolveMusicImport(entries,{invoke,delay});assert.equal(calls,5);
 });
 test("concurrent 429 stops scheduling further requests",async()=>{
  let calls=0;const rows=await resolveMusicImport(Array.from({length:20},(_,i)=>entry(i+1)),{delay,invoke:async()=>{calls++;throw Error("429");}});
- assert.ok(calls<=3);assert.equal(rows.length,20);assert.ok(rows.every(row=>/rate-limited/.test(row.error)));
+ assert.ok(calls<=4);assert.equal(rows.length,20);assert.ok(rows.every(row=>/rate-limited/.test(row.error)));
 });
 
 test("1500-song link/file normalization shares matches and warm cache without assuming completeness",async context=>{
@@ -116,4 +116,27 @@ test("1500-song link/file normalization shares matches and warm cache without as
  assert.equal(cold.length,1500);assert.equal(warm.length,1500);assert.equal(calls,1500);
  assert.deepEqual(warm.map(r=>r.item.id),cold.map(r=>r.item.id));
  context.diagnostic(`Fixture only, network and pacing mocked: cold ${coldMs.toFixed(1)} ms, warm ${(performance.now()-warmStart).toFixed(1)} ms; 1500 then 0 lookups.`);
+});
+
+test("matches are remembered across sessions, only certain ones, and a full storage does not stop matching",async()=>{
+ const memoryStore=new Map(),storage={getItem:key=>memoryStore.get(key)??null,setItem:(key,value)=>memoryStore.set(key,value)};
+ const entries=[entry(1),entry(2),entry(3)];
+ let calls=0;const invoke=async(_,args)=>{calls++;return catalog([song(Number(args.value.match(/Song (\d+)/)[1]))]);};
+ const first=await resolveMusicImport(entries,{invoke,delay,memory:createMatchMemory(storage)});
+ assert.equal(calls,3);assert.ok(first.every(row=>row.confidence==="exact"));
+ assert.ok(memoryStore.has(MATCH_MEMORY_KEY));
+ // A new session: a fresh caller and a fresh memory read back from storage, and no request at all.
+ let later=0;const again=await resolveMusicImport(entries,{invoke:async()=>{later++;return catalog([]);},delay,memory:createMatchMemory(storage)});
+ assert.equal(later,0);assert.deepEqual(again.map(row=>row.item.id),first.map(row=>row.item.id));
+ // Old matches expire, and only the newest are kept within the limit.
+ const aged=createMatchMemory(storage,{now:()=>Date.now()+91*86400000});
+ assert.equal(aged.get(JSON.parse(memoryStore.get(MATCH_MEMORY_KEY))&&Object.keys(JSON.parse(memoryStore.get(MATCH_MEMORY_KEY)))[0]),null);
+ const small=createMatchMemory({getItem:()=>null,setItem(){}},{limit:2});
+ for(const n of [1,2,3])small.set("k"+n,{item:song(n),confidence:"exact"});
+ assert.equal(small.get("k1"),null);assert.ok(small.get("k3"));
+ small.set("review",{item:song(4),confidence:"review"});assert.equal(small.get("review"),null);
+ // Storage refusing the write: matching still completes.
+ const full={getItem:()=>null,setItem(){throw Error("QuotaExceededError");}};
+ const rows=await resolveMusicImport([entry(5)],{invoke,delay,memory:createMatchMemory(full)});
+ assert.equal(rows[0].confidence,"exact");
 });

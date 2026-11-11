@@ -66,6 +66,9 @@ pub async fn spotify_sign_in(app: tauri::AppHandle, window: tauri::WebviewWindow
 pub async fn spotify_sign_out(app: tauri::AppHandle, window: tauri::WebviewWindow, engine: tauri::State<'_, crate::Engine>) -> Result<(), String> {
     if window.label() != "main" { return Err("Unavailable window".into()); }
     if let Some(open) = app.get_webview_window(LABEL) { let _ = open.destroy(); }
+    // Spotify's own session in the window's profile goes too, so a new sign-in can choose another account.
+    #[cfg(not(target_os = "macos"))]
+    { let _ = crate::clear_profile_cookies(&app, "spotify", profile(&app)?, &["spotify.com"]).await; }
     let file = engine.dir.join(FILE);
     if file.exists() { fs::remove_file(&file).map_err(|e| format!("Could not remove the saved sign-in: {e}"))?; }
     let profile = profile(&app)?;

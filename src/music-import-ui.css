@@ -242,11 +242,43 @@
 .music-import-file-area[hidden] {
   display: none;
 }
+/* Cards in three groups: through a sign-in, by link, from a file. */
 .music-import-cards {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.music-import-group {
+  margin: 10px 2px 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--workspace-muted, #aab);
+}
+.music-import-card-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  margin-top: 16px;
+}
+/* Whether the account behind a card is signed in. */
+.music-import-chip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 650;
+  vertical-align: 1px;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: var(--workspace-muted, #aab);
+}
+.music-import-chip[data-signed-in="true"] {
+  background: rgb(62 207 110 / 0.16);
+  color: #3ecf6e;
+}
+.music-import-chip[hidden] {
+  display: none;
 }
 .music-import-card {
   display: grid;
@@ -425,5 +457,55 @@
   margin: 0 0 2px;
 }
 .music-import-account-area button[hidden] {
+  display: none;
+}
+
+/* One-colour brand marks drawn in their brand colour. */
+.music-import-mark {
+  display: block;
+  width: 26px;
+  height: 26px;
+  background: #ff0033;
+  mask: center / contain no-repeat;
+}
+.music-import-mark-youtubemusic {
+  mask-image: url("assets/brands/youtubemusic.svg");
+}
+.music-import-mark-youtube {
+  mask-image: url("assets/brands/youtube.svg");
+}
+/* The account step: its state, the service's own sign-in, and a moving bar while the library is read. */
+.music-import-account-head {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.music-import-account-state {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+  background: color-mix(in srgb, currentColor 9%, transparent);
+  color: var(--workspace-muted, #aab);
+}
+.music-import-account-state[data-signed-in="true"] {
+  background: rgb(62 207 110 / 0.16);
+  color: #3ecf6e;
+}
+.music-import-account-state[data-signed-in="true"]::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 1px;
+}
+.music-import-reading {
+  flex-basis: 100%;
+}
+.music-import-reading[hidden] {
   display: none;
 }

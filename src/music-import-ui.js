@@ -1,6 +1,6 @@
 import { t, language, errorText } from "./i18n.js";
 import { parseMusicImport } from "./music-import-format.js";
-import { resolveMusicImportLibrary, readPlaylistLink } from "./music-import-resolver.js";
+import { resolveMusicImportLibrary, readPlaylistLink, createMatchMemory } from "./music-import-resolver.js";
 import { readImportDraft, writeImportDraft, clearImportDraft } from "./music-import-session.js";
 import { showTip } from "./music-tour.js";
 const el = (tag, cls, text) => {
@@ -9,7 +9,14 @@ const el = (tag, cls, text) => {
   if (text != null) node.textContent = text;
   return node;
 };
+// Seconds as m:ss for the reading timer.
+export const formatElapsed = seconds => {
+  const whole = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+};
+
 export function wireMusicImport({ invoke, button, commit, storage = window.localStorage }) {
+  const matchMemory = createMatchMemory(storage);
   function open() {
     const modal = el("dialog", "music-import-dialog"),
       head = el("header", "music-library-dialog-head"),
@@ -239,6 +246,7 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
         invoke,
         language: language(),
         signal,
+        memory: matchMemory,
         onRow: row => {
           rows.push(row);
           showRow(row);
@@ -638,6 +646,7 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
         title: t("My YouTube Music library"),
         text: t("Liked songs and your playlists, read through your YouTube sign-in on this computer."),
         command: "music_import_youtube_account",
+        account: "youtube",
         signIn: {
           status: "youtube_login_status",
           open: ["open_youtube", { signIn: true }],
@@ -655,6 +664,7 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
         title: t("My Spotify library"),
         text: t("Liked Songs and your playlists, private ones included, through your own Spotify sign-in."),
         command: "music_import_spotify_account",
+        account: "spotify",
         signIn: { status: "spotify_account_status", open: ["spotify_sign_in", {}], event: "spotify-session" },
         steps: [
           t("Sign in to Spotify in the window that opens. Deviload keeps the sign-in on this computer only."),
@@ -734,9 +744,12 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
     fileArea.append(sources, guide, pick, file, drop, help);
     // Libraries read through the person's own sign-in: no link or file, one button.
     const accountArea = el("div", "music-import-account-area"),
-      accountState = el("p", "music-import-caption");
+      accountState = el("span", "music-import-account-state"),
+      readingBar = el("progress", "music-import-progress music-import-reading");
+    readingBar.hidden = true;
     let accountSource = null,
-      signedIn = false;
+      signedIn = false,
+      readingTimer = null;
     const signIn = button(
       t("Sign in"),
       null,
@@ -749,12 +762,20 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
           notice.textContent = errorText(error);
         }
       },
-      "outline small",
+      "music-account-in",
     );
     function showAccount() {
-      accountState.textContent = signedIn ? t("Signed in on this computer.") : t("Not signed in yet.");
+      accountState.textContent = signedIn ? t("Signed in") : t("Sign-in needed");
+      accountState.dataset.signedIn = String(signedIn);
       signIn.hidden = signedIn;
-      readAccount.disabled = !signedIn;
+      if (accountSource) {
+        signIn.className = `music-account-in music-account-in-${accountSource.account}`;
+        signIn.textContent =
+          accountSource.account === "spotify" ? t("Sign in with Spotify") : t("Sign in with YouTube");
+      }
+      // Once signed in, the step about signing in is done and steps aside.
+      if (stepList.firstElementChild) stepList.firstElementChild.hidden = signedIn;
+      readAccount.disabled = !signedIn || busy;
     }
     async function checkAccount() {
       const source = accountSource;
@@ -774,9 +795,25 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
       t("Read my library"),
       null,
       () =>
-        run(async () => {
-          notice.textContent = t("Reading your library…");
-          const value = await invoke(accountSource.command);
+        run(async signal => {
+          // A large library takes a minute or two: a moving bar and the time so far show it is still working.
+          const started = performance.now();
+          const tick = () =>
+            (notice.textContent = t("Reading your library… {time}", {
+              time: formatElapsed((performance.now() - started) / 1000),
+            }));
+          tick();
+          readingBar.hidden = false;
+          readAccount.disabled = true;
+          readingTimer = setInterval(tick, 1000);
+          let value;
+          try {
+            value = await invoke(accountSource.command);
+          } finally {
+            clearInterval(readingTimer);
+            readingTimer = null;
+            readingBar.hidden = true;
+          }
           if (!Array.isArray(value?.entries) || !Array.isArray(value?.playlists))
             throw Error("No importable music was found.");
           const names = {
@@ -791,15 +828,23 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
             playlists: value.playlists.map(list => ({ ...list, name: names[list.name] || list.name })),
             warnings: Array.isArray(value.warnings) ? value.warnings : [],
           });
-        }),
+          // A whole library is read to be matched: matching starts at once instead of waiting for another press.
+          if (chosenEntries().length) await matchBatch(signal);
+        }).finally(showAccount),
       "music-primary",
     );
-    accountArea.append(accountState, signIn, readAccount);
+    const accountHead = el("div", "music-import-account-head");
+    accountHead.append(accountState);
+    accountArea.append(accountHead, signIn, readAccount, readingBar);
     step.append(back, stepHead, stepList, linkArea, fileArea, accountArea);
     step.hidden = true;
     const art = source => {
       const node = el("span", "music-import-art");
-      if (source.brand) {
+      if (source.brand === "youtubemusic" || source.brand === "youtube") {
+        const mark = el("span", `music-import-mark music-import-mark-${source.brand}`);
+        mark.setAttribute("aria-hidden", "true");
+        node.append(mark);
+      } else if (source.brand) {
         const image = el("img", "");
         image.src = `assets/brands/${source.brand}.svg`;
         image.alt = "";
@@ -812,18 +857,41 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
       }
       return node;
     };
-    for (const source of SOURCES) {
-      const card = el("button", "music-import-card");
-      card.type = "button";
-      const copy = el("span", "music-import-card-copy");
-      copy.append(el("strong", "", source.title), el("small", "", source.text));
-      const chevron = el("span", "icon music-import-chevron");
-      chevron.dataset.icon = "caret-down";
-      chevron.setAttribute("aria-hidden", "true");
-      card.append(art(source), copy, chevron);
-      card.addEventListener("click", () => showStep(source));
-      if (!cards.childElementCount) card.autofocus = true;
-      cards.append(card);
+    const GROUPS = [
+      { title: t("Through your sign-in"), test: source => !!source.command },
+      { title: t("By link"), test: source => !source.command && source.key !== "file" },
+      { title: t("From a file"), test: source => source.key === "file" },
+    ];
+    for (const group of GROUPS) {
+      const grid = el("div", "music-import-card-grid");
+      for (const source of SOURCES.filter(group.test)) {
+        const card = el("button", "music-import-card");
+        card.type = "button";
+        const copy = el("span", "music-import-card-copy");
+        const name = el("strong", "", source.title);
+        copy.append(name, el("small", "", source.text));
+        if (source.signIn) {
+          // The account cards say at a glance whether a sign-in is ready.
+          const chip = el("span", "music-import-chip", "");
+          chip.hidden = true;
+          name.append(chip);
+          Promise.resolve(invoke(source.signIn.status))
+            .then(value => {
+              chip.textContent = value ? t("Signed in") : t("Sign-in needed");
+              chip.dataset.signedIn = String(!!value);
+              chip.hidden = false;
+            })
+            .catch(() => {});
+        }
+        const chevron = el("span", "icon music-import-chevron");
+        chevron.dataset.icon = "caret-down";
+        chevron.setAttribute("aria-hidden", "true");
+        card.append(art(source), copy, chevron);
+        card.addEventListener("click", () => showStep(source));
+        if (!cards.querySelector(".music-import-card")) card.autofocus = true;
+        grid.append(card);
+      }
+      cards.append(el("h3", "music-import-group", group.title), grid);
     }
     function showStep(source) {
       start.hidden = true;
