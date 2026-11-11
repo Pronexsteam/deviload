@@ -178,16 +178,93 @@ dialog.app-mode-welcome > p {
 }
 
 /* The YouTube account row: its state and a note on the left, one button on the right. */
-#music-preferences .music-account {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+/* Accounts: YouTube Music and Spotify side by side, each with its logo and its own sign-in button. */
+#music-preferences .music-accounts {
+  display: grid;
+  gap: 10px;
 }
-#music-preferences .music-account small {
+#music-preferences .music-accounts-title {
+  font-size: 14px;
+}
+#music-preferences .music-accounts-note {
+  opacity: 0.65;
+}
+#music-preferences .music-account-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+}
+#music-preferences .music-account-logo {
+  width: 32px;
+  height: 32px;
+}
+#music-preferences .music-account-logo-youtube {
   display: block;
-  margin-top: 2px;
+  background: #ff0033;
+  mask: url("assets/brands/youtubemusic.svg") center / contain no-repeat;
+}
+#music-preferences .music-account-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+#music-preferences .music-account-name {
+  font-weight: 600;
+}
+#music-preferences .music-account-copy small {
   opacity: 0.72;
+  line-height: 1.4;
+}
+#music-preferences .music-account-row[data-signed-in="true"] .music-account-name::after {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 8px;
+  border-radius: 50%;
+  background: #3ecf6e;
+  vertical-align: middle;
+}
+:root[data-theme] body #music-preferences .music-account-in {
+  min-height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px -10px currentColor;
+  transition:
+    filter 150ms ease,
+    transform 150ms ease;
+}
+:root[data-theme] body #music-preferences .music-account-in:not(:disabled):hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+:root[data-theme] body #music-preferences .music-account-in:disabled {
+  opacity: 0.6;
+}
+/* The services' own colours: YouTube red with white, Spotify green with black. */
+:root[data-theme] body #music-preferences .music-account-in-youtube {
+  background: #ff0033;
+  color: #fff;
+}
+:root[data-theme] body #music-preferences .music-account-in-spotify {
+  background: #1ed760;
+  color: #000;
+}
+@media (max-width: 520px) {
+  #music-preferences .music-account-row {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+  #music-preferences .music-account-row > button {
+    grid-column: 1 / -1;
+  }
 }
 #music-preferences .music-control-api {
   display: flex;
