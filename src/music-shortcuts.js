@@ -1,4 +1,13 @@
-const LETTERS = { KeyL: "like", KeyM: "mute", KeyQ: "queue", KeyF: "full", KeyS: "shuffle", KeyR: "repeat" };
+const LETTERS = {
+  KeyL: "like",
+  KeyM: "mute",
+  KeyQ: "queue",
+  KeyF: "full",
+  KeyS: "shuffle",
+  KeyR: "repeat",
+  BracketLeft: "slower",
+  BracketRight: "faster",
+};
 const ARROWS = { ArrowRight: "next", ArrowLeft: "previous", ArrowUp: "louder", ArrowDown: "quieter" };
 const SEEK = { ArrowRight: "forward", ArrowLeft: "back" };
 

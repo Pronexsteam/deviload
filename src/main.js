@@ -1,4 +1,5 @@
 import "./ui-motion.js";
+import { keepPresses } from "./press-capture.js";
 import { wireAppMode } from "./app-mode.js";
 import { orderDownloads, orderLibrary } from "./download-order.js";
 import { createCinema } from "./cinema-player.js";
@@ -64,6 +65,8 @@ import { downloadAuthView } from "./account-status.js";
 import { wireGalleryDownloads } from "./gallery-download.js";
 import { downloadMusic } from "./music-download.js";
 import { wireDownloadDetails, inspectionKey, sourceEstimate } from "./download-options.js";
+// A press near the edge of a shrinking player button still counts (see press-capture.js).
+keepPresses();
 
 const $ = id => document.getElementById(id);
 const invoke = window.__TAURI__?.core?.invoke;

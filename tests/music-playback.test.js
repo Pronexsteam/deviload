@@ -53,7 +53,7 @@ function player(invoke,items=[song(1)]){
     view:"home",lastQuery:{kind:"home"},activeMood:"",playlistId:null,browseItem:null,getPlaylist:()=>null,
     taste:readTaste(),clock:{seconds:0,reset(){this.seconds=0;},sample() {return this.seconds;}},
     changeSource:{hidden:true},nextHomeCandidates:[],title:field(),artist:field(),artwork:field(),updateDockArt(){},seek:field(),isRangeDragging:()=>false,elapsed:field(),duration:field(),previous:{click(){}},
-    invoke:(command,args)=>{if(command==="music_cancel_stream"){ctx.cancellations=(ctx.cancellations||0)+1;ctx.lastCancellation=args;return Promise.resolve();}return invoke(command,args);},tracks,remember,nextIndex,recommend,recordListening,tasteSeeds,tasteArtistKeys,canonicalArtistKey,mergeRecommendationPools,rankMusicRecommendations,recommendationFamiliarity,createRecordingView,resolveRecordingSource,setRecordingSource,removeRecordingSource,recordingFamilyIds,sanitizeMusicTrack,saveMusicProfile,rememberInterestTrack,interestProfile,interestSources,interestSeeds,cover:()=>null,displaySubtitle:item=>item?.artists?.join(", ")||"Unknown artist",language:()=>"en",t:s=>s,errorText:String,
+    invoke:(command,args)=>{if(command==="music_cancel_stream"){ctx.cancellations=(ctx.cancellations||0)+1;ctx.lastCancellation=args;return Promise.resolve();}return invoke(command,args);},tracks,remember,nextIndex,recommend,recordListening,tasteSeeds,tasteArtistKeys,canonicalArtistKey,mergeRecommendationPools,rankMusicRecommendations,recommendationFamiliarity,createRecordingView,resolveRecordingSource,setRecordingSource,removeRecordingSource,recordingFamilyIds,sanitizeMusicTrack,saveMusicProfile,rememberInterestTrack,interestProfile,interestSources,interestSeeds,cover:()=>null,displaySubtitle:item=>item?.artists?.join(", ")||"Unknown artist",language:()=>"en",t:s=>s,errorText:String,isCasting:()=>false,
     storage:{getItem:key=>memory.get(key),setItem:(key,value)=>memory.set(key,value)},playbackQueue,button(){},openRecordingPicker:options=>{ctx.picker=options;},downloadsPending:new Set(),presentation:{notify(){}},onDownload:null,homeCache:null,
     wireMusicProfile:options=>{ctx.profileActions=options;},library:{invalidateUndo(){},find(){}},musicGain,previousVolume:.7,syncVolume(){},showLocal(){},load(){},
     request:0,loading:false,loaded:false,sections:[],continuation:null,morePending:false,listFilter:"",listSort:"original",rememberNavigation(){},selectView:next=>{ctx.view=next;},skeleton(){},render(){ctx.rendered=ctx.sections;},prepareHomeSelection(){},showPlaylist(){},
@@ -769,6 +769,14 @@ test('repeated stall events share one recovery deadline and preserve playback po
  p.expire();await settle();assert.equal(calls.length,2);assert.equal(p.ctx.audio.currentTime,42);assert.equal(p.ctx.bufferingTimer,null);
  p.ctx.navigator.onLine=false;p.emit('waiting');p.expire();await settle();
  assert.equal(calls.length,2);assert.equal(p.ctx.audio.currentTime,42);assert.equal(p.ctx.audio.paused,false);
+});
+
+test('a second stall after the automatic reopen asks for a retry at the same place instead of freezing in silence',async()=>{
+ const calls=[];const p=player(async(cmd,args)=>{if(cmd==='music_recovery_allowed')return true;if(cmd==='music_stream')calls.push(args);return cmd==='music_stream'?{url:args.id}:null;});
+ await p.playAt(0);p.ctx.audio.currentTime=42;p.ctx.audio.readyState=2;
+ p.emit('waiting');p.expire();await settle();assert.equal(calls.length,2);assert.equal(p.ctx.recoveryUsed,true);
+ p.ctx.audio.currentTime=80;p.ctx.audio.readyState=2;p.emit('waiting');p.expire();await settle();await settle();
+ assert.equal(p.ctx.audio.paused,true);assert.equal(p.ctx.retryPosition,80);assert.equal(p.ctx.needsRefresh,true);
 });
 
 test('temporary source lookup failures recover once and keep the requested position',async()=>{

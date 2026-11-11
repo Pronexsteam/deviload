@@ -238,6 +238,7 @@
 .music-import-start[hidden],
 .music-import-step[hidden],
 .music-import-link-area[hidden],
+.music-import-account-area[hidden],
 .music-import-file-area[hidden] {
   display: none;
 }
@@ -410,4 +411,19 @@
   .music-import-step {
     animation: none !important;
   }
+}
+
+/* A library read through the person's own sign-in: its state, then Sign in and Read my library side by side. */
+.music-import-account-area {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+.music-import-account-area > p {
+  flex-basis: 100%;
+  margin: 0 0 2px;
+}
+.music-import-account-area button[hidden] {
+  display: none;
 }

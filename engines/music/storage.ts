@@ -1,6 +1,8 @@
 // Audio only: no signed URLs, cookies or account credentials are persisted.
 export const CACHE_LIMIT = 200 * 1024 * 1024;
 export const CACHE_LIMITS = [CACHE_LIMIT, 1024 * 1024 * 1024, 5 * 1024 * 1024 * 1024] as const;
+// Songs heard again come from disk and never ask YouTube; 1 GB holds about 250 songs.
+export const DEFAULT_CACHE_LIMIT = CACHE_LIMITS[1];
 export const validCacheLimit = (value: unknown): value is number => typeof value === 'number' && CACHE_LIMITS.some(limit => limit === value);
 export const TRACK_LIMIT = 64 * 1024 * 1024;
 export const validId = (id: unknown): id is string => typeof id === 'string' && /^[\w-]{11}$/.test(id);
@@ -26,7 +28,7 @@ export class AudioCache {
   epoch = 0;
   private saves = Promise.resolve();
   private settings = Promise.resolve();
-  constructor(readonly root: string, public limit: number = CACHE_LIMIT) {}
+  constructor(readonly root: string, public limit: number = DEFAULT_CACHE_LIMIT) {}
   path(file: string) { if (!validFile(file)) throw Error('Invalid cache file'); return `${this.root}/${file}`; }
   async open() {
     await Deno.mkdir(this.root, { recursive: true });

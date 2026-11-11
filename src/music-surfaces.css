@@ -377,6 +377,8 @@
   border-radius: 20px;
   background: color-mix(in srgb, var(--theme-bg, #101318) 90%, var(--workspace-ink, #fff) 10%);
   box-shadow: 0 18px 44px -18px #000c;
+  /* Nothing in the menu scrolls sideways: long names end with an ellipsis instead. */
+  overflow-x: hidden;
 }
 .music-dock-menu:popover-open {
   display: grid;
@@ -404,6 +406,10 @@
 }
 #music-dock-menu > button::after {
   content: attr(aria-label);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 @media (min-width: 900px) {
   :root[data-theme] body.music-page .music-dock {

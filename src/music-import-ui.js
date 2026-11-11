@@ -633,6 +633,36 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
     // Step one: choose where the music comes from. Step two: short directions and the matching field.
     const SOURCES = [
       {
+        key: "youtube-account",
+        brand: "youtubemusic",
+        title: t("My YouTube Music library"),
+        text: t("Liked songs and your playlists, read through your YouTube sign-in on this computer."),
+        command: "music_import_youtube_account",
+        signIn: {
+          status: "youtube_login_status",
+          open: ["open_youtube", { signIn: true }],
+          event: "youtube-session",
+        },
+        steps: [
+          t("Sign in to YouTube if you have not yet."),
+          t("Press Read my library. Only song lists are read; nothing changes in your account."),
+          t("Check the matches, then add the songs you want."),
+        ],
+      },
+      {
+        key: "spotify-account",
+        brand: "spotify",
+        title: t("My Spotify library"),
+        text: t("Liked Songs and your playlists, private ones included, through your own Spotify sign-in."),
+        command: "music_import_spotify_account",
+        signIn: { status: "spotify_account_status", open: ["spotify_sign_in", {}], event: "spotify-session" },
+        steps: [
+          t("Sign in to Spotify in the window that opens. Deviload keeps the sign-in on this computer only."),
+          t("Press Read my library. Only song lists are read; nothing changes in your account."),
+          t("Check the matches, then add the songs you want."),
+        ],
+      },
+      {
         key: "spotify",
         brand: "spotify",
         title: t("Spotify playlist or album"),
@@ -702,7 +732,70 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
       fileArea = el("div", "music-import-file-area");
     linkArea.append(linkForm);
     fileArea.append(sources, guide, pick, file, drop, help);
-    step.append(back, stepHead, stepList, linkArea, fileArea);
+    // Libraries read through the person's own sign-in: no link or file, one button.
+    const accountArea = el("div", "music-import-account-area"),
+      accountState = el("p", "music-import-caption");
+    let accountSource = null,
+      signedIn = false;
+    const signIn = button(
+      t("Sign in"),
+      null,
+      async () => {
+        if (!accountSource) return;
+        try {
+          const [command, args] = accountSource.signIn.open;
+          await invoke(command, args);
+        } catch (error) {
+          notice.textContent = errorText(error);
+        }
+      },
+      "outline small",
+    );
+    function showAccount() {
+      accountState.textContent = signedIn ? t("Signed in on this computer.") : t("Not signed in yet.");
+      signIn.hidden = signedIn;
+      readAccount.disabled = !signedIn;
+    }
+    async function checkAccount() {
+      const source = accountSource;
+      if (!source) return;
+      try {
+        signedIn = !!(await invoke(source.signIn.status));
+      } catch {
+        signedIn = false;
+      }
+      if (source === accountSource) showAccount();
+    }
+    // A sign-in finished in its own window updates this step; the listeners end with the dialog.
+    const sessionListeners = ["youtube-session", "spotify-session"].map(name =>
+      window.__TAURI__?.event?.listen?.(name, () => checkAccount()),
+    );
+    const readAccount = button(
+      t("Read my library"),
+      null,
+      () =>
+        run(async () => {
+          notice.textContent = t("Reading your library…");
+          const value = await invoke(accountSource.command);
+          if (!Array.isArray(value?.entries) || !Array.isArray(value?.playlists))
+            throw Error("No importable music was found.");
+          const names = {
+            "My YouTube Music library": t("My YouTube Music library"),
+            "Liked music": t("Liked music"),
+            "My Spotify library": t("My Spotify library"),
+            "Liked Songs": t("Liked Songs"),
+          };
+          setBatch({
+            ...value,
+            name: names[value.name] || value.name,
+            playlists: value.playlists.map(list => ({ ...list, name: names[list.name] || list.name })),
+            warnings: Array.isArray(value.warnings) ? value.warnings : [],
+          });
+        }),
+      "music-primary",
+    );
+    accountArea.append(accountState, signIn, readAccount);
+    step.append(back, stepHead, stepList, linkArea, fileArea, accountArea);
     step.hidden = true;
     const art = source => {
       const node = el("span", "music-import-art");
@@ -738,17 +831,24 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
       stepHead.firstChild.replaceWith(art(source));
       stepTitle.textContent = source.title;
       stepList.replaceChildren(...source.steps.map(text => el("li", "", text)));
-      const isFile = source.key === "file";
-      linkArea.hidden = isFile;
+      const isFile = source.key === "file",
+        isAccount = !!source.command;
+      accountSource = isAccount ? source : null;
+      linkArea.hidden = isFile || isAccount;
       fileArea.hidden = !isFile;
+      accountArea.hidden = !isAccount;
       if (isFile) choose(service);
-      else {
+      else if (isAccount) {
+        signedIn = false;
+        showAccount();
+        checkAccount();
+      } else {
         link.placeholder = source.placeholder;
         link.setAttribute("aria-label", source.placeholder);
         requestAnimationFrame(() => link.focus());
       }
       // The first time, point at the field the directions lead to.
-      if (!isFile)
+      if (!isFile && !isAccount)
         setTimeout(() => {
           if (!step.hidden)
             showTip({
@@ -771,7 +871,7 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
       t("Choose an export for the full library"),
       "folder-open",
       () => {
-        showStep(SOURCES[3]);
+        showStep(SOURCES.find(source => source.key === "file"));
         pick.click();
       },
       "outline small",
@@ -804,6 +904,7 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
     choose("spotify");
     updateSelection();
     modal.addEventListener("close", () => {
+      for (const listener of sessionListeners) listener?.then(stop => stop()).catch(() => {});
       controller?.abort();
       persist();
       modal.remove();

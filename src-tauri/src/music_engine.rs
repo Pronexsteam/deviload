@@ -141,6 +141,8 @@ impl Worker {
         Ok(worker)
     }
 }
+// The port of the running engine's local audio server, so casting proxies that server and nothing else.
+pub(crate) fn local_port()->Option<u16>{WORKER.get()?.lock().ok()?.as_ref().filter(|w|w.alive.load(Ordering::Relaxed)).map(|w|*w.port.lock().unwrap())}
 fn worker()->Result<Arc<Worker>,String>{
     let mut state=WORKER.get_or_init(||Mutex::new(None)).lock().unwrap();
     if let Some(worker)=state.as_ref().filter(|w|w.alive.load(Ordering::Relaxed)){return Ok(worker.clone());}

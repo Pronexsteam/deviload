@@ -8,6 +8,7 @@ export { readYield, yieldStep, YIELD_KEY } from "./music-yield-model.js";
 export function wireMusicYield({
   invoke,
   host,
+  before = null,
   audios = [],
   isPlaying,
   pause,
@@ -20,7 +21,7 @@ export function wireMusicYield({
     state = { yielded: false },
     acting = false;
   const box = document.createElement("fieldset");
-  box.className = "music-yield";
+  box.className = "music-catalog-context music-yield";
   const make = key => {
     const label = document.createElement("label"),
       input = document.createElement("input"),
@@ -36,7 +37,7 @@ export function wireMusicYield({
   const note = document.createElement("p");
   note.className = "music-yield-note";
   box.append(note);
-  host?.append(box);
+  host?.insertBefore(box, before);
   function labels() {
     pauseOption.text.textContent = t("Pause when another app plays sound");
     resumeOption.text.textContent = t("Resume when it goes quiet");

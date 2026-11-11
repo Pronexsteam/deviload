@@ -414,6 +414,38 @@ fn stream_error(stderr: &[u8]) -> &'static str {
 }
 
 struct ResolveFailure { message: String, retry: bool }
+
+// The person's own YouTube sign-in (the one Deviload saves for downloads). Music uses it only when YouTube
+// limits or refuses guest playback, so the account is not worn out by every song. It is read by the local
+// yt-dlp alone: never sent to listening rooms, the phone remote, settings backups or diagnostics.
+static ACCOUNT_SESSION: OnceLock<std::path::PathBuf> = OnceLock::new();
+pub(crate) fn set_account_session(path: std::path::PathBuf) { let _ = ACCOUNT_SESSION.set(path); }
+pub(crate) fn account_session() -> Option<std::path::PathBuf> {
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    ACCOUNT_SESSION.get().filter(|path| crate::cookies::has_saved_session_file(path, &["youtube.com", "youtu.be", "google.com"], crate::YOUTUBE_SIGNED_IN, now)).cloned()
+}
+// A limit on guest playback must not stop the account, and the account's own limit is kept apart.
+fn account_limit() -> Arc<crate::music_audio::PlaybackLimit> {
+    static LIMIT: OnceLock<Arc<crate::music_audio::PlaybackLimit>> = OnceLock::new();
+    LIMIT.get_or_init(Arc::default).clone()
+}
+// Guest failures an account can get past: a rate limit, a refusal, or a video that asks to sign in.
+fn account_helps(message: &str) -> bool {
+    [stream_error(b"429"), stream_error(b"http error 403"), stream_error(b"sign in")].contains(&message)
+}
+// Guest first; the account only when the guest was limited or refused and a sign-in is saved.
+fn resolve_any(id: &str, proxy: &str, timeout: Duration, limit: Arc<crate::music_audio::PlaybackLimit>, cancelled: &dyn Fn() -> bool) -> Result<crate::music_audio::Source, ResolveFailure> {
+    resolve_with(id, proxy, timeout, limit, cancelled, account_session())
+}
+fn resolve_with(id: &str, proxy: &str, timeout: Duration, limit: Arc<crate::music_audio::PlaybackLimit>, cancelled: &dyn Fn() -> bool, account: Option<std::path::PathBuf>) -> Result<crate::music_audio::Source, ResolveFailure> {
+    let started = Instant::now();
+    let guest = if limit.active() { Err(ResolveFailure::from(stream_error(b"429"))) } else { resolve(id, proxy, timeout, limit, cancelled, None, account.is_none()) };
+    match (guest, account) {
+        (Err(failure), Some(path)) if account_helps(&failure.message) && !cancelled() =>
+            resolve(id, proxy, timeout.saturating_sub(started.elapsed()), account_limit(), cancelled, Some(&path), true),
+        (result, _) => result,
+    }
+}
 impl From<&str> for ResolveFailure {
     fn from(message: &str) -> Self { Self { message: message.into(), retry: false } }
 }
@@ -644,7 +676,7 @@ fn stream_reserved(id: &str, proxy: &str, refresh: bool, preload: bool, generati
     if cancelled() { return Err("Could not open this track".into()); }
     if let Some(source)=cached(){return Ok(Stream{url:crate::music_audio::register(source)?});}
     let limit=streams.lock().unwrap().limit.clone();
-    if limit.active() {
+    if limit.active() && account_session().is_none() {
         return Err(stream_error(b"429").into());
     }
     for attempt in 0..2 {
@@ -659,12 +691,12 @@ fn stream_reserved(id: &str, proxy: &str, refresh: bool, preload: bool, generati
             }
         }
         if cancelled() { return Err("Could not open this track".into()); }
-        if limit.active() { return Err(stream_error(b"429").into()); }
+        if limit.active() && account_session().is_none() { return Err(stream_error(b"429").into()); }
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining < Duration::from_secs(5) { break; }
         streams.lock().unwrap().next_request = Some(Instant::now() + Duration::from_secs(5));
         #[cfg(debug_assertions)] let timing=Instant::now();
-        let source = match resolve(id, proxy, remaining.min(Duration::from_secs(25)), limit.clone(), &cancelled) {
+        let source = match resolve_any(id, proxy, remaining.min(Duration::from_secs(25)), limit.clone(), &cancelled) {
             Ok(source) => Arc::new(source),
             Err(error) => {
                 if error.message == stream_error(b"429") { limit.note(None); }
@@ -709,13 +741,17 @@ pub(super) fn verify_reserve_source(source:&crate::music_audio::Source,deadline:
     }
 }
 
-fn resolve(id: &str, proxy: &str, timeout: Duration, limit: Arc<crate::music_audio::PlaybackLimit>, cancelled: &dyn Fn() -> bool) -> Result<crate::music_audio::Source, ResolveFailure> {
+fn resolve(id: &str, proxy: &str, timeout: Duration, limit: Arc<crate::music_audio::PlaybackLimit>, cancelled: &dyn Fn() -> bool, account: Option<&std::path::Path>, note_denial: bool) -> Result<crate::music_audio::Source, ResolveFailure> {
     let exe = crate::binary("yt-dlp")?;
     let deno = crate::binary("deno")?;
     let mut command = crate::ytdlp_command_with(&exe, proxy);
+    if let Some(path) = account { command.arg("--cookies").arg(path); }
     command
         .args(["--js-runtimes", &format!("deno:{}", deno.display())])
-        .args(["--extractor-args", "youtube:player_client=web_embedded;player_skip=webpage,initial_data;skip=hls,dash"])
+        // visionos serves full audio without a token, label uploads included; web_embedded covers what it lacks.
+        // visionos needs the watch page's visitor data, so the page is not skipped. Signed in, yt-dlp picks
+        // the clients that accept an account itself.
+        .args(["--extractor-args", if account.is_some() { "youtube:skip=hls,dash" } else { "youtube:player_client=visionos,web_embedded;skip=hls,dash" }])
         // The relay verifies actual audio bytes. yt-dlp's separate format probe
         // duplicates that request and can discard a briefly unavailable URL.
         .args(["--ignore-config", "--no-plugin-dirs", "--no-playlist", "--skip-download", "--dump-single-json", "--no-warnings", "--no-colors",
@@ -725,7 +761,7 @@ fn resolve(id: &str, proxy: &str, timeout: Duration, limit: Arc<crate::music_aud
     if !output.status.success() {
         let error=extraction_failure(&output.stderr);
         if error.message==stream_error(b"429"){limit.note(None);}
-        if error.message==stream_error(b"http error 403")||error.message==stream_error(b"private video"){crate::music_engine::note_reserve_denial(id);}
+        if note_denial&&(error.message==stream_error(b"http error 403")||error.message==stream_error(b"private video")){crate::music_engine::note_reserve_denial(id);}
         return Err(error);
     }
     let value: Value = serde_json::from_slice(&output.stdout).map_err(|_| "Could not open this track")?;
@@ -740,7 +776,9 @@ fn resolve(id: &str, proxy: &str, timeout: Duration, limit: Arc<crate::music_aud
 
 fn reserve_slot(deadline:Instant,cancelled:&dyn Fn()->bool)->Result<std::sync::MutexGuard<'static,()>,String>{
     loop{
-        if cancelled()||Instant::now()>=deadline{return Err("Cancelled".into());}
+        if cancelled(){return Err("Cancelled".into());}
+        // Waiting too long for another lookup is a passing condition, not a cancellation: the engine retries it.
+        if Instant::now()>=deadline{return Err("Reserve audio is busy".into());}
         if let Ok(lock)=RESOLUTION.try_lock(){
             if cancelled(){return Err("Cancelled".into());}
             return Ok(lock);
@@ -752,7 +790,7 @@ pub(crate) fn reserve_audio(id: &str, generation: Option<u64>) -> Result<String,
     if !video_id(id) { return Err("Invalid music request".into()); }
     if let Some(error)=crate::music_engine::recovery_error(id){return Err(error);}
     let limit=STREAMS.get_or_init(||Mutex::new(Streams::default())).lock().unwrap().limit.clone();
-    if limit.active(){return Err(stream_error(b"429").into());}
+    if limit.active()&&account_session().is_none(){return Err(stream_error(b"429").into());}
     // Pausing may finish the current buffer, but choosing another song cancels
     // an obsolete reserve extraction as well as the main worker request.
     let generation=generation.unwrap_or_else(||selection().lock().unwrap().generation);
@@ -765,7 +803,12 @@ pub(crate) fn reserve_audio(id: &str, generation: Option<u64>) -> Result<String,
     if cancelled(){return Err("Cancelled".into());}
     let deadline=Instant::now()+Duration::from_secs(25);
     let _resolution=reserve_slot(deadline,&cancelled)?;
-    let source=resolve(id,"",deadline.saturating_duration_since(Instant::now()),limit.clone(),&cancelled).map_err(|e|e.message)?;
+    let attempt=||resolve_any(id,"",deadline.saturating_duration_since(Instant::now()),limit.clone(),&cancelled);
+    // YouTube sometimes answers once without direct formats; one more look usually finds them.
+    let source=match attempt(){
+        Err(failure) if failure.retry && !cancelled() && deadline.saturating_duration_since(Instant::now())>Duration::from_secs(8)=>attempt(),
+        result=>result,
+    }.map_err(|e|e.message)?;
     if cancelled(){return Err("Cancelled".into());}
     crate::music_audio::register(Arc::new(source))
 }
@@ -874,8 +917,11 @@ mod tests {
             if checks.get()==2{crate::music_engine::note_reserve_denial(id);}
             crate::music_engine::recovery_error(id).is_some()
         });
-        assert!(result.is_err());
+        assert_eq!(result.err().as_deref(),Some("Cancelled"));
         assert!(checks.get()>=2);
+        // A lookup that only waited too long is not reported as a cancellation, so the engine may retry it.
+        let _held=RESOLUTION.lock().unwrap_or_else(|e|e.into_inner());
+        assert_eq!(reserve_slot(Instant::now()+Duration::from_millis(50),&||false).err().as_deref(),Some("Reserve audio is busy"));
     }
     #[test]
     fn recovery_invalidates_the_old_producer_even_for_the_same_track() {
@@ -1081,6 +1127,8 @@ mod tests {
 #[cfg(test)] mod suggestion_tests{
     use super::*;
     #[test] fn catalog_retries_a_truncated_body_once(){
+        // A client needs a TLS provider even for loopback; never rely on another test installing it first.
+        let _=rustls::crypto::ring::default_provider().install_default();
         use std::io::Write;
         let listener=std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let address=listener.local_addr().unwrap();
@@ -1096,6 +1144,7 @@ mod tests {
         server.join().unwrap();
     }
     #[test] fn catalog_retries_a_temporary_response_but_preserves_access_denial(){
+        let _=rustls::crypto::ring::default_provider().install_default();
         use std::io::Write;
         for statuses in [vec![503,200],vec![403]]{
             let listener=std::net::TcpListener::bind("127.0.0.1:0").unwrap();let address=listener.local_addr().unwrap();
@@ -1115,5 +1164,31 @@ mod tests {
         assert_eq!(suggestion_texts(&json!(many)).len(),8);
         for status in [401,403,404,429]{assert!(!transient_catalog_status(status));}
         for status in [500,502,503,504]{assert!(transient_catalog_status(status));}
+    }
+}
+
+#[cfg(test)]
+mod account_tests {
+    use super::*;
+    #[test]
+    fn the_account_is_used_only_when_youtube_limits_or_refuses_the_guest() {
+        for message in [stream_error(b"429"), stream_error(b"http error 403"), stream_error(b"sign in")] { assert!(account_helps(message), "{message}"); }
+        for message in [stream_error(b"http error 503"), stream_error(b"requested format is not available"), "Cancelled", "Could not open this track"] { assert!(!account_helps(message), "{message}"); }
+    }
+    #[test]
+    fn without_a_sign_in_a_guest_limit_ends_at_once_and_runs_nothing() {
+        let limit = Arc::new(crate::music_audio::PlaybackLimit::default());
+        limit.note(Some(60));
+        let started = Instant::now();
+        let result = resolve_with("dQw4w9WgXcQ", "", Duration::from_secs(5), limit, &|| false, None);
+        assert_eq!(result.err().map(|e| e.message), Some(stream_error(b"429").to_string()));
+        assert!(started.elapsed() < Duration::from_secs(1));
+    }
+    #[test]
+    fn the_account_has_its_own_limit_so_a_guest_limit_never_blocks_it() {
+        let guest = Arc::new(crate::music_audio::PlaybackLimit::default());
+        guest.note(Some(60));
+        assert!(guest.active() && !account_limit().active());
+        assert!(!Arc::ptr_eq(&guest, &account_limit()));
     }
 }

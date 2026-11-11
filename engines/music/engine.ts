@@ -1,6 +1,7 @@
-import { Innertube, UniversalCache, Constants } from 'youtubei.js';
+import { Innertube, UniversalCache, Constants, YTNodes } from 'youtubei.js';
 import { SabrStream } from 'googlevideo/sabr-stream';
 import { buildSabrFormat, EnabledTrackTypes } from 'googlevideo/utils';
+type SabrFormat = ReturnType<typeof buildSabrFormat>;
 import { safe } from './runtime.ts';
 import { restricted, playbackError } from './errors.ts';
 import { fileURLToPath } from 'node:url';
@@ -9,11 +10,17 @@ import { pendingOpening } from './opening.ts';
 import { idleRelease } from './idle.ts';
 import { stallClock } from './stall.ts';
 import { Ranges } from './ranges.ts';
-import { segmentIndex, segmentAt, type SegmentIndex } from './segments.ts';
+import { continueFromReserve, mayRetryContinuation, continueDelay, type Transfer } from './reserve.ts';
+import { segmentIndex, sessionStart, SegmentPlacer, type SegmentIndex } from './segments.ts';
 import { clipFormat, clipHeights } from './clip.ts';
-import { onSegment, snapshot, resumeState, type Snapshot } from './resume.ts';
 
 const SEEK_AHEAD = 524288, SEEK_SPACING = 300, SEEK_LIMIT = 24;
+// A SABR session that delivers nothing for this long hands the song to the reserve.
+const SABR_IDLE_MS = 8000;
+// After SABR delivers nothing for a few songs in a row, songs go straight to the reserve for a while, so each
+// one asks YouTube once instead of twice; then SABR is tried again.
+const SABR_MISSES = 2, SABR_REST_MS = 10 * 60000;
+let sabrMisses = 0, sabrRestUntil = 0;
 // A music video is fetched about a minute ahead of what is watched, not to the end; the last two stay for a reopen.
 const CLIP_AHEAD_S = 75, CLIP_RESUME_S = 40, CLIPS_KEPT = 2;
 const emit = (message: unknown) => console.log(JSON.stringify(message));
@@ -23,6 +30,9 @@ let stopped = false, serial = 0, selection = 0, selected = '', limitedUntil = 0;
 let prepared = '', readerSerial = 0;
 let foregroundGeneration = 0;
 const sessions = new Map<string, Track>();
+// Songs YouTube refused or limited in this run. Automatic recovery never retries them; a person's own
+// choice of the song does.
+const refused = new Map<string, 'restricted' | 'limited'>();
 // A song's music video plays muted beside the audio; only one is kept at a time.
 let clip: Track | undefined;
 const keptClips: Track[] = [];
@@ -65,21 +75,29 @@ function guest() {
     po!.onerror=e=>{e.preventDefault();clearTimeout(timer);reject(Error('Guest session failed'));};
   });const attempt=poPromise;attempt.then(()=>guestIdle.arm(),()=>{if(poPromise===attempt){po?.terminate();po=undefined;poPromise=undefined;}});return attempt;
 }
+// Tokens travel as websafe base64; SABR asks for the raw bytes.
+const websafeBytes=(text:string)=>Uint8Array.from(atob(text.replace(/-/g,'+').replace(/_/g,'/')+'==='.slice((text.length+3)%4)),c=>c.charCodeAt(0));
 async function mint(id:string) {try{await guest();guestIdle.hold();return await new Promise<string>((resolve,reject)=>{const key=++serial,timer=setTimeout(()=>{tokens.delete(key);reject(Error('Guest token timeout'));},5000);tokens.set(key,{resolve,reject,timer});po!.postMessage({key,id});});}finally{guestIdle.arm();}}
+function refuse(id:string,error:unknown){
+  const reason=/429|rate limit/i.test(safe(error))?'limited':'restricted';refused.set(id,reason);
+  emit({event:'source_protection',id,reason});
+}
 function fallback(id:string) {return new Promise<any>((resolve,reject)=>{const key=++serial,timer=setTimeout(()=>{pending.delete(key);reject(Error('Reserve timeout'));},35000);pending.set(key,{resolve,reject,timer});emit({event:'fallback',key,id});});}
 function protectedFiles() {return new Set([...sessions.values()].filter(t=>t.id===selected||t.id===prepared||t.readers>0).map(t=>t.file));}
 class Track {
   token=crypto.randomUUID();file=crypto.randomUUID()+'.audio';prefix=new Uint8Array();ranges=new Ranges();complete=false;error='';readers=0;
   control=new AbortController();started=false;at=Date.now();epoch=cache.epoch;
+  failures=0;retryable=false;reserveOnly=false;reserve:Transfer|undefined;selectedAt=Date.now();startTimer:ReturnType<typeof setTimeout>|undefined;
   readAt=0;parked=false;choice={height:0,wanted:0,heights:[] as number[]};loudness:number|undefined;
-  index:SegmentIndex|undefined;resume:Snapshot|undefined;want:number|undefined;claim=0;sessionAt=0;starts=0;session:{from:number;control:AbortController}|undefined;
+  index:SegmentIndex|undefined;want:number|undefined;claim=0;sessionAt=0;starts=0;session:{from:number;control:AbortController}|undefined;
   constructor(readonly id:string,readonly size:number,readonly itag=140,readonly video=false){}
-  async read(offset:number,length:number,reader=0,gone=()=>false) {
+  async read(offset:number,length:number,reader=0,gone=()=>false,seek=false) {
     if(this.video)this.readAt=offset;
     if(offset<this.prefix.length)return this.prefix.slice(offset,Math.min(this.prefix.length,offset+length));
     const end=Math.min(this.size,offset+length),stalled=stallClock(65000);
     while(!this.ranges.covers(offset,end)){
-      if(this.error)throw Error(this.error);if(this.control.signal.aborted||gone())throw Error('Cancelled');
+      if(!this.started)this.continueLater(seek);
+      if(this.error&&!this.revive())throw Error(this.error);if(this.control.signal.aborted||gone())throw Error('Cancelled');
       this.request(offset,reader);
       if(stalled(this.ranges.total))throw Error('Audio continuation timed out');await new Promise(r=>setTimeout(r,20));
     }
@@ -87,7 +105,16 @@ class Track {
   }
   request(offset:number,reader:number){
     // Only the newest listener may move the download, and never in a tight loop.
-    const session=this.session;if(!session||session.control.signal.aborted||!this.index||!this.resume||reader<this.claim||this.starts>=SEEK_LIMIT)return;
+    const reserve=this.reserve;
+    if(reserve){
+      // A seek outside the reserve transfer moves it there instead of waiting for it to arrive in order.
+      // The listener waits for the first byte still missing at or after its position, not the position itself.
+      const missing=this.ranges.gap(offset,this.size);
+      if(missing===undefined||missing>=offset+65536||reader<this.claim||Date.now()-this.sessionAt<SEEK_SPACING)return;
+      if(missing>=reserve.from&&missing<=reserve.at()+SEEK_AHEAD)return;
+      this.claim=reader;this.want=missing;this.sessionAt=Date.now();reserve.jump();return;
+    }
+    const session=this.session;if(!session||session.control.signal.aborted||!this.index||reader<this.claim||this.starts>=SEEK_LIMIT)return;
     const head=this.ranges.gap(session.from,this.size)??this.size;
     if(offset>=session.from&&offset<=head+SEEK_AHEAD||Date.now()-this.sessionAt<SEEK_SPACING)return;
     this.claim=reader;this.want=offset;session.control.abort();
@@ -96,7 +123,7 @@ class Track {
     if(this.want!==undefined){const at=this.ranges.gap(this.want,this.size);if(at!==undefined)return at;this.want=undefined;}
     return this.ranges.gap(0,this.size);
   }
-  cancel(){if(!this.complete){this.control.abort();this.error='Cancelled';if(!this.readers)this.prefix=new Uint8Array();} }
+  cancel(){clearTimeout(this.startTimer);this.startTimer=undefined;if(!this.complete){this.control.abort();this.error='Cancelled';if(!this.readers)this.prefix=new Uint8Array();} }
   async place(file:Deno.FsFile,offset:number,bytes:Uint8Array){
     const end=offset+bytes.length;if(end>this.size)throw Error('Audio size mismatch');
     for(const [start,stop]of this.ranges.overlaps(offset,end))
@@ -104,33 +131,39 @@ class Track {
     if(this.ranges.covers(offset,end))return false;
     await file.seek(offset,Deno.SeekMode.Start);await writeBytes(file,bytes);this.ranges.add(offset,end);return true;
   }
-  async copy(file:Deno.FsFile,stream:ReadableStream<Uint8Array>){
-    const reader=stream.getReader();let offset=0;
-    try{
-      while(true){
-        if(this.control.signal.aborted)throw Error('Cancelled');
-        const {value,done}=await reader.read();if(done)break;
-        await this.place(file,offset,value);offset+=value.length;
-      }
-    }finally{await reader.cancel().catch(()=>{});}
-    if(offset!==this.size)throw Error('Incomplete audio stream');
+  // A passing failure is retried from the reserve when the player next asks for the missing audio.
+  revive(){
+    if(!this.error||!this.retryable||this.control.signal.aborted)return false;
+    this.retryable=false;this.error='';this.started=false;this.start();return true;
+  }
+  // Video follows the viewer at once; audio waits until the song is being listened to (see continueDelay).
+  continueLater(seek=false){
+    if(this.started||this.complete)return;
+    const delay=this.video?0:continueDelay(this.selectedAt,Date.now(),seek);
+    if(!delay){this.start();return;}
+    this.startTimer??=setTimeout(()=>{this.startTimer=undefined;this.start();},delay);
   }
   start(){
+    clearTimeout(this.startTimer);this.startTimer=undefined;
     if(this.started||this.complete)return;this.started=true;
-    void this.download().catch(error=>{this.error=restricted(error)?'Playback unavailable or temporarily limited':'Audio continuation failed';emit({event:'diagnostic',stage:'continuation',id:this.id,error:safe(error)});}).finally(()=>{if(!this.complete&&this.control.signal.aborted)void this.remove();});
+    void this.download().catch(error=>{const limited=restricted(error);if(limited&&!this.video)refuse(this.id,error);this.failures++;this.retryable=!limited&&mayRetryContinuation(safe(error),this.failures,this.video);this.error=limited?'Playback unavailable or temporarily limited':'Audio continuation failed';emit({event:'diagnostic',stage:'continuation',id:this.id,error:safe(error)});}).finally(()=>{if(!this.complete&&this.control.signal.aborted)void this.remove();});
   }
   async download(){
     const file=await Deno.open(cache.path(this.file),{read:true,write:true,create:true});
     try{
       if(this.prefix.length)await this.place(file,0,this.prefix);
       this.index=segmentIndex(this.prefix);if(this.index?.end!==this.size)this.index=undefined;
-      try{await this.stream(file);}catch(error){
-        if(this.video||this.control.signal.aborted||aborted(error)||restricted(error)||/streams differ|size mismatch/.test(safe(error)))throw error;
+      // After one failed SABR attempt a retry goes straight to the reserve.
+      try{if(this.reserveOnly||(!this.video&&Date.now()<sabrRestUntil))throw Error('Continuing from the reserve');await this.stream(file);}catch(error){
+        // The reserve is another route with its own checks, so a SABR refusal or mismatch still tries it.
+        // A rate limit does not: asking YouTube again only prolongs it.
+        if(this.video||this.control.signal.aborted||aborted(error)||/429|rate limit/i.test(safe(error)))throw error;
+        this.reserveOnly=true;
         const source=await fallback(this.id);if(this.control.signal.aborted)throw Error('Cancelled');
         const url=new URL(source.url);if(url.hostname!=='127.0.0.1'||url.protocol!=='http:'||url.username||url.password)throw Error('Invalid reserve source');
-        const response=await fetch(url,{signal:AbortSignal.any([this.control.signal,AbortSignal.timeout(40000)])});
-        if(!response.ok||Number(response.headers.get('content-length'))!==this.size){await response.body?.cancel();throw Error('Reserve audio differs');}
-        await this.copy(file,response.body!);
+        // Continue after the audio already here; a slow reserve may take its time while it keeps delivering.
+        await continueFromReserve({size:this.size,next:()=>this.next(),signal:this.control.signal,onTransfer:transfer=>this.reserve=transfer,
+          open:(from,signal)=>fetch(url,{headers:{range:`bytes=${from}-`},signal}),place:(offset,bytes)=>this.place(file,offset,bytes)});
       }
       if(!this.ranges.covers(0,this.size))throw Error('Incomplete audio stream');await file.sync();
     }finally{file.close();}
@@ -142,45 +175,66 @@ class Track {
     // Only uncached foreground audio needs the heavier guest session.
     void guest();
     const client=await fullSession();
-    const info=await client.getBasicInfo(this.id,{client:'WEB'});
-    if(info.playability_status?.status!=='OK')throw Error(info.playability_status?.status||'Unplayable');
-    const format=info.streaming_data?.adaptive_formats.find(f=>f.itag===this.itag&&!f.is_drc);
+    // The player request a web player makes: with the player's signature time and its playback context, and on a
+    // reload the context the server handed back. SABR trusts such a session sooner than a bare info request.
+    const load=async(reload?:unknown)=>{
+      const extra:any={playbackContext:{contentPlaybackContext:{vis:0,splay:false,signatureTimestamp:client.session.player?.signature_timestamp}},contentCheckOk:true,racyCheckOk:true,client:'WEB'};
+      if(reload)extra.playbackContext.reloadPlaybackContext=reload;
+      const info:any=await new YTNodes.NavigationEndpoint({watchEndpoint:{videoId:this.id}}).call(client.actions,{...extra,parse:true});
+      if(info.playability_status?.status!=='OK')throw Error(info.playability_status?.status||'Unplayable');
+      const config=info.player_config?.media_common_config.media_ustreamer_request_config?.video_playback_ustreamer_config;
+      const url=await client.session.player!.decipher(info.streaming_data!.server_abr_streaming_url);
+      if(!config||!url)throw Error('Unsupported audio stream');
+      return {info,url,config};
+    };
+    let source=await load();
+    const format=source.info.streaming_data?.adaptive_formats.find((f:any)=>f.itag===this.itag&&!f.is_drc);
     if(!format||Number(format.content_length)!==this.size)throw Error('Audio streams differ');
-    const config=info.player_config?.media_common_config.media_ustreamer_request_config?.video_playback_ustreamer_config;
-    const url=await client.session.player!.decipher(info.streaming_data!.server_abr_streaming_url);
     if(this.control.signal.aborted)throw Error('Cancelled');
-    const poToken=await mint(this.id),formats=info.streaming_data!.adaptive_formats.map(buildSabrFormat);
+    const formats=source.info.streaming_data!.adaptive_formats.map(buildSabrFormat);
     const clientInfo={clientName:Number(Constants.CLIENT_NAME_IDS[client.session.context.client.clientName as keyof typeof Constants.CLIENT_NAME_IDS]),clientVersion:client.session.context.client.clientVersion};
     for(let from=this.next();from!==undefined;from=this.next()){
       if(this.control.signal.aborted)throw Error('Cancelled');
       if(this.video){await this.pace(from);from=this.next();if(from===undefined)break;}
-      const segment=this.index&&this.resume?segmentAt(this.index,from):-1;
-      const state=segment>0?resumeState(this.resume!,this.index!,segment,this.itag):undefined;
+      const start=sessionStart(this.index,from);
+      const exact=(list:SabrFormat[])=>list.find(f=>f.itag===this.itag&&!f.isDrc&&Number(f.contentLength)===this.size);
       const control=new AbortController(),signal=AbortSignal.any([this.control.signal,control.signal]);
-      const sabr=new SabrStream({fetch:(input,init)=>network(input,{...init,signal:AbortSignal.any([signal,...(init?.signal?[init.signal]:[])])}),poToken,formats,serverAbrStreamingUrl:url,videoPlaybackUstreamerConfig:config!,clientInfo});
-      const session={from:state?this.index!.starts[segment]:0,control};this.session=session;this.sessionAt=Date.now();this.starts++;
-      let fresh=false,added=false,failure:unknown,writing=Promise.resolve();
-      onSegment(sabr,(header,bytes)=>{
-        const itag=header.itag??header.formatId?.itag;if(itag!==undefined&&itag!==this.itag)return;
-        this.resume=snapshot(sabr)??this.resume;
-        writing=writing.then(async()=>{
-          if(signal.aborted)return;
-          const offset=header.startRange!==undefined?Number(header.startRange):header.isInitSeg?0:this.index?.starts[(header.sequenceNumber||0)-1];
-          if(offset===undefined||!Number.isSafeInteger(offset))throw Error('Unplaced audio segment');
-          if(await this.place(file,offset,bytes)){fresh=added=true;if(this.video&&offset-this.readAt>this.byteRate()*CLIP_AHEAD_S)control.abort();}
-          // Stop once this session reaches audio another session already wrote.
-          else if(fresh&&this.index)control.abort();
-        }).catch(error=>{failure=error;control.abort();});
-      });
-      const stop=()=>sabr.abort();signal.addEventListener('abort',stop,{once:true});
+      const heartbeat=source.info.heartbeat_params;
+      const sabr=new SabrStream({videoId:this.id,fetchFunction:(input,init)=>network(input,{...init,signal:AbortSignal.any([signal,...(init?.signal?[init.signal]:[])])}),
+        serverAbrStreamingUrl:source.url,videoPlaybackUstreamerConfig:source.config,clientInfo,formats,poToken:await mint(this.id),
+        ...(heartbeat?{heartbeatParams:{heartbeatToken:heartbeat.heartbeat_token,heartbeatServerData:heartbeat.heartbeat_server_data,intervalMilliseconds:heartbeat.interval_milliseconds}}:{}),
+        // The server may ask for a fresh token, a fresh player response or a heartbeat mid-song; all are answered.
+        callbacks:{onMintPoToken:async()=>websafeBytes(await mint(this.id)),
+          onReloadPlayerResponse:async context=>{source=await load(context);return {serverAbrStreamingUrl:source.url,videoPlaybackUstreamerConfig:source.config};},
+          onCheckHeartbeat:async body=>{const answer:any=await client.actions.execute('/player/heartbeat',{...body,parse:true});return {status:answer.playability_status?.status,pollDelayMs:answer.poll_delay_ms};}}});
+      const session={from:start.begin,control};this.session=session;this.sessionAt=Date.now();this.starts++;
+      const placer=new SegmentPlacer(this.index),media=this.index?.starts[0]??0;
+      let fresh=false,added=false,stalled=false,timer:ReturnType<typeof setTimeout>|undefined;
+      // A session that stops delivering hands the song to the reserve instead of holding it.
+      const quiet=()=>{clearTimeout(timer);timer=setTimeout(()=>{stalled=true;control.abort();},SABR_IDLE_MS);};
+      const stop=()=>void sabr.abort().catch(()=>{});signal.addEventListener('abort',stop,{once:true});
       try{
-        const streams=await sabr.start({...(this.video?{enabledTrackTypes:EnabledTrackTypes.VIDEO_ONLY,videoFormat:this.itag,audioFormat:140}:{enabledTrackTypes:EnabledTrackTypes.AUDIO_ONLY,audioFormat:140}),preferMP4:true,maxRetries:state?2:0,stallDetectionMs:5000,...(state?{state}:{})});
+        quiet();
+        const streams=sabr.start({...(this.video?{enabledTrackTypes:EnabledTrackTypes.VIDEO_ONLY,videoFormat:this.itag,audioFormat:140}:{enabledTrackTypes:EnabledTrackTypes.AUDIO_ONLY,audioFormat:exact}),
+          isPostLiveDvr:false,maxRetries:2,stallDetectionMs:SABR_IDLE_MS,...(start.startTimeMs?{startTimeMs:start.startTimeMs}:{})});
         const reader=(this.video?streams.videoStream:streams.audioStream).getReader();
-        try{while(!(await reader.read()).done);}catch(error){if(!signal.aborted)throw error;}
-        await writing;
-      }finally{signal.removeEventListener('abort',stop);sabr.abort();if(this.session===session)this.session=undefined;}
-      if(failure)throw failure;
+        try{
+          reading:while(true){
+            const {value,done}=await reader.read();if(done)break;
+            const bytes=new Uint8Array(value.buffer,value.byteOffset,value.byteLength);
+            for(const [offset,part]of placer.push(bytes)){
+              // Only new audio counts as progress: while its token check is pending the server repeats the
+              // opening, which must not keep a session that never gets further alive.
+              if(await this.place(file,offset,part)){fresh=added=true;quiet();if(this.video&&offset-this.readAt>this.byteRate()*CLIP_AHEAD_S){control.abort();break reading;}}
+              // Stop once this session reaches audio another session already wrote.
+              else if(fresh&&this.index&&offset>=media){control.abort();break reading;}
+            }
+          }
+        }catch(error){if(!signal.aborted)throw error;}finally{await reader.cancel().catch(()=>{});}
+      }finally{clearTimeout(timer);signal.removeEventListener('abort',stop);void sabr.abort().catch(()=>{});if(this.session===session)this.session=undefined;}
       if(this.control.signal.aborted)throw Error('Cancelled');
+      if(!this.video){if(added){sabrMisses=0;}else if(stalled&&++sabrMisses>=SABR_MISSES){sabrMisses=0;sabrRestUntil=Date.now()+SABR_REST_MS;}}
+      if(stalled)throw Error('Audio stream stalled');
       if(!added&&!control.signal.aborted)throw Error('Incomplete audio stream');
     }
   }
@@ -236,7 +290,7 @@ async function openClip(id:string,height:number){
 async function getTrack(id:string,preload:boolean,refresh:boolean,generation:number):Promise<Track>{
   let track=sessions.get(id);
   if(track?.complete&&!await Deno.stat(cache.path(track.file)).then(s=>s.size===track!.size).catch(()=>false)){sessions.delete(id);track=undefined;}
-  if(track&&!track.error&&!track.control.signal.aborted&&!refresh){if(!preload)track.start();return track;}
+  if(track&&!track.error&&!track.control.signal.aborted&&!refresh){if(!preload)track.continueLater();return track;}
   const pending=await pendingOpening(id,inflight,resolving);if(pending)return pending;
   if(generation!==selection&&selected!==id)throw Error('Cancelled');
   // Another waiter may have started a replacement while cancellation settled.
@@ -263,7 +317,7 @@ async function getTrack(id:string,preload:boolean,refresh:boolean,generation:num
     if(control.signal.aborted||(generation!==selection&&selected!==id))throw Error('Cancelled');
     sessions.get(id)?.cancel();sessions.set(id,track!);
     for(const [key,old]of sessions)if(sessions.size>12&&key!==selected&&key!==prepared&&old.readers===0){old.cancel();sessions.delete(key);void old.remove();}
-    if(!preload||selected===id)track!.start();return track!;
+    if(!preload||selected===id)track!.continueLater();return track!;
   })();inflight.set(id,job);
   try{return await job;}catch(error){
     if(openingSignal.aborted&&!control.signal.aborted)throw Error('Opening audio timed out');
@@ -287,17 +341,21 @@ const server=Deno.serve({hostname:'127.0.0.1',port:0,onListen:()=>{}},request=>{
   const headers:HeadersInit={'Content-Type':track.video?'video/mp4':'audio/mp4','Content-Length':String(end-start+1),'Accept-Ranges':'bytes','Cache-Control':'no-store','Access-Control-Allow-Origin':'*'};
   if(request.headers.has('range'))headers['Content-Range']=`bytes ${start}-${end}/${track.size}`;
   if(request.method==='HEAD')return new Response(null,{status:request.headers.has('range')?206:200,headers});
+  // A request that begins past the opening is a seek: the rest of the song is needed now.
+  const seek=start>0&&start>=track.prefix.length;
   if(track.readers>=(track.video?16:6))return new Response(null,{status:503});track.readers++;let closed=false;const reader=++readerSerial;
   const finish=()=>{if(!closed){closed=true;track.readers--;if(!track.video&&track.id!==selected&&track.readers===0)void track.remove();}};
-  const body=new ReadableStream<Uint8Array>({async pull(controller){try{if(closed)return;const bytes=await track.read(start,Math.min(65536,end-start+1),reader,()=>closed);if(closed)return;start+=bytes.length;controller.enqueue(bytes);if(start>end){finish();controller.close();}}catch(e){finish();controller.error(e);}},cancel(){finish();}});
+  const body=new ReadableStream<Uint8Array>({async pull(controller){try{if(closed)return;const bytes=await track.read(start,Math.min(65536,end-start+1),reader,()=>closed,seek);if(closed)return;start+=bytes.length;controller.enqueue(bytes);if(start>end){finish();controller.close();}}catch(e){finish();controller.error(e);}},cancel(){finish();}});
   return new Response(body,{status:request.headers.has('range')?206:200,headers});
 });
-emit({event:'ready',port:server.addr.port,version:'1.0.0'});
+// recoveryGuard: this engine reports refusals and answers recovery_check, so the host may recover automatically.
+emit({event:'ready',port:server.addr.port,version:'1.0.0',recoveryGuard:1});
 async function command(cmd:any){
   try{
     if(cmd.action==='prepare'){return;}
     // How loud the recording is, for optional volume levelling; null when unknown.
     if(cmd.action==='loudness'){if(!validId(cmd.id))throw Error('Invalid music request');const value=sessions.get(cmd.id)?.loudness??(await cache.find(cmd.id))?.loudness;emit({key:cmd.key,data:validLoudness(value)?value:null});return;}
+    if(cmd.action==='recovery_check'){emit({key:cmd.key,data:{allowed:validId(cmd.id)&&!refused.has(cmd.id)}});return;}
     if(cmd.action==='reserve'){const p=pending.get(cmd.key);if(p){pending.delete(cmd.key);clearTimeout(p.timer);cmd.error?p.reject(Error(cmd.error)):p.resolve(cmd);}return;}
     if(cmd.action==='cancel'){
       if(Number(cmd.generation)<foregroundGeneration)return;
@@ -324,6 +382,7 @@ async function command(cmd:any){
     if(cmd.action!=='play'||!validId(cmd.id))throw Error('Invalid music request');
     if(Number(cmd.generation)<foregroundGeneration)throw Error('Cancelled');
     if(!cmd.preload)foregroundGeneration=Number(cmd.generation)||foregroundGeneration;
+    if(!cmd.preload&&!cmd.automatic)refused.delete(cmd.id);
     if(!cmd.preload)select(cmd.id);else{
       // A newer next-track choice replaces the old one, which only holds its opening audio.
       if(prepared&&prepared!==cmd.id){resolving.get(prepared)?.abort();const old=sessions.get(prepared);if(old&&!old.complete&&!old.started&&old.readers===0){old.cancel();sessions.delete(prepared);void old.remove();}}
@@ -331,7 +390,7 @@ async function command(cmd:any){
     }
     const generation=selection,track=await getTrack(cmd.id,!!cmd.preload,!!cmd.refresh,generation);
     if(generation!==selection&&selected!==cmd.id)throw Error('Cancelled');
-    if(!cmd.preload)track.start();
+    if(!cmd.preload){track.selectedAt=Date.now();track.continueLater();}
     emit({key:cmd.key,data:{url:`http://127.0.0.1:${server.addr.port}/${track.token}`}});
   }catch(error){emit({key:cmd.key,error:playbackError(error),restricted:restricted(error)});}
 }

@@ -5,7 +5,10 @@ import {
   soundSettings,
   equalizerHeadroom,
   createMusicRate,
+  createSilenceWatch,
+  SILENCE,
 } from "./music-sound-model.js";
+import { createSegmentSkip } from "./music-skip-segments.js";
 export { soundSettings } from "./music-sound-model.js";
 export function createMusicSound({
   nodes,
@@ -14,6 +17,8 @@ export function createMusicSound({
   notify,
   getAudio = () => nodes[0],
   onRateChange = () => {},
+  invoke = null,
+  canSkip = () => true,
 }) {
   let settings;
   try {
@@ -27,6 +32,15 @@ export function createMusicSound({
     revision = 0;
   const trims = new Map();
   const speed = createMusicRate(nodes, () => settings.rate);
+  const segments = createSegmentSkip({
+    invoke: invoke || (async () => null),
+    enabled: () => !!invoke && settings.skipSegments,
+    allowed: canSkip,
+  });
+  for (const node of nodes)
+    node.addEventListener("timeupdate", () => {
+      if (node === getAudio()) segments.check(node);
+    });
   function ramp(param, value, delay = 0) {
     const now = context.currentTime;
     param.cancelScheduledValues(now);
@@ -74,13 +88,75 @@ export function createMusicSound({
     apply();
     await context.resume();
   }
+  const needsGraph = () =>
+    settings.soft || settings.level || settings.skipSilence || settings.bands.some(Boolean);
+  // The analyser is a side branch, never a second connection to the speakers.
+  function tap(graph) {
+    if (graph.analyser) return;
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.35;
+    analyser.minDecibels = -85;
+    analyser.maxDecibels = -15;
+    graph.compressor.connect(analyser);
+    graph.analyser = analyser;
+    graph.spectrum = new Uint8Array(analyser.frequencyBinCount);
+    graph.wave = new Float32Array(analyser.fftSize);
+  }
+  const silence = createSilenceWatch();
+  let silenceTimer = 0,
+    hurried = null;
+  function release() {
+    if (hurried) speed.hurry(hurried, 0);
+    hurried = null;
+    silence.reset();
+  }
+  function checkSilence() {
+    const node = getAudio(),
+      graph = graphs.find(graph => graph.node === node);
+    if (hurried && hurried !== node) release();
+    // During an overlap the other song is still audible, and a muted player tells nothing about its sound.
+    const listening =
+      context.state === "running" &&
+      !!graph?.analyser &&
+      !node.paused &&
+      !node.seeking &&
+      node.readyState >= 3 &&
+      !node.muted &&
+      node.volume >= 0.02 &&
+      !nodes.some(other => other !== node && !other.paused);
+    let rms = 1;
+    if (listening) {
+      graph.analyser.getFloatTimeDomainData(graph.wave);
+      let energy = 0;
+      for (const sample of graph.wave) energy += sample * sample;
+      // Whether or not the browser applies the element volume before the graph, this hears the song itself.
+      rms = Math.sqrt(energy / graph.wave.length) / node.volume;
+    }
+    const quiet = silence.update(rms, performance.now() / 1000, listening);
+    if (quiet && hurried !== node) {
+      hurried = node;
+      speed.hurry(node, SILENCE.rate);
+    } else if (!quiet && hurried) release();
+  }
+  function watchSilence() {
+    if (!settings.skipSilence || speed.mode || !context) {
+      clearInterval(silenceTimer);
+      silenceTimer = 0;
+      release();
+      return;
+    }
+    graphs.forEach(tap);
+    silenceTimer ||= setInterval(checkSilence, 50);
+  }
   async function commit() {
     const token = ++revision;
     try {
       storage?.setItem("devil-music-sound", JSON.stringify(settings));
       speed.refresh();
       onRateChange();
-      if (context || settings.soft || settings.level || settings.bands.some(Boolean)) await activate();
+      if (context || needsGraph()) await activate();
+      watchSilence();
     } catch (error) {
       if (token === revision) notify(error.message, true);
     }
@@ -212,7 +288,9 @@ export function createMusicSound({
     soft = toggle(value => (settings.soft = value)),
     level = toggle(value => (settings.level = value)),
     transition = choice(value => (settings.transition = Number(value))),
-    seamless = toggle(value => (settings.seamless = value));
+    seamless = toggle(value => (settings.seamless = value)),
+    skipSilence = toggle(value => (settings.skipSilence = value)),
+    skipSegments = toggle(value => (settings.skipSegments = value));
   const rateRow = node("label"),
     rateLabel = node("span"),
     rate = node("input"),
@@ -313,6 +391,17 @@ export function createMusicSound({
     );
     seamless.input.checked = settings.seamless;
     seamless.label.textContent = t("Play albums without gaps");
+    skipSilence.input.checked = settings.skipSilence;
+    skipSilence.input.disabled = !!speed.mode;
+    skipSilence.label.textContent = t("Skip silence");
+    skipSegments.input.checked = settings.skipSegments;
+    skipSegments.label.textContent = t("Skip non-music parts of music videos");
+    skipSegments.label.title = t(
+      "Intros and outros marked by the SponsorBlock community. Only a short fragment of a code made from the video id is sent, never the video itself.",
+    );
+    skipSilence.label.title = t(
+      "Quiet stretches inside and around a song pass quickly. Listening rooms keep normal time.",
+    );
     rateLabel.textContent = rate.ariaLabel = t("Playback speed");
     rate.value = settings.rate;
     rateValue.textContent = settings.rate.toFixed(2) + "\u00d7";
@@ -323,9 +412,7 @@ export function createMusicSound({
         ? t("Listening rooms use normal speed for synchronization.")
         : reason === "pitch"
           ? t("This device cannot preserve pitch at other speeds.")
-          : reason === "online"
-            ? t("Speed is available for music stored on this device.")
-            : t("Voice pitch is preserved.");
+          : t("Voice pitch is preserved.");
     reset.textContent = reset.ariaLabel = t("Reset sound settings");
     close.textContent = close.ariaLabel = t("Close");
     note.textContent = t(
@@ -337,7 +424,10 @@ export function createMusicSound({
   document.addEventListener(
     "pointerdown",
     () => {
-      if (settings.bands.some(Boolean) || settings.soft) activate().catch(() => {});
+      if (needsGraph())
+        activate()
+          .then(watchSilence)
+          .catch(() => {});
     },
     { once: true },
   );
@@ -373,36 +463,42 @@ export function createMusicSound({
     get transition() {
       return settings.transition;
     },
+    get rate() {
+      return settings.rate;
+    },
+    // The speed from outside this dialog (the dock menu, the [ and ] keys). Refused where a listening room
+    // or the device rules speed out, exactly like the slider.
+    setRate(value) {
+      if (speed.reason(getAudio())) return false;
+      settings.rate = soundSettings({ ...settings, rate: Number(value) }).rate;
+      commit();
+      return true;
+    },
+    rateBlocked: () => speed.reason(getAudio()),
     get seamless() {
       return settings.seamless;
+    },
+    get skipSegments() {
+      return settings.skipSegments;
     },
     resume() {
       if (context) context.resume().catch(() => {});
     },
-    setSource(node, offline) {
+    // [sourceId] is the YouTube recording being played; local and downloaded files have none.
+    setSource(node, offline, sourceId) {
       speed.setSource(node, offline);
+      if (node === getAudio()) segments.load(sourceId);
       if (dialog.open) refresh();
     },
     setRoomMode(mode) {
       speed.setMode(mode);
+      watchSilence();
       refresh();
       onRateChange();
     },
     async enableAnalysis() {
       await activate();
-      for (const graph of graphs)
-        if (!graph.analyser) {
-          const analyser = context.createAnalyser();
-          analyser.fftSize = 2048;
-          analyser.smoothingTimeConstant = 0.35;
-          analyser.minDecibels = -85;
-          analyser.maxDecibels = -15;
-          // A side branch, never a second connection to the speakers.
-          graph.compressor.connect(analyser);
-          graph.analyser = analyser;
-          graph.spectrum = new Uint8Array(analyser.frequencyBinCount);
-          graph.wave = new Float32Array(analyser.fftSize);
-        }
+      graphs.forEach(tap);
     },
     analyse(node) {
       const graph = graphs.find(graph => graph.node === node);

@@ -22,6 +22,8 @@ pub struct MiniState {
 }
 static STATE: OnceLock<Mutex<MiniState>> = OnceLock::new();
 fn stored() -> &'static Mutex<MiniState> { STATE.get_or_init(|| Mutex::new(MiniState::default())) }
+// The latest player state, already sanitized; the local control API reads it.
+pub(crate) fn current() -> MiniState { stored().lock().map(|state| state.clone()).unwrap_or_default() }
 
 static OPENING: AtomicBool = AtomicBool::new(false);
 // Reserve creation before checking the window registry: WebView2 creation can

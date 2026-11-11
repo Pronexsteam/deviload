@@ -1,6 +1,6 @@
 import { readMusicState } from "./music-state.js";
 import { readTaste } from "./music-taste.js";
-import { playlistCover } from "./music-library-model.js";
+import { playlistCover, folderName } from "./music-library-model.js";
 import { musicGain } from "./music-volume.js";
 import { sanitizeInterestMixes } from "./music-interest-mixes.js";
 import { safeArtworkUrl } from "./music-artwork.js";
@@ -99,6 +99,7 @@ function playlists(values = [], strict = false) {
       items,
       ...(value.description ? { description: text(value.description, 600) } : {}),
       ...(value.pinned === true ? { pinned: true } : {}),
+      ...(folderName(value.folder) ? { folder: folderName(value.folder) } : {}),
       ...(playlistCover(value.cover) ? { cover: playlistCover(value.cover) } : {}),
     };
   });

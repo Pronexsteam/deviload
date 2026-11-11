@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Devil Music listens for a few seconds to recognize the song playing nearby. Only a fingerprint of the sound is sent for recognition.</string>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>Devil Music looks for TVs and speakers on your network to cast music, and the phone remote connects on your network.</string>
+  <key>NSBonjourServices</key>
+  <array>
+    <string>_googlecast._tcp</string>
+  </array>
+</dict>
+</plist>

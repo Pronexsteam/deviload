@@ -70,13 +70,13 @@ const normalize = text => text.replace(/\{[^}]*\}/g, "{}");
 
 function rustMessages() {
   const found = [];
-  for (const file of ["cinema_embed.rs", "cinema.rs", "lib.rs", "gallery.rs", "gallery_install.rs", "download_recovery.rs", "music.rs", "music_audio.rs", "music_profile.rs", "music_import.rs", "music_room.rs", "music_playlist_import.rs", "music_lyrics.rs", "music_offline.rs", "music_local.rs", "music_engine_diagnostics.rs", "music_engine_protection.rs", "download_details.rs", "quick_cut.rs", "cookies.rs", "engine_update.rs", "model.rs", "share.rs", "settings_backup.rs", "watch.rs", "convert.rs", "power.rs", "media_server.rs"]) {
+  for (const file of ["cinema_embed.rs", "cinema.rs", "lib.rs", "gallery.rs", "gallery_install.rs", "download_recovery.rs", "music.rs", "music_audio.rs", "music_profile.rs", "music_import.rs", "music_room.rs", "music_playlist_import.rs", "music_lyrics.rs", "music_scrobble.rs", "music_offline.rs", "music_local.rs", "music_engine_diagnostics.rs", "music_engine_protection.rs", "music_control_api.rs", "music_account_import.rs", "music_spotify_account.rs", "music_recognize.rs", "music_cast.rs", "download_details.rs", "quick_cut.rs", "cookies.rs", "engine_update.rs", "model.rs", "share.rs", "settings_backup.rs", "watch.rs", "convert.rs", "power.rs", "media_server.rs"]) {
     const source = read(join("src-tauri/src", file)).split("#[cfg(test)]")[0];
     if(file === 'cinema.rs')for(const text of literals(block(source,'pub(crate) fn source_failure','// Never log')))found.push({file,text});
     // Start inside the body so Rust lifetimes such as &'static are not parsed
     // as single-quoted JavaScript strings by literals().
     if(file === "music.rs")for(const text of literals(block(source,"let error = String::from_utf8_lossy(stderr)", "struct ResolveFailure")))if(text.endsWith("."))found.push({file,text});
-    if(file === "cinema.rs" || file === "music_import.rs" || file === "music_room.rs" || file === "music_playlist_import.rs" || file === "quick_cut.rs")for(const [,name,text] of source.matchAll(/const (\w+): &str = "([^"]+)";/g)){
+    if(file === "cinema.rs" || file === "music_import.rs" || file === "music_room.rs" || file === "music_playlist_import.rs" || file === "music_account_import.rs" || file === "music_spotify_account.rs" || file === "music_recognize.rs" || file === "music_cast.rs" || file === "quick_cut.rs")for(const [,name,text] of source.matchAll(/const (\w+): &str = "([^"]+)";/g)){
       if(file==='cinema.rs'&&['STREAM_TEMPLATE','FORMAT_TEMPLATE'].includes(name))continue; // yt-dlp field projections, never UI copy.
       found.push({file,text});
     }

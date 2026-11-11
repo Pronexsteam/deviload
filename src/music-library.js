@@ -1,6 +1,12 @@
 import { t } from "./i18n.js";
 import { tracks, reorderTrack } from "./music-state.js";
-import { movePlaylistTracks, transferPlaylistTracks, duplicateGroups } from "./music-library-model.js";
+import {
+  movePlaylistTracks,
+  transferPlaylistTracks,
+  duplicateGroups,
+  folderName,
+  playlistFolders,
+} from "./music-library-model.js";
 import { playlistArtwork } from "./music-playlist-art.js";
 
 export function createMusicLibrary({ saved, commit, onOpen, notify, button, cover }) {
@@ -73,6 +79,24 @@ export function createMusicLibrary({ saved, commit, onOpen, notify, button, cove
       description.rows = 3;
       description.value = existing?.description || "";
       descriptionLabel.append(description);
+      // A folder is just a name; typing a new one creates it and the last playlist leaving it removes it.
+      const folderLabel = el("label", "", t("Folder")),
+        folder = el("input", ""),
+        known = el("datalist", "");
+      folder.type = "text";
+      folder.maxLength = 48;
+      folder.placeholder = t("No folder");
+      folder.value = existing?.folder || "";
+      known.id = "music-playlist-folders";
+      folder.setAttribute("list", known.id);
+      known.append(
+        ...playlistFolders(saved.playlists).folders.map(group => {
+          const option = el("option", "");
+          option.value = group.name;
+          return option;
+        }),
+      );
+      folderLabel.append(folder, known);
       let artwork = existing?.cover || "";
       const image = el("input", "");
       image.type = "file";
@@ -147,7 +171,7 @@ export function createMusicLibrary({ saved, commit, onOpen, notify, button, cove
       const submit = el("button", "music-primary", t("Save playlist"));
       submit.type = "submit";
       actions.append(submit);
-      form.append(label, descriptionLabel, actions);
+      form.append(label, descriptionLabel, folderLabel, actions);
       body.append(form);
       form.addEventListener("submit", event => {
         event.preventDefault();
@@ -162,6 +186,8 @@ export function createMusicLibrary({ saved, commit, onOpen, notify, button, cove
           description: description.value.trim(),
           cover: artwork,
         };
+        delete playlist.folder;
+        if (folderName(folder.value)) playlist.folder = folderName(folder.value);
         const lists = existing
           ? saved.playlists.map(list => (list.id === id ? playlist : list))
           : [playlist, ...saved.playlists];
@@ -172,6 +198,31 @@ export function createMusicLibrary({ saved, commit, onOpen, notify, button, cove
       });
     });
     modal.querySelector("input[type=text]").focus();
+  }
+  function folderDialog(title, value, save) {
+    dialog(title, (body, close) => {
+      const form = el("form", "music-playlist-form"),
+        label = el("label", "", t("Folder name")),
+        input = el("input", "");
+      input.type = "text";
+      input.required = true;
+      input.maxLength = 48;
+      input.value = value;
+      label.append(input);
+      const actions = el("div", "music-library-actions"),
+        submit = el("button", "music-primary", t("Save"));
+      submit.type = "submit";
+      actions.append(button(t("Cancel"), null, close, "quiet small"), submit);
+      form.append(label, actions);
+      body.append(form);
+      form.addEventListener("submit", event => {
+        event.preventDefault();
+        const name = folderName(input.value);
+        if (!name) return input.focus();
+        if (save(name) !== false) close();
+      });
+      queueMicrotask(() => input.select());
+    });
   }
   function picker(item) {
     dialog(t("Add to playlist"), (body, close) => {
@@ -374,6 +425,41 @@ export function createMusicLibrary({ saved, commit, onOpen, notify, button, cove
         previous = null;
         onOpen(find(id) ? id : null);
       }
+    },
+    // Folders are names on playlists; these change every playlist that carries the name.
+    setFolder(id, name) {
+      const folder = folderName(name);
+      const lists = saved.playlists.map(x => {
+        if (x.id !== id) return x;
+        const next = { ...x };
+        delete next.folder;
+        return folder ? { ...next, folder } : next;
+      });
+      if (find(id)) update(lists);
+    },
+    newFolder(id) {
+      folderDialog(t("New folder"), "", name => this.setFolder(id, name));
+    },
+    renameFolder(name) {
+      const key = folderName(name).toLocaleLowerCase();
+      folderDialog(t("Rename folder"), folderName(name), next =>
+        update(
+          saved.playlists.map(x =>
+            folderName(x.folder).toLocaleLowerCase() === key ? { ...x, folder: next } : x,
+          ),
+        ),
+      );
+    },
+    ungroup(name) {
+      const key = folderName(name).toLocaleLowerCase();
+      update(
+        saved.playlists.map(x => {
+          if (folderName(x.folder).toLocaleLowerCase() !== key) return x;
+          const next = { ...x };
+          delete next.folder;
+          return next;
+        }),
+      );
     },
     pin(id) {
       const list = find(id);

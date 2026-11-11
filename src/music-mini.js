@@ -1,10 +1,13 @@
 import { mountPictureDisc, setPictureDiscArtwork } from "./music-picture-disc.js";
+import { keepPresses } from "./press-capture.js";
 import { t, onLanguageChange } from "./i18n.js";
 import { paintAmbient, ambientArtwork } from "./music-ambient-light.js";
 import { registerPlaybackRange, isRangeDragging } from "./player-controls.js";
 import { wireMiniQueue } from "./music-mini-queue.js";
 import { createMusicClip } from "./music-clip.js";
 import { wireGlassOrb, wireGlassButtons } from "./music-glass.js";
+// A press near the edge of a shrinking player button still counts (see press-capture.js).
+keepPresses();
 const $ = id => document.getElementById(id),
   invoke = window.__TAURI__.core.invoke;
 const time = n =>

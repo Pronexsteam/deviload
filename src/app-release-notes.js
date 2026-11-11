@@ -79,6 +79,28 @@ export function wireReleaseNotes(workspace) {
     // Every release with its notes, newest first.
     const releases = [
       {
+        version: "2.13.0",
+        changes: [
+          t(
+            "Songs play through to the end: a reserve copy takes over where YouTube stops, and far seeks land where you click.",
+          ),
+          t(
+            "Bring your YouTube Music and Spotify libraries, private playlists included, through your own sign-in on this computer.",
+          ),
+          t(
+            "Recognize a song playing nearby with the microphone, and cast music to a TV or speaker with Chromecast or DLNA.",
+          ),
+          t(
+            "Playback speed in one click, a Lossless mark for FLAC and WAV files, and music videos in the mini player.",
+          ),
+        ],
+        fixes: [
+          t("Songs no longer stop at 30–40 percent."),
+          t("The whole play orb responds to clicks, and liking a song in an album keeps your place."),
+          t("Lyrics no longer jump on songs with short pauses."),
+        ],
+      },
+      {
         version: "2.12.0",
         changes: [
           t(

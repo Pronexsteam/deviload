@@ -102,6 +102,21 @@ body.music-page #open-youtube-view {
 .music-search button[hidden] {
   display: none;
 }
+.music-search .music-recognize.is-listening {
+  color: #e8876b;
+  animation: music-recognize-pulse 1.2s ease-in-out infinite;
+}
+@keyframes music-recognize-pulse {
+  50% {
+    background: #e8876b26;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .music-search .music-recognize.is-listening {
+    animation: none;
+    background: #e8876b26;
+  }
+}
 .music-search .music-search-submit {
   background: #eee2d7;
   color: #241e1c;

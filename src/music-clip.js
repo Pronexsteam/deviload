@@ -168,17 +168,21 @@ export function createMusicClip({
     pulse();
   };
   const found = new Map();
-  // The music engine streams the video like the audio; the video player's source is the reserve.
+  // The music engine streams the video like the audio; the video player's source is the reserve. Once the
+  // engine's stream of this video broke, the retry goes straight to the reserve: the engine would only hand
+  // back the same stream, which YouTube had just stopped (it does while it checks a session's token).
   async function source(id, token) {
-    try {
-      const result = await invoke("music_clip_stream", { id, height: quality });
-      if (result?.url) {
-        streaming = true;
-        return result;
-      }
-    } catch {}
+    if (retried !== key)
+      try {
+        const result = await invoke("music_clip_stream", { id, height: quality });
+        if (result?.url) {
+          streaming = true;
+          return result;
+        }
+      } catch {}
     if (token !== serial) return null;
-    const reserve = () => invoke("cinema_stream", { id, quality });
+    // The picture only: the clip plays muted, and YouTube serves the silent format for label videos too.
+    const reserve = () => invoke("cinema_stream", { id, quality, silent: true });
     const result = await reserve().catch(async () => {
       await pause(1500);
       return token === serial ? reserve() : null;

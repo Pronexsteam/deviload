@@ -92,3 +92,19 @@ test('recommendation artist reasons require positive evidence and ignore empty o
   assert.equal(recommendationArtist(song(4,[' ',null,{}]),taste,[song(5,[''])]),'');
   assert.equal(recommendationArtist(candidate,taste,[song(6,['ＡＲＴＩＳＴ'])]),'ＡＲＴＩＳＴ');
 });
+
+test("playlist folders group by name regardless of spacing or case and keep pinned lists first",async()=>{
+  const {playlistFolders,folderName}=await import("../src/music-library-model.js");
+  const lists=[{id:"a",folder:"Gym"},{id:"b"},{id:"c",folder:"  gym ",pinned:true},{id:"d",folder:"Chill"},{id:"e",folder:"   "},{id:"f",pinned:true}];
+  const {folders,loose}=playlistFolders(lists);
+  assert.deepEqual(folders.map(f=>[f.name,f.playlists.map(p=>p.id)]),[["Chill",["d"]],["Gym",["c","a"]]]);
+  assert.deepEqual(loose.map(p=>p.id),["f","b","e"]);
+  assert.equal(folderName("x".repeat(80)).length,48);assert.equal(folderName(42),"");assert.equal(folderName("a\n\tb"),"a b");
+});
+test("folders survive a profile round trip and invalid folder values are dropped",async()=>{
+  const {exportMusicProfile,importMusicProfile}=await import("../src/music-profile.js");
+  const {readTaste}=await import("../src/music-taste.js");
+  const saved={favorites:[],recent:[],playlists:[{id:"p1",name:"One",items:[],folder:" Road  trip "},{id:"p2",name:"Two",items:[],folder:{evil:true}}]};
+  const restored=importMusicProfile(exportMusicProfile(saved,readTaste())).saved.playlists;
+  assert.equal(restored[0].folder,"Road trip");assert.equal("folder" in restored[1],false);
+});

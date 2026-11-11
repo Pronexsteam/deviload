@@ -96,21 +96,37 @@ dialog.app-mode-welcome > p {
 :root[data-theme] body #music-preferences .app-mode-toggle {
   display: grid !important;
   grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
   justify-content: stretch;
+  column-gap: 10px;
+  row-gap: 8px;
+  margin: 0 0 20px !important;
+  padding: 0 0 20px !important;
+  border: 0 !important;
+  border-bottom: 1px solid #ffffff12 !important;
+  border-radius: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
   text-align: left;
+  font-weight: 600;
+}
+/* The note sits under the switch at the left edge, like the notes of the rows below it. */
+:root[data-theme] body #music-preferences .app-mode-toggle small {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--workspace-muted, #b9bcc6);
 }
 :root[data-theme] body #music-preferences .app-mode-toggle input {
   margin: 0;
 }
-/* Pause while another app plays: two plain switches with a note, aligned like the rest of the panel. */
+/* Pause while another app plays: two switches and a note, laid out like the other settings rows. */
 :root[data-theme] body #music-preferences .music-yield {
   display: grid;
-  gap: 8px;
-  margin: 12px 0 4px;
-  padding: 12px 14px;
-  border: 1px solid var(--surf-line, #ffffff1c);
-  border-radius: 14px;
-  background: var(--surf-fill, #ffffff06);
+  gap: 10px;
   min-width: 0;
 }
 :root[data-theme] body #music-preferences .music-yield label {
@@ -132,6 +148,68 @@ dialog.app-mode-welcome > p {
 }
 .music-yield-note {
   margin: 0;
+  font-size: 13px;
+  color: var(--workspace-muted, #b9bcc6);
+}
+/* Scrobbling: one block per service, name above its state, actions on one wrapping row. */
+#music-preferences .music-scrobbling-service {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+}
+#music-preferences .music-scrobbling-service > span {
+  font-size: 13px;
+  color: var(--workspace-muted, #b9bcc6);
+}
+#music-preferences .music-scrobbling-service .setting-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+#music-preferences .music-scrobbling-service input[type="password"] {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.music-scrobbling-note {
+  margin: 10px 0 0;
   font-size: 12px;
   color: var(--workspace-muted, #b9bcc6);
+}
+
+/* The YouTube account row: its state and a note on the left, one button on the right. */
+#music-preferences .music-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+#music-preferences .music-account small {
+  display: block;
+  margin-top: 2px;
+  opacity: 0.72;
+}
+#music-preferences .music-control-api {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+#music-preferences .music-control-api small {
+  display: block;
+  margin-top: 2px;
+  opacity: 0.72;
+}
+#music-preferences .music-control-api code {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.82em;
+  opacity: 0.85;
+  user-select: text;
+}
+#music-preferences .music-control-api-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
 }

@@ -20,6 +20,7 @@ export function createShortcutHelp({ button }) {
     [t("Previous track"), "Ctrl ←"],
     [t("Seek 5 seconds"), "← →"],
     [t("Change volume"), "Ctrl ↑ ↓"],
+    [t("Slower or faster"), "[ ]"],
     [t("Mute"), "M"],
     [t("Like this song"), "L"],
     [t("Shuffle"), "S"],
