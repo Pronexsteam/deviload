@@ -27,6 +27,25 @@ pub async fn export_music_profile(app: tauri::AppHandle, window: tauri::WebviewW
     }).await.map_err(|e| e.to_string())?
 }
 
+/// The library in a format other apps read (CSV, M3U or JSON), saved where the person chooses.
+#[tauri::command]
+pub async fn export_music_library(app: tauri::AppHandle, window: tauri::WebviewWindow, text: String, format: String) -> Result<bool, String> {
+    if window.label() != "main" { return Err("Invalid music profile.".into()); }
+    let (name, extension) = match format.as_str() { "csv" => ("CSV", "csv"), "m3u" => ("M3U", "m3u"), "json" => ("JSON", "json"), _ => return Err("Invalid music profile.".into()) };
+    if text.len() > 32 * 1024 * 1024 { return Err("Invalid music profile.".into()); }
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(file) = app.dialog().file().add_filter(name, &[extension])
+            .set_file_name(format!("devil-music-library.{extension}")).blocking_save_file() else { return Ok(false); };
+        let path = file.into_path().map_err(|e| e.to_string())?;
+        let parent = path.parent().ok_or("Choose a local folder")?;
+        let mut temporary = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+        temporary.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+        temporary.as_file().sync_all().map_err(|e| e.to_string())?;
+        temporary.persist(path).map_err(|e| e.to_string())?;
+        Ok(true)
+    }).await.map_err(|e| e.to_string())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

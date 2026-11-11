@@ -132,6 +132,12 @@ fn response(stream: &mut TcpStream, code: u16, body: &[u8], open: bool) -> std::
     write!(stream, "HTTP/1.1 {code} Response\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n{cors}\r\n", body.len())?;
     stream.write_all(body)
 }
+// The page an OBS browser source shows: the song playing, read from the state above with the same token.
+const OVERLAY: &'static str = include_str!("music_overlay.html");
+fn page(stream: &mut TcpStream, body: &[u8]) -> std::io::Result<()> {
+    write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nContent-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src https:; connect-src 'self'\r\n\r\n", body.len())?;
+    stream.write_all(body)
+}
 fn error(stream: &mut TcpStream, code: u16, message: &str) -> std::io::Result<()> { response(stream, code, &serde_json::to_vec(&serde_json::json!({"error": message}))?, false) }
 
 fn same(a: &str, b: &str) -> bool { a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0 }
@@ -154,6 +160,7 @@ fn serve(mut stream: TcpStream, token: &str, state: &dyn Fn() -> crate::music_mi
     let given = r.headers.get("authorization").and_then(|v| v.strip_prefix("Bearer ")).map(str::trim).or_else(|| r.query.get("token").map(String::as_str));
     if !given.is_some_and(|g| same(g, token)) { return error(&mut stream, 401, "Token required"); }
     if r.method == "GET" && r.path == "/api/v1/state" { return response(&mut stream, 200, &serde_json::to_vec(&state())?, true); }
+    if r.method == "GET" && r.path == "/overlay" { return page(&mut stream, OVERLAY.as_bytes()); }
     let Some(action) = command(&r.path) else { return error(&mut stream, 404, "Not found") };
     if r.method != "POST" { return error(&mut stream, 405, "Use POST"); }
     // Browsers name the page that sent a request; the person's tools and scripts do not. Pages may not steer the player.
@@ -216,6 +223,16 @@ mod tests {
         assert!(answer.starts_with("HTTP/1.1 405") && sent.is_empty());
         let (answer, sent) = exchange(&format!("POST /api/v1/close HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nAuthorization: Bearer {t}\r\n\r\n"), &t);
         assert!(answer.starts_with("HTTP/1.1 404") && sent.is_empty());
+    }
+
+    #[test]
+    fn the_overlay_page_needs_the_token_and_only_reads() {
+        let t = token();
+        let (answer, _) = exchange(&format!("GET /overlay HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\n\r\n"), &t);
+        assert!(answer.starts_with("HTTP/1.1 401"));
+        let (answer, sent) = exchange(&format!("GET /overlay?token={t} HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\n\r\n"), &t);
+        assert!(answer.starts_with("HTTP/1.1 200") && answer.contains("text/html") && answer.contains("connect-src 'self'"));
+        assert!(answer.contains("/api/v1/state") && sent.is_empty());
     }
 
     #[test]

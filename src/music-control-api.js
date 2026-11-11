@@ -11,6 +11,11 @@ export function controlApiExample(status) {
   return `curl -X POST -H "Authorization: Bearer ${status.token}" ${status.url}/next`;
 }
 
+// The page an OBS browser source shows: the song playing, on a transparent background.
+export function controlApiOverlay(status) {
+  return `${String(status.url).replace(/\/api\/v1$/, "")}/overlay?token=${status.token}`;
+}
+
 export function wireMusicControlApi({
   invoke,
   host,
@@ -28,15 +33,16 @@ export function wireMusicControlApi({
     actions = document.createElement("div"),
     toggle = document.createElement("button"),
     copyButton = document.createElement("button"),
+    overlayButton = document.createElement("button"),
     renew = document.createElement("button");
   box.className = "music-catalog-context music-control-api";
   actions.className = "music-control-api-actions";
-  for (const button of [toggle, copyButton, renew]) {
+  for (const button of [toggle, copyButton, overlayButton, renew]) {
     button.type = "button";
     button.className = "outline small";
   }
   copy.append(text, note, address);
-  actions.append(copyButton, renew, toggle);
+  actions.append(overlayButton, copyButton, renew, toggle);
   box.append(copy, actions);
   host?.insertBefore(box, before);
   const announce = () => {
@@ -56,11 +62,15 @@ export function wireMusicControlApi({
     );
     address.textContent = status.running ? status.url : "";
     address.hidden = !status.running;
-    copyButton.hidden = renew.hidden = !status.running;
+    copyButton.hidden = overlayButton.hidden = renew.hidden = !status.running;
     copyButton.textContent = t("Copy example");
+    overlayButton.textContent = t("Copy OBS link");
+    overlayButton.title = t(
+      "Add it in OBS as a Browser source: the song playing, on a transparent background.",
+    );
     renew.textContent = t("New token");
     toggle.textContent = status.enabled ? t("Turn off") : t("Turn on");
-    for (const button of [toggle, copyButton, renew]) button.disabled = busy;
+    for (const button of [toggle, copyButton, overlayButton, renew]) button.disabled = busy;
   }
   async function apply(request) {
     if (busy) return;
@@ -95,6 +105,14 @@ export function wireMusicControlApi({
     try {
       await clipboard.writeText(controlApiExample(status));
       notify(t("Copied with the token. Keep it private."));
+    } catch (error) {
+      notify(errorText(error), true);
+    }
+  });
+  overlayButton.addEventListener("click", async () => {
+    try {
+      await clipboard.writeText(controlApiOverlay(status));
+      notify(t("OBS link copied. It holds the token; keep it private."));
     } catch (error) {
       notify(errorText(error), true);
     }
