@@ -842,11 +842,29 @@ export function createMusic({ invoke, onDownload, storage }) {
     before: $("music-private-session").closest(".music-catalog-context"),
   });
   // "What's playing?" from the microphone, beside the search it fills in.
+  // Liking a song found by recognition: its best catalog match goes to Liked songs.
   const recognizer = wireMusicRecognize({
     invoke,
     form: $("music-search"),
     input: $("music-query"),
     notify: (message, error) => status(message, error),
+    like: async song => {
+      const result = await invoke("music_catalog", {
+        kind: "search",
+        value: `${song.title} ${song.artist}`.slice(0, 120),
+        filter: "songs",
+        language: language(),
+      });
+      const found = (result?.sections || [])
+        .flatMap(section => section.items || [])
+        .find(item => item?.kind === "song");
+      if (!found) return false;
+      const track = sanitizeMusicTrack(found);
+      if (saved.favorites.some(value => value.id === track.id)) return true;
+      if (!changeFavorite(track)) return false;
+      syncDock();
+      return true;
+    },
   });
   // An opt-in API on this computer for overlays, Stream Deck and scripts.
   wireMusicControlApi({

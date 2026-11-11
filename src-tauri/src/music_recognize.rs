@@ -64,6 +64,119 @@ fn recognize(uri: &str, samplems: u32) -> Result<Option<Value>, String> {
     Ok(song(&answer))
 }
 
+// ---------- Sound to recognise besides the microphone: what this computer plays, or a file ----------
+
+const SAMPLE_RATE: u32 = 16_000;
+const NO_SOUND: &str = "Nothing is playing on this computer. Start the song, then try again.";
+const NO_FILE_SOUND: &str = "Could not read sound from this file.";
+const NO_LISTENING: &str = "Could not listen to this computer's sound.";
+
+/// Mono floats at any rate become signed 16-bit samples at 16 kHz, as little-endian bytes in base64.
+fn to_payload(mono: &[f32], rate: u32) -> String {
+    let out_len = (mono.len() as u64 * SAMPLE_RATE as u64 / rate.max(1) as u64) as usize;
+    let mut bytes = Vec::with_capacity(out_len * 2);
+    for i in 0..out_len {
+        let at = i as f64 * rate as f64 / SAMPLE_RATE as f64;
+        let low = at.floor() as usize;
+        let high = (low + 1).min(mono.len().saturating_sub(1));
+        let value = mono.get(low).copied().unwrap_or(0.0) as f64 + (mono.get(high).copied().unwrap_or(0.0) as f64 - mono.get(low).copied().unwrap_or(0.0) as f64) * (at - low as f64);
+        let sample = (value.clamp(-1.0, 1.0) * 32767.0).round() as i16;
+        bytes.extend_from_slice(&sample.to_le_bytes());
+    }
+    base64::engine::general_purpose::STANDARD.encode(bytes)
+}
+
+/// Records what the default output device plays (WASAPI loopback), mixed to mono.
+#[cfg(windows)]
+fn capture_output(seconds: u32) -> Result<(Vec<f32>, u32), String> {
+    use windows::Win32::Media::Audio::{eConsole, eRender, IAudioCaptureClient, IAudioClient, IMMDeviceEnumerator, MMDeviceEnumerator, AUDCLNT_BUFFERFLAGS_SILENT, AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_LOOPBACK};
+    use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoTaskMemFree, CLSCTX_ALL, COINIT_MULTITHREADED};
+    let failed = |_| NO_LISTENING.to_string();
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(failed)?;
+        let device = enumerator.GetDefaultAudioEndpoint(eRender, eConsole).map_err(failed)?;
+        let client: IAudioClient = device.Activate(CLSCTX_ALL, None).map_err(failed)?;
+        let format = client.GetMixFormat().map_err(failed)?;
+        let (channels, rate, bits) = ((*format).nChannels.max(1) as usize, (*format).nSamplesPerSec, (*format).wBitsPerSample);
+        let started = client.Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_LOOPBACK, 10_000_000, 0, format, None);
+        CoTaskMemFree(Some(format as *const _));
+        started.map_err(failed)?;
+        let capture: IAudioCaptureClient = client.GetService().map_err(failed)?;
+        client.Start().map_err(failed)?;
+        let wanted = rate as usize * seconds as usize;
+        let deadline = std::time::Instant::now() + Duration::from_secs(seconds as u64 + 2);
+        let mut mono: Vec<f32> = Vec::with_capacity(wanted);
+        let mut heard = false;
+        while mono.len() < wanted && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+            let mut packet = capture.GetNextPacketSize().unwrap_or(0);
+            while packet > 0 {
+                let (mut data, mut frames, mut flags) = (std::ptr::null_mut(), 0u32, 0u32);
+                if capture.GetBuffer(&mut data, &mut frames, &mut flags, None, None).is_err() { break; }
+                let silent = flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0;
+                for frame in 0..frames as usize {
+                    let mut sum = 0f32;
+                    if !silent && !data.is_null() {
+                        for channel in 0..channels {
+                            let index = frame * channels + channel;
+                            sum += if bits == 32 { *(data as *const f32).add(index) } else { *(data as *const i16).add(index) as f32 / 32768.0 };
+                        }
+                    }
+                    mono.push(sum / channels as f32);
+                }
+                heard |= !silent && frames > 0;
+                let _ = capture.ReleaseBuffer(frames);
+                packet = capture.GetNextPacketSize().unwrap_or(0);
+            }
+        }
+        let _ = client.Stop();
+        // Windows sends no packets at all while nothing plays.
+        if !heard { return Err(NO_SOUND.into()); }
+        Ok((mono, rate))
+    }
+}
+#[cfg(not(windows))]
+fn capture_output(_seconds: u32) -> Result<(Vec<f32>, u32), String> {
+    Err("Recognising this computer's sound is available on Windows.".into())
+}
+
+#[tauri::command]
+pub async fn music_capture_output(window: tauri::WebviewWindow, seconds: Option<u32>) -> Result<String, String> {
+    if window.label() != "main" { return Err("Unavailable window".into()); }
+    let seconds = seconds.unwrap_or(10).clamp(4, 15);
+    tauri::async_runtime::spawn_blocking(move || capture_output(seconds).map(|(mono, rate)| to_payload(&mono, rate)))
+        .await.map_err(|_| FAILED.to_owned())?
+}
+
+/// A dozen seconds from a file the person picks, decoded by FFmpeg: from 30 s in when the song is that long.
+fn decode_file(path: &std::path::Path) -> Result<String, String> {
+    let ffmpeg = crate::binary("ffmpeg")?;
+    let read = |start: &str| -> Result<Vec<u8>, String> {
+        let mut command = crate::command(&ffmpeg);
+        command.args(["-v", "error", "-ss", start, "-t", "12", "-i"]).arg(path).args(["-vn", "-ac", "1", "-ar", "16000", "-f", "s16le", "-"]);
+        let output = crate::engine_update::json_output_large(&mut command, Duration::from_secs(60)).map_err(|_| NO_FILE_SOUND)?;
+        Ok(output.stdout)
+    };
+    let mut bytes = read("30")?;
+    if bytes.len() < SAMPLE_RATE as usize * 2 * 4 { bytes = read("0")?; }
+    if bytes.len() < SAMPLE_RATE as usize * 2 * 3 { return Err(NO_FILE_SOUND.into()); }
+    Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+}
+
+#[tauri::command]
+pub async fn music_recognize_file(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    if window.label() != "main" { return Err("Unavailable window".into()); }
+    tauri::async_runtime::spawn_blocking(move || {
+        let picked = app.dialog().file()
+            .add_filter("Audio or video", &["mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "webm", "mp4", "mkv", "mov", "avi", "wma", "aiff"])
+            .blocking_pick_file();
+        let Some(path) = picked.and_then(|p| p.into_path().ok()) else { return Ok(None) };
+        decode_file(&path).map(Some)
+    }).await.map_err(|_| FAILED.to_owned())?
+}
+
 #[tauri::command]
 pub async fn music_recognize(window: tauri::WebviewWindow, uri: String, samplems: u32) -> Result<Option<Value>, String> {
     if window.label() != "main" { return Err("Unavailable window".into()); }
@@ -96,6 +209,18 @@ mod tests {
         let tracked = json!({"matches": [{"id": "1"}], "track": {"title": "X", "subtitle": "Y", "images": {"coverart": "http://evil.example/a.jpg"}}});
         assert!(song(&tracked).unwrap()["image"].is_null());
         assert!(song(&json!({"matches": [], "tagid": "x"})).is_none());
+    }
+
+    #[test]
+    fn computer_sound_becomes_16_khz_samples() {
+        // One second of a 48 kHz tone at full scale: 16 000 samples, still at full scale.
+        let tone: Vec<f32> = (0..48_000).map(|i| if i % 2 == 0 { 1.0 } else { -1.0 }).collect();
+        let bytes = base64::engine::general_purpose::STANDARD.decode(to_payload(&tone, 48_000)).unwrap();
+        assert_eq!(bytes.len(), 32_000);
+        let samples: Vec<i16> = bytes.chunks(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect();
+        assert!(samples.iter().all(|s| s.unsigned_abs() >= 32_000));
+        assert_eq!(base64::engine::general_purpose::STANDARD.decode(to_payload(&[0.25; 16_000], 16_000)).unwrap().len(), 32_000);
+        assert_eq!(to_payload(&[], 48_000), "");
     }
 
     #[test]

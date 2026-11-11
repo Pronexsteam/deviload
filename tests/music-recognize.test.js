@@ -18,7 +18,9 @@ const element = tag => {
 };
 globalThis.requestAnimationFrame ??= fn => fn();
 globalThis.document ??= { documentElement: { lang: "en" }, createElement: element };
-const { wireMusicRecognize, resample, quiet } = await import("../src/music-recognize.js");
+const { wireMusicRecognize, resample, quiet, readHistory, rememberSong, samplesFromBase64, HISTORY_KEY } = await import(
+  "../src/music-recognize.js"
+);
 const { t } = await import("../src/i18n.js");
 
 // A few notes in different bands, with a little noise so every frame has a spectrum.
@@ -138,4 +140,64 @@ test("silence and refusals end with advice instead of a request", async () => {
   const nothing = wireMusicRecognize({ invoke, form, input, notify: (m, e) => notes.push([m, e]), record: async () => ({ samples: music(3), rate: SAMPLE_RATE }) });
   await nothing.listen();
   assert.equal(notes.at(-1)[0], t("No match. Try again closer to the music."));
+});
+
+const memoryStorage = () => {
+  const map = new Map();
+  return { getItem: key => map.get(key) ?? null, setItem: (key, value) => map.set(key, value), map };
+};
+const toBase64 = int16 => {
+  const bytes = new Uint8Array(int16.buffer, int16.byteOffset, int16.byteLength);
+  let text = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(text);
+};
+
+test("the history keeps the newest songs once each, and survives bad data", () => {
+  const storage = memoryStorage();
+  rememberSong({ title: "A", artist: "X" }, "microphone", storage, 1);
+  rememberSong({ title: "B", artist: "Y" }, "computer", storage, 2);
+  const list = rememberSong({ title: "A", artist: "X" }, "file", storage, 3);
+  assert.deepEqual(list.map(song => song.title), ["A", "B"]);
+  assert.equal(list[0].source, "file");
+  for (let i = 0; i < 120; i++) rememberSong({ title: "S" + i, artist: "Z" }, "microphone", storage, 10 + i);
+  assert.equal(readHistory(storage).length, 100);
+  storage.setItem(HISTORY_KEY, "{broken");
+  assert.deepEqual(readHistory(storage), []);
+});
+
+test("samples sent by the app come back as the same 16-bit values", () => {
+  const values = Int16Array.from([0, 1, -1, 32767, -32768, 1234]);
+  assert.deepEqual([...samplesFromBase64(toBase64(values))], [...values]);
+});
+
+test("this computer's sound and a file are recognised the same way, and remembered", async () => {
+  const form = element("form"),
+    input = element("input"),
+    storage = memoryStorage(),
+    calls = [],
+    notes = [];
+  form.requestSubmit = () => {};
+  const loud = toInt16(music(4));
+  const invoke = async (command, args) => {
+    calls.push(command);
+    if (command === "music_capture_output") return toBase64(loud);
+    if (command === "music_recognize_file") return null;
+    if (command === "music_recognize") return { title: "Song", artist: "Band" };
+  };
+  const { listen } = wireMusicRecognize({ invoke, form, input, storage, notify: (m, e) => notes.push([m, e]) });
+  await listen("computer");
+  assert.deepEqual(calls, ["music_capture_output", "music_recognize"]);
+  assert.equal(readHistory(storage)[0].source, "computer");
+  assert.equal(input.value, "Song Band");
+  // Closing the file picker is not an error and sends nothing.
+  calls.length = 0;
+  await listen("file");
+  assert.deepEqual(calls, ["music_recognize_file"]);
+  // Silence from the computer explains itself instead of asking the service.
+  const quietInvoke = async command => (calls.push(command), command === "music_capture_output" ? toBase64(new Int16Array(16000)) : null);
+  calls.length = 0;
+  await wireMusicRecognize({ invoke: quietInvoke, form, input, storage, notify: (m, e) => notes.push([m, e]) }).listen("computer");
+  assert.deepEqual(calls, ["music_capture_output"]);
+  assert.equal(notes.at(-1)[1], true);
 });
