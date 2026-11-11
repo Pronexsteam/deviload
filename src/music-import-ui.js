@@ -789,7 +789,10 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
     }
     // A sign-in finished in its own window updates this step; the listeners end with the dialog.
     const sessionListeners = ["youtube-session", "spotify-session"].map(name =>
-      window.__TAURI__?.event?.listen?.(name, () => checkAccount()),
+      window.__TAURI__?.event?.listen?.(name, () => {
+        checkAccount();
+        refreshChips();
+      }),
     );
     const readAccount = button(
       t("Read my library"),
@@ -857,6 +860,9 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
       }
       return node;
     };
+    // A sign-in or sign-out while the dialog is open, and every return to the sources, refreshes the cards' state.
+    const chipUpdates = [];
+    const refreshChips = () => chipUpdates.forEach(update => update());
     const GROUPS = [
       { title: t("Through your sign-in"), test: source => !!source.command },
       { title: t("By link"), test: source => !source.command && source.key !== "file" },
@@ -875,13 +881,16 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
           const chip = el("span", "music-import-chip", "");
           chip.hidden = true;
           name.append(chip);
-          Promise.resolve(invoke(source.signIn.status))
-            .then(value => {
-              chip.textContent = value ? t("Signed in") : t("Sign-in needed");
-              chip.dataset.signedIn = String(!!value);
-              chip.hidden = false;
-            })
-            .catch(() => {});
+          const update = () =>
+            Promise.resolve(invoke(source.signIn.status))
+              .then(value => {
+                chip.textContent = value ? t("Signed in") : t("Sign-in needed");
+                chip.dataset.signedIn = String(!!value);
+                chip.hidden = false;
+              })
+              .catch(() => {});
+          chipUpdates.push(update);
+          update();
         }
         const chevron = el("span", "icon music-import-chevron");
         chevron.dataset.icon = "caret-down";
@@ -930,6 +939,7 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
         }, 420);
     }
     function showStart() {
+      refreshChips();
       step.hidden = true;
       preview.hidden = true;
       start.hidden = false;
