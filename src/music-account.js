@@ -35,7 +35,14 @@ export const ACCOUNTS = [
   },
 ];
 
-export function wireMusicAccount({ invoke, host, before = null, listen = window.__TAURI__?.event?.listen }) {
+// `addons` holds extra controls for an account, shown under it while it is signed in.
+export function wireMusicAccount({
+  invoke,
+  host,
+  before = null,
+  listen = window.__TAURI__?.event?.listen,
+  addons = {},
+}) {
   const box = document.createElement("div"),
     title = document.createElement("strong"),
     note = document.createElement("small");
@@ -63,6 +70,7 @@ export function wireMusicAccount({ invoke, host, before = null, listen = window.
     name.textContent = account.name;
     copy.className = "music-account-copy";
     copy.append(name, state);
+    if (addons[account.key]) copy.append(addons[account.key]);
     button.type = "button";
     row.append(logo, copy, button);
     box.append(row);

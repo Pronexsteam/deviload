@@ -27,6 +27,7 @@ import { createStatsWindow } from "./music-stats-window.js";
 import { runTour, tourSeen, forgetTour } from "./music-tour.js";
 import { wireMusicYield } from "./music-yield.js";
 import { wireMusicAccount } from "./music-account.js";
+import { createLikesSync, likesSyncControls } from "./music-likes-sync.js";
 import { wireMusicControlApi } from "./music-control-api.js";
 import { wireMusicRecognize } from "./music-recognize.js";
 import { createMusicCast, isCasting } from "./music-cast.js";
@@ -836,11 +837,21 @@ export function createMusic({ invoke, onDownload, storage }) {
     notify: message => status(message),
   });
   // The person's own YouTube sign-in, used only when YouTube limits or refuses guest playback.
+  // New likes in YouTube Music come over to Liked songs once a day when the person asks for it.
+  const likesSync = createLikesSync({
+    invoke,
+    storage,
+    notify: (message, error) => status(message, error),
+    add: async entries => addFavorites(entries),
+  });
   wireMusicAccount({
     invoke,
     host: $("music-preferences"),
     before: $("music-private-session").closest(".music-catalog-context"),
+    addons: { youtube: likesSyncControls(likesSync) },
   });
+  likesSync.maybe();
+  setInterval(() => likesSync.maybe(), 3600000);
   // "What's playing?" from the microphone, beside the search it fills in.
   // Liking a song found by recognition: its best catalog match goes to Liked songs.
   const recognizer = wireMusicRecognize({
@@ -1761,6 +1772,36 @@ export function createMusic({ invoke, onDownload, storage }) {
     if (!changeFavorite(current)) return;
     syncDock();
     if (view === "favorites") showLocal("favorites");
+  }
+  // Several songs at once into Liked songs, newest first, leaving the page where it is. Returns how many were new.
+  function addFavorites(entries) {
+    const known = new Set(saved.favorites.map(value => value.id));
+    const fresh = tracks(
+      entries.flatMap(entry => {
+        try {
+          return [
+            sanitizeMusicTrack({
+              kind: "song",
+              id: entry.videoId,
+              title: entry.title,
+              artists: entry.artists,
+              subtitle: (Array.isArray(entry.artists) ? entry.artists : []).join(", "),
+              image: entry.image,
+            }),
+          ];
+        } catch {
+          return [];
+        }
+      }),
+    ).filter(item => !known.has(item.id));
+    if (!fresh.length) return 0;
+    const favorites = [...fresh, ...saved.favorites];
+    saveMusicProfile(storage, { ...saved, favorites }, taste);
+    saved.favorites = favorites;
+    invalidateRecommendations();
+    syncDock();
+    if (view === "favorites") showLocal("favorites");
+    return fresh.length;
   }
   function changeFavorite(item) {
     const favorites = saved.favorites.some(value => value.id === item.id)

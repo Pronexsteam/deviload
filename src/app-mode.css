@@ -258,6 +258,29 @@ dialog.app-mode-welcome > p {
   background: #1ed760;
   color: #000;
 }
+/* Bringing YouTube Music likes over: only while signed in, under the account's name. */
+#music-preferences .music-account-row[data-signed-in="false"] .music-account-addon {
+  display: none;
+}
+#music-preferences .music-likes-sync {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 8px;
+}
+#music-preferences .music-likes-sync-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+#music-preferences .music-likes-sync .music-likes-sync-when {
+  flex-basis: 100%;
+  opacity: 0.6;
+}
 @media (max-width: 520px) {
   #music-preferences .music-account-row {
     grid-template-columns: 32px minmax(0, 1fr);

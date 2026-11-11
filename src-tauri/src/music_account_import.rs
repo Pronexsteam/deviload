@@ -111,8 +111,10 @@ fn read(url: &str, session: &Path, limit: usize) -> Result<Value, String> {
 // Lists read at the same time: each is its own yt-dlp process; three keep the account well inside YouTube's limits.
 const PARALLEL: usize = 3;
 
+// One reading of the account at a time, whole library or only the likes.
+static ACTIVE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn read_library(session: &Path) -> Result<Value, String> {
-    static ACTIVE: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _guard = ACTIVE.try_lock().map_err(|_| BUSY)?;
     // Liked songs and the list of playlists are fetched together.
     let (liked, page) = std::thread::scope(|scope| {
@@ -163,6 +165,24 @@ pub async fn music_import_youtube_account(window: tauri::WebviewWindow) -> Resul
     tauri::async_runtime::spawn_blocking(move || read_library(&session)).await.map_err(|_| UNAVAILABLE.to_owned())?
 }
 
+/// The newest liked songs only, for keeping Liked songs in step with YouTube Music: the account lists the latest
+/// likes first, so a short read finds everything liked since the last time. Nothing is written to the account.
+fn liked_songs(list: &Value) -> Value {
+    let entries: Vec<Value> = songs(list).into_iter().map(|mut row| { row["liked"] = json!(true); row }).collect();
+    json!({"entries": entries})
+}
+
+#[tauri::command]
+pub async fn music_youtube_liked(window: tauri::WebviewWindow, limit: Option<usize>) -> Result<Value, String> {
+    if window.label() != "main" { return Err("Music import is only available in the main window.".into()); }
+    let session = crate::music::account_session().ok_or(NO_SIGN_IN)?;
+    let limit = limit.unwrap_or(200).clamp(1, MAX_SONGS);
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = ACTIVE.try_lock().map_err(|_| BUSY)?;
+        read("https://www.youtube.com/playlist?list=LM", &session, limit).map(|list| liked_songs(&list))
+    }).await.map_err(|_| UNAVAILABLE.to_owned())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,6 +210,16 @@ mod tests {
         assert_eq!(list_url("RDdQw4w9WgXcQ"), "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ");
         assert_eq!(list_url("PLabc_DEF-123"), "https://www.youtube.com/playlist?list=PLabc_DEF-123");
         assert_eq!(list_url("RDCLAK5uy_long-album-radio-id"), "https://www.youtube.com/playlist?list=RDCLAK5uy_long-album-radio-id");
+    }
+
+    #[test]
+    fn the_newest_likes_come_back_marked_liked() {
+        let list = json!({"entries": [{"id": "dQw4w9WgXcQ", "title": "Song A", "channel": "A - Topic"}, {"id": "bad", "title": "B"}]});
+        let result = liked_songs(&list);
+        let entries = result["entries"].as_array().unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0]["liked"], true);
+        assert_eq!(entries[0]["artists"][0], "A");
     }
 
     #[test]
