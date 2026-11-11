@@ -28,6 +28,8 @@ export function createNowPlaying({
   onHideArtist,
   onArtist,
   onDismissQueue,
+  clipOffset = () => 0,
+  onClip = () => {},
 }) {
   const make = (tag, cls) => {
     const node = document.createElement(tag);
@@ -236,6 +238,8 @@ export function createNowPlaying({
     getLatency,
     audios,
     getItem: () => current,
+    getOffset: clipOffset,
+    onClip,
     getHost: () => clipView.frame,
     isVisible: () => clipView.isOpen && !stage.open,
     onBuffering: on => clipView.setBuffering(on),

@@ -627,11 +627,31 @@ export function createMusic({ invoke, onDownload, storage }) {
       closeQueue();
     }
   });
+  const align = createRecordingAlign({ invoke, storage });
+  let heardSource = null;
   const presentation = createNowPlaying({
     invoke,
     language,
     getAudio: () => audio,
     getLatency: () => sound.latency(),
+    // The music video in step with the song even when its intro is longer: both are measured against the studio
+    // recording, and the picture follows the difference.
+    clipOffset: clipId => {
+      const song = align.value(heardSource),
+        picture = align.value(clipId);
+      return song == null || picture == null ? 0 : song - picture;
+    },
+    onClip: clipId => {
+      if (!clipId || clipId === heardSource || align.known(clipId) || privateSession || !current) return;
+      const song = current;
+      invoke("music_stream", { id: clipId, preload: true })
+        .then(result =>
+          result?.url
+            ? align.measure(clipId, { address: result.url, title: song.title, artists: song.artists })
+            : 0,
+        )
+        .catch(() => {});
+    },
     audios: decks.nodes,
     convertFileSrc: path => window.__TAURI__.core.convertFileSrc(path),
     dock,
@@ -742,8 +762,6 @@ export function createMusic({ invoke, onDownload, storage }) {
   });
   // Which upload of the song is heard, and how far it is shifted from the studio recording the lyrics are timed
   // on. Measured once per upload a few seconds into playback; another version of the song brings its own.
-  const align = createRecordingAlign({ invoke, storage });
-  let heardSource = null;
   const measureHeard = event => {
     const node = event.target;
     if (

@@ -76,3 +76,20 @@ test("broken saved shifts are ignored", () => {
   storage.setItem(ALIGN_KEY, "[1,2]");
   assert.deepEqual(readAlignments(storage), {});
 });
+
+test("a music video nobody hears is measured from its address, and only measured shifts count", async () => {
+  const heard = [];
+  const align = createRecordingAlign({
+    storage: memory(),
+    capture: async () => assert.fail("the playing song is not listened to here"),
+    captureFrom: async address => (heard.push(address), sound(48)()),
+    invoke: async () => ({ title: "Song", artist: "Band", offset: 45.5 }),
+  });
+  assert.equal(align.value("clip"), null);
+  assert.equal(await align.measure("clip", { address: "http://127.0.0.1/clip", title: "Song", artists: ["Band"] }), -2.5);
+  assert.deepEqual(heard, ["http://127.0.0.1/clip"]);
+  assert.equal(align.value("clip"), -2.5);
+  const unknown = createRecordingAlign({ storage: memory(), capture: sound(10), invoke: async () => null });
+  await unknown.measure("x", { audio: {}, title: "Song", artists: ["Band"] });
+  assert.equal(unknown.value("x"), null);
+});
