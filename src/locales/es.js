@@ -2341,6 +2341,8 @@ export default {
 "{count} already in your library": "{count} ya en tu biblioteca",
 "In your library": "Ya en tu biblioteca",
 "Add files": "Añadir archivos",
+"Find a playlist": "Buscar una lista",
+"No playlist with that name.": "No hay ninguna lista con ese nombre.",
 "New likes from YouTube Music: {count}": "Nuevos me gusta de YouTube Music: {count}",
 "Liked songs are up to date.": "Tus canciones favoritas ya están al día.",
 "Bring new likes from YouTube Music once a day": "Traer cada día los nuevos me gusta de YouTube Music",

@@ -43,7 +43,12 @@ fn song(answer: &Value) -> Option<Value> {
     let album = track["sections"].as_array().into_iter().flatten()
         .filter_map(|s| s["metadata"].as_array()).flatten()
         .find(|m| m["title"] == "Album").map(|m| clean(&m["text"])).unwrap_or_default();
-    Some(json!({"title": title, "artist": artist, "album": album, "image": https_image(&track["images"]["coverart"])}))
+    // Where in the studio recording the sound was heard, and how much faster or slower it ran: lyrics are timed
+    // on the studio recording, so this tells how far another upload of the song is shifted from it.
+    let found = &answer["matches"][0];
+    let number = |v: &Value| v.as_f64().filter(|n| n.is_finite());
+    Some(json!({"title": title, "artist": artist, "album": album, "image": https_image(&track["images"]["coverart"]),
+        "offset": number(&found["offset"]), "skew": number(&found["timeskew"])}))
 }
 
 fn recognize(uri: &str, samplems: u32) -> Result<Option<Value>, String> {
@@ -205,7 +210,9 @@ mod tests {
         let answer = json!({"matches": [{"id": "1"}], "track": {"title": "Thunderstruck", "subtitle": "AC/DC",
             "images": {"coverart": "https://is1-ssl.mzstatic.com/image/cover.jpg"},
             "sections": [{"metadata": [{"title": "Album", "text": "The Razors Edge"}, {"title": "Released", "text": "1990"}]}]}});
-        assert_eq!(song(&answer).unwrap(), json!({"title": "Thunderstruck", "artist": "AC/DC", "album": "The Razors Edge", "image": "https://is1-ssl.mzstatic.com/image/cover.jpg"}));
+        assert_eq!(song(&answer).unwrap(), json!({"title": "Thunderstruck", "artist": "AC/DC", "album": "The Razors Edge", "image": "https://is1-ssl.mzstatic.com/image/cover.jpg", "offset": null, "skew": null}));
+        let timed = json!({"matches": [{"id": "1", "offset": 61.25, "timeskew": 0.001}], "track": {"title": "X", "subtitle": "Y"}});
+        assert_eq!(song(&timed).unwrap()["offset"], 61.25);
         let tracked = json!({"matches": [{"id": "1"}], "track": {"title": "X", "subtitle": "Y", "images": {"coverart": "http://evil.example/a.jpg"}}});
         assert!(song(&tracked).unwrap()["image"].is_null());
         assert!(song(&json!({"matches": [], "tagid": "x"})).is_none());

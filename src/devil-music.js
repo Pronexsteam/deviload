@@ -28,6 +28,7 @@ import { runTour, tourSeen, forgetTour } from "./music-tour.js";
 import { wireMusicYield } from "./music-yield.js";
 import { wireMusicAccount } from "./music-account.js";
 import { createLikesSync, likesSyncControls } from "./music-likes-sync.js";
+import { createRecordingAlign } from "./music-recording-align.js";
 import { wireMusicControlApi } from "./music-control-api.js";
 import { wireMusicRecognize } from "./music-recognize.js";
 import { createMusicCast, isCasting } from "./music-cast.js";
@@ -736,6 +737,27 @@ export function createMusic({ invoke, onDownload, storage }) {
       orb.energy(levels?.[0]);
     },
   });
+  // Which upload of the song is heard, and how far it is shifted from the studio recording the lyrics are timed
+  // on. Measured once per upload a few seconds into playback; another version of the song brings its own.
+  const align = createRecordingAlign({ invoke, storage });
+  let heardSource = null;
+  const measureHeard = event => {
+    const node = event.target;
+    if (
+      node !== audio ||
+      !heardSource ||
+      privateSession ||
+      align.known(heardSource) ||
+      node.paused ||
+      node.currentTime < 4 ||
+      !(node.duration - node.currentTime > 15) ||
+      !current
+    )
+      return;
+    const key = heardSource;
+    align.measure(key, { audio: node, title: current.title, artists: current.artists }).catch(() => {});
+  };
+  document.addEventListener("timeupdate", measureHeard, true);
   const lyrics = createMusicLyrics({
     invoke,
     button,
@@ -743,6 +765,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     getAudio: () => audio,
     getLatency: () => sound.latency(),
     isPrivate: () => privateSession,
+    getShift: () => align.shift(heardSource),
   });
   // One Lyrics button: it shows the words wherever the player is, in the full player, the Now Playing
   // panel, or by opening the full player.
@@ -2802,6 +2825,7 @@ export function createMusic({ invoke, onDownload, storage }) {
       };
       if (prepared && audio.currentSrc === audio.src) rememberMediaDuration();
       sound.setSource(audio, offlineSource, result.sourceId);
+      heardSource = offlineSource || localResult ? null : result.sourceId || null;
       resolvedTrack = current.id;
       playbackStage = "start";
       diagnostics.record("start", "ready");
@@ -4430,9 +4454,26 @@ export function createMusic({ invoke, onDownload, storage }) {
         action.append(el("span", "music-menu-label", action.getAttribute("aria-label")));
       }
     };
+    // The actions open in the window's top layer: a card that is moved or clipped (a shelf, a tilted cover) would
+    // otherwise place them relative to itself, off the screen or cut away.
+    options.popover = "auto";
+    let dismissedAt = 0;
+    options.addEventListener("toggle", event => {
+      if (event.newState !== "closed" || !menu.open) return;
+      dismissedAt = performance.now();
+      menu.open = false;
+    });
+    // A click on the button that just closed the menu by clicking outside it must not open it again.
+    summary.addEventListener("click", event => {
+      if (performance.now() - dismissedAt < 300) event.preventDefault();
+    });
     menu.addEventListener("toggle", () => {
-      if (!menu.open) return;
+      if (!menu.open) {
+        if (options.matches?.(":popover-open")) options.hidePopover();
+        return;
+      }
       prepare();
+      if (!options.matches?.(":popover-open")) options.showPopover?.();
       const rect = summary.getBoundingClientRect();
       // Keep every action between the sticky application header and the player.
       // A long menu scrolls inside this space instead of hiding its first rows.

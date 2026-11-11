@@ -13,6 +13,8 @@ export function createMusicLyrics({
   getAudio,
   getLatency = () => 0,
   isPrivate = () => false,
+  // Seconds from the playing upload's clock to the studio recording's, which the lyrics are timed on.
+  getShift = () => 0,
 }) {
   const dialog = document.createElement("dialog");
   dialog.className = "music-lyrics-dialog";
@@ -70,6 +72,10 @@ export function createMusicLyrics({
   let extraNote = "";
   let offsets = readLyricsOffsets(localStorage),
     offset = 0;
+  // The person's own correction on top of the measured shift of the recording that plays.
+  // Lyrics services time their lines on the studio recording, so they follow the measured shift; Unison times
+  // its lyrics on the very upload that plays, so it needs none.
+  const clock = () => offset + (source === "Unison" ? 0 : getShift());
   const timing = document.createElement("details"),
     timingTitle = document.createElement("summary"),
     timingControls = document.createElement("div");
@@ -139,7 +145,10 @@ export function createMusicLyrics({
       ));
   // The next line comes up in one even movement, slow at both ends, instead of jumping most of the way at once and
   // creeping the rest. Positions land on whole screen pixels so the letters do not shimmer while they move.
-  const GLIDE_MS = 520;
+  // It starts a little before the line is sung (LEAD) so the line is in place when the voice reaches it, not half a
+  // second later; the light on the words still follows the real time.
+  const GLIDE_MS = 450,
+    LEAD = 0.35;
   let scrollFrame = 0,
     scrollAt = 0,
     scrollGoal = 0,
@@ -353,7 +362,7 @@ export function createMusicLyrics({
                 if (getTrack()?.id !== id || !Number.isFinite(audio.duration)) return;
                 manualUntil = 0;
                 followPending = true;
-                audio.currentTime = Math.max(0, Math.min(line.at - offset, audio.duration));
+                audio.currentTime = Math.max(0, Math.min(line.at - clock(), audio.duration));
                 update();
               },
               "music-lyric-line",
@@ -462,7 +471,7 @@ export function createMusicLyrics({
     const line = lines[active],
       next = lines[active + 1],
       paused = audio.paused || audio.ended;
-    const key = `${id}|${active}|${paused}|${audio.playbackRate}|${offset}`,
+    const key = `${id}|${active}|${paused}|${audio.playbackRate}|${clock()}`,
       stamp = performance.now();
     if (key === shared.key && stamp - shared.at < 1000) return;
     shared = { key, at: stamp };
@@ -507,8 +516,8 @@ export function createMusicLyrics({
     const audio = getAudio(),
       states = lyricFrame(
         lines,
-        audio.currentTime + offset - getLatency(),
-        Number.isFinite(audio.duration) ? audio.duration + offset : Infinity,
+        audio.currentTime + clock() - getLatency(),
+        Number.isFinite(audio.duration) ? audio.duration + clock() : Infinity,
       ),
       nextRows = new Set(states.map(state => state.index));
     for (const index of activeRows)
@@ -554,8 +563,14 @@ export function createMusicLyrics({
         row.classList.toggle("lyric-near", distance === 1);
       }
     }
-    if (shown && followPending && Date.now() >= manualUntil) follow(body.children[active]);
-    share(audio.currentTime + offset - getLatency(), audio);
+    if (shown && Date.now() >= manualUntil) {
+      const now = audio.currentTime + clock() - getLatency(),
+        next = lines[active + 1],
+        soon = !audio.paused && next && next.at - now > 0 && next.at - now <= LEAD;
+      if (soon) follow(body.children[active + 1]);
+      else if (followPending) follow(body.children[active]);
+    }
+    share(audio.currentTime + clock() - getLatency(), audio);
     if (!audio.paused && !audio.ended && !frame) {
       const tick = now => {
         frame = 0;
@@ -611,8 +626,8 @@ export function createMusicLyrics({
         id: id || "",
         lines: lines.map((line, index) => ({
           text: line.text || "",
-          at: line.at - offset,
-          end: (line.end ?? lines[index + 1]?.at ?? line.at + 5) - offset,
+          at: line.at - clock(),
+          end: (line.end ?? lines[index + 1]?.at ?? line.at + 5) - clock(),
         })),
       };
     },

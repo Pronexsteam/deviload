@@ -226,43 +226,83 @@ export function createMusicLibrary({ saved, commit, onOpen, notify, button, cove
   }
   function picker(item) {
     dialog(t("Add to playlist"), (body, close) => {
-      body.append(el("p", "music-dialog-track", item.title));
-      body.append(
-        button(
-          t("Create playlist"),
-          "plus",
-          () => {
-            close();
-            edit(null, item);
-          },
-          "music-library-create",
-        ),
+      body.closest("dialog")?.classList.add("music-playlist-picker");
+      // The song being added, as it looks in the player.
+      const song = el("div", "music-picker-song"),
+        cover = el("img", "music-picker-song-cover"),
+        names = el("div", "music-picker-song-names");
+      cover.alt = "";
+      if (item.image) cover.src = item.image;
+      else cover.hidden = true;
+      names.append(
+        el("strong", "", item.title),
+        el("small", "", item.artists?.join(", ") || item.subtitle || ""),
       );
-      for (const list of saved.playlists) {
-        const included = list.items.some(track => track.id === item.id);
-        const select = button(
-          list.name,
+      song.append(cover, names);
+      body.append(song);
+      const create = button(
+        t("Create playlist"),
+        "plus",
+        () => {
+          close();
+          edit(null, item);
+        },
+        "music-library-create music-picker-create",
+      );
+      body.append(create);
+      // Many playlists: a search on top, and the list scrolls on its own instead of growing past the screen.
+      const search = el("input", "music-picker-search");
+      search.type = "search";
+      search.placeholder = t("Find a playlist");
+      search.setAttribute("aria-label", t("Find a playlist"));
+      search.hidden = saved.playlists.length <= 6;
+      const list = el("div", "music-picker-list"),
+        none = el("p", "music-picker-none", t("No playlist with that name."));
+      none.hidden = true;
+      const rows = saved.playlists.map(playlist => {
+        const included = playlist.items.some(track => track.id === item.id);
+        const choice = button(
+          playlist.name,
           null,
           () => {
             if (
               update(
                 saved.playlists.map(value =>
-                  value.id === list.id ? { ...value, items: tracks([...value.items, item]) } : value,
+                  value.id === playlist.id ? { ...value, items: tracks([...value.items, item]) } : value,
                 ),
               )
             ) {
               close();
-              notify(t("Added to playlist: {name}", { name: list.name }));
+              notify(t("Added to playlist: {name}", { name: playlist.name }));
             }
           },
           "music-playlist-choice",
         );
-        select.append(
-          el("span", "", included ? t("Already added") : t("{count} tracks", { count: list.items.length })),
+        const thumb = artwork(playlist);
+        thumb.classList.add("music-picker-cover");
+        const copy = el("span", "music-picker-copy");
+        copy.append(
+          el("strong", "", playlist.name),
+          el("small", "", t("{count} tracks", { count: playlist.items.length })),
         );
-        select.disabled = included;
-        body.append(select);
-      }
+        const state = el("span", "music-picker-state", included ? t("Already added") : "");
+        choice.replaceChildren(thumb, copy, state);
+        choice.disabled = included;
+        choice.dataset.name = playlist.name.toLocaleLowerCase();
+        list.append(choice);
+        return choice;
+      });
+      search.addEventListener("input", () => {
+        const query = search.value.trim().toLocaleLowerCase();
+        let shown = 0;
+        for (const row of rows) {
+          row.hidden = !!query && !row.dataset.name.includes(query);
+          if (!row.hidden) shown++;
+        }
+        none.hidden = shown > 0;
+      });
+      body.append(search, list, none);
+      if (!search.hidden) queueMicrotask(() => search.focus());
     });
   }
   function overview(root) {

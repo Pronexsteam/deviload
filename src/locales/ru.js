@@ -2391,6 +2391,8 @@ export default {
 "{count} already in your library": "уже в библиотеке: {count}",
 "In your library": "Уже в библиотеке",
 "Add files": "Добавить файлы",
+"Find a playlist": "Найти плейлист",
+"No playlist with that name.": "Плейлиста с таким названием нет.",
 "New likes from YouTube Music: {count}": "Новые лайки из YouTube Music: {count}",
 "Liked songs are up to date.": "Избранное уже совпадает с YouTube Music.",
 "Bring new likes from YouTube Music once a day": "Раз в день переносить новые лайки из YouTube Music",

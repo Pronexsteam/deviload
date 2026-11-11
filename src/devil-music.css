@@ -3071,3 +3071,132 @@ body.music-focus .music-library-sidebar {
 .music-recognize-like[hidden] {
   display: none;
 }
+
+/* Song actions sit in the window's top layer, placed by the script beside their button. */
+:root body .music-track-menu > .music-track-options:popover-open {
+  position: fixed !important;
+  /* top and left come from the script; only the opposite sides are let go. */
+  right: auto !important;
+  bottom: auto !important;
+  margin: 0 !important;
+  width: 232px;
+  max-width: calc(100vw - 16px);
+  overflow: auto;
+  color: var(--workspace-ink, inherit);
+}
+
+/* Add to playlist: the song on top, then one tidy list of playlists with their covers. A long list scrolls inside
+   the window and gets a search. */
+:root body .music-playlist-picker {
+  width: min(440px, calc(100vw - 32px));
+}
+:root body .music-playlist-picker .music-picker-song {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 10px;
+  border-radius: 14px;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+:root body .music-playlist-picker .music-picker-song-cover {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: 10px;
+  object-fit: cover;
+}
+:root body .music-playlist-picker .music-picker-song-names {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+:root body .music-playlist-picker .music-picker-song-names > * {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+:root body .music-playlist-picker .music-picker-song-names small {
+  opacity: 0.65;
+}
+:root body .music-playlist-picker .music-picker-search {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 8px 0 4px;
+}
+:root body .music-playlist-picker .music-picker-list {
+  display: grid;
+  gap: 4px;
+  max-height: min(46vh, 380px);
+  margin: 8px -4px 0;
+  padding: 0 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+:root[data-theme] body .music-playlist-picker :is(.music-library-create, .music-playlist-choice) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 8px 10px;
+  min-height: 56px;
+  border-radius: 12px;
+}
+:root[data-theme] body .music-playlist-picker .music-picker-create {
+  border: 1px dashed color-mix(in srgb, currentColor 22%, transparent);
+  background: transparent;
+  font-weight: 600;
+}
+:root[data-theme] body .music-playlist-picker .music-picker-create .icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0 10px;
+  opacity: 0.9;
+}
+:root body .music-playlist-picker .music-picker-cover {
+  width: 40px !important;
+  height: 40px !important;
+  flex: none;
+  margin: 0 !important;
+  border-radius: 10px;
+  overflow: hidden;
+}
+:root body .music-playlist-picker .music-picker-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+:root[data-theme] body .music-playlist-picker .music-playlist-choice .music-picker-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  color: inherit;
+  font-size: 14px;
+  white-space: normal;
+}
+:root body .music-playlist-picker .music-picker-copy strong {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+:root body .music-playlist-picker .music-picker-copy small {
+  opacity: 0.6;
+  font-size: 12px;
+}
+:root[data-theme] body .music-playlist-picker .music-playlist-choice .music-picker-state {
+  margin-left: auto;
+  font-size: 12px;
+  opacity: 0.8;
+}
+:root[data-theme] body .music-playlist-picker .music-playlist-choice:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+:root body .music-playlist-picker .music-picker-none {
+  margin: 12px 0 0;
+  text-align: center;
+  opacity: 0.6;
+}
