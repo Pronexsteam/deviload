@@ -35,6 +35,15 @@ fn image(entry: &Value) -> Option<String> {
     }).map(str::to_owned)
 }
 
+/// Where a list's songs are read. A saved Mix (RD and the song it started from) has no playlist page: YouTube
+/// answers "unviewable", so it is opened from its first song instead.
+fn list_url(id: &str) -> String {
+    match id.strip_prefix("RD").filter(|seed| seed.len() == 11) {
+        Some(seed) => format!("https://www.youtube.com/watch?v={seed}&list={id}"),
+        None => format!("https://www.youtube.com/playlist?list={id}"),
+    }
+}
+
 /// Songs of one list, in order, without repeats.
 fn songs(list: &Value) -> Vec<Value> {
     let mut seen = std::collections::HashSet::new();
@@ -108,7 +117,9 @@ fn read_library(session: &Path) -> Result<Value, String> {
         Ok(page) => for (id, name) in playlists(&page) {
             // A short pause between lists keeps the account clear of YouTube's request limits.
             std::thread::sleep(Duration::from_millis(400));
-            match read(&format!("https://www.youtube.com/playlist?list={id}"), session, MAX_SONGS) {
+            // A Mix never ends; like a Mix imported by link, it keeps its first hundred songs.
+            let limit = if id.starts_with("RD") { 100 } else { MAX_SONGS };
+            match read(&list_url(&id), session, limit) {
                 Ok(list) => lists.push((name, list)),
                 Err(error) if error.contains("rate-limited") => { failed += 1; break; }
                 Err(_) => failed += 1,
@@ -148,6 +159,13 @@ mod tests {
         assert_eq!(rows[0]["image"], "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg");
         assert_eq!(rows[1]["key"], "youtube:kJQP7kiw5Fk");
         assert!(rows[1]["image"].is_null());
+    }
+
+    #[test]
+    fn a_saved_mix_is_read_from_its_first_song() {
+        assert_eq!(list_url("RDdQw4w9WgXcQ"), "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ");
+        assert_eq!(list_url("PLabc_DEF-123"), "https://www.youtube.com/playlist?list=PLabc_DEF-123");
+        assert_eq!(list_url("RDCLAK5uy_long-album-radio-id"), "https://www.youtube.com/playlist?list=RDCLAK5uy_long-album-radio-id");
     }
 
     #[test]

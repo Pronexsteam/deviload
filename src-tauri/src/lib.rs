@@ -829,6 +829,11 @@ async fn site_sign_out(app: tauri::AppHandle, engine: tauri::State<'_, Engine>, 
     Ok(())
 }
 
+// A Google page other than the sign-in itself: the account or one of its checks, reached once signed in.
+fn after_google_sign_in(host: &str) -> bool {
+    (host == "google.com" || host.ends_with(".google.com")) && host != "accounts.google.com"
+}
+
 #[tauri::command]
 async fn open_youtube(app: tauri::AppHandle, engine: tauri::State<'_, Engine>, sign_in: bool) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("youtube") {
@@ -837,6 +842,8 @@ async fn open_youtube(app: tauri::AppHandle, engine: tauri::State<'_, Engine>, s
         return Ok(());
     }
     let address = if sign_in { YOUTUBE_SIGN_IN } else { "https://www.youtube.com/" };
+    // Once per window, so a Google page that keeps returning cannot loop.
+    let redirected = Arc::new(AtomicBool::new(false));
     let url = address.parse().map_err(|e| format!("Invalid YouTube address: {e}"))?;
     let dir = engine.dir.clone();
     let builder = tauri::WebviewWindowBuilder::new(&app, "youtube", tauri::WebviewUrl::External(url))
@@ -846,6 +853,9 @@ async fn open_youtube(app: tauri::AppHandle, engine: tauri::State<'_, Engine>, s
         .on_page_load(move |window, payload| {
             if payload.event() != tauri::webview::PageLoadEvent::Finished { return; }
             let host = payload.url().host_str().unwrap_or("").to_ascii_lowercase();
+            // After the password Google may show its own pages (a security checkup, recovery details) instead of
+            // returning to YouTube. Those are past the sign-in: continue to YouTube, which saves it and closes.
+            if sign_in && after_google_sign_in(&host) && !redirected.swap(true, Ordering::Relaxed) { let _ = window.navigate(YOUTUBE_SIGN_IN.parse().unwrap()); return; }
             if host != "youtube.com" && !host.ends_with(".youtube.com") { return; }
             let dir = dir.clone();
             // Reading cookies on the page-load thread deadlocks WebView2.
@@ -3585,6 +3595,14 @@ mod engine_tests {
             .map(|arg| arg.to_string_lossy().into_owned()).collect();
         assert_eq!(args, ["--encoding", "utf-8", "--proxy", "http://proxy:8080"]);
         assert_eq!(ytdlp_command_with(Path::new("yt-dlp"), "").get_args().count(), 2);
+    }
+    #[test]
+    fn google_pages_after_the_password_lead_back_to_youtube() {
+        assert!(after_google_sign_in("myaccount.google.com"));
+        assert!(after_google_sign_in("gds.google.com"));
+        assert!(!after_google_sign_in("accounts.google.com"), "the sign-in itself, challenges included, stays");
+        assert!(!after_google_sign_in("www.youtube.com"));
+        assert!(!after_google_sign_in("evilgoogle.com"));
     }
     #[test]
     fn cookie_export_keeps_only_youtube_and_google_domains() {
