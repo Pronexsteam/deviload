@@ -2345,6 +2345,7 @@ export default {
 "Playback": "Reproducción",
 "Copy OBS link": "Enlace para OBS",
 "Export library": "Exportar biblioteca",
+"This video plays with the song's sound from Devil Music.": "Este vídeo se reproduce con el sonido de la canción desde Devil Music.",
 "File format": "Formato de archivo",
 "CSV · for Excel and Google Sheets": "CSV · para Excel y Hojas de cálculo de Google",
 "M3U · playlist for players": "M3U · lista para reproductores",
