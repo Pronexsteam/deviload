@@ -77,7 +77,19 @@ export function wireMusicImport({
         step.hidden = false;
         linkArea.hidden = fileArea.hidden = true;
         stepList.replaceChildren();
-        stepTitle.textContent = t("Resume unfinished import");
+        // The review says where the songs came from; the sign-in and reading are done already.
+        const from =
+          draft.batch.origin === "account"
+            ? SOURCES.find(
+                source => source.account === (draft.batch.source === "spotify" ? "spotify" : "youtube"),
+              )
+            : null;
+        stepHead.firstChild.replaceWith(art(from || { icon: "music-notes" }));
+        stepTitle.textContent = from ? from.title : draft.batch.name || t("Resume unfinished import");
+        accountSource = null;
+        accountArea.hidden = stepList.hidden = true;
+        // Choosing the batch saved the draft before its songs were back; save it again whole.
+        persist();
       },
       "music-primary",
     );

@@ -746,3 +746,77 @@
     animation: none;
   }
 }
+
+/* One scroll: the window scrolls, the list of songs does not scroll inside it. Adding stays in reach at the bottom. */
+.music-import-dialog .music-import-results {
+  max-height: none;
+  overflow: visible;
+  margin: 10px 0;
+}
+.music-import-dialog .music-import-actions {
+  position: sticky;
+  bottom: -26px;
+  z-index: 2;
+  margin: 0 -26px -26px;
+  padding: 14px 26px 22px;
+  border-top: 1px solid #ffffff14;
+  background: color-mix(in srgb, #161519 92%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+.music-import-dialog .music-import-actions:not(:has(> :not([hidden]))) {
+  display: none;
+}
+/* Our own ticks, in the player's colour, instead of the system's blue squares. */
+.music-import-dialog input[type="checkbox"] {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  margin: 0;
+  border: 1.5px solid color-mix(in srgb, currentColor 38%, transparent);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+.music-import-dialog input[type="checkbox"]::after {
+  content: "";
+  width: 5px;
+  height: 10px;
+  margin-top: -2px;
+  border: solid #10131a;
+  border-width: 0 2px 2px 0;
+  rotate: 45deg;
+  scale: 0;
+  transition: scale 0.15s cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+.music-import-dialog input[type="checkbox"]:checked {
+  border-color: var(--player-primary, #9ad0ff);
+  background: var(--player-primary, #9ad0ff);
+}
+.music-import-dialog input[type="checkbox"]:checked::after {
+  scale: 1;
+}
+.music-import-dialog input[type="checkbox"]:hover:not(:disabled) {
+  border-color: color-mix(in srgb, currentColor 60%, transparent);
+}
+.music-import-dialog input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--player-primary, #9ad0ff);
+  outline-offset: 2px;
+}
+.music-import-dialog input[type="checkbox"]:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.music-import-dialog .music-import-result {
+  cursor: pointer;
+  border-radius: 10px;
+}
+.music-import-dialog .music-import-result:hover {
+  background: color-mix(in srgb, currentColor 4%, transparent);
+}
