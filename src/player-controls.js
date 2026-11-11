@@ -5,9 +5,14 @@ const selector =
 const clocks = new WeakMap(),
   dragging = new Set();
 export const isRangeDragging = input => dragging.has(input);
-export function registerPlaybackRange(input, read) {
+// `live` tells whether a range moves on its own clock without a player in this page (the mini player follows
+// the main window); while it says so the loop keeps running.
+const lives = new Set();
+export function registerPlaybackRange(input, read, live) {
   clocks.set(input, read);
+  if (live) lives.add(live);
 }
+export const wakePlaybackRanges = () => wake();
 export function paintPlaybackRange(input) {
   const min = Number(input.min) || 0,
     max = Number(input.max) || 100,
@@ -29,10 +34,17 @@ document.addEventListener("input", event => {
   if (event.target.matches(selector)) paint(event.target);
 });
 document.addEventListener("pointerdown", event => {
-  if (event.target.matches(selector)) dragging.add(event.target);
+  if (event.target.matches(selector)) {
+    dragging.add(event.target);
+    wake();
+  }
 });
 for (const event of ["pointerup", "pointercancel", "blur"])
-  window.addEventListener(event, () => dragging.clear());
+  window.addEventListener(event, () => {
+    dragging.clear();
+    // One more frame puts the slider back on the playing position.
+    wake();
+  });
 // Moving the same controls between the dock and modal changes membership, but
 // playback timestamps and CSS animations do not. Avoid a document-wide selector
 // on every frame; text-only updates must not invalidate the cached controls.
@@ -42,8 +54,10 @@ let frame = 0,
 const observer = new MutationObserver(records => {
   if (
     records.some(record => [...record.addedNodes, ...record.removedNodes].some(node => node.nodeType === 1))
-  )
+  ) {
     dirty = true;
+    wake();
+  }
 });
 observer.observe(document.documentElement, { childList: true, subtree: true });
 function tick() {
@@ -62,8 +76,40 @@ function tick() {
     }
     paint(input);
   });
-  frame = requestAnimationFrame(tick);
+  // Only while something plays or a slider is held: a paused player costs no frames.
+  if (
+    dragging.size ||
+    [...active].some(media => !media.paused && !media.ended) ||
+    [...lives].some(live => live())
+  )
+    frame = requestAnimationFrame(tick);
 }
+function wake() {
+  if (!frame && !document.hidden) frame = requestAnimationFrame(tick);
+}
+// The players that play, kept by their own events (which do not bubble, so they are caught on the way down)
+// instead of searching the page on every frame. Any change of a player wakes the loop for at least one frame.
+const active = new Set();
+for (const name of ["play", "playing"])
+  document.addEventListener(
+    name,
+    event => {
+      active.add(event.target);
+      wake();
+    },
+    true,
+  );
+for (const name of ["pause", "ended", "emptied"])
+  document.addEventListener(
+    name,
+    event => {
+      active.delete(event.target);
+      wake();
+    },
+    true,
+  );
+for (const name of ["seeked", "loadedmetadata", "ratechange", "durationchange"])
+  document.addEventListener(name, wake, true);
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && !frame) tick();
 });
@@ -75,6 +121,7 @@ window.addEventListener(
     frame = 0;
     observer.disconnect();
     ranges = [];
+    active.clear();
   },
   { once: true },
 );

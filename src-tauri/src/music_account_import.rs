@@ -100,7 +100,7 @@ fn read(url: &str, session: &Path, limit: usize) -> Result<Value, String> {
     command.arg("--cookies").arg(session)
         .args(["--ignore-config", "--no-plugin-dirs", "--flat-playlist", "--dump-single-json", "--no-warnings", "--no-colors",
             "--socket-timeout", "15", "--extractor-retries", "1", "--playlist-end", &limit.to_string(), "--", url]);
-    let output = crate::engine_update::json_output(&mut command, Duration::from_secs(150)).map_err(|_| UNAVAILABLE)?;
+    let output = crate::engine_update::json_output_large(&mut command, Duration::from_secs(150)).map_err(|_| UNAVAILABLE)?;
     if !output.status.success() {
         let error = String::from_utf8_lossy(&output.stderr).to_ascii_lowercase();
         return Err(if error.contains("429") { "Music catalog is temporarily rate-limited. Try again later." } else if error.contains("sign in") || error.contains("login") { NO_SIGN_IN } else { UNAVAILABLE }.into());

@@ -99,7 +99,7 @@ pub(crate) fn run_spotify_script(args: &[&str], env: &[(&str, &str)], timeout: D
     for (name, value) in env { command.env(name, value); allowed.push(name); }
     command.current_dir(&root).args(["run", "--no-config", "--no-npm", "--no-remote", "--no-prompt", "--allow-net=open.spotify.com,open.spotifycdn.com,clienttoken.spotify.com,api-partner.spotify.com,code.thetadev.de"])
         .arg(format!("--allow-env={}", allowed.join(","))).arg(script.path()).args(args);
-    let output = crate::engine_update::json_output(&mut command, timeout).map_err(|_| fallback)?;
+    let output = crate::engine_update::json_output_large(&mut command, timeout).map_err(|_| fallback)?;
     let data: Value = serde_json::from_slice(&output.stdout).map_err(|_| fallback)?;
     if !output.status.success() { return Err(data["error"].as_str().unwrap_or(fallback).to_owned()); }
     Ok(data)

@@ -1026,9 +1026,19 @@ async fn export_download_profiles(app: tauri::AppHandle, text: String) -> Result
     }).await.map_err(|e| e.to_string())?
 }
 
+// Every music request asks for the proxy; the settings file is parsed again only when it changed on disk.
 fn stored_proxy(dir: &Path) -> String {
-    read_store(dir).get("network").and_then(|network| network["proxy"].as_str())
-        .and_then(|proxy| model::parse_proxy(proxy).ok()).unwrap_or_default()
+    static CACHE: Mutex<Option<(PathBuf, Option<std::time::SystemTime>, u64, String)>> = Mutex::new(None);
+    let file = dir.join("library.json");
+    let stamp = fs::metadata(&file).ok().map(|m| (m.modified().ok(), m.len()));
+    let (modified, len) = stamp.unwrap_or((None, 0));
+    if let Some((path, at, size, proxy)) = CACHE.lock().unwrap().as_ref() {
+        if *path == file && *at == modified && *size == len && modified.is_some() { return proxy.clone(); }
+    }
+    let proxy = read_store(dir).get("network").and_then(|network| network["proxy"].as_str())
+        .and_then(|proxy| model::parse_proxy(proxy).ok()).unwrap_or_default();
+    *CACHE.lock().unwrap() = Some((file, modified, len, proxy.clone()));
+    proxy
 }
 
 #[tauri::command]

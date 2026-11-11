@@ -2,7 +2,7 @@ import { mountPictureDisc, setPictureDiscArtwork } from "./music-picture-disc.js
 import { keepPresses } from "./press-capture.js";
 import { t, onLanguageChange } from "./i18n.js";
 import { paintAmbient, ambientArtwork } from "./music-ambient-light.js";
-import { registerPlaybackRange, isRangeDragging } from "./player-controls.js";
+import { registerPlaybackRange, isRangeDragging, wakePlaybackRanges } from "./player-controls.js";
 import { wireMiniQueue } from "./music-mini-queue.js";
 import { createMusicClip } from "./music-clip.js";
 import { wireGlassOrb, wireGlassButtons } from "./music-glass.js";
@@ -52,6 +52,7 @@ registerPlaybackRange($("mini-progress"), () =>
           (state.playing ? Math.min(1.1, (performance.now() - receivedAt) / 1000) * (state.rate || 1) : 0),
       ) / state.duration
     : 0,
+  () => !!state.playing,
 );
 $("mini-progress").step = "any";
 // The timeline is the same glass tube as in the main player: the liquid moves while the song plays.
@@ -83,6 +84,8 @@ reduced.addEventListener("change", resetLight);
 function render(value) {
   state = value || {};
   receivedAt = performance.now();
+  // A new state may start the song: the timeline wakes to follow it.
+  wakePlaybackRanges();
   document.documentElement.dataset.theme = ["ambient", "glass-light", "aurora", "prism"].includes(state.theme)
     ? state.theme
     : "ambient";

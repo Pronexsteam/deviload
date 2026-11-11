@@ -5,6 +5,8 @@ use std::{collections::HashMap, io::{Read, Write}, net::{TcpListener, TcpStream}
 const CHUNK: u64 = 512 * 1024;
 // Verify a small opening buffer; keep later transfers large for efficiency.
 const FIRST_CHUNK: u64 = 64 * 1024;
+// Songs up to this size are kept whole in memory while they play (a few MB for ordinary songs).
+const REPLAY_LIMIT: u64 = 16 * 1024 * 1024;
 fn chunk_offset(position: u64) -> u64 {
     if position < FIRST_CHUNK { 0 } else { FIRST_CHUNK + (position-FIRST_CHUNK)/CHUNK*CHUNK }
 }
@@ -102,7 +104,7 @@ impl Source {
     fn bounded(url: url::Url, size: u64, mime: &'static str, agent: &str, proxy: &str, limit: Arc<PlaybackLimit>, max_size: u64) -> Result<Self, String> {
         if !trusted_url(&url) || size == 0 || size > max_size { return Err("Could not open this track".into()); }
         let _ = rustls::crypto::ring::default_provider().install_default();
-        let mut builder = Client::builder().timeout(CHUNK_DEADLINE).connect_timeout(Duration::from_secs(6))
+        let mut builder = Client::builder().no_gzip().no_brotli().timeout(CHUNK_DEADLINE).connect_timeout(Duration::from_secs(6))
             .redirect(reqwest::redirect::Policy::custom(|attempt| {
                 if attempt.previous().len() < 3 && trusted_url(attempt.url()) { attempt.follow() } else { attempt.stop() }
             }));
@@ -211,7 +213,8 @@ impl Source {
                 Ok(bytes) => {
                     let mut chunks = self.chunks.lock().unwrap();
                     if !chunks.iter().any(|(offset,_)| *offset == start) {
-                        if chunks.len() >= 8 { chunks.remove(0); }
+                        // A whole song up to 16 MB stays, so playing it again needs no request; larger files keep a window.
+                        if self.size > REPLAY_LIMIT && chunks.len() >= 8 { chunks.remove(0); }
                         chunks.push((start, bytes.clone()));
                     }
                     return Ok(bytes);

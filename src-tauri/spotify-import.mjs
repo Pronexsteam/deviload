@@ -94,12 +94,25 @@ export async function webSession({fetcher=fetch,signal=AbortSignal.timeout(15000
   const token=JSON.parse((await get('https://clienttoken.spotify.com/v1/clienttoken',{method:'POST',headers:{'content-type':'application/json','accept':'application/json'},body:JSON.stringify({client_data:{client_version:config.clientVersion,client_id:auth.clientId,js_sdk_data:{device_brand:'unknown',device_model:'unknown',os:'windows',os_version:'NT 10.0',device_id:crypto.randomUUID(),device_type:'computer'}}})},1024*1024)).text);
   if(token.response_type!=='RESPONSE_GRANTED_TOKEN_RESPONSE'||typeof token.granted_token?.token!=='string')throw Error(UNAVAILABLE);
   const hashes=new Map(),files=scriptCandidates(main.text),pattern=op=>new RegExp('"'+op+'","query","([a-f0-9]{64})"');
-  async function hash(op){
-    if(hashes.has(op))return hashes.get(op);
-    let found=main.text.match(pattern(op))?.[1];
-    for(const file of found?[]:files){found=(await get('https://open.spotifycdn.com/cdn/build/web-player/'+file)).text.match(pattern(op))?.[1];if(found)break;}
+  // The web player's chunks are fetched five at a time and kept: each operation searches what is already here
+  // before fetching more, and readers asking for the same operation at once share one search.
+  const chunks=[];let next=0;
+  async function search(op){
+    const re=pattern(op);
+    let found=main.text.match(re)?.[1];
+    for(const text of chunks){if(found)break;found=text.match(re)?.[1];}
+    while(!found&&next<files.length){
+      const batch=files.slice(next,next+5);next+=batch.length;
+      const texts=await Promise.all(batch.map(file=>get('https://open.spotifycdn.com/cdn/build/web-player/'+file).then(r=>r.text,()=>'')));
+      chunks.push(...texts);
+      for(const text of texts){found=text.match(re)?.[1];if(found)break;}
+    }
     if(!found)throw Error(UNAVAILABLE);
-    hashes.set(op,found);return found;
+    return found;
+  }
+  function hash(op){
+    if(!hashes.has(op))hashes.set(op,search(op).catch(error=>{hashes.delete(op);throw error;}));
+    return hashes.get(op);
   }
   async function query(op,variables){
     const params=new URLSearchParams({operationName:op,variables:JSON.stringify(variables),extensions:JSON.stringify({persistedQuery:{version:1,sha256Hash:await hash(op)}})});
@@ -147,17 +160,29 @@ export async function readLibrary(cookie,{fetcher=fetch,signal=AbortSignal.timeo
   if(!/^[A-Za-z0-9_-]{20,2048}$/.test(cookie||''))throw Error(SIGNED_OUT);
   const session=await webSession({fetcher,signal,cookie,secrets,maxRequests:2500,maxBytes:160*1024*1024});
   const wait=()=>new Promise(resolve=>setTimeout(resolve,pause));
-  const liked=[];let offset=0,total=Infinity;
-  while(offset<total&&offset<maxLiked){
-    signal.throwIfAborted();
+  // Liked songs: the first page tells the total, the rest come three pages at a time, kept in their order.
+  const likedPage=async offset=>{
     const page=(await session.query('fetchLibraryTracks',{offset,limit:50}))?.data?.me?.library?.tracks;
     if(!page||!Array.isArray(page.items)||!Number.isSafeInteger(page.totalCount))throw Error(LIBRARY);
-    total=page.totalCount;
-    for(const row of page.items){const entry=likedEntry(row);if(entry)liked.push(entry);}
-    if(!page.items.length)break;
-    offset+=page.items.length;await wait();
+    return page;
+  };
+  const first=await likedPage(0);
+  const pages=[first.items],offsets=[];
+  for(let at=50;at<Math.min(first.totalCount,maxLiked);at+=50)offsets.push(at);
+  const rest=new Array(offsets.length);let take=0;
+  async function likedReader(){
+    while(take<offsets.length){
+      signal.throwIfAborted();
+      const index=take++;rest[index]=(await likedPage(offsets[index])).items;
+      await wait();
+    }
   }
-  const found=[];offset=0;total=Infinity;
+  await Promise.all(Array.from({length:Math.min(parallel,offsets.length)},likedReader));
+  pages.push(...rest);
+  const liked=[];
+  for(const items of pages)for(const row of items||[]){const entry=likedEntry(row);if(entry)liked.push(entry);}
+  let offset=0,total=Infinity;
+  const found=[];
   while(offset<total&&found.length<maxPlaylists){
     const page=await session.query('libraryV3',{filters:['Playlists'],order:null,textFilter:'',features:['LIKED_SONGS','YOUR_EPISODES_V2','PRERELEASES','PRERELEASES_V2','EVENTS'],limit:50,offset,flatten:true,expandedFolders:[],folderUri:null,includeFoldersWhenFlattening:true});
     const library=page?.data?.me?.libraryV3;

@@ -278,7 +278,7 @@ fn serve(mut stream: TcpStream, server: &Server) -> std::io::Result<()> {
             if !head_only { use std::io::Seek; file.seek(std::io::SeekFrom::Start(start))?; std::io::copy(&mut file.take(length), &mut stream)?; }
         }
         Source::Proxy(url) => {
-            let client = reqwest::blocking::Client::builder().no_proxy().connect_timeout(Duration::from_secs(3)).timeout(None).build().map_err(std::io::Error::other)?;
+            let client = reqwest::blocking::Client::builder().no_proxy().no_gzip().no_brotli().connect_timeout(Duration::from_secs(3)).timeout(None).build().map_err(std::io::Error::other)?;
             let mut request = client.get(&url);
             if let Some(r) = headers.get("range") { request = request.header("Range", r); }
             let mut response = request.send().map_err(std::io::Error::other)?;
@@ -500,8 +500,13 @@ fn cast_session(host: String, name: String, commands: mpsc::Receiver<Command>, s
 
 #[derive(Clone, Debug, Default)]
 struct Meta { title: String, artist: String, image: Option<String> }
+#[derive(Clone)]
 enum Link { Dlna(Device), Cast(mpsc::Sender<Command>, Arc<Mutex<CastState>>) }
+#[derive(Clone)]
 struct Active { device: Device, server: Arc<Server>, link: Link }
+// A copy of the cast taken under the lock and used after it is released: a TV that does not answer its SOAP request
+// for seconds must not block pause, stop or the next status.
+fn current() -> Option<Active> { active().lock().unwrap().clone() }
 fn active() -> &'static Mutex<Option<Active>> { static ACTIVE: OnceLock<Mutex<Option<Active>>> = OnceLock::new(); ACTIVE.get_or_init(|| Mutex::new(None)) }
 
 fn clean(text: &str, limit: usize) -> String { text.chars().filter(|c| !c.is_control()).take(limit).collect() }
@@ -540,7 +545,8 @@ fn load(active: &Active, source: Source, mime: &str, meta: Meta, position: f64, 
 }
 
 fn stop_active() {
-    if let Some(old) = active().lock().unwrap().take() {
+    let old = active().lock().unwrap().take();
+    if let Some(old) = old {
         old.server.stopped.store(true, Ordering::Relaxed);
         match old.link {
             Link::Dlna(device) => { let _ = soap(&device.control, &device.service, "Stop", "<InstanceID>0</InstanceID>"); }
@@ -583,9 +589,8 @@ pub async fn music_cast_load(window: tauri::WebviewWindow, engine: tauri::State<
     let engine = engine.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let (source, mime) = source_for(&engine, &id, &url)?;
-        let guard = active().lock().unwrap();
-        let current = guard.as_ref().ok_or(NOT_CASTING)?;
-        load(current, source, &mime, meta(&title, &artist, &image), position.max(0.0), playing)
+        let current = current().ok_or(NOT_CASTING)?;
+        load(&current, source, &mime, meta(&title, &artist, &image), position.max(0.0), playing)
     }).await.map_err(|e| e.to_string())?
 }
 
@@ -595,8 +600,7 @@ pub async fn music_cast_control(window: tauri::WebviewWindow, action: String, va
     tauri::async_runtime::spawn_blocking(move || {
         if action == "stop" { stop_active(); return Ok(()); }
         let value = value.filter(|v| v.is_finite()).unwrap_or(0.0);
-        let guard = active().lock().unwrap();
-        let current = guard.as_ref().ok_or(NOT_CASTING)?;
+        let current = current().ok_or(NOT_CASTING)?;
         match &current.link {
             Link::Dlna(d) => {
                 let s = &d.service;
@@ -621,8 +625,7 @@ pub async fn music_cast_control(window: tauri::WebviewWindow, action: String, va
 pub async fn music_cast_status(window: tauri::WebviewWindow) -> Result<Option<Status>, String> {
     if window.label() != "main" { return Err("Unavailable window".into()); }
     tauri::async_runtime::spawn_blocking(move || {
-        let guard = active().lock().unwrap();
-        let Some(current) = guard.as_ref() else { return Ok(None) };
+        let Some(current) = current() else { return Ok(None) };
         match &current.link {
             Link::Cast(_, shared) => {
                 let state = shared.lock().unwrap();

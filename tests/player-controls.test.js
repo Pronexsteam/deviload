@@ -17,6 +17,7 @@ function controls(){
 }
 test('playback paints smooth values without rescanning the document on every frame or text update',()=>{
  const h=controls();let position=0;h.api.registerPlaybackRange(h.seek,()=>++position);
+ h.listeners.playing({target:{paused:false,ended:false}});
  for(let i=0;i<120;i++){h.mutate(3);h.frame();}
  assert.equal(h.queries,1);assert.equal(h.seek.value,'120');assert.equal(h.seek.style.values.get('--range-progress'),'100.0000%');
  const added=h.input();added.value='25';h.nodes.push(added);h.mutate(1);h.frame();
@@ -24,7 +25,7 @@ test('playback paints smooth values without rescanning the document on every fra
  h.nodes.splice(0,1);h.seek.isConnected=false;h.mutate(1);h.frame();assert.equal(h.queries,3);
 });
 test('dragged seeks remain under user control and visibility restarts exactly one animation loop',()=>{
- const h=controls();h.api.registerPlaybackRange(h.seek,()=>80);h.listeners.pointerdown({target:h.seek});h.seek.value='30';h.frame();
+ const h=controls();h.api.registerPlaybackRange(h.seek,()=>80);h.listeners.playing({target:{paused:false,ended:false}});h.listeners.pointerdown({target:h.seek});h.seek.value='30';h.frame();
  assert.equal(h.seek.value,'30');assert.equal(h.api.isRangeDragging(h.seek),true);
  h.listeners.pointerup();h.frame();assert.equal(h.seek.value,'80');
  h.document.hidden=true;h.frame();assert.equal(h.pending,0);
@@ -43,4 +44,12 @@ test('track fill ends at the native thumb centre at both ends and intermediate p
    assert(Math.abs(edge-(5+fraction*(width-10)))<.001);
   }
  }
+});
+
+test('a paused player costs no frames, and play wakes the loop again',()=>{
+ const h=controls(),media={paused:false,ended:false};let reads=0;h.api.registerPlaybackRange(h.seek,()=>++reads);
+ h.listeners.playing({target:media});h.frame();h.frame();assert.equal(h.pending,1);
+ media.paused=true;h.listeners.pause({target:media});h.frame();assert.equal(h.pending,0,'the last frame paints the paused position and stops');
+ const before=reads;h.frame();assert.equal(reads,before);
+ media.paused=false;h.listeners.play({target:media});assert.equal(h.pending,1);
 });

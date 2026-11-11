@@ -162,7 +162,10 @@ fn worker()->Result<Arc<Worker>,String>{
     })?;*state=Some(started.clone());Ok(started)
 }
 pub fn prepare(){if let Ok(worker)=worker(){let _=worker.send(json!({"action":"prepare"}));}}
-pub fn cancel(generation:u64,preserve:bool){if let Some(state)=WORKER.get(){if let Some(worker)=state.lock().unwrap().as_ref(){let _=worker.send(json!({"action":"cancel","generation":generation,"preserve":preserve}));}}}
+// Runs on the window's thread when a song is skipped. While the engine is still starting, its slot stays locked for up to
+// 18 s; waiting for it froze the window. A starting engine has nothing to cancel yet, and the new generation already
+// tells it to drop the old request when it answers.
+pub fn cancel(generation:u64,preserve:bool){if let Some(state)=WORKER.get(){if let Ok(slot)=state.try_lock(){if let Some(worker)=slot.as_ref(){let _=worker.send(json!({"action":"cancel","generation":generation,"preserve":preserve}));}}}}
 pub fn play(id:&str,refresh:bool,preload:bool,original:Option<&str>,generation:u64,cancelled:&dyn Fn()->bool)->Result<String,String>{
     let worker=worker().inspect_err(|error|diagnostics::record(DiagnosticStage::Worker,diagnostics::classify(error),None))?;
     if cancelled(){return Err("Cancelled".into());}
