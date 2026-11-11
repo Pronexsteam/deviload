@@ -135,7 +135,34 @@ const moods = {
   jazz: "jazz",
   electronic: "electronic night music",
   rock: "rock",
+  fresh: "new music this week",
+  hits: "top hits",
+  workout: "workout music",
+  road: "road trip songs",
 };
+// Mood shelves come back at once: kept for a few hours, and read ahead quietly while the home is open.
+const MOOD_KEY = "deviload-music-moods-v1",
+  MOOD_MS = 6 * 3600000;
+function moodCache(storage) {
+  let table = {};
+  try {
+    const value = JSON.parse(storage?.getItem(MOOD_KEY) || "{}");
+    if (value && typeof value === "object" && !Array.isArray(value)) table = value;
+  } catch {}
+  return {
+    get(key) {
+      const row = table[key];
+      return row && Date.now() - row.at < MOOD_MS && Array.isArray(row.result?.sections) ? row.result : null;
+    },
+    set(key, result) {
+      table[key] = { at: Date.now(), result: { sections: result.sections || [] } };
+      for (const old of Object.keys(table)) if (Date.now() - table[old].at >= MOOD_MS) delete table[old];
+      try {
+        storage?.setItem(MOOD_KEY, JSON.stringify(table));
+      } catch {}
+    },
+  };
+}
 const el = (tag, cls, text) => {
   const node = document.createElement(tag);
   node.className = cls;
@@ -198,6 +225,8 @@ export function createMusic({ invoke, onDownload, storage }) {
   const diagnostics = createMusicDiagnostics();
   const loadArtistCatalog = createArtistCatalog(invoke);
   const newReleases = createNewReleases({ loadArtist: loadArtistCatalog, storage });
+  const moodShelves = moodCache(storage);
+  let moodsAhead = false;
   const decks = createMusicDecks();
   let audio = decks.current;
   document.body.append(...decks.nodes);
@@ -4707,8 +4736,34 @@ export function createMusic({ invoke, onDownload, storage }) {
     $("music-shelves").replaceChildren(grid);
   }
   let coverFlight = null;
+  // Once a session, a few seconds after the home opens: the mood shelves not kept yet, one at a time.
+  function readMoodsAhead() {
+    if (moodsAhead || !invoke || navigator.connection?.saveData) return;
+    moodsAhead = true;
+    setTimeout(async () => {
+      for (const [mood, query] of Object.entries(moods)) {
+        const key = [mood, language()].join("|");
+        if (moodShelves.get(key)) continue;
+        try {
+          const result = await invoke("music_catalog", {
+            kind: "search",
+            value: query,
+            params: "",
+            language: language(),
+            filter: searchFilter,
+          });
+          if (result?.sections?.some(section => section.items?.length)) moodShelves.set(key, result);
+        } catch {
+          return;
+        }
+        await new Promise(resolve => setTimeout(resolve, 700));
+      }
+    }, 5000);
+  }
   async function load(kind, value = "", heading = "", refresh = false, params = "") {
     const retainHome = kind === "home" && view === "home" && lastQuery.kind === "home" && sections.length > 0;
+    const moodKey = kind === "search" && activeMood ? [activeMood, language()].join("|") : "",
+      moodReady = moodKey && !refresh ? moodShelves.get(moodKey) : null;
     rememberNavigation({
       type: "catalog",
       kind,
@@ -4736,8 +4791,8 @@ export function createMusic({ invoke, onDownload, storage }) {
       kind === "home" ? t("PRESS PLAY") : kind === "search" ? t("SEARCH") : t("EXPLORE");
     loading = true;
     $("music-refresh").disabled = true;
-    status(retainHome ? "" : t("Finding your music…"));
-    if (!retainHome) skeleton();
+    status(retainHome || moodReady ? "" : t("Finding your music…"));
+    if (!retainHome && !moodReady) skeleton();
     try {
       if (!invoke) throw new Error(t("Open Deviload to browse and play music."));
       const artistPage =
@@ -4745,17 +4800,21 @@ export function createMusic({ invoke, onDownload, storage }) {
       const result =
         kind === "home"
           ? { sections: [] }
-          : artistPage
-            ? await loadArtistCatalog(browseItem, language(), refresh)
-            : await invoke("music_catalog", {
-                kind,
-                value,
-                params,
-                language: language(),
-                filter: searchFilter,
-              });
+          : moodReady
+            ? moodReady
+            : artistPage
+              ? await loadArtistCatalog(browseItem, language(), refresh)
+              : await invoke("music_catalog", {
+                  kind,
+                  value,
+                  params,
+                  language: language(),
+                  filter: searchFilter,
+                });
       if (token !== request) return;
       if (kind === "home") homeCache = result;
+      if (moodKey && !moodReady && result.sections?.some(section => section.items?.length))
+        moodShelves.set(moodKey, result);
       continuation = result.continuation || null;
       if (!retainHome)
         sections =
@@ -4797,7 +4856,10 @@ export function createMusic({ invoke, onDownload, storage }) {
         const first = tracks(sections.flatMap(section => section.items))[0];
         if (first) intent.enter(first.id);
       }
-      if (kind === "home") personalize(token, result.sections);
+      if (kind === "home") {
+        personalize(token, result.sections);
+        readMoodsAhead();
+      }
     } catch (error) {
       if (token !== request) return;
       if (kind === "search") musicSearch?.allowRetry();

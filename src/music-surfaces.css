@@ -407,6 +407,9 @@
 #music-dock-menu > button::after {
   content: attr(aria-label);
   min-width: 0;
+  /* Room for letters that go below the line (g, p, y): the clipping for the ellipsis must not cut them. */
+  line-height: 1.45;
+  padding-block: 1px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -21,7 +21,7 @@ test("home never fetches regional shelves, while explicit search remains availab
   selectView(){},t:s=>s,status(){},skeleton(){},render(){},homeSections:()=>[],personalize(){},
   language:()=> 'ru',audio:{paused:false},invoke:async(command,args)=>{calls.push({command,...args});return {sections:base};},
   homeCache:{sections:base},saved:{showRegional:true},listFilter:'',listSort:'',view:'home',lastQuery:{kind:'home'},
-  continuation:null,morePending:false,loading:false,sections:[],loaded:false};
+  continuation:null,morePending:false,loading:false,sections:[],loaded:false,moodShelves:{get:()=>null,set(){}},readMoodsAhead(){}};
  const load=runInNewContext(`(()=>{${source.slice(source.indexOf('  async function load('),source.indexOf('  function renderInterestPool('))};return load;})()`,ctx);
  await load('home');await load('home','','',true);assert.equal(calls.length,0);
  await load('search','Any artist');assert.equal(calls.length,1);
