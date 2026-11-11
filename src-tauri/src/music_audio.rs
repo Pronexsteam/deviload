@@ -5,9 +5,19 @@ use std::{collections::HashMap, io::{Read, Write}, net::{TcpListener, TcpStream}
 const CHUNK: u64 = 512 * 1024;
 // Verify a small opening buffer; keep later transfers large for efficiency.
 const FIRST_CHUNK: u64 = 64 * 1024;
+// Songs up to this size are kept whole in memory while they play (a few MB for ordinary songs).
+const REPLAY_LIMIT: u64 = 16 * 1024 * 1024;
 fn chunk_offset(position: u64) -> u64 {
     if position < FIRST_CHUNK { 0 } else { FIRST_CHUNK + (position-FIRST_CHUNK)/CHUNK*CHUNK }
 }
+// A slow connection still delivers audio: a transfer fails only below about 32 KB/s,
+// a little above the speed the music itself plays at, never because a chunk took over six seconds.
+const SLOWEST_BYTES_PER_MS: u64 = 32;
+fn chunk_timeout(length: u64) -> Duration {
+    Duration::from_secs(6).max(Duration::from_millis(length / SLOWEST_BYTES_PER_MS))
+}
+// Two attempts at the slowest accepted speed, plus the short pause between them.
+const CHUNK_DEADLINE: Duration = Duration::from_secs(40);
 const MAX_STREAMS: usize = 12;
 const STREAM_LIFETIME: Duration = Duration::from_secs(3600);
 
@@ -94,7 +104,7 @@ impl Source {
     fn bounded(url: url::Url, size: u64, mime: &'static str, agent: &str, proxy: &str, limit: Arc<PlaybackLimit>, max_size: u64) -> Result<Self, String> {
         if !trusted_url(&url) || size == 0 || size > max_size { return Err("Could not open this track".into()); }
         let _ = rustls::crypto::ring::default_provider().install_default();
-        let mut builder = Client::builder().timeout(Duration::from_secs(15)).connect_timeout(Duration::from_secs(6))
+        let mut builder = Client::builder().no_gzip().no_brotli().timeout(CHUNK_DEADLINE).connect_timeout(Duration::from_secs(6))
             .redirect(reqwest::redirect::Policy::custom(|attempt| {
                 if attempt.previous().len() < 3 && trusted_url(attempt.url()) { attempt.follow() } else { attempt.stop() }
             }));
@@ -138,7 +148,7 @@ impl Source {
     // Some media servers accept the URL byte range while rejecting an HTTP Range
     // header. Translate here so every WebView gets ordinary seekable HTTP audio.
     fn fetch_chunk(&self, start: u64) -> Result<Vec<u8>, SourceError> {
-        self.fetch_chunk_until(start, Instant::now() + Duration::from_secs(12))
+        self.fetch_chunk_until(start, Instant::now() + CHUNK_DEADLINE)
     }
 
     fn fetch_chunk_until(&self, start: u64, deadline: Instant) -> Result<Vec<u8>, SourceError> {
@@ -183,7 +193,7 @@ impl Source {
             if remaining.is_zero() { break; }
             let fetched = (|| {
                 let response = self.client.get(url.clone()).headers(self.headers.clone())
-                    .timeout(remaining.min(Duration::from_secs(6))).send().map_err(|_| SourceError::Network)?;
+                    .timeout(remaining.min(chunk_timeout(end - start + 1))).send().map_err(|_| SourceError::Network)?;
                 let status = response.status();
                 if !status.is_success() {
                     if self.mime=="video/mp4" {eprintln!("Cinema upstream status: {}",status.as_u16());}
@@ -203,7 +213,8 @@ impl Source {
                 Ok(bytes) => {
                     let mut chunks = self.chunks.lock().unwrap();
                     if !chunks.iter().any(|(offset,_)| *offset == start) {
-                        if chunks.len() >= 8 { chunks.remove(0); }
+                        // A whole song up to 16 MB stays, so playing it again needs no request; larger files keep a window.
+                        if self.size > REPLAY_LIMIT && chunks.len() >= 8 { chunks.remove(0); }
                         chunks.push((start, bytes.clone()));
                     }
                     return Ok(bytes);
@@ -225,7 +236,10 @@ impl Source {
         }
         if matches!(last, SourceError::Denied | SourceError::Limited) {
             *self.failed.lock().unwrap() = Some(last);
-            if last==SourceError::Denied{if let Some(id)=&self.music_id{crate::music_engine::note_reserve_denial(id);}}
+            // A first answer of 403 refuses the song. A 403 after this link already delivered audio is how YouTube
+            // ends a link while it limits a busy address: this link stops, but a fresh one may continue the song.
+            let delivered=!self.chunks.lock().unwrap().is_empty();
+            if last==SourceError::Denied && !delivered{if let Some(id)=&self.music_id{crate::music_engine::note_reserve_denial(id);}}
         }
         Err(last)
     }
@@ -269,6 +283,9 @@ pub fn release_video(address: &str) {
         if let Some(token)=address.strip_prefix(&format!("http://127.0.0.1:{}/",relay.port)){if let Some(entry)=relay.entries.lock().unwrap().remove(token){entry.source.cancelled.store(true,Ordering::Relaxed);}}
     }}
 }
+
+// The port of the reserve audio relay, if it runs; casting may proxy it.
+pub(crate) fn relay_port() -> Option<u16> { RELAY.get()?.lock().ok()?.as_ref().map(|relay| relay.port) }
 
 pub fn register(source: Arc<Source>) -> Result<String, String> {
     let mut relay = RELAY.get_or_init(|| Mutex::new(None)).lock().unwrap();
@@ -518,6 +535,18 @@ mod tests {
     }
 
     #[test]
+    fn a_403_after_delivered_audio_stops_the_link_without_refusing_the_song() {
+        let id="late403Song";
+        let (source,count,worker)=fixture(vec![200,403],false);
+        let source=source.with_music_id(id);
+        assert_eq!(source.fetch_chunk(0).unwrap(),vec![42;100]);
+        assert_eq!(source.fetch_chunk(50),Err(SourceError::Denied));
+        worker.join().unwrap();assert_eq!(count.load(Ordering::Relaxed),2);
+        assert!(source.failed(),"this link is finished");
+        assert!(crate::music_engine::recovery_error(id).is_none(),"a fresh link may still continue the song");
+    }
+
+    #[test]
     fn explicit_denials_and_rate_limits_never_retry_audio() {
         for (statuses,expected) in [(vec![401],SourceError::Denied),(vec![403],SourceError::Denied),(vec![429],SourceError::Limited)] {
             let requests=statuses.len();
@@ -558,6 +587,14 @@ mod tests {
         assert!(started.elapsed()<Duration::from_secs(1));
         worker.join().unwrap();assert_eq!(count.load(Ordering::Relaxed),0);
         assert!(!source.failed());
+    }
+
+    #[test]
+    fn slow_connections_get_time_for_a_full_chunk_while_both_attempts_fit_the_deadline() {
+        assert_eq!(chunk_timeout(FIRST_CHUNK),Duration::from_secs(6));
+        // 512 KiB at 32 KB/s is the slowest accepted transfer; music needs about 16 KB/s.
+        assert_eq!(chunk_timeout(CHUNK),Duration::from_millis(16384));
+        assert!(chunk_timeout(CHUNK)*2+Duration::from_millis(100)<=CHUNK_DEADLINE);
     }
 
     #[test]

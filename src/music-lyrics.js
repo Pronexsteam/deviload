@@ -13,6 +13,8 @@ export function createMusicLyrics({
   getAudio,
   getLatency = () => 0,
   isPrivate = () => false,
+  // Seconds from the playing upload's clock to the studio recording's, which the lyrics are timed on.
+  getShift = () => 0,
 }) {
   const dialog = document.createElement("dialog");
   dialog.className = "music-lyrics-dialog";
@@ -70,6 +72,10 @@ export function createMusicLyrics({
   let extraNote = "";
   let offsets = readLyricsOffsets(localStorage),
     offset = 0;
+  // The person's own correction on top of the measured shift of the recording that plays.
+  // Lyrics services time their lines on the studio recording, so they follow the measured shift; Unison times
+  // its lyrics on the very upload that plays, so it needs none.
+  const clock = () => offset + (source === "Unison" ? 0 : getShift());
   const timing = document.createElement("details"),
     timingTitle = document.createElement("summary"),
     timingControls = document.createElement("div");
@@ -137,21 +143,25 @@ export function createMusicLyrics({
         host.getClientRects().length &&
         (!host.closest("dialog") || host.closest("dialog").open),
       ));
+  // The next line comes up in one even movement, slow at both ends, instead of jumping most of the way at once and
+  // creeping the rest. Positions land on whole screen pixels so the letters do not shimmer while they move.
+  // It starts a little before the line is sung (LEAD) so the line is in place when the voice reaches it, not half a
+  // second later; the light on the words still follows the real time.
+  const GLIDE_MS = 450,
+    LEAD = 0.35;
   let scrollFrame = 0,
     scrollAt = 0,
     scrollGoal = 0,
-    scrollTick = 0;
+    scrollFrom = 0,
+    scrollStart = 0;
+  const pixel = value => Math.round(value * (devicePixelRatio || 1)) / (devicePixelRatio || 1);
   const glide = now => {
-    const step = Math.min(48, now - scrollTick || 16);
-    scrollTick = now;
-    scrollAt += (scrollGoal - scrollAt) * (1 - Math.exp(-step / 130));
-    if (Math.abs(scrollGoal - scrollAt) < 0.5) {
-      body.scrollTop = scrollGoal;
-      scrollFrame = 0;
-      return;
-    }
-    body.scrollTop = scrollAt;
-    scrollFrame = requestAnimationFrame(glide);
+    scrollStart ||= now;
+    const progress = Math.min(1, (now - scrollStart) / GLIDE_MS),
+      eased = progress < 0.5 ? 4 * progress ** 3 : 1 - (-2 * progress + 2) ** 3 / 2;
+    scrollAt = scrollFrom + (scrollGoal - scrollFrom) * eased;
+    body.scrollTop = pixel(scrollAt);
+    scrollFrame = progress < 1 ? requestAnimationFrame(glide) : 0;
   };
   const manualScroll = () => {
     cancelAnimationFrame(scrollFrame);
@@ -169,6 +179,31 @@ export function createMusicLyrics({
   body.addEventListener("keydown", event => {
     if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"].includes(event.key)) manualScroll();
   });
+  // A translation or romanisation arriving changes the rows' heights at once. Whatever the rows above the current
+  // line grew or shrank by is added to the scroll, glide included, so the current line stays where it is instead
+  // of the pane sliding a whole verse later. The current line itself is left to the normal glide.
+  const heights = new WeakMap();
+  const anchor = new ResizeObserver(entries => {
+    let shift = 0;
+    for (const entry of entries) {
+      const row = entry.target,
+        height = row.getBoundingClientRect().height,
+        before = heights.get(row);
+      heights.set(row, height);
+      if (before == null || active < 0) continue;
+      const index = Array.prototype.indexOf.call(body.children, row);
+      if (index >= 0 && index < active) shift += height - before;
+    }
+    if (!shift || body.classList.contains("is-browsing")) return;
+    body.scrollTop += shift;
+    scrollAt += shift;
+    scrollFrom += shift;
+    scrollGoal += shift;
+  });
+  new MutationObserver(() => {
+    anchor.disconnect();
+    for (const row of body.children) anchor.observe(row);
+  }).observe(body, { childList: true });
   function follow(row) {
     // A pane in transit between the sidebar and full player has no layout yet; retry on the next tick.
     if (!row || !body.clientHeight || !row.getClientRects().length) return;
@@ -187,10 +222,13 @@ export function createMusicLyrics({
       body.scrollTop = target;
       return;
     }
-    scrollGoal = target;
+    // Already on its way there: a repeated call must not restart the movement.
+    if (scrollFrame && Math.abs(target - scrollGoal) < 1) return;
+    if (!scrollFrame && Math.abs(target - body.scrollTop) < 1) return;
     cancelAnimationFrame(scrollFrame);
-    scrollAt = body.scrollTop;
-    scrollTick = 0;
+    scrollFrom = scrollFrame ? scrollAt : body.scrollTop;
+    scrollGoal = target;
+    scrollStart = 0;
     scrollFrame = requestAnimationFrame(glide);
   }
   async function load() {
@@ -324,7 +362,7 @@ export function createMusicLyrics({
                 if (getTrack()?.id !== id || !Number.isFinite(audio.duration)) return;
                 manualUntil = 0;
                 followPending = true;
-                audio.currentTime = Math.max(0, Math.min(line.at - offset, audio.duration));
+                audio.currentTime = Math.max(0, Math.min(line.at - clock(), audio.duration));
                 update();
               },
               "music-lyric-line",
@@ -433,7 +471,7 @@ export function createMusicLyrics({
     const line = lines[active],
       next = lines[active + 1],
       paused = audio.paused || audio.ended;
-    const key = `${id}|${active}|${paused}|${audio.playbackRate}|${offset}`,
+    const key = `${id}|${active}|${paused}|${audio.playbackRate}|${clock()}`,
       stamp = performance.now();
     if (key === shared.key && stamp - shared.at < 1000) return;
     shared = { key, at: stamp };
@@ -478,8 +516,8 @@ export function createMusicLyrics({
     const audio = getAudio(),
       states = lyricFrame(
         lines,
-        audio.currentTime + offset - getLatency(),
-        Number.isFinite(audio.duration) ? audio.duration + offset : Infinity,
+        audio.currentTime + clock() - getLatency(),
+        Number.isFinite(audio.duration) ? audio.duration + clock() : Infinity,
       ),
       nextRows = new Set(states.map(state => state.index));
     for (const index of activeRows)
@@ -525,8 +563,14 @@ export function createMusicLyrics({
         row.classList.toggle("lyric-near", distance === 1);
       }
     }
-    if (shown && followPending && Date.now() >= manualUntil) follow(body.children[active]);
-    share(audio.currentTime + offset - getLatency(), audio);
+    if (shown && Date.now() >= manualUntil) {
+      const now = audio.currentTime + clock() - getLatency(),
+        next = lines[active + 1],
+        soon = !audio.paused && next && next.at - now > 0 && next.at - now <= LEAD;
+      if (soon) follow(body.children[active + 1]);
+      else if (followPending) follow(body.children[active]);
+    }
+    share(audio.currentTime + clock() - getLatency(), audio);
     if (!audio.paused && !audio.ended && !frame) {
       const tick = now => {
         frame = 0;
@@ -582,8 +626,8 @@ export function createMusicLyrics({
         id: id || "",
         lines: lines.map((line, index) => ({
           text: line.text || "",
-          at: line.at - offset,
-          end: (line.end ?? lines[index + 1]?.at ?? line.at + 5) - offset,
+          at: line.at - clock(),
+          end: (line.end ?? lines[index + 1]?.at ?? line.at + 5) - clock(),
         })),
       };
     },

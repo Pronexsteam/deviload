@@ -40,7 +40,7 @@ function player(){
     weekly:createWeeklyStats(storage,{now:()=>1800000000000}),recommendationSession:createRecommendationSession(),recommendationRevision:0,listeningRevision:0,recordListening,remember,recommendationFamiliarity,rememberInterestTrack,profileWrites:0,sessionWrites:0,
     persist(){ctx.profileWrites++;},saveMusicProfile(_storage,profile){ctx.profileWrites++;ctx.lastProfile=profile;},saveMusicSession(){ctx.sessionWrites++;},storage,sessionTransition:false,queue:[song(1)],resolvedTrack:song(1).id,retryPosition:0,knownDuration:200,repeat:'off',shuffle:false,autoplay:true,sessionSavedAt:0,
     status(){},view:'favorites',homeCache:null,clearRecommendationContext(){ctx.recommendationSession.reset();ctx.playbackContext=[];ctx.playbackSourceContext={kind:'manual'};ctx.playbackOrigin='manual';},
-    t:value=>value,$:()=>control,decks:{listen:(name,fn)=>events[name]=fn},clearTimeout(){},bufferingTimer:null,artist:{},syncDock(){},performance:{now:()=>0}};
+    t:value=>value,isCasting:()=>false,$:()=>control,decks:{listen:(name,fn)=>events[name]=fn},clearTimeout(){},bufferingTimer:null,artist:{},syncDock(){},performance:{now:()=>0}};
   const actions=runInNewContext(`(()=>{${subtitle}\n${capture}\n${persistence}\n${toggle}\n${boundary}\n${playing}\nreturn {captureListening,persistSession};})()`,ctx);
   return {ctx,...actions,toggle(value){control.checked=value;handlers.change();},playing(){events.playing();},listen(seconds){ctx.clock.seconds=seconds;actions.captureListening();}};
 }

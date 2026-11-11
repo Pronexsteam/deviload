@@ -1,7 +1,10 @@
 import { t, onLanguageChange, locale } from "./i18n.js";
 import { playlistArtwork } from "./music-playlist-art.js";
+import { playlistFolders } from "./music-library-model.js";
 
 const STORAGE_KEY = "deviload-music-library-panel";
+const FOLDERS_KEY = "deviload-music-folders-closed";
+const DRAG_TYPE = "application/x-deviload-playlist";
 const el = (tag, cls, text) => {
   const node = document.createElement(tag);
   node.className = cls;
@@ -30,6 +33,7 @@ export function createMusicLibrarySidebar({
   onHome,
   summary,
   cover,
+  onMoveToFolder,
 }) {
   const content = el("div", "music-main-content"),
     aside = el("aside", "music-library-sidebar"),
@@ -61,6 +65,14 @@ export function createMusicLibrarySidebar({
     /* Local preferences are optional. */
   }
   let opened = preference ? preference === "open" : media.matches;
+  let closedFolders = new Set();
+  try {
+    const value = JSON.parse(localStorage.getItem(FOLDERS_KEY) || "[]");
+    if (Array.isArray(value))
+      closedFolders = new Set(value.filter(key => typeof key === "string").slice(0, 200));
+  } catch {
+    /* Local preferences are optional. */
+  }
   const toggle = makeButton("music-library-panel-toggle", "sidebar-simple", () =>
       setOpen(!opened, true, true),
     ),
@@ -200,6 +212,22 @@ export function createMusicLibrarySidebar({
     if (active === id) node.setAttribute("aria-current", "page");
     return node;
   }
+  function dropTarget(node, folder) {
+    node.addEventListener("dragover", event => {
+      if (!event.dataTransfer.types.includes(DRAG_TYPE)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      node.classList.add("is-drop-target");
+    });
+    node.addEventListener("dragleave", () => node.classList.remove("is-drop-target"));
+    node.addEventListener("drop", event => {
+      node.classList.remove("is-drop-target");
+      const id = event.dataTransfer.getData(DRAG_TYPE);
+      if (!id) return;
+      event.preventDefault();
+      onMoveToFolder(id, folder);
+    });
+  }
   function refresh(activeId) {
     if (destroyed) return;
     if (activeId !== undefined) active = activeId;
@@ -218,24 +246,75 @@ export function createMusicLibrarySidebar({
         row(t("Downloaded music"), null, art, onOffline, "offline", false, t("Available without internet")),
       );
     }
-    const playlists = [...(saved.playlists || [])].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));
+    const playlists = saved.playlists || [];
+    const { folders, loose } = playlistFolders(playlists, (a, b) => a.localeCompare(b, locale()));
     let matchingPlaylists = 0;
-    for (const playlist of playlists) {
-      if (query && !normalize(playlist.name).includes(query)) continue;
-      matchingPlaylists++;
+    const playlistRow = playlist => {
       const art = el("span", "music-library-nav-art");
       if (cover) art.append(playlistArtwork(playlist, cover, 96));
       else art.append(glyph("playlist"));
-      list.append(
-        row(
-          playlist.name,
-          playlist.items?.length || 0,
-          art,
-          () => onPlaylist(playlist.id),
-          playlist.id,
-          playlist.pinned,
-        ),
+      const node = row(
+        playlist.name,
+        playlist.items?.length || 0,
+        art,
+        () => onPlaylist(playlist.id),
+        playlist.id,
+        playlist.pinned,
       );
+      if (onMoveToFolder) {
+        node.draggable = true;
+        node.addEventListener("dragstart", event => {
+          event.dataTransfer.setData(DRAG_TYPE, playlist.id);
+          event.dataTransfer.effectAllowed = "move";
+        });
+        // Dropping on a playlist outside any folder takes the dragged one out of its folder.
+        if (!playlist.folder) dropTarget(node, "");
+      }
+      return node;
+    };
+    for (const folder of folders) {
+      // A folder whose name matches shows all its playlists; otherwise only the matching ones.
+      const shown =
+        query && !normalize(folder.name).includes(query)
+          ? folder.playlists.filter(playlist => normalize(playlist.name).includes(query))
+          : folder.playlists;
+      if (!shown.length) continue;
+      matchingPlaylists += shown.length;
+      const open = !!query || !closedFolders.has(folder.key) || folder.playlists.some(p => p.id === active);
+      const group = el("div", "music-library-folder"),
+        head = makeButton("music-library-nav-item music-library-folder-head", null, () => {
+          if (closedFolders.has(folder.key)) closedFolders.delete(folder.key);
+          else closedFolders.add(folder.key);
+          try {
+            localStorage.setItem(FOLDERS_KEY, JSON.stringify([...closedFolders]));
+          } catch {
+            /* Kept for this session. */
+          }
+          refresh();
+        }),
+        items = el("div", "music-library-folder-items");
+      const art = el("span", "music-library-nav-art music-library-folder-art"),
+        copy = el("span", "music-library-nav-copy");
+      art.append(glyph("folders"));
+      copy.append(
+        el("strong", "", folder.name),
+        el("small", "", t("Playlists: {count}", { count: folder.playlists.length })),
+      );
+      head.append(art, copy, glyph("caret-down"));
+      head.setAttribute("aria-expanded", String(open));
+      head.dataset.folder = folder.name;
+      if (onMoveToFolder) dropTarget(head, folder.name);
+      head.title = folder.name;
+      items.hidden = !open;
+      items.append(...shown.map(playlistRow));
+      group.classList.toggle("is-open", open);
+      group.append(head, items);
+      list.append(group);
+    }
+    for (const playlist of loose) {
+      if (query && !normalize(playlist.name).includes(query)) continue;
+      matchingPlaylists++;
+      list.append(playlistRow(playlist));
     }
     empty.textContent = query
       ? t("No matching playlists.")

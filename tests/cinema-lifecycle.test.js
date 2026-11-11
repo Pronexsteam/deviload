@@ -16,10 +16,10 @@ function setup(controlCancellation=false){
  const doc=new EventTarget();doc.getElementById=id=>{if(!els.has(id))els.set(id,new Element(id));return els.get(id);};doc.createElement=tag=>new Element(tag);doc.createDocumentFragment=()=>new Element('fragment');globalThis.document=doc;
  const positions={},jobs=[{id:1,status:'done',file:'C:/fixture/one.mp4'},{id:2,status:'done',file:'C:/fixture/two.mp4'}],pending=[];
  const cancels=[],streams=[],currentCalls=[];let failure="";
- const invoke=async(name,args)=>{if(controlCancellation&&name==='cinema_cancel'&&args.playback!==false)return new Promise(resolve=>cancels.push(resolve));if(name==='cinema_entries')return new Promise(resolve=>pending.push({kind:'discovery',resolve}));if(name==='cinema_stream'){streams.push(args.id);if(args.id===failure)throw Error('Fixture unavailable');return {url:'http://127.0.0.1/'+args.id,height:360,qualities:[360]};}if(name==='media_source')return new Promise(resolve=>pending.push({id:args.id,resolve}));if(name==='player_metadata')return {};return null;};
+ const invoke=async(name,args)=>{if(controlCancellation&&name==='cinema_cancel'&&args.playback!==false)return new Promise(resolve=>cancels.push(resolve));if(name==='cinema_entries')return new Promise(resolve=>pending.push({kind:'discovery',resolve}));if(name==='cinema_stream'){streams.push(args.id);if(args.id===failure)throw Error('Fixture unavailable');return {url:'http://127.0.0.1/'+args.id,height:360,qualities:[360]};}if(name==='media_source')return new Promise(resolve=>pending.push({id:args.id,resolve}));if(name==='player_metadata')return {};if(name==='music_stream'){streams.push('sound:'+args.id+':'+args.preload);return {url:'http://127.0.0.1/sound/'+args.id};}return null;};
  let onlineActive='',onlinePlay=false,callbacks;const createOnlinePlayer=options=>{callbacks=options;return {async start(id,play){streams.push(id);if(id===failure)throw Error('Fixture unavailable');onlineActive=id;onlinePlay=play;},pause(){onlinePlay=false;},suspend(){onlineActive='';},stop(){onlineActive='';}};};
  const api=createCinema({createOnlinePlayer,invoke,convertFileSrc:x=>x,t:x=>x,errorText:String,getJobs:()=>jobs,getIds:()=>[1,2],getPositions:()=>positions,persistPositions(){},onCut(){},onShare(){},onActivity(){},onCurrent:item=>currentCalls.push(item)});
- return {api,doc,els,onlineState:state=>callbacks.onState(state),onlineActive:()=>onlineActive,onlinePlay:()=>onlinePlay,positions,jobs,pending,cancels,streams,currentCalls,failStream:id=>{failure=id;},video:els.get('player-video')};
+ return {api,doc,els,onlineState:state=>callbacks.onState(state),onlineError:code=>callbacks.onError(code),onlineActive:()=>onlineActive,onlinePlay:()=>onlinePlay,positions,jobs,pending,cancels,streams,currentCalls,failStream:id=>{failure=id;},video:els.get('player-video')};
 }
 const run=test;
 await run('related search waits for media readiness and queue nodes survive status changes',async()=>{
@@ -82,3 +82,19 @@ for(const action of ['next','close-reopen','music'])await run(`all prior playbac
 
 
 await run('music pauses embedded playback and close releases its player',async()=>{const x=setup();x.api.playEntries([{id:'aaaaaaaaaaa',title:'A'}]);await flush();x.onlineState(1);check(x.onlinePlay(),'not playing');x.doc.dispatchEvent(new Event('deviload:music-play'));check(!x.onlinePlay(),'music did not pause video');x.els.get('player-dialog').close();check(!x.onlineActive(),'closed embed retained video');});
+await run('a label video refused by the embedded player plays its picture with the song sound in step',async()=>{
+ const x=setup();x.api.playEntries([{id:'aaaaaaaaaaa',title:'A'}]);await flush();
+ x.onlineError(150);await flush();
+ check(x.streams.includes('aaaaaaaaaaa')&&x.streams.includes('sound:aaaaaaaaaaa:true'),'picture and sound were not both requested');
+ const audio=x.els.get('player-audio');
+ check(x.video.src==='http://127.0.0.1/aaaaaaaaaaa'&&audio.src==='http://127.0.0.1/sound/aaaaaaaaaaa','sources not set');
+ check(!x.video.hidden&&audio.hidden,'the picture should show and the sound stay hidden');
+ x.video.dispatchEvent(new Event('loadedmetadata'));await flush();
+ check(x.video.playCalls===1,'video did not start');
+ x.video.currentTime=42;x.video.dispatchEvent(new Event('seeked'));check(audio.currentTime===42,'sound did not follow a jump');
+ x.video.dispatchEvent(new Event('play'));check(!audio.paused,'sound did not play with the picture');
+ x.video.dispatchEvent(new Event('pause'));check(audio.paused,'sound did not pause with the picture');
+ x.video.volume=0.3;x.video.muted=true;x.video.dispatchEvent(new Event('volumechange'));check(audio.volume===0.3&&audio.muted===true,'volume not mirrored');
+ check(x.els.get('cinema-retry').hidden!==false,'refusal was reported as a failure');
+ x.els.get('player-dialog').close();
+});

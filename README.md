@@ -43,13 +43,19 @@ Built with Rust and [Tauri 2](https://tauri.app), with English, Russian and Span
 Open the YouTube Music catalog and start listening without a Devil Music account or a YouTube Music subscription.
 
 - **Find something to play:** search songs, artists, albums and playlists; save favorites and keep a queue.
-- **Bring your collection:** import public Spotify playlists and albums, YouTube playlists, or a snapshot of a YouTube Mix. Review uncertain matches before accepting them.
+- **Bring your collection:** import public Spotify playlists and albums, YouTube playlists, or a snapshot of a YouTube Mix. Signed in, bring your YouTube Music liked songs and playlists, or your Spotify Liked Songs and playlists, private ones included. Review uncertain matches before accepting them.
+- **Name that song:** Identify song beside the search listens to the room, to this computer's sound or to an audio or video file, and finds the song here. Songs found are kept to search again or like in one click. Only a fingerprint of the sound is sent for recognition.
+- **Keep your likes in step:** turn on daily likes in music settings and new YouTube Music likes come over to Liked songs once a day. The account is only read.
+- **Play it on the TV:** cast to a Chromecast or DLNA TV or speaker on your Wi-Fi. The player on the computer keeps the queue and lyrics and steers the device.
 - **Make discovery your own:** likes and listening shape local recommendations. Choose familiar music or more discoveries, and hide songs or artists you do not want.
-- **Stay with the music:** one Lyrics button shows the words wherever the player is. In the full player the lines move in and out of focus; timed words fill as they are sung when the lyrics source provides word timings. The words can also run over the music video like subtitles, float on your desktop, or become a picture to share with Share a line.
+- **Stay with the music:** one Lyrics button shows the words wherever the player is. In the full player the lines move in and out of focus; timed words fill as they are sung when the lyrics source provides word timings. Lyrics stay in time on every version of a song: the recording that plays is measured once against the studio recording the lyrics are timed on. The words can also run over the music video like subtitles, float on your desktop, or become a picture to share with Share a line.
 - **Liquid glass player:** the play button is a glass orb that breathes with the bass, the timeline fills like a glass tube, and panels, windows and menus glide. Hover the timeline to see the time and the line sung there; the mouse wheel seeks and sets the volume.
 - **Watch the music video:** the camera button opens the song's official video on its own stage, silent and in step with the music, in up to 1080p and full screen.
 - **Make room on your desktop:** switch to a small, rounded mini-player with a vinyl cover, playback controls, repeat, shuffle, seeking and volume. Its video mode shows the music video in a window you can resize and pin above other windows. Returning restores the main window.
 - **Control it from your phone:** click the remote icon and scan its QR code on the same Wi-Fi. The phone follows your theme; sound stays on the computer. No account or hosted server is needed.
+- **Fine-tune playback:** playback speed is one click away in More and on the [ and ] keys, and songs on your computer stored without loss show a Lossless mark.
+- **Something new every day:** the home shows new albums and singles from artists you follow, and moods such as Unwind, New this week, Top hits, Workout and Road trip open at once. A playlist downloads for offline listening in one click.
+- **Take it elsewhere:** export liked songs and playlists as CSV, M3U or JSON, and show the song playing in OBS with the local control API's overlay page.
 - **Set the mood:** Ambient carries the cover colors across the workspace and reacts to the audio. Choose from eight themes, adjust the equalizer, or keep motion reduced. The next track is prepared in advance to reduce waiting.
 - **Make it yours:** the Your own theme puts a photo, GIF or silent looping video behind the workspace. Adjust blur, darkening, panel transparency, ambient light and the accent color. Files up to 300 MB are accepted, roughly 2 to 5 minutes of Full HD video; a 10 to 60 second loop looks best.
 - **Arrange it your way:** Edit layout, in the Themes menu, lets you drag blocks and player buttons to another place, hide the ones you do not need, swap the side panels or reset everything. A folded library stays as a rail of icons and playlist covers.
@@ -92,9 +98,9 @@ Add a live link to record from that moment, then stop when you have what you nee
 
 ## Latest update
 
-**Deviload 2.12.0 puts Devil Music in liquid glass.** The play button is a glass orb that breathes with the bass, the timeline fills like a glass tube, and panels, windows and menus glide. One Lyrics button shows the words in the full player, over the music video, on your desktop or as a picture to share. Your listening week, month and year open in a stats window, search finds the original song first, and the phone remote and Listen together are redesigned. Scrolling stays smooth while music plays.
+**Deviload 2.15.0 times the lyrics to the recording that plays.** Devil Music measures each version of a song once and shifts the words to it, so they meet the voice on music videos and re-uploads too, without flicker. Identify song listens to the room, this computer's sound or a file, new YouTube Music likes come over by themselves, and the home brings new releases from artists you follow and moods that open at once. An OBS overlay, library export, playlists for offline listening and label videos with sound in Cinema are new too.
 
-Read the [2.12.0 release notes](.github/release-notes/v2.12.0.md).
+Read the [2.15.0 release notes](.github/release-notes/v2.15.0.md).
 
 ## Installation
 
@@ -270,6 +276,16 @@ The supporter board reads a small list of public Ko-fi display names bundled wit
 Devil Music contacts YouTube Music for catalog results, artwork hosts for covers, and YouTube media servers for audio. Opening lyrics sends the track title, artist and duration to LRCLIB. Word-by-word highlighting requires supplied timestamps; missing word timing falls back to lines or plain text. Missing lyrics are not treated as proof that a song is instrumental. See [lyrics behavior](docs/music-lyrics-sync.md). Its listening profile stays in local WebView storage. Likes are never automatically evicted; recent history is bounded to 80 songs and recommendation history to 1,000 learned tracks. Profiles also keep up to 30 playlists with 500 total entries and 200 saved artists, albums or catalog playlists. Export/import files are limited to 2 MB and contain metadata and preferences, not music files or account credentials. If a profile reaches the storage limit, saving reports an error rather than removing older likes. Reinstalling the operating system can erase local preferences; export a backup first.
 
 Optional public ListenBrainz and MusicBrainz lookups are enabled by default. Requests contain up to two artist names and two allowlisted genre tags. Those services can see the queries and your connection's IP address, but Deviload does not upload your listening history, create an account, send a user identifier or submit scrobbles. Turn the source off in music settings to stop new requests; it is also disabled during private sessions, while offline and on connections that report data-saving mode. Lyrics and ordinary music playback use their own services as described above.
+
+Signing in to Spotify for an import opens Spotify's own sign-in page in a separate window; Deviload keeps only Spotify's session cookie, in `spotify-session.json` in the app data folder, and uses it only to read your song lists from Spotify. The YouTube sign-in reads YouTube Music lists the same way, through the local yt-dlp. Neither is sent anywhere else, included in backups or shown to listening rooms or the phone remote; Sign out deletes it.
+
+Song recognition listens to a few seconds from the microphone, this computer's sound or a chosen file only when you ask it to. The sound is turned into a fingerprint of spectral peaks on your computer, and only that fingerprint goes to Shazam's recognition service, without location or account details; the sound is discarded. To time lyrics, Devil Music does the same once for each recording it plays and for the music video shown beside it: a fingerprint of a few seconds is sent, and the answer (where that sound is in the studio recording) is kept on this computer. This does not happen during a private session.
+
+Daily likes, when turned on, read the newest liked songs of your YouTube Music account through the same local sign-in and change nothing in the account. The OBS overlay page is served by the local control API on this computer only and needs its token.
+
+Casting looks for devices on the local network only (SSDP and mDNS). While casting, a small server on your local network address serves the current song under a random address to the chosen device, and stops when casting ends.
+
+The local control API is off by default. Turned on in music settings, it listens on 127.0.0.1 port 17311 only and needs the token shown there; web pages cannot send it commands. Its settings are kept in `control-api.json`.
 
 Personal mixes and recording choices travel with the music profile in this update. Mixes are limited to eight, each referencing up to eight playlists and retaining up to 100 learned track references; explicit recording choices are limited to 200. Diagnostic reports are exported only on request, exclude track names, links, paths and account data, and are never uploaded automatically.
 

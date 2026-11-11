@@ -26,6 +26,15 @@ import { wireLyricsLines } from "./music-lyrics-desktop.js";
 import { createStatsWindow } from "./music-stats-window.js";
 import { runTour, tourSeen, forgetTour } from "./music-tour.js";
 import { wireMusicYield } from "./music-yield.js";
+import { wireMusicAccount } from "./music-account.js";
+import { createLikesSync, likesSyncControls } from "./music-likes-sync.js";
+import { createRecordingAlign } from "./music-recording-align.js";
+import { groupMusicSettings } from "./music-settings-groups.js";
+import { createNewReleases } from "./music-new-releases.js";
+import { wireMusicControlApi } from "./music-control-api.js";
+import { wireMusicRecognize } from "./music-recognize.js";
+import { createMusicCast, isCasting } from "./music-cast.js";
+import { wireScrobbling } from "./music-scrobble.js";
 import { wireGlassOrb, wireGlassButtons } from "./music-glass.js";
 import { wireResultKeys } from "./music-results-keys.js";
 import { createMusicHomeTiles } from "./music-home-tiles.js";
@@ -33,6 +42,7 @@ import { revealView, cascadeIn, flyFrom } from "./music-transitions.js";
 import { transitionPlan } from "./music-transition-model.js";
 import { createSleepTimer, sleepLabel, SLEEP_MINUTES } from "./music-sleep.js";
 import { musicShortcut } from "./music-shortcuts.js";
+import { wireMusicSpeed } from "./music-speed.js";
 import { createShortcutHelp } from "./music-shortcut-help.js";
 import {
   collectionFacts,
@@ -110,11 +120,11 @@ import { createMusicSound } from "./music-sound.js";
 import { createMusicAmbient } from "./music-ambient.js";
 import { createMusicLyrics } from "./music-lyrics.js";
 
-import { selectTrackRange, smartPlaylists } from "./music-library-model.js";
+import { selectTrackRange, smartPlaylists, folderName, playlistFolders } from "./music-library-model.js";
 import { createWeeklyStats } from "./music-weekly.js";
 import { openArtistPicker } from "./music-artist-picker.js";
 import { wireMusicImport } from "./music-import-ui.js";
-import { mergeMusicImport } from "./music-import-model.js";
+import { mergeMusicImport, createLibraryIndex } from "./music-import-model.js";
 import { enhanceMusicShelves } from "./music-shelf-navigation.js";
 import { createMusicLibrarySidebar } from "./music-library-sidebar.js";
 
@@ -125,7 +135,34 @@ const moods = {
   jazz: "jazz",
   electronic: "electronic night music",
   rock: "rock",
+  fresh: "new music this week",
+  hits: "top hits",
+  workout: "workout music",
+  road: "road trip songs",
 };
+// Mood shelves come back at once: kept for a few hours, and read ahead quietly while the home is open.
+const MOOD_KEY = "deviload-music-moods-v1",
+  MOOD_MS = 6 * 3600000;
+function moodCache(storage) {
+  let table = {};
+  try {
+    const value = JSON.parse(storage?.getItem(MOOD_KEY) || "{}");
+    if (value && typeof value === "object" && !Array.isArray(value)) table = value;
+  } catch {}
+  return {
+    get(key) {
+      const row = table[key];
+      return row && Date.now() - row.at < MOOD_MS && Array.isArray(row.result?.sections) ? row.result : null;
+    },
+    set(key, result) {
+      table[key] = { at: Date.now(), result: { sections: result.sections || [] } };
+      for (const old of Object.keys(table)) if (Date.now() - table[old].at >= MOOD_MS) delete table[old];
+      try {
+        storage?.setItem(MOOD_KEY, JSON.stringify(table));
+      } catch {}
+    },
+  };
+}
 const el = (tag, cls, text) => {
   const node = document.createElement(tag);
   node.className = cls;
@@ -187,6 +224,9 @@ function playableCover(item, glyph = "play", size = 320) {
 export function createMusic({ invoke, onDownload, storage }) {
   const diagnostics = createMusicDiagnostics();
   const loadArtistCatalog = createArtistCatalog(invoke);
+  const newReleases = createNewReleases({ loadArtist: loadArtistCatalog, storage });
+  const moodShelves = moodCache(storage);
+  let moodsAhead = false;
   const decks = createMusicDecks();
   let audio = decks.current;
   document.body.append(...decks.nodes);
@@ -458,7 +498,10 @@ export function createMusic({ invoke, onDownload, storage }) {
   artist.type = "button";
   artist.addEventListener("click", () => showArtist(current));
   const artistLine = el("span", "music-dock-artist-line");
-  artistLine.append(artist);
+  // A file on this device stored without loss (FLAC, ALAC, WAV) says so beside the artist.
+  const losslessBadge = el("span", "music-lossless", t("Lossless"));
+  losslessBadge.hidden = true;
+  artistLine.append(artist, losslessBadge);
   const changeSource = button(
     t("Choose track version"),
     "music-notes",
@@ -469,6 +512,8 @@ export function createMusic({ invoke, onDownload, storage }) {
   changeSource.hidden = true;
   onLanguageChange(() => {
     changeSource.textContent = changeSource.title = changeSource.ariaLabel = t("Choose track version");
+    losslessBadge.textContent = t("Lossless");
+    losslessBadge.title = t("Lossless audio: FLAC, ALAC or WAV on this device");
   });
   info.append(title, artistLine, changeSource);
   const like = button(t("Like this song"), null, toggleLike, "music-icon-button music-like");
@@ -611,11 +656,31 @@ export function createMusic({ invoke, onDownload, storage }) {
       closeQueue();
     }
   });
+  const align = createRecordingAlign({ invoke, storage });
+  let heardSource = null;
   const presentation = createNowPlaying({
     invoke,
     language,
     getAudio: () => audio,
     getLatency: () => sound.latency(),
+    // The music video in step with the song even when its intro is longer: both are measured against the studio
+    // recording, and the picture follows the difference.
+    clipOffset: clipId => {
+      const song = align.value(heardSource),
+        picture = align.value(clipId);
+      return song == null || picture == null ? 0 : song - picture;
+    },
+    onClip: clipId => {
+      if (!clipId || clipId === heardSource || align.known(clipId) || privateSession || !current) return;
+      const song = current;
+      invoke("music_stream", { id: clipId, preload: true })
+        .then(result =>
+          result?.url
+            ? align.measure(clipId, { address: result.url, title: song.title, artists: song.artists })
+            : 0,
+        )
+        .catch(() => {});
+    },
     audios: decks.nodes,
     convertFileSrc: path => window.__TAURI__.core.convertFileSrc(path),
     dock,
@@ -665,6 +730,7 @@ export function createMusic({ invoke, onDownload, storage }) {
         saved.interestMixes = interestMixes;
         interestPool = null;
         invalidateRecommendations();
+        librarySidebar?.refresh();
         return true;
       } catch (error) {
         status(errorText(error), true);
@@ -702,7 +768,12 @@ export function createMusic({ invoke, onDownload, storage }) {
     button,
     notify: status,
     getAudio: () => audio,
-    onRateChange: () => miniPlayer?.sync(),
+    onRateChange: () => {
+      miniPlayer?.sync();
+      dispatchEvent(new Event("music-rate-change"));
+    },
+    invoke,
+    canSkip: () => !musicRoom?.isGuest(),
   });
   const orb = wireGlassOrb(dock.querySelector(".music-play-button"));
   wireGlassButtons();
@@ -718,6 +789,25 @@ export function createMusic({ invoke, onDownload, storage }) {
       orb.energy(levels?.[0]);
     },
   });
+  // Which upload of the song is heard, and how far it is shifted from the studio recording the lyrics are timed
+  // on. Measured once per upload a few seconds into playback; another version of the song brings its own.
+  const measureHeard = event => {
+    const node = event.target;
+    if (
+      node !== audio ||
+      !heardSource ||
+      privateSession ||
+      align.known(heardSource) ||
+      node.paused ||
+      node.currentTime < 4 ||
+      !(node.duration - node.currentTime > 15) ||
+      !current
+    )
+      return;
+    const key = heardSource;
+    align.measure(key, { audio: node, title: current.title, artists: current.artists }).catch(() => {});
+  };
+  document.addEventListener("timeupdate", measureHeard, true);
   const lyrics = createMusicLyrics({
     invoke,
     button,
@@ -725,6 +815,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     getAudio: () => audio,
     getLatency: () => sound.latency(),
     isPrivate: () => privateSession,
+    getShift: () => align.shift(heardSource),
   });
   // One Lyrics button: it shows the words wherever the player is, in the full player, the Now Playing
   // panel, or by opening the full player.
@@ -803,10 +894,11 @@ export function createMusic({ invoke, onDownload, storage }) {
     for (const node of decks.nodes)
       for (const name of ["playing", "timeupdate"]) node.addEventListener(name, () => level(node));
   }
-  // Optional pause while another app plays sound; the choices live under Playback in music settings.
+  // Optional pause while another app plays sound; a top-level choice in music settings, after Discord.
   wireMusicYield({
     invoke,
-    host: $("music-playback-settings"),
+    host: $("music-preferences"),
+    before: $("music-private-session").closest(".music-catalog-context"),
     audios: decks.nodes,
     isPlaying: () => !!current && !audio.paused,
     pause: () => {
@@ -815,6 +907,65 @@ export function createMusic({ invoke, onDownload, storage }) {
     play: () => {
       if (audio.paused && !streamLoading) togglePlay();
     },
+    notify: message => status(message),
+  });
+  // The person's own YouTube sign-in, used only when YouTube limits or refuses guest playback.
+  // New likes in YouTube Music come over to Liked songs once a day when the person asks for it.
+  const likesSync = createLikesSync({
+    invoke,
+    storage,
+    notify: (message, error) => status(message, error),
+    add: async entries => addFavorites(entries),
+  });
+  wireMusicAccount({
+    invoke,
+    host: $("music-preferences"),
+    before: $("music-private-session").closest(".music-catalog-context"),
+    addons: { youtube: likesSyncControls(likesSync) },
+  });
+  likesSync.maybe();
+  setInterval(() => likesSync.maybe(), 3600000);
+  // "What's playing?" from the microphone, beside the search it fills in.
+  // Liking a song found by recognition: its best catalog match goes to Liked songs.
+  const recognizer = wireMusicRecognize({
+    invoke,
+    form: $("music-search"),
+    input: $("music-query"),
+    notify: (message, error) => status(message, error),
+    like: async song => {
+      const result = await invoke("music_catalog", {
+        kind: "search",
+        value: `${song.title} ${song.artist}`.slice(0, 120),
+        filter: "songs",
+        language: language(),
+      });
+      const found = (result?.sections || [])
+        .flatMap(section => section.items || [])
+        .find(item => item?.kind === "song");
+      if (!found) return false;
+      const track = sanitizeMusicTrack(found);
+      if (saved.favorites.some(value => value.id === track.id)) return true;
+      if (!changeFavorite(track)) return false;
+      syncDock();
+      return true;
+    },
+  });
+  // An opt-in API on this computer for overlays, Stream Deck and scripts.
+  wireMusicControlApi({
+    invoke,
+    host: $("music-preferences"),
+    before: $("music-private-session").closest(".music-catalog-context"),
+    notify: (message, error) => status(message, error),
+  });
+  // Optional scrobbling to the person's own ListenBrainz or Last.fm profile.
+  wireScrobbling({
+    invoke,
+    host: $("music-preferences"),
+    before: $("music-profile"),
+    nodes: decks.nodes,
+    getAudio: () => audio,
+    getTrack: () => current,
+    isPrivate: () => privateSession,
     notify: message => status(message),
   });
   const sleep = createSleepTimer({
@@ -902,7 +1053,8 @@ export function createMusic({ invoke, onDownload, storage }) {
     () => localLibrary.open(),
     "outline small music-settings-open",
   );
-  localOpen.append(el("span", "", t("Add local music")));
+  // A short name fits the narrow library column; the full one stays for the tooltip and screen readers.
+  localOpen.append(el("span", "", t("Add files")));
   document.querySelector(".music-heading-actions").prepend(localOpen);
   $("music-discovery").value = taste.mode;
   $("music-public-discovery").checked = saved.publicDiscovery !== false;
@@ -942,6 +1094,9 @@ export function createMusic({ invoke, onDownload, storage }) {
     invoke,
     button,
     storage,
+    // Songs already saved are matched from the library instead of searched again.
+    library: () =>
+      createLibraryIndex([...saved.favorites, ...(saved.playlists || []).flatMap(list => list.items || [])]),
     commit: async (batch, options) => {
       captureListening();
       const result = mergeMusicImport(saved, taste, batch, options);
@@ -1365,6 +1520,8 @@ export function createMusic({ invoke, onDownload, storage }) {
       ...(retryAlternate ? { retryAlternate: true } : {}),
     });
     diagnostics.record(preload ? "preload" : "resolve", "ready");
+    // The recording actually played, which is what community marks for skipping parts refer to.
+    if (result && typeof result === "object") result.sourceId = sourceId;
     return result;
   }
   async function showOffline() {
@@ -1573,6 +1730,24 @@ export function createMusic({ invoke, onDownload, storage }) {
       },
     });
   }
+  // Every song of a playlist into downloads in one go, so the playlist plays without a connection.
+  async function downloadPlaylist(list) {
+    const items = tracks(list.items || [])
+      .filter(item => !isLocalMusicId(item.id))
+      .map(item => resolveRecordingSource(item, saved.sourceBindings));
+    if (!items.length) return;
+    try {
+      if (!onDownload) throw new Error(t("Open the installed Deviload app to download."));
+      const count = await onDownload(items);
+      status(
+        count
+          ? t("Added to downloads: {count} songs. They will play offline once downloaded.", { count })
+          : t("These links are already in the queue."),
+      );
+    } catch (error) {
+      status(errorText(error), true);
+    }
+  }
   async function downloadTrack(item) {
     if (!item || isLocalMusicId(item.id) || downloadsPending.has(item.id)) return;
     downloadsPending.add(item.id);
@@ -1614,6 +1789,7 @@ export function createMusic({ invoke, onDownload, storage }) {
   }
   function syncDock() {
     dock.hidden = !current && document.querySelector("main").dataset.page !== "music";
+    losslessBadge.hidden = !current?.lossless;
     ambient.update();
     if (dock.hidden && queueOpen) {
       queueOpen = false;
@@ -1688,6 +1864,36 @@ export function createMusic({ invoke, onDownload, storage }) {
     syncDock();
     if (view === "favorites") showLocal("favorites");
   }
+  // Several songs at once into Liked songs, newest first, leaving the page where it is. Returns how many were new.
+  function addFavorites(entries) {
+    const known = new Set(saved.favorites.map(value => value.id));
+    const fresh = tracks(
+      entries.flatMap(entry => {
+        try {
+          return [
+            sanitizeMusicTrack({
+              kind: "song",
+              id: entry.videoId,
+              title: entry.title,
+              artists: entry.artists,
+              subtitle: (Array.isArray(entry.artists) ? entry.artists : []).join(", "),
+              image: entry.image,
+            }),
+          ];
+        } catch {
+          return [];
+        }
+      }),
+    ).filter(item => !known.has(item.id));
+    if (!fresh.length) return 0;
+    const favorites = [...fresh, ...saved.favorites];
+    saveMusicProfile(storage, { ...saved, favorites }, taste);
+    saved.favorites = favorites;
+    invalidateRecommendations();
+    syncDock();
+    if (view === "favorites") showLocal("favorites");
+    return fresh.length;
+  }
   function changeFavorite(item) {
     const favorites = saved.favorites.some(value => value.id === item.id)
       ? saved.favorites.filter(value => value.id !== item.id)
@@ -1700,6 +1906,27 @@ export function createMusic({ invoke, onDownload, storage }) {
     } catch (error) {
       status(errorText(error), true);
       return false;
+    }
+  }
+  // A like changes the song's hearts and its menu entry, not the page. Re-rendering the whole list reset its
+  // scroll, so the liked song seemed to jump away.
+  function showLike(item) {
+    const liked = saved.favorites.some(value => value.id === item.id),
+      label = liked ? t("Remove from liked songs") : t("Like this song"),
+      before = liked ? t("Like this song") : t("Remove from liked songs");
+    for (const row of document.querySelectorAll(".music-track-row")) {
+      if (row.dataset.trackId !== item.id) continue;
+      for (const heart of row.querySelectorAll(".music-like")) {
+        heart.textContent = liked ? "♥" : "♡";
+        heart.setAttribute("aria-pressed", String(liked));
+      }
+      for (const option of row.querySelectorAll(".music-track-options button"))
+        if (option.getAttribute("aria-label") === before) {
+          option.setAttribute("aria-label", label);
+          if (option.title) option.title = label;
+          const text = option.querySelector(".music-menu-label");
+          if (text) text.textContent = label;
+        }
     }
   }
   function toggleShuffle() {
@@ -2665,7 +2892,8 @@ export function createMusic({ invoke, onDownload, storage }) {
             : null,
       };
       if (prepared && audio.currentSrc === audio.src) rememberMediaDuration();
-      sound.setSource(audio, offlineSource);
+      sound.setSource(audio, offlineSource, result.sourceId);
+      heardSource = offlineSource || localResult ? null : result.sourceId || null;
       resolvedTrack = current.id;
       playbackStage = "start";
       diagnostics.record("start", "ready");
@@ -3084,7 +3312,10 @@ export function createMusic({ invoke, onDownload, storage }) {
     clock.sample(
       audio.currentTime,
       at,
-      !audio.paused && !audio.seeking && audio.readyState >= 3 && audio.volume > 0 && !audio.muted,
+      !audio.paused &&
+        !audio.seeking &&
+        audio.readyState >= 3 &&
+        (isCasting() || (audio.volume > 0 && !audio.muted)),
     );
   }
   decks.listen("playing", () => {
@@ -3173,9 +3404,10 @@ export function createMusic({ invoke, onDownload, storage }) {
           finish();
           return;
         }
+        // Stalled again after the automatic reopen: try an equivalent recording or say so, never freeze in silence.
         if (recoveryUsed) {
           finish();
-          if (endSource?.alternateRetry) failPlayback("timeout");
+          failPlayback("timeout");
           return;
         }
         if (!resolvedOffline) {
@@ -3202,7 +3434,7 @@ export function createMusic({ invoke, onDownload, storage }) {
           transportFault: !resolvedOffline,
         });
       },
-      depleted ? 2500 : 20000,
+      depleted && !recoveryUsed ? 2500 : 20000,
     );
     bufferingTimer = timer;
   }
@@ -3401,7 +3633,10 @@ export function createMusic({ invoke, onDownload, storage }) {
     const seconds = clock.sample(
       audio.currentTime,
       performance.now(),
-      !audio.paused && !audio.seeking && audio.readyState >= 3 && audio.volume > 0 && !audio.muted,
+      !audio.paused &&
+        !audio.seeking &&
+        audio.readyState >= 3 &&
+        (isCasting() || (audio.volume > 0 && !audio.muted)),
     );
     if (seconds >= 30 && seconds - checkpoint >= 15) {
       checkpoint = seconds;
@@ -3494,6 +3729,8 @@ export function createMusic({ invoke, onDownload, storage }) {
     view = next;
     musicSearch?.sync(next === "search" && !activeMood ? lastQuery.value : "");
     $("music-home-hero").hidden = next !== "home";
+    // The home already greets and names each shelf; a page title above "For you" only repeated it.
+    $("music-heading").hidden = next === "home";
     $("music-moods").hidden = next !== "home" && !(next === "search" && activeMood);
     document.querySelectorAll("[data-music-view]").forEach(b => {
       const selected = b.dataset.musicView === (["playlist", "interest"].includes(next) ? "library" : next);
@@ -3829,6 +4066,7 @@ export function createMusic({ invoke, onDownload, storage }) {
             [t("Edit playlist"), "pencil-simple", () => library.rename(playlist.id)],
             ...(hasTracks
               ? [
+                  [t("Download for offline"), "download-simple", () => downloadPlaylist(playlist)],
                   [t("Create interest mix"), "music-notes", () => interestUI.edit(null, playlist.id)],
                   [t("Review similar tracks"), "copy", () => library.duplicates(playlist.id)],
                   [
@@ -3917,10 +4155,20 @@ export function createMusic({ invoke, onDownload, storage }) {
         art.replaceChildren(playableCover(best));
         // Video results have wide YouTube frames; a square would cut their sides off.
         if (/^https:\/\/i\.ytimg\.com\//.test(best.image || "")) art.classList.add("is-wide");
+        // The artist under a top song opens the artist page, as it does in every song row and card.
+        const byline =
+          best.kind !== "artist" && best.artists?.length
+            ? button(
+                displaySubtitle(best),
+                null,
+                () => showArtist(best),
+                "music-artist-link music-best-artist",
+              )
+            : el("p", "", displaySubtitle(best));
         copy.append(
           el("span", "music-eyebrow", t("Top result")),
           el("h2", "", best.title),
-          el("p", "", displaySubtitle(best)),
+          byline,
           button(
             best.kind === "song" ? t("Play") : t("Open {title}", { title: best.title }),
             best.kind === "song" ? "play" : "arrow-right",
@@ -4130,7 +4378,7 @@ export function createMusic({ invoke, onDownload, storage }) {
           if (changeFavorite(item)) {
             syncDock();
             if (view === "favorites") showLocal(view);
-            else render();
+            else showLike(item);
           }
         },
       ],
@@ -4173,11 +4421,43 @@ export function createMusic({ invoke, onDownload, storage }) {
     return [
       [t("Open {title}", { title: list.name }), "arrow-right", () => showPlaylist(list.id)],
       ...(list.items?.length ? [[t("Play"), "play", () => playItems(list.items)]] : []),
+      ...(list.items?.some(item => !isLocalMusicId(item.id))
+        ? [[t("Download for offline"), "download-simple", () => downloadPlaylist(list)]]
+        : []),
       null,
       [list.pinned ? t("Unpin playlist") : t("Pin playlist"), "push-pin", () => library.pin(list.id)],
       [t("Edit playlist"), "pencil-simple", () => library.rename(list.id)],
       null,
+      ...folderMoves(list),
+      null,
       [t("Delete playlist"), "trash", () => library.remove(list.id)],
+    ];
+  }
+  // Moving a playlist between folders from its menu; the folder list stays short.
+  function folderMoves(list) {
+    const current = folderName(list.folder).toLocaleLowerCase();
+    const others = playlistFolders(saved.playlists)
+      .folders.filter(folder => folder.key !== current)
+      .slice(0, 6);
+    return [
+      ...others.map(folder => [
+        t("Move to {folder}", { folder: folder.name }),
+        "folders",
+        () => library.setFolder(list.id, folder.name),
+      ]),
+      [t("New folder…"), "folder-open", () => library.newFolder(list.id)],
+      ...(current ? [[t("Remove from folder"), "x-circle", () => library.setFolder(list.id, "")]] : []),
+    ];
+  }
+  function folderActions(name) {
+    const key = folderName(name).toLocaleLowerCase(),
+      lists = saved.playlists.filter(list => folderName(list.folder).toLocaleLowerCase() === key),
+      seen = new Set(),
+      items = lists.flatMap(list => list.items || []).filter(item => !seen.has(item.id) && seen.add(item.id));
+    return [
+      ...(items.length ? [[t("Play folder"), "play", () => playItems(items)]] : []),
+      [t("Rename folder"), "pencil-simple", () => library.renameFolder(name)],
+      [t("Ungroup folder"), "folder-open", () => library.ungroup(name)],
     ];
   }
   function showContextMenu(entries, x, y) {
@@ -4216,6 +4496,8 @@ export function createMusic({ invoke, onDownload, storage }) {
       queued = track && queue.find(item => item.id === track);
     if (queued) return songActions(queued);
     if (target.closest(".music-dock .music-now") && current) return songActions(current);
+    const folder = target.closest(".music-library-folder-head")?.dataset.folder;
+    if (folder) return folderActions(folder);
     const listId =
         target.closest(".music-library-nav-item")?.dataset.collection ||
         target.closest(".music-playlist-tile")?.dataset.playlistId,
@@ -4246,9 +4528,26 @@ export function createMusic({ invoke, onDownload, storage }) {
         action.append(el("span", "music-menu-label", action.getAttribute("aria-label")));
       }
     };
+    // The actions open in the window's top layer: a card that is moved or clipped (a shelf, a tilted cover) would
+    // otherwise place them relative to itself, off the screen or cut away.
+    options.popover = "auto";
+    let dismissedAt = 0;
+    options.addEventListener("toggle", event => {
+      if (event.newState !== "closed" || !menu.open) return;
+      dismissedAt = performance.now();
+      menu.open = false;
+    });
+    // A click on the button that just closed the menu by clicking outside it must not open it again.
+    summary.addEventListener("click", event => {
+      if (performance.now() - dismissedAt < 300) event.preventDefault();
+    });
     menu.addEventListener("toggle", () => {
-      if (!menu.open) return;
+      if (!menu.open) {
+        if (options.matches?.(":popover-open")) options.hidePopover();
+        return;
+      }
       prepare();
+      if (!options.matches?.(":popover-open")) options.showPopover?.();
       const rect = summary.getBoundingClientRect();
       // Keep every action between the sticky application header and the player.
       // A long menu scrolls inside this space instead of hiding its first rows.
@@ -4328,6 +4627,11 @@ export function createMusic({ invoke, onDownload, storage }) {
     );
     const text = el("span", "music-track-copy");
     text.append(el("strong", "", item.title));
+    if (item.lossless) {
+      const badge = el("span", "music-lossless", t("Lossless"));
+      badge.title = t("Lossless audio: FLAC, ALAC or WAV on this device");
+      text.append(badge);
+    }
     select.replaceChildren(
       el("span", "music-track-number", String(position + 1).padStart(2, "0")),
       ...(albumRow ? [] : [playableCover(item, "play", 96)]),
@@ -4351,7 +4655,7 @@ export function createMusic({ invoke, onDownload, storage }) {
         if (!changeFavorite(item)) return;
         syncDock();
         if (view === "favorites") showLocal(view);
-        else render();
+        else showLike(item);
       },
       "music-icon-button music-like",
     );
@@ -4432,8 +4736,34 @@ export function createMusic({ invoke, onDownload, storage }) {
     $("music-shelves").replaceChildren(grid);
   }
   let coverFlight = null;
+  // Once a session, a few seconds after the home opens: the mood shelves not kept yet, one at a time.
+  function readMoodsAhead() {
+    if (moodsAhead || !invoke || navigator.connection?.saveData) return;
+    moodsAhead = true;
+    setTimeout(async () => {
+      for (const [mood, query] of Object.entries(moods)) {
+        const key = [mood, language()].join("|");
+        if (moodShelves.get(key)) continue;
+        try {
+          const result = await invoke("music_catalog", {
+            kind: "search",
+            value: query,
+            params: "",
+            language: language(),
+            filter: searchFilter,
+          });
+          if (result?.sections?.some(section => section.items?.length)) moodShelves.set(key, result);
+        } catch {
+          return;
+        }
+        await new Promise(resolve => setTimeout(resolve, 700));
+      }
+    }, 5000);
+  }
   async function load(kind, value = "", heading = "", refresh = false, params = "") {
     const retainHome = kind === "home" && view === "home" && lastQuery.kind === "home" && sections.length > 0;
+    const moodKey = kind === "search" && activeMood ? [activeMood, language()].join("|") : "",
+      moodReady = moodKey && !refresh ? moodShelves.get(moodKey) : null;
     rememberNavigation({
       type: "catalog",
       kind,
@@ -4461,8 +4791,8 @@ export function createMusic({ invoke, onDownload, storage }) {
       kind === "home" ? t("PRESS PLAY") : kind === "search" ? t("SEARCH") : t("EXPLORE");
     loading = true;
     $("music-refresh").disabled = true;
-    status(retainHome ? "" : t("Finding your music…"));
-    if (!retainHome) skeleton();
+    status(retainHome || moodReady ? "" : t("Finding your music…"));
+    if (!retainHome && !moodReady) skeleton();
     try {
       if (!invoke) throw new Error(t("Open Deviload to browse and play music."));
       const artistPage =
@@ -4470,17 +4800,21 @@ export function createMusic({ invoke, onDownload, storage }) {
       const result =
         kind === "home"
           ? { sections: [] }
-          : artistPage
-            ? await loadArtistCatalog(browseItem, language(), refresh)
-            : await invoke("music_catalog", {
-                kind,
-                value,
-                params,
-                language: language(),
-                filter: searchFilter,
-              });
+          : moodReady
+            ? moodReady
+            : artistPage
+              ? await loadArtistCatalog(browseItem, language(), refresh)
+              : await invoke("music_catalog", {
+                  kind,
+                  value,
+                  params,
+                  language: language(),
+                  filter: searchFilter,
+                });
       if (token !== request) return;
       if (kind === "home") homeCache = result;
+      if (moodKey && !moodReady && result.sections?.some(section => section.items?.length))
+        moodShelves.set(moodKey, result);
       continuation = result.continuation || null;
       if (!retainHome)
         sections =
@@ -4522,7 +4856,10 @@ export function createMusic({ invoke, onDownload, storage }) {
         const first = tracks(sections.flatMap(section => section.items))[0];
         if (first) intent.enter(first.id);
       }
-      if (kind === "home") personalize(token, result.sections);
+      if (kind === "home") {
+        personalize(token, result.sections);
+        readMoodsAhead();
+      }
     } catch (error) {
       if (token !== request) return;
       if (kind === "search") musicSearch?.allowRetry();
@@ -4756,11 +5093,16 @@ export function createMusic({ invoke, onDownload, storage }) {
     discoveryCandidates = items;
     sections = homeSections(base, items);
     if (!personal && items.length) sections[0].title = t("Explore with ListenBrainz");
-    if (albums.length)
-      sections.splice(items.length ? 1 : 0, 0, {
+    // Albums already on the new releases shelf are not repeated on the one after it.
+    const fresh = new Set(newReleases.cached(followedArtists(), language()).map(item => item.id)),
+      older = albums.filter(item => !fresh.has(item.id));
+    if (older.length) {
+      const releases = sections.findIndex(section => section.title === t("New from artists you follow"));
+      sections.splice(releases >= 0 ? releases + 1 : items.length ? 1 : 0, 0, {
         title: t("Albums from artists you follow"),
-        items: albums.slice(0, 12),
+        items: older.slice(0, 12),
       });
+    }
     render();
     prepareHomeSelection();
   }
@@ -4769,9 +5111,43 @@ export function createMusic({ invoke, onDownload, storage }) {
     const first = current || tracks(sections.flatMap(section => section.items))[0];
     if (first) intent.enter(first.id);
   }
+  const followedArtists = () => (saved.collections || []).filter(item => item.kind === "artist");
+  let releasesLoading = false;
+  // New albums and singles from followed artists: the last shelf at once, a fresh one when it is ready.
+  function refreshReleases() {
+    if (releasesLoading || !followedArtists().length) return;
+    releasesLoading = true;
+    newReleases
+      .load(followedArtists(), language())
+      .then(items => {
+        if (view !== "home") return;
+        const title = t("New from artists you follow"),
+          shelf = sections.find(section => section.title === title);
+        if ((shelf?.items || []).map(item => item.id).join() === items.map(item => item.id).join()) return;
+        const ids = new Set(items.map(item => item.id));
+        sections = sections
+          .filter(section => section.title !== title)
+          .map(section =>
+            section.title === t("Albums from artists you follow")
+              ? { ...section, items: section.items.filter(item => !ids.has(item.id)) }
+              : section,
+          )
+          .filter(section => section.items.length);
+        if (items.length) {
+          const after = sections.findIndex(section => section.title === t("For you"));
+          sections.splice(after + 1, 0, { title, items });
+        }
+        render();
+      })
+      .catch(() => {})
+      .finally(() => (releasesLoading = false));
+  }
   function homeSections(base, personal = []) {
     const result = [];
     if (personal.length) result.push({ title: t("For you"), items: personal });
+    const releases = newReleases.cached(followedArtists(), language());
+    if (releases.length) result.push({ title: t("New from artists you follow"), items: releases });
+    Promise.resolve().then(refreshReleases);
     if (saved.recent.length) result.push({ title: t("Recently played"), items: saved.recent.slice(0, 12) });
     // Cached or imported regional catalog sections must never enter discovery.
     return result;
@@ -5012,6 +5388,12 @@ export function createMusic({ invoke, onDownload, storage }) {
       else $("music-expand")?.click();
     },
     help: () => shortcutHelp.open(),
+    recognize: () => recognizer.listen(),
+    refresh: () => {
+      if (!$("music-refresh").disabled) $("music-refresh").click();
+    },
+    slower: () => quickSpeed.slower(),
+    faster: () => quickSpeed.faster(),
   };
   document.addEventListener("keydown", event => {
     if (
@@ -5092,10 +5474,8 @@ export function createMusic({ invoke, onDownload, storage }) {
     offlineTab.textContent = t("Downloaded music");
     offlineTab.title = t("Downloaded music");
     offlineTab.setAttribute("aria-label", t("Downloaded music"));
-    localOpen.querySelector("span:not(.icon)").textContent =
-      localOpen.title =
-      localOpen.ariaLabel =
-        t("Add local music");
+    localOpen.querySelector("span:not(.icon)").textContent = t("Add files");
+    localOpen.title = localOpen.ariaLabel = t("Add local music");
     const labels = { all: "All results", songs: "Songs", albums: "Albums", artists: "Artists" };
     for (const node of filters.children) {
       const label = t(labels[node.dataset.filter]);
@@ -5155,6 +5535,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     },
     summary: () => ({ ...weekly.summary(), days: weekly.daily() }),
     cover,
+    onMoveToFolder: (id, folder) => library.setFolder(id, folder),
     button,
   });
   // The listening summary opens into "Your week in music".
@@ -5307,12 +5688,19 @@ export function createMusic({ invoke, onDownload, storage }) {
       }
     },
   });
+  // Casting to a TV or speaker; the player here keeps time silently.
+  const cast = createMusicCast({
+    invoke,
+    button,
+    decks,
+    getState: playerState,
+    notify: (message, error) => status(message, error),
+  });
   wireMusicConnectionShortcuts(button, librarySidebar.stats);
   const shortcutsOpen = button(t("Keyboard shortcuts"), "keyboard", () => shortcutHelp.open());
   onLanguageChange(() => {
     shortcutsOpen.title = shortcutsOpen.ariaLabel = t("Keyboard shortcuts");
   });
-  const layoutOpen = button(t("Edit layout"), "squares-four", () => musicLayout?.edit());
   desktopItem = button(t("Lyrics on the desktop"), "monitor", () =>
     lyricLines.toggle().catch(error => status(errorText(error))),
   );
@@ -5320,26 +5708,28 @@ export function createMusic({ invoke, onDownload, storage }) {
   onLanguageChange(() => {
     desktopItem.title = desktopItem.ariaLabel = t("Lyrics on the desktop");
   });
-  onLanguageChange(() => {
-    layoutOpen.title = layoutOpen.ariaLabel = t("Edit layout");
-  });
+  // Quick speed: common speeds in More, a badge beside it when the speed is not normal, and [ and ].
+  const quickSpeed = wireMusicSpeed({ sound, button, notify: message => status(message) });
   wireMusicDockMenu({
     extras,
     button,
     workspace: $("devil-music"),
-    direct: [$("music-expand"), $("music-clip-open")],
-    shortcuts: [
-      { source: $("music-mini-open"), glyph: "arrows-in" },
-      { source: $("music-remote-open"), glyph: "phone-remote" },
-    ],
+    direct: [$("music-expand"), $("music-clip-open"), quickSpeed.badge, cast.badge],
+    // The mini player and the phone remote live in the menu only: each action has one place, and the dock keeps
+    // what is used during a song.
+    shortcuts: [],
     items: [
+      quickSpeed.row,
       saveToPlaylist,
       soundButton,
       sleepButton,
       downloadButton,
+      el("div", "music-dock-menu-sep"),
       ...["music-mini-open", "music-room-open", "music-remote-open"].map($),
+      cast.trigger,
+      el("div", "music-dock-menu-sep"),
       desktopItem,
-      layoutOpen,
+      // Edit layout lives in the Themes menu only.
       shortcutsOpen,
     ],
   });
@@ -5466,6 +5856,11 @@ export function createMusic({ invoke, onDownload, storage }) {
       (note || preferences).after ? note.after(replay) : preferences.append(replay);
       onLanguageChange(() => {
         replay.lastChild.textContent = t("Show the tour again");
+      });
+      // Under plain headings; again on every opening, for blocks added later.
+      groupMusicSettings(preferences);
+      preferences.addEventListener("toggle", () => {
+        if (preferences.open) groupMusicSettings(preferences);
       });
     }
   }

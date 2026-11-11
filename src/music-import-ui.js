@@ -1,6 +1,6 @@
 import { t, language, errorText } from "./i18n.js";
 import { parseMusicImport } from "./music-import-format.js";
-import { resolveMusicImportLibrary, readPlaylistLink } from "./music-import-resolver.js";
+import { resolveMusicImportLibrary, readPlaylistLink, createMatchMemory } from "./music-import-resolver.js";
 import { readImportDraft, writeImportDraft, clearImportDraft } from "./music-import-session.js";
 import { showTip } from "./music-tour.js";
 const el = (tag, cls, text) => {
@@ -9,7 +9,20 @@ const el = (tag, cls, text) => {
   if (text != null) node.textContent = text;
   return node;
 };
-export function wireMusicImport({ invoke, button, commit, storage = window.localStorage }) {
+// Seconds as m:ss for the reading timer.
+export const formatElapsed = seconds => {
+  const whole = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+};
+
+export function wireMusicImport({
+  invoke,
+  button,
+  commit,
+  storage = window.localStorage,
+  library = () => null,
+}) {
+  const matchMemory = createMatchMemory(storage);
   function open() {
     const modal = el("dialog", "music-import-dialog"),
       head = el("header", "music-library-dialog-head"),
@@ -43,6 +56,7 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
         setBatch(draft.batch);
         name.value = draft.name || draft.batch.name;
         destination.value = draft.destination;
+        syncDestination();
         subset.value = draft.subset;
         if (!subset.value) subset.value = "all";
         use.checked = draft.useForTaste;
@@ -63,7 +77,19 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
         step.hidden = false;
         linkArea.hidden = fileArea.hidden = true;
         stepList.replaceChildren();
-        stepTitle.textContent = t("Resume unfinished import");
+        // The review says where the songs came from; the sign-in and reading are done already.
+        const from =
+          draft.batch.origin === "account"
+            ? SOURCES.find(
+                source => source.account === (draft.batch.source === "spotify" ? "spotify" : "youtube"),
+              )
+            : null;
+        stepHead.firstChild.replaceWith(art(from || { icon: "music-notes" }));
+        stepTitle.textContent = from ? from.title : draft.batch.name || t("Resume unfinished import");
+        accountSource = null;
+        accountArea.hidden = stepList.hidden = true;
+        // Choosing the batch saved the draft before its songs were back; save it again whole.
+        persist();
       },
       "music-primary",
     );
@@ -189,18 +215,43 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
     preview.hidden = true;
     const coverage = el("p", "music-import-coverage");
     coverage.setAttribute("role", "status");
-    const destinationLabel = el("label", "", t("Save songs to")),
-      destination = el("select", "");
+    // Where the songs go: three buttons side by side instead of a list to open.
+    const destinationLabel = el("div", "music-import-field"),
+      destination = el("select", ""),
+      destinationChips = el("div", "music-import-segments");
+    destination.hidden = true;
+    destinationChips.setAttribute("role", "group");
+    destinationChips.setAttribute("aria-label", t("Save songs to"));
     for (const [value, title] of [
-      ["export", t("As in export")],
+      ["export", t("As in the source")],
       ["favorites", t("Liked songs")],
       ["playlist", t("A separate playlist")],
     ]) {
       const option = el("option", "", title);
       option.value = value;
       destination.append(option);
+      const chip = el("button", "music-import-segment", title);
+      chip.type = "button";
+      chip.dataset.value = value;
+      chip.addEventListener("click", () => {
+        if (busy || reading) return;
+        destination.value = value;
+        syncDestination();
+        persist();
+      });
+      destinationChips.append(chip);
     }
-    destinationLabel.append(destination);
+    destinationLabel.append(
+      el("span", "music-import-field-label", t("Save songs to")),
+      destinationChips,
+      destination,
+    );
+    // The name matters only for a separate playlist.
+    function syncDestination() {
+      for (const chip of destinationChips.children)
+        chip.setAttribute("aria-pressed", String(chip.dataset.value === destination.value));
+      nameLabel.hidden = destination.value !== "playlist";
+    }
     const destinationHint = el(
       "p",
       "music-import-caption",
@@ -223,15 +274,45 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
         ),
       );
     const progress = el("progress", "music-import-progress");
-    progress.hidden = true;
     progress.setAttribute("aria-label", t("Find my music"));
+    const meter = el("div", "music-import-meter"),
+      meterText = el("span", "music-import-meter-text");
+    meterText.setAttribute("role", "status");
+    meter.hidden = true;
+    meter.append(meterText, progress);
+    // One tally of the chosen songs: the meter, the review heading and the hint beside Add all read it,
+    // so their numbers tell one story (checked, found, found but to check, not found).
+    const tally = () => {
+      const keys = new Set(chosenEntries().map(entry => entry.key)),
+        mine = rows.filter(row => keys.has(row.entry.key)),
+        found = mine.filter(row => row.item);
+      return {
+        total: keys.size,
+        found: found.length,
+        check: found.filter(row => row.confidence === "review" && !applied.has(row.entry.key)).length,
+        missing: mine.filter(row => !row.item).length,
+        known: found.filter(row => row.known).length,
+      };
+    };
+    const finalMeter = () => {
+      const now = tally();
+      return [
+        t("Found {found} of {total}", { found: now.found, total: now.total }),
+        now.known ? t("{count} already in your library", { count: now.known }) : "",
+        now.check ? t("{count} to check", { count: now.check }) : "",
+        now.missing ? t("{count} not found", { count: now.missing }) : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    };
     async function matchBatch(signal) {
       const ready = new Set([...applied, ...rows.filter(row => row.item).map(row => row.entry.key)]),
         pending = chosenEntries().filter(entry => !ready.has(entry.key));
       rows = rows.filter(row => row.item);
       renderRows();
       review.open = true;
-      progress.hidden = false;
+      meter.hidden = false;
+      meter.classList.add("is-running");
       progress.max = chosenEntries().length;
       const readyCount = chosenEntries().filter(entry => ready.has(entry.key)).length;
       progress.value = readyCount;
@@ -239,9 +320,13 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
         invoke,
         language: language(),
         signal,
+        memory: matchMemory,
+        library: library(),
         onRow: row => {
           rows.push(row);
           showRow(row);
+          // The counts grow with the search, not only at its end.
+          updateSelection();
           if (rows.length % 25 === 0 && performance.now() - lastPersist > 2000) {
             lastPersist = performance.now();
             persist();
@@ -249,12 +334,15 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
         },
         onProgress: done => {
           progress.value = readyCount + done;
-          notice.textContent = t("Matching music: {done} / {total}", {
+          meterText.textContent = t("Searching YouTube Music… checked {done} of {total}, found {found}", {
             done: readyCount + done,
             total: progress.max,
+            found: tally().found,
           });
         },
       });
+      meter.classList.remove("is-running");
+      meterText.textContent = finalMeter();
       showRows();
     }
     const match = button(t("Find my music"), null, () => run(matchBatch), "outline small");
@@ -309,8 +397,12 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
       "music-primary",
     );
     apply.disabled = true;
+    const selectionHint = el("p", "music-import-caption music-import-hint");
+    selectionHint.hidden = true;
+    const review = el("details", "music-import-review-details"),
+      reviewTitle = el("summary", "", "");
     const selectionTools = el("div", "music-import-selection");
-    const selectAll = button(t("Select all"), null, () => setAll(true), "outline small");
+    const selectAll = button(t("Select all"), null, () => setAll(true), "quiet small");
     const clearSelection = button(t("Clear selection"), null, () => setAll(false), "quiet small");
     const selectionCount = el("span", "music-import-selection-count");
     selectionCount.setAttribute("role", "status");
@@ -326,6 +418,7 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
       "quiet small",
     );
     moreRows.hidden = true;
+    review.append(reviewTitle, selectionTools, results, moreRows);
     function renderRows() {
       results.replaceChildren();
       boxes.clear();
@@ -349,8 +442,30 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
       selectAll.disabled = busy || reading || !available.some(row => !selected.has(row));
       clearSelection.disabled = busy || reading || !selected.size;
       apply.disabled = busy || reading || !selected.size;
+      apply.textContent = selected.size
+        ? t("Add {count} songs", { count: selected.size })
+        : t("Add selected songs");
       selectionCount.textContent = t("{count} selected", { count: selected.size });
       moreRows.hidden = rows.length <= shown;
+      const now = tally();
+      reviewTitle.textContent = t("Found songs ({count})", { count: available.length });
+      // Songs marked to check are left unticked: the hint says why Add counts fewer than were found.
+      const unticked = available.filter(row => !selected.has(row)).length;
+      selectionHint.textContent =
+        unticked && now.check
+          ? t("{count} songs marked to check are not selected. Tick them if the version is right.", {
+              count: Math.min(unticked, now.check),
+            })
+          : "";
+      selectionHint.hidden = !selectionHint.textContent;
+      if (!busy && rows.length && !meter.hidden) meterText.textContent = finalMeter();
+      // Search again only for songs still missing; save to a file only what could not be found.
+      const done = new Set([...applied, ...rows.filter(row => row.item).map(row => row.entry.key)]);
+      const missing = batch ? chosenEntries().filter(entry => !done.has(entry.key)).length : 0;
+      match.hidden = !batch || busy || (rows.length > 0 && missing === 0);
+      report.hidden = !rows.some(row => !row.item && !applied.has(row.entry.key));
+      // Once the search has begun, the directions before it have done their job.
+      summary.hidden = matchingNote.hidden = rows.length > 0;
     }
     const report = button(
       t("Save remaining songs"),
@@ -419,7 +534,7 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
       boxes.clear();
       shown = 200;
       updateSelection();
-      progress.hidden = true;
+      meter.hidden = true;
     }
     subset.addEventListener("change", () => {
       refreshSelection();
@@ -429,20 +544,25 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
     function setBatch(value) {
       batch = value;
       completeFile.hidden = value.completeness !== "unknown";
-      coverage.hidden = !value.completeness;
       coverage.textContent =
-        value.completeness === "complete"
-          ? t("Spotify playlist read: {received} / {total} entries. {unavailable} unavailable.", {
-              received: value.receivedCount,
-              total: value.reportedTotal,
-              unavailable: value.unavailableCount || 0,
+        value.origin === "account"
+          ? t("{songs} songs in {lists} lists.", {
+              songs: value.entries.length,
+              lists: value.playlists.length,
             })
-          : value.completeness === "unknown"
-            ? t(
-                "Spotify returned {count} songs in a public preview. The full playlist size is unknown. You can transfer these songs or choose an export file below.",
-                { count: value.entries.length },
-              )
-            : "";
+          : value.completeness === "complete" && Number.isSafeInteger(value.reportedTotal)
+            ? t("Spotify playlist read: {received} / {total} entries. {unavailable} unavailable.", {
+                received: value.receivedCount,
+                total: value.reportedTotal,
+                unavailable: value.unavailableCount || 0,
+              })
+            : value.completeness === "unknown"
+              ? t(
+                  "Spotify returned {count} songs in a public preview. The full playlist size is unknown. You can transfer these songs or choose an export file below.",
+                  { count: value.entries.length },
+                )
+              : "";
+      coverage.hidden = !coverage.textContent;
       applied.clear();
       match.textContent = t("Find my music");
       destination.value =
@@ -463,6 +583,7 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
         subset.append(option);
       });
       subsetLabel.hidden = value.playlists.length <= 1;
+      syncDestination();
       warnings.replaceChildren(...value.warnings.map(message => el("p", "", t(message))));
       refreshSelection();
       notice.textContent = "";
@@ -527,28 +648,41 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
         updateSelection();
         persist();
       });
-      const copy = el("span", "");
+      const copy = el("span", "music-import-result-copy"),
+        cover = el("span", "music-import-thumb"),
+        song = row.item || row.entry;
+      if (row.item?.image) {
+        const image = el("img", "");
+        image.src = row.item.image;
+        image.alt = "";
+        image.loading = "lazy";
+        cover.append(image);
+      }
       copy.append(
-        el("strong", "", row.entry.title || row.entry.videoId),
-        el("small", "", row.entry.artists.join(", ")),
+        el("strong", "", song.title || row.entry.videoId),
+        el("small", "", (song.artists || []).join(", ")),
       );
-      if (row.item) copy.append(el("span", "", row.item.title + " · " + row.item.artists.join(", ")));
-      copy.append(
-        el(
-          "small",
-          row.confidence === "review" ? "music-import-review" : "",
-          applied.has(row.entry.key)
-            ? t("Added")
-            : row.error
-              ? t(row.error)
-              : row.confidence === "exact"
-                ? t("Matched")
-                : row.confidence === "review"
-                  ? t("Check this version before selecting")
-                  : t("No match found"),
-        ),
-      );
-      label.append(box, copy);
+      const plain = value =>
+        String(value || "")
+          .toLocaleLowerCase()
+          .replace(/\s+/g, " ")
+          .trim();
+      if (row.item && plain(row.item.title) !== plain(row.entry.title))
+        copy.append(el("small", "music-import-from", t("From: {title}", { title: row.entry.title })));
+      const status = applied.has(row.entry.key)
+        ? t("Added")
+        : row.error
+          ? t(row.error)
+          : row.confidence === "review"
+            ? t("Check this version before selecting")
+            : row.known
+              ? t("In your library")
+              : row.item
+                ? ""
+                : t("No match found");
+      label.dataset.state = applied.has(row.entry.key) ? "added" : row.item ? row.confidence : "none";
+      label.append(box, cover, copy);
+      if (status) label.append(el("small", "music-import-pill", status));
       results.append(label);
     }
     function showRows() {
@@ -607,6 +741,7 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
         match.textContent = t(rows.length ? "Continue matching missing songs" : "Find my music");
         apply.disabled = !selected.size;
         cancel.hidden = discard.hidden = true;
+        meter.classList.remove("is-running");
         updateSelection();
         persist();
       }
@@ -633,39 +768,35 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
     // Step one: choose where the music comes from. Step two: short directions and the matching field.
     const SOURCES = [
       {
-        key: "spotify",
-        brand: "spotify",
-        title: t("Spotify playlist or album"),
-        text: t("Paste a share link to a public playlist or album."),
-        placeholder: t("Spotify playlist or album link"),
-        steps: [
-          t("Open the playlist or album in Spotify."),
-          t("Click the three dots, then Share, then Copy link."),
-          t("Paste the link below."),
-        ],
-      },
-      {
-        key: "youtube",
+        key: "youtube-account",
         brand: "youtubemusic",
-        title: t("YouTube Music playlist"),
-        text: t("Paste a link to a public YouTube Music or YouTube playlist."),
-        placeholder: t("YouTube Music or YouTube playlist link"),
+        title: t("My YouTube Music library"),
+        text: t("Liked songs and your playlists, read through your YouTube sign-in on this computer."),
+        command: "music_import_youtube_account",
+        account: "youtube",
+        signIn: {
+          status: "youtube_login_status",
+          open: ["open_youtube", { signIn: true }],
+          event: "youtube-session",
+        },
         steps: [
-          t("Open the playlist on YouTube Music or YouTube."),
-          t("Click Share, then Copy."),
-          t("Paste the link below."),
+          t("Sign in to YouTube if you have not yet."),
+          t("Press Read my library. Only song lists are read; nothing changes in your account."),
+          t("Check the matches, then add the songs you want."),
         ],
       },
       {
-        key: "mix",
-        brand: "youtube",
-        title: t("YouTube Mix"),
-        text: t("Keep a Mix as a playlist, up to 100 songs."),
-        placeholder: t("YouTube Mix link"),
+        key: "spotify-account",
+        brand: "spotify",
+        title: t("My Spotify library"),
+        text: t("Liked Songs and your playlists, private ones included, through your own Spotify sign-in."),
+        command: "music_import_spotify_account",
+        account: "spotify",
+        signIn: { status: "spotify_account_status", open: ["spotify_sign_in", {}], event: "spotify-session" },
         steps: [
-          t("Start a Mix on YouTube Music or YouTube."),
-          t("Copy its link from Share or the address bar."),
-          t("Paste it below. The songs are saved as they are now."),
+          t("Sign in to Spotify in the window that opens. Deviload keeps the sign-in on this computer only."),
+          t("Press Read my library. Only song lists are read; nothing changes in your account."),
+          t("Check the matches, then add the songs you want."),
         ],
       },
       {
@@ -682,7 +813,19 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
     ];
     const start = el("section", "music-import-start"),
       cards = el("div", "music-import-cards");
-    start.append(intro, resume, cards);
+    const linkStart = el("div", "music-import-link-start");
+    linkStart.append(el("p", "music-import-or", t("Or paste a link to a playlist, album or Mix")), linkForm);
+    const fileLink = button(
+      t("I have a data export file"),
+      "files",
+      () => {
+        if (busy || reading) return;
+        showStep(SOURCES.find(source => source.key === "file"));
+      },
+      "quiet small music-import-file-link",
+    );
+    fileLink.append(el("span", "", t("I have a data export file")));
+    start.append(intro, resume, cards, linkStart, fileLink);
     const step = el("section", "music-import-step"),
       back = button(
         t("All sources"),
@@ -700,13 +843,122 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
     stepHead.append(el("span", "music-import-art"), stepTitle);
     const linkArea = el("div", "music-import-link-area"),
       fileArea = el("div", "music-import-file-area");
-    linkArea.append(linkForm);
     fileArea.append(sources, guide, pick, file, drop, help);
-    step.append(back, stepHead, stepList, linkArea, fileArea);
+    // Libraries read through the person's own sign-in: no link or file, one button.
+    const accountArea = el("div", "music-import-account-area"),
+      accountState = el("span", "music-import-account-state"),
+      readingBar = el("div", "music-import-meter is-running music-import-reading"),
+      readingText = el("span", "music-import-meter-text"),
+      readingTrack = el("div", "music-import-bar");
+    readingText.setAttribute("role", "status");
+    readingTrack.append(el("span", ""));
+    readingBar.append(readingText, readingTrack);
+    readingBar.hidden = true;
+    let accountSource = null,
+      signedIn = false,
+      readingTimer = null;
+    const signIn = button(
+      t("Sign in"),
+      null,
+      async () => {
+        if (!accountSource) return;
+        try {
+          const [command, args] = accountSource.signIn.open;
+          await invoke(command, args);
+        } catch (error) {
+          notice.textContent = errorText(error);
+        }
+      },
+      "music-account-in",
+    );
+    function showAccount() {
+      accountState.textContent = signedIn ? t("Signed in") : t("Sign-in needed");
+      accountState.dataset.signedIn = String(signedIn);
+      signIn.hidden = signedIn;
+      if (accountSource) {
+        signIn.className = `music-account-in music-account-in-${accountSource.account}`;
+        signIn.textContent =
+          accountSource.account === "spotify" ? t("Sign in with Spotify") : t("Sign in with YouTube");
+      }
+      // Once signed in, the step about signing in is done and steps aside.
+      if (stepList.firstElementChild) stepList.firstElementChild.hidden = signedIn;
+      readAccount.disabled = !signedIn || busy;
+    }
+    async function checkAccount() {
+      const source = accountSource;
+      if (!source) return;
+      try {
+        signedIn = !!(await invoke(source.signIn.status));
+      } catch {
+        signedIn = false;
+      }
+      if (source === accountSource) showAccount();
+    }
+    // A sign-in finished in its own window updates this step; the listeners end with the dialog.
+    const sessionListeners = ["youtube-session", "spotify-session"].map(name =>
+      window.__TAURI__?.event?.listen?.(name, () => {
+        checkAccount();
+        refreshChips();
+      }),
+    );
+    const readAccount = button(
+      t("Read my library"),
+      null,
+      () =>
+        run(async signal => {
+          // A large library takes a minute or two: a moving bar and the time so far show it is still working.
+          const started = performance.now();
+          const tick = () =>
+            (readingText.textContent = t("Reading your library… {time}", {
+              time: formatElapsed((performance.now() - started) / 1000),
+            }));
+          notice.textContent = "";
+          tick();
+          readingBar.hidden = false;
+          readAccount.disabled = true;
+          readingTimer = setInterval(tick, 1000);
+          let value;
+          try {
+            value = await invoke(accountSource.command);
+          } finally {
+            clearInterval(readingTimer);
+            readingTimer = null;
+            readingBar.hidden = true;
+          }
+          if (!Array.isArray(value?.entries) || !Array.isArray(value?.playlists))
+            throw Error("No importable music was found.");
+          const names = {
+            "My YouTube Music library": t("My YouTube Music library"),
+            "Liked music": t("Liked music"),
+            "My Spotify library": t("My Spotify library"),
+            "Liked Songs": t("Liked Songs"),
+          };
+          setBatch({
+            ...value,
+            name: names[value.name] || value.name,
+            playlists: value.playlists.map(list => ({ ...list, name: names[list.name] || list.name })),
+            warnings: Array.isArray(value.warnings) ? value.warnings : [],
+          });
+          stepList.hidden = true;
+          readAccount.textContent = t("Read again");
+          readAccount.className = "quiet small";
+          // A whole library is read to be matched: matching starts at once instead of waiting for another press.
+          if (chosenEntries().length) await matchBatch(signal);
+        }).finally(showAccount),
+      "music-primary",
+    );
+    const accountHead = el("div", "music-import-account-head");
+    accountHead.append(accountState);
+    accountArea.append(accountHead, signIn, readAccount, readingBar);
+    step.append(back, stepHead, stepList, linkArea, fileArea, accountArea);
     step.hidden = true;
     const art = source => {
       const node = el("span", "music-import-art");
-      if (source.brand) {
+      if (source.brand === "youtubemusic" || source.brand === "youtube") {
+        const mark = el("span", `music-import-mark music-import-mark-${source.brand}`);
+        mark.setAttribute("aria-hidden", "true");
+        node.append(mark);
+      } else if (source.brand) {
         const image = el("img", "");
         image.src = `assets/brands/${source.brand}.svg`;
         image.alt = "";
@@ -719,49 +971,68 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
       }
       return node;
     };
-    for (const source of SOURCES) {
+    // A sign-in or sign-out while the dialog is open, and every return to the sources, refreshes the cards' state.
+    const chipUpdates = [];
+    const refreshChips = () => chipUpdates.forEach(update => update());
+    for (const source of SOURCES.filter(source => source.command)) {
       const card = el("button", "music-import-card");
       card.type = "button";
       const copy = el("span", "music-import-card-copy");
-      copy.append(el("strong", "", source.title), el("small", "", source.text));
+      const name = el("strong", "", source.title);
+      copy.append(name, el("small", "", source.text));
+      if (source.signIn) {
+        // The account cards say at a glance whether a sign-in is ready.
+        const chip = el("span", "music-import-chip", "");
+        chip.hidden = true;
+        name.append(chip);
+        const update = () =>
+          Promise.resolve(invoke(source.signIn.status))
+            .then(value => {
+              chip.textContent = value ? t("Signed in") : t("Sign-in needed");
+              chip.dataset.signedIn = String(!!value);
+              chip.hidden = false;
+            })
+            .catch(() => {});
+        chipUpdates.push(update);
+        update();
+      }
       const chevron = el("span", "icon music-import-chevron");
       chevron.dataset.icon = "caret-down";
       chevron.setAttribute("aria-hidden", "true");
       card.append(art(source), copy, chevron);
       card.addEventListener("click", () => showStep(source));
-      if (!cards.childElementCount) card.autofocus = true;
+      if (!cards.querySelector(".music-import-card")) card.autofocus = true;
       cards.append(card);
     }
+
     function showStep(source) {
       start.hidden = true;
       step.hidden = false;
       stepHead.firstChild.replaceWith(art(source));
       stepTitle.textContent = source.title;
       stepList.replaceChildren(...source.steps.map(text => el("li", "", text)));
-      const isFile = source.key === "file";
-      linkArea.hidden = isFile;
+      stepList.hidden = false;
+      readAccount.textContent = t("Read my library");
+      readAccount.className = "music-primary";
+      const isFile = source.key === "file",
+        isAccount = !!source.command;
+      accountSource = isAccount ? source : null;
+      linkArea.hidden = isFile || isAccount;
       fileArea.hidden = !isFile;
+      accountArea.hidden = !isAccount;
       if (isFile) choose(service);
-      else {
+      else if (isAccount) {
+        signedIn = false;
+        showAccount();
+        checkAccount();
+      } else {
         link.placeholder = source.placeholder;
         link.setAttribute("aria-label", source.placeholder);
         requestAnimationFrame(() => link.focus());
       }
-      // The first time, point at the field the directions lead to.
-      if (!isFile)
-        setTimeout(() => {
-          if (!step.hidden)
-            showTip({
-              key: "import-link",
-              target: linkForm,
-              title: t("Paste the link here"),
-              text: t(
-                "Copy the link as the steps above show, paste it here and press Read link. You can check the matches before anything is added.",
-              ),
-            });
-        }, 420);
     }
     function showStart() {
+      refreshChips();
       step.hidden = true;
       preview.hidden = true;
       start.hidden = false;
@@ -771,31 +1042,30 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
       t("Choose an export for the full library"),
       "folder-open",
       () => {
-        showStep(SOURCES[3]);
+        showStep(SOURCES.find(source => source.key === "file"));
         pick.click();
       },
       "outline small",
     );
     completeFile.append(el("span", "", t("Choose an export for the full library")));
     completeFile.hidden = true;
-    const review = el("details", "music-import-review-details");
-    review.append(el("summary", "", t("Review matches")), selectionTools, results, moreRows);
+    const actions = el("div", "music-import-actions");
+    actions.append(apply, report, selectionHint);
     preview.append(
       coverage,
       completeFile,
+      warnings,
       destinationLabel,
       destinationHint,
       nameLabel,
       subsetLabel,
       summary,
-      warnings,
       matchingNote,
       match,
-      progress,
+      meter,
       review,
       useLabel,
-      apply,
-      report,
+      actions,
     );
     body.append(start, step, preview, cancel, discard, notice);
     modal.append(head, body);
@@ -804,6 +1074,7 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
     choose("spotify");
     updateSelection();
     modal.addEventListener("close", () => {
+      for (const listener of sessionListeners) listener?.then(stop => stop()).catch(() => {});
       controller?.abort();
       persist();
       modal.remove();

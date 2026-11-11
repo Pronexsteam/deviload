@@ -110,3 +110,25 @@ export function recommendationArtist(item, taste, favorites) {
       .find(artist => keys.has(canonicalArtistKey(artist))) || ""
   );
 }
+// Folder names are free text; spacing and case differences never split one folder in two.
+export const folderName = value =>
+  typeof value === "string" ? value.normalize("NFKC").replace(/\s+/g, " ").trim().slice(0, 48) : "";
+const byPinned = (a, b) => Number(!!b.pinned) - Number(!!a.pinned);
+// Folders in name order, then playlists outside any folder; pinned playlists lead inside each group.
+export function playlistFolders(playlists = [], compare = (a, b) => a.localeCompare(b)) {
+  const folders = new Map(),
+    loose = [];
+  for (const playlist of playlists) {
+    const name = folderName(playlist.folder);
+    if (!name) {
+      loose.push(playlist);
+      continue;
+    }
+    const key = name.toLocaleLowerCase();
+    if (!folders.has(key)) folders.set(key, { key, name, playlists: [] });
+    folders.get(key).playlists.push(playlist);
+  }
+  const groups = [...folders.values()].sort((a, b) => compare(a.name, b.name));
+  for (const group of groups) group.playlists.sort(byPinned);
+  return { folders: groups, loose: loose.sort(byPinned) };
+}

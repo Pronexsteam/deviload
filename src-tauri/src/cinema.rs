@@ -15,15 +15,18 @@ const PAGE: usize = 50;
 const STREAM_TEMPLATE: &str = "%(.{id,ext,vcodec,acodec,url,filesize,http_headers,height,is_live,has_drm})j";
 const FORMAT_TEMPLATE: &str = "%(formats.:.{height,ext,vcodec,acodec,protocol})j";
 const STREAM_KEYS: &[&str] = &["id","ext","vcodec","acodec","url","filesize","http_headers","height","is_live","has_drm"];
-struct CachedVideo { id:String, quality:Option<u32>, proxy:String, value:Value, created:Instant, source:Weak<crate::music_audio::Source> }
+struct CachedVideo { id:String, quality:Option<u32>, silent:bool, proxy:String, value:Value, created:Instant, source:Weak<crate::music_audio::Source> }
 static VERIFIED_STREAMS: OnceLock<Mutex<Vec<CachedVideo>>> = OnceLock::new();
 fn compact_stream(value:&Value)->Value {
     let mut result=Value::Object(STREAM_KEYS.iter().filter_map(|key|value.get(*key).map(|v|((*key).to_owned(),v.clone()))).collect());
     result["qualities"]=serde_json::to_value(qualities(value)).unwrap();result
 }
+// A music video beside the song plays muted, so it needs no sound of its own (see cinema_stream).
+fn picture(format:&Value)->bool {format["ext"]=="mp4"&&format["protocol"]=="https"&&format["vcodec"].as_str().is_some_and(|s|s.starts_with("avc1"))&&format["acodec"]=="none"}
 fn progressive(format:&Value)->bool {format["ext"]=="mp4"&&format["protocol"]=="https"&&format["vcodec"].as_str().is_some_and(|s|s.starts_with("avc1"))&&format["acodec"].as_str().is_some_and(|s|s.starts_with("mp4a"))}
 fn qualities(value:&Value)->Vec<u64>{
-    let mut heights:Vec<u64>=value["formats"].as_array().into_iter().flatten().filter(|f|progressive(f)).filter_map(|f|f["height"].as_u64()).collect();
+    let silent=value["acodec"]=="none";
+    let mut heights:Vec<u64>=value["formats"].as_array().into_iter().flatten().filter(|f|if silent {picture(f)} else {progressive(f)}).filter_map(|f|f["height"].as_u64()).collect();
     heights.extend(value["qualities"].as_array().into_iter().flatten().filter_map(Value::as_u64));
     heights.extend(value["height"].as_u64());heights.retain(|h|(144..=4320).contains(h));heights.sort_unstable();heights.dedup();heights
 }
@@ -40,19 +43,19 @@ fn cache_fresh(value:&Value, age:Duration, now:u64)->bool {
     crate::music_audio::trusted_url(&url)&&url.query_pairs().find(|(key,_)|key=="expire")
         .and_then(|(_,v)|v.parse::<u64>().ok()).is_some_and(|expiry|expiry>now.saturating_add(60))
 }
-fn cached_stream(id:&str,quality:Option<u32>,proxy:&str)->Option<Value> {
+fn cached_stream(id:&str,quality:Option<u32>,silent:bool,proxy:&str)->Option<Value> {
     let now=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
     let mut entries=VERIFIED_STREAMS.get_or_init(Default::default).lock().unwrap();
     entries.retain(|entry|cache_fresh(&entry.value,entry.created.elapsed(),now)&&!entry.source.upgrade().is_some_and(|source|source.failed()));
-    entries.iter().find(|entry|entry.id==id&&entry.quality==quality&&entry.proxy==proxy).map(|entry|entry.value.clone())
+    entries.iter().find(|entry|entry.id==id&&entry.quality==quality&&entry.silent==silent&&entry.proxy==proxy).map(|entry|entry.value.clone())
 }
 fn forget_stream(id:&str){VERIFIED_STREAMS.get_or_init(Default::default).lock().unwrap().retain(|entry|entry.id!=id);}
-fn remember_stream(id:&str,quality:Option<u32>,proxy:&str,value:&Value,source:&Arc<crate::music_audio::Source>){
+fn remember_stream(id:&str,quality:Option<u32>,silent:bool,proxy:&str,value:&Value,source:&Arc<crate::music_audio::Source>){
     let mut value=compact_stream(value);value["filesize"]=source.size.into();
     // Keep only two tiny descriptors, no video buffers or library/profile data.
     let mut entries=VERIFIED_STREAMS.get_or_init(Default::default).lock().unwrap();
-    entries.retain(|entry|entry.id!=id||entry.quality!=quality);if entries.len()>=2 {entries.remove(0);}
-    entries.push(CachedVideo{id:id.into(),quality,proxy:proxy.into(),value,created:Instant::now(),source:Arc::downgrade(source)});
+    entries.retain(|entry|entry.id!=id||entry.quality!=quality||entry.silent!=silent);if entries.len()>=2 {entries.remove(0);}
+    entries.push(CachedVideo{id:id.into(),quality,silent,proxy:proxy.into(),value,created:Instant::now(),source:Arc::downgrade(source)});
 }
 const UNSUPPORTED: &str = "No compatible video with audio is available. Download the video to watch it.";
 pub(crate) fn source_failure(error: crate::music_audio::SourceError) -> &'static str {
@@ -184,23 +187,27 @@ pub async fn cinema_entries(address: String, start: Option<u64>, lane: Option<St
     }).await.map_err(|_|"Could not open the video or playlist. Check the link and try again.".to_owned())?
 }
 
-fn video_source(value: &Value, proxy: &str) -> Result<crate::music_audio::Source,String> {
+fn video_source(value: &Value, proxy: &str, silent: bool) -> Result<crate::music_audio::Source,String> {
     let video=value["vcodec"].as_str().unwrap_or("");
     let audio=value["acodec"].as_str().unwrap_or("");
-    if value["ext"]!="mp4" || !video.starts_with("avc1") || !audio.starts_with("mp4a") || value["is_live"]==true || value["has_drm"]==true {return stage("format-compatibility",Err(UNSUPPORTED.into()));}
+    let sound_ok=if silent {audio=="none"} else {audio.starts_with("mp4a")};
+    if value["ext"]!="mp4" || !video.starts_with("avc1") || !sound_ok || value["is_live"]==true || value["has_drm"]==true {return stage("format-compatibility",Err(UNSUPPORTED.into()));}
     let raw=stage("missing-address",value["url"].as_str().ok_or_else(||UNSUPPORTED.to_owned()))?;
     let url=url::Url::parse(raw).map_err(|_|{eprintln!("Cinema preparation failed: invalid-address");UNSUPPORTED})?;
     let size=value["filesize"].as_u64().or_else(||url.query_pairs().find(|(k,_)|k=="clen").and_then(|(_,v)|v.parse().ok())).unwrap_or(0);
     crate::music_audio::Source::video(url,size,value["http_headers"]["User-Agent"].as_str().unwrap_or("Mozilla/5.0"),proxy)
 }
 
-fn selected_source(id: &str, value: &Value, proxy: &str) -> Result<crate::music_audio::Source,String> {
+fn selected_source(id: &str, value: &Value, proxy: &str, silent: bool) -> Result<crate::music_audio::Source,String> {
     if value["id"].as_str()!=Some(id){return stage("video-identity",Err("Could not start the video. Try again later.".into()));}
-    video_source(value,proxy)
+    video_source(value,proxy,silent)
 }
 
 #[tauri::command]
-pub async fn cinema_stream(id: String, quality: Option<u32>, engine: tauri::State<'_,crate::Engine>) -> Result<Stream,String> {
+// silent: a music video playing muted beside its song. It needs only the picture, which YouTube also
+// serves for label videos through the visionos client (the progressive format with sound is refused).
+pub async fn cinema_stream(id: String, quality: Option<u32>, silent: Option<bool>, engine: tauri::State<'_,crate::Engine>) -> Result<Stream,String> {
+    let silent=silent.unwrap_or(false);
     if !video_id(&id){return Err("Unavailable video".into());}
     let quality=quality.filter(|height|(144..=4320).contains(height));
     let generation=PLAYBACK.fetch_add(1,Ordering::SeqCst)+1;
@@ -209,11 +216,13 @@ pub async fn cinema_stream(id: String, quality: Option<u32>, engine: tauri::Stat
     tauri::async_runtime::spawn_blocking(move||{
         let cancelled=||PLAYBACK.load(Ordering::SeqCst)!=generation;
         if cancelled(){return Err("Cancelled".into());}
-        let began=Instant::now();let cached=cached_stream(&id,quality,&proxy);let reused=cached.is_some();
+        let began=Instant::now();let cached=cached_stream(&id,quality,silent,&proxy);let reused=cached.is_some();
         let value:Value=if let Some(value)=cached {value} else {
         let mut cmd=crate::ytdlp_command_with(&crate::binary("yt-dlp")?,&proxy);
         if let Ok(deno)=crate::binary("deno"){cmd.args(["--js-runtimes",&format!("deno:{}",deno.display())]);}
-        let format=format!("best[ext=mp4][vcodec^=avc1][acodec^=mp4a][protocol=https]{}",quality.map(|height|format!("[height<={height}]")).unwrap_or_default());
+        let limit=quality.map(|height|format!("[height<={height}]")).unwrap_or_default();
+        let format=if silent {format!("bestvideo[ext=mp4][vcodec^=avc1][protocol=https]{limit}")} else {format!("best[ext=mp4][vcodec^=avc1][acodec^=mp4a][protocol=https]{limit}")};
+        if silent {cmd.args(["--extractor-args","youtube:player_client=visionos,web_embedded;skip=hls,dash"]);}
         cmd.args(["--ignore-config","--no-plugin-dirs","--no-playlist","--skip-download","--print",STREAM_TEMPLATE,"--print",FORMAT_TEMPLATE,"--no-warnings","--no-colors","--socket-timeout","10","--retries","0","--extractor-retries","0","-f",&format])
             .arg("--").arg(format!("https://www.youtube.com/watch?v={id}"));
         let output=stage("extractor-process",crate::engine_update::json_output_cancellable(&mut cmd,Duration::from_secs(40),&cancelled))?;
@@ -222,14 +231,14 @@ pub async fn cinema_stream(id: String, quality: Option<u32>, engine: tauri::Stat
         };
         eprintln!("Cinema timing: metadata_ms={}, reused={reused}",began.elapsed().as_millis());
         if cancelled(){return Err("Cancelled".into());}
-        let source=Arc::new(stage("source-selection",selected_source(&id,&value,&proxy)).inspect_err(|_|forget_stream(&id))?);
+        let source=Arc::new(stage("source-selection",selected_source(&id,&value,&proxy,silent)).inspect_err(|_|forget_stream(&id))?);
         source.verify_cancellable(Instant::now()+Duration::from_secs(12),&cancelled).map_err(|error|{
             forget_stream(&id);
             eprintln!("Cinema preparation failed: first-buffer ({error:?}, cancelled={})",cancelled());
             source_failure(error)
         })?;
         if cancelled(){return Err("Cancelled".into());}
-        remember_stream(&id,quality,&proxy,&value,&source);
+        remember_stream(&id,quality,silent,&proxy,&value,&source);
         eprintln!("Cinema timing: ready_ms={}",began.elapsed().as_millis());
         let url=stage("relay-registration",crate::music_audio::register_video(source))?;
         if cancelled(){crate::music_audio::release_video(&url);return Err("Cancelled".into());}
@@ -277,10 +286,10 @@ mod tests {
         let expires=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()+600;
         let make=|id:&str|json!({"id":id,"url":format!("https://rr1.googlevideo.com/a?expire={expires}"),"ext":"mp4","vcodec":"avc1.4d","acodec":"mp4a.40.2","filesize":100});
         let (a,b,c)=(make("cache-test1"),make("cache-test2"),make("cache-test3"));
-        let source=Arc::new(video_source(&a,"").unwrap());
-        remember_stream("cache-test1",None,"",&a,&source);remember_stream("cache-test2",None,"",&b,&source);remember_stream("cache-test3",None,"",&c,&source);
-        assert!(cached_stream("cache-test1",None,"").is_none());assert!(cached_stream("cache-test2",None,"").is_some());assert!(cached_stream("cache-test2",None,"different").is_none());
-        forget_stream("cache-test2");assert!(cached_stream("cache-test2",None,"").is_none());forget_stream("cache-test3");
+        let source=Arc::new(video_source(&a,"",false).unwrap());
+        remember_stream("cache-test1",None,false,"",&a,&source);remember_stream("cache-test2",None,false,"",&b,&source);remember_stream("cache-test3",None,false,"",&c,&source);
+        assert!(cached_stream("cache-test1",None,false,"").is_none());assert!(cached_stream("cache-test2",None,false,"").is_some());assert!(cached_stream("cache-test2",None,false,"different").is_none());
+        forget_stream("cache-test2");assert!(cached_stream("cache-test2",None,false,"").is_none());forget_stream("cache-test3");
     }
     #[test] fn metadata_search_deduplicates_and_filters_without_stream_fields() {
         let rows=search_entries(&json!({"entries":[null,{"id":"abcdefghijk","title":"A","channel":"Author","duration":90,"url":"must-not-leak"},{"id":"abcdefghijk","title":"Duplicate"},{"id":"bbbbbbbbbbb","title":"Private","availability":"private"},{"id":"ccccccccccc","title":"Live","is_live":true},{"id":"ddddddddddd","title":"D","uploader":"Uploader"}]}));
@@ -303,11 +312,26 @@ mod tests {
         assert_eq!(page.entries.len(),50);assert_eq!(page.next,Some(101));assert!(page.entries[0].unavailable);assert_eq!(page.entries[1].index,52);
     }
     #[test] fn rejects_audio_only_adaptive_drm_and_remote_urls() {
-        for value in [json!({"ext":"mp4","vcodec":"none","acodec":"mp4a.40.2"}),json!({"ext":"mp4","vcodec":"avc1.4d","acodec":"none"}),json!({"ext":"mp4","vcodec":"avc1.4d","acodec":"mp4a.40.2","has_drm":true}),json!({"ext":"mp4","vcodec":"avc1.4d","acodec":"mp4a.40.2","filesize":100,"url":"https://example.org/a"})] {assert!(video_source(&value,"").is_err());}
+        for value in [json!({"ext":"mp4","vcodec":"none","acodec":"mp4a.40.2"}),json!({"ext":"mp4","vcodec":"avc1.4d","acodec":"none"}),json!({"ext":"mp4","vcodec":"avc1.4d","acodec":"mp4a.40.2","has_drm":true}),json!({"ext":"mp4","vcodec":"avc1.4d","acodec":"mp4a.40.2","filesize":100,"url":"https://example.org/a"})] {assert!(video_source(&value,"",false).is_err());}
     }
     #[test] fn source_must_match_requested_video_and_uses_video_mime() {
         let value=json!({"id":"abcdefghijk","ext":"mp4","vcodec":"avc1.4d401e","acodec":"mp4a.40.2","filesize":3000000000_u64,"url":"https://rr1.googlevideo.com/videoplayback"});
-        assert!(selected_source("differentID",&value,"").is_err());
-        let source=selected_source("abcdefghijk",&value,"").unwrap();assert_eq!(source.mime,"video/mp4");assert_eq!(source.size,3000000000);
+        assert!(selected_source("differentID",&value,"",false).is_err());
+        let source=selected_source("abcdefghijk",&value,"",false).unwrap();assert_eq!(source.mime,"video/mp4");assert_eq!(source.size,3000000000);
+    }
+    #[test]
+    fn a_muted_music_video_takes_the_picture_only_and_never_shares_the_cache_with_cinema(){
+        let picture=json!({"id":"abcdefghijk","ext":"mp4","vcodec":"avc1.4d401f","acodec":"none","url":"https://rr1.googlevideo.com/videoplayback?expire=9999999999&clen=1000","filesize":1000,"height":720,
+            "formats":[{"height":720,"ext":"mp4","vcodec":"avc1.4d401f","acodec":"none","protocol":"https"},{"height":360,"ext":"mp4","vcodec":"avc1.42001E","acodec":"mp4a.40.2","protocol":"https"},{"height":480,"ext":"mp4","vcodec":"avc1.4d401e","acodec":"none","protocol":"https"}]});
+        // Silent: the picture-only format is the right one; Cinema, which needs sound, refuses it.
+        assert!(video_source(&picture,"",true).is_ok());
+        assert!(video_source(&picture,"",false).is_err());
+        // The offered heights are the picture-only ones.
+        assert_eq!(qualities(&picture),vec![480,720]);
+        let source=Arc::new(video_source(&picture,"",true).unwrap());
+        remember_stream("silentTest1",Some(720),true,"",&compact_stream(&picture),&source);
+        assert!(cached_stream("silentTest1",Some(720),true,"").is_some());
+        assert!(cached_stream("silentTest1",Some(720),false,"").is_none(),"Cinema never receives a muted stream");
+        forget_stream("silentTest1");
     }
 }

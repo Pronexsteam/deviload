@@ -73,35 +73,39 @@
   opacity: 1;
   background-color: color-mix(in srgb, var(--lyric-ink) 5%, transparent);
 }
+/* Inline, not inline-block: a word split into syllables for timing ("BE" "LIEVE") must not break across lines;
+   only the spaces between words do. Words no longer move, so they need no box of their own. */
 :root body .music-lyric-word {
-  display: inline-block;
+  display: inline;
   white-space: pre-wrap;
-  transform: translateY(0) scale(1);
-  transform-origin: center bottom;
   transition: text-shadow 0.16s ease;
   filter: none !important;
 }
 :root body .music-lyric-line.active .music-lyric-word[data-state="current"] {
   transform: none;
-  text-shadow:
-    0 0 8px var(--lyric-focus),
-    0 0 16px var(--lyric-focus);
   filter: none;
 }
+/* Karaoke as people expect it: in the current line, words not yet sung are dim, sung words are bright, and the
+   word being sung fills from left to right with a soft edge. One ink colour, no cover tint inside the letters. */
+/* No colour transition here: the word being sung is drawn by its fill with a transparent colour, so fading the
+   colour in once it is sung made every word go dark for a moment and light up again. */
+:root body .music-lyric-line.active.has-word-sync .music-lyric-word {
+  color: color-mix(in srgb, var(--lyric-ink) 40%, transparent);
+  transition: none !important;
+}
 :root body .music-lyric-line.active.has-word-sync .music-lyric-word[data-state="sung"] {
-  color: color-mix(in srgb, var(--lyric-aura) 36%, var(--lyric-ink));
+  color: var(--lyric-ink);
 }
 :root body .music-lyric-line.active.has-word-sync .music-lyric-word[data-state="current"] {
   background: linear-gradient(
     90deg,
-    var(--lyric-aura) calc(var(--word-progress) - 18%),
-    var(--lyric-shine) calc(var(--word-progress) - 4%),
-    var(--lyric-aura) var(--word-progress),
-    color-mix(in srgb, var(--lyric-ink) 36%, transparent) calc(var(--word-progress) + 10%)
+    var(--lyric-ink) calc(var(--word-progress) - 6%),
+    color-mix(in srgb, var(--lyric-ink) 40%, transparent) calc(var(--word-progress) + 6%)
   );
   background-clip: text;
   -webkit-background-clip: text;
   color: transparent;
+  transition: none;
 }
 :root[data-theme]
   body

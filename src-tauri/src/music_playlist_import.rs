@@ -65,24 +65,51 @@ pub fn read_public_playlist(link: &str) -> Result<Value, String> {
     parse_page(std::str::from_utf8(&bytes).map_err(|_| UNAVAILABLE)?, &kind, &id)
 }
 
+// The web player's shared TOTP secrets, fetched here rather than in the script: Deno can take half a minute to
+// reach that host on networks with broken IPv6, while this client falls back to IPv4 at once. Kept for an hour.
+fn spotify_secrets() -> Option<String> {
+    static CACHE: std::sync::Mutex<Option<(std::time::Instant, String)>> = std::sync::Mutex::new(None);
+    if let Some((at, text)) = CACHE.lock().ok()?.as_ref() { if at.elapsed() < Duration::from_secs(3600) { return Some(text.clone()); } }
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    let client = reqwest::blocking::Client::builder().user_agent("Deviload Spotify import").connect_timeout(Duration::from_secs(8)).timeout(Duration::from_secs(15)).redirect(reqwest::redirect::Policy::none()).build().ok()?;
+    let response = client.get("https://code.thetadev.de/ThetaDev/spotify-secrets/raw/branch/main/secrets/secretDict.json").send().ok()?;
+    if !response.status().is_success() { return None; }
+    let mut text = String::new();
+    response.take(1024 * 1024).read_to_string(&mut text).ok()?;
+    serde_json::from_str::<Value>(&text).ok()?.as_object()?;
+    *CACHE.lock().ok()? = Some((std::time::Instant::now(), text.clone()));
+    Some(text)
+}
+
+/// Runs the Spotify metadata script in its own bounded Deno process: network to Spotify's web-player hosts only,
+/// no files, and only the environment named here.
+pub(crate) fn run_spotify_script(args: &[&str], env: &[(&str, &str)], timeout: Duration, fallback: &str) -> Result<Value, String> {
+    let root = dirs::cache_dir().ok_or(fallback)?.join("com.deviload.desktop").join("spotify-import");
+    std::fs::create_dir_all(&root).map_err(|_| fallback)?;
+    let mut script = tempfile::Builder::new().prefix("spotify-").suffix(".mjs").tempfile_in(&root).map_err(|_| fallback)?;
+    use std::io::Write;
+    script.write_all(include_bytes!("../spotify-import.mjs")).map_err(|_| fallback)?;
+    script.flush().map_err(|_| fallback)?;
+    let mut command = crate::command(&crate::binary("deno")?);
+    command.env_clear();
+    for name in ["SystemRoot", "TEMP", "TMP"] { if let Some(v) = std::env::var_os(name) { command.env(name, v); } }
+    let secrets = spotify_secrets().unwrap_or_default();
+    let mut allowed = vec!["DEVILOAD_SPOTIFY_SECRETS"];
+    command.env("DEVILOAD_SPOTIFY_SECRETS", &secrets);
+    for (name, value) in env { command.env(name, value); allowed.push(name); }
+    command.current_dir(&root).args(["run", "--no-config", "--no-npm", "--no-remote", "--no-prompt", "--allow-net=open.spotify.com,open.spotifycdn.com,clienttoken.spotify.com,api-partner.spotify.com,code.thetadev.de"])
+        .arg(format!("--allow-env={}", allowed.join(","))).arg(script.path()).args(args);
+    let output = crate::engine_update::json_output_large(&mut command, timeout).map_err(|_| fallback)?;
+    let data: Value = serde_json::from_slice(&output.stdout).map_err(|_| fallback)?;
+    if !output.status.success() { return Err(data["error"].as_str().unwrap_or(fallback).to_owned()); }
+    Ok(data)
+}
+
 fn read_full_playlist(link: &str) -> Result<Value, String> {
     // A separate bounded metadata process cannot occupy the audio worker.
     static ACTIVE: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _guard = ACTIVE.try_lock().map_err(|_| "A Spotify import is already running. Please wait.")?;
-    let root = dirs::cache_dir().ok_or(UNAVAILABLE)?.join("com.deviload.desktop").join("spotify-import");
-    std::fs::create_dir_all(&root).map_err(|_| UNAVAILABLE)?;
-    let mut script = tempfile::Builder::new().prefix("public-playlist-").suffix(".mjs").tempfile_in(&root).map_err(|_| UNAVAILABLE)?;
-    use std::io::Write;
-    script.write_all(include_bytes!("../spotify-import.mjs")).map_err(|_| UNAVAILABLE)?;
-    script.flush().map_err(|_| UNAVAILABLE)?;
-    let mut command = crate::command(&crate::binary("deno")?);
-    command.env_clear();
-    for name in ["SystemRoot", "TEMP", "TMP"] { if let Some(v) = std::env::var_os(name) { command.env(name, v); } }
-    command.current_dir(&root).args(["run", "--no-config", "--no-npm", "--no-remote", "--no-prompt", "--allow-net=open.spotify.com,open.spotifycdn.com,clienttoken.spotify.com,api-partner.spotify.com,code.thetadev.de"])
-        .arg(script.path()).arg(link);
-    let output = crate::engine_update::json_output(&mut command, Duration::from_secs(155)).map_err(|_| UNAVAILABLE)?;
-    let data: Value = serde_json::from_slice(&output.stdout).map_err(|_| UNAVAILABLE)?;
-    if !output.status.success() { return Err(data["error"].as_str().unwrap_or(UNAVAILABLE).to_owned()); }
+    let data = run_spotify_script(&[link], &[], Duration::from_secs(155), UNAVAILABLE)?;
     if data["source"] != "spotify" || data["completeness"] != "complete" || data["receivedCount"] != data["reportedTotal"] || !data["entries"].is_array() { return Err(UNAVAILABLE.into()); }
     Ok(data)
 }

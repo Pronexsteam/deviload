@@ -42,7 +42,7 @@ test("an older home personalization cannot replace a newer taste choice",async()
     mergeRecommendationPools,recommendWithReasons,rankMusicRecommendations,recommendationOptions:()=>({random:()=>.5}),homeSections:(_,items)=>items,
     render(){rendered.push(ctx.sections.map(item=>item.id));},prepareHomeSelection(){},language:()=>"en",t:s=>s
   };
-  Object.assign(ctx,{publicDiscovery:{candidates:async()=>[],clear(){}},nextHomeCandidates:[],publicGeneration:0,sourceRevision:0,navigator:{},resolveRecordingSource,view:"home",lastQuery:{kind:"home"}});
+  Object.assign(ctx,{newReleases:{cached:()=>[],load:async()=>[]},followedArtists:()=>[],publicDiscovery:{candidates:async()=>[],clear(){}},nextHomeCandidates:[],publicGeneration:0,sourceRevision:0,navigator:{},resolveRecordingSource,view:"home",lastQuery:{kind:"home"}});
   const personalize=runInNewContext(`(()=>{${code};return personalize;})()`,ctx);
   const first=personalize(1,[]);await settle();ctx.saved.favorites=[song(2)];
   const second=personalize(1,[]);await settle();fresh.resolve([song(4)]);await second;

@@ -27,6 +27,8 @@ export function soundSettings(raw = {}) {
     level: raw.level === true,
     transition: TRANSITIONS.includes(raw.transition) ? raw.transition : 0,
     seamless: raw.seamless !== false,
+    skipSilence: raw.skipSilence === true,
+    skipSegments: raw.skipSegments === true,
     rate: Number.isFinite(raw.rate) ? Math.round(Math.max(0.5, Math.min(2, raw.rate)) * 20) / 20 : 1,
   };
 }
@@ -57,7 +59,7 @@ export function equalizerHeadroom(bands, sampleRate = 48000) {
   return peak > 1.00001 ? 1 / (peak * 10 ** (0.5 / 20)) : 1;
 }
 export function createMusicRate(nodes, getRate) {
-  const local = new WeakMap();
+  const fast = new WeakMap();
   let mode = "";
   const pitchSupported = nodes.every(
     node => "preservesPitch" in node || "webkitPreservesPitch" in node || "mozPreservesPitch" in node,
@@ -70,14 +72,29 @@ export function createMusicRate(nodes, getRate) {
       node.defaultPlaybackRate = 1;
       return;
     }
-    node.playbackRate = mode || !pitchSupported || !local.get(node) ? 1 : getRate();
-    node.defaultPlaybackRate = node.playbackRate;
+    const rate = mode || !pitchSupported ? 1 : getRate();
+    // Silence has no pitch to preserve, so it may pass faster even where pitch correction is missing.
+    node.playbackRate = (!mode && fast.get(node)) || rate;
+    node.defaultPlaybackRate = rate;
   }
-  for (const node of nodes) node.addEventListener("loadedmetadata", () => apply(node));
+  for (const node of nodes)
+    node.addEventListener("loadedmetadata", () => {
+      fast.delete(node);
+      apply(node);
+    });
   return {
     pitchSupported,
-    setSource(node, offline) {
-      local.set(node, offline === true);
+    get mode() {
+      return mode;
+    },
+    setSource(node) {
+      fast.delete(node);
+      apply(node);
+    },
+    // A temporary rate for a silent stretch; 0 returns the node to the chosen speed.
+    hurry(node, rate) {
+      if (rate) fast.set(node, rate);
+      else fast.delete(node);
       apply(node);
     },
     setMode(value) {
@@ -87,8 +104,28 @@ export function createMusicRate(nodes, getRate) {
     refresh() {
       nodes.forEach(apply);
     },
-    reason(node) {
-      return mode ? "room" : !pitchSupported ? "pitch" : !local.get(node) ? "online" : "";
+    reason() {
+      return mode ? "room" : !pitchSupported ? "pitch" : "";
+    },
+  };
+}
+// Silence is played through quickly rather than cut, so a song that returns after a pause loses nothing
+// but the few milliseconds it takes to hear it. Short breaths between phrases stay untouched.
+export const SILENCE = { level: 0.0015, hold: 0.8, rate: 4 };
+export function createSilenceWatch({ level = SILENCE.level, hold = SILENCE.hold } = {}) {
+  let quietSince = null;
+  return {
+    // rms of the current output already divided by the player volume; seconds from any monotonic clock.
+    update(rms, now, listening) {
+      if (!listening || !(rms < level)) {
+        quietSince = null;
+        return false;
+      }
+      quietSince ??= now;
+      return now - quietSince >= hold;
+    },
+    reset() {
+      quietSince = null;
     },
   };
 }

@@ -1,4 +1,4 @@
-import {AudioCache,CACHE_LIMIT,CACHE_LIMITS,TRACK_LIMIT,byteRange,readBytes,validId} from './storage.ts';
+import {AudioCache,CACHE_LIMIT,CACHE_LIMITS,DEFAULT_CACHE_LIMIT,TRACK_LIMIT,byteRange,readBytes,validId} from './storage.ts';
 function assert(value:unknown,message='Assertion failed'){if(!value)throw Error(message);}
 Deno.test('ranges reject invalid requests and preserve exact boundaries',()=>{
  assert(JSON.stringify(byteRange('bytes=4-8',10))==='[4,8]');assert(JSON.stringify(byteRange('bytes=-3',10))==='[7,9]');
@@ -74,7 +74,7 @@ Deno.test('cache preference write failure rolls back the in-memory limit',async(
 Deno.test('invalid persisted cache preferences fall back to the bounded default',async()=>{
  const root=await Deno.makeTempDir();try{
  for(const config of ['{"limit":9999999999999}','{"limit":"5368709120"}','not json',' '.repeat(1025)]){
- await Deno.writeTextFile(root+'/config.json',config);const cache=new AudioCache(root);await cache.open();assert(cache.limit===CACHE_LIMIT);
+ await Deno.writeTextFile(root+'/config.json',config);const cache=new AudioCache(root);await cache.open();assert(cache.limit===DEFAULT_CACHE_LIMIT);
  }
  }finally{await Deno.remove(root,{recursive:true});}
 });

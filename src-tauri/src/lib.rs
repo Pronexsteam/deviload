@@ -24,6 +24,11 @@ mod lyric_card;
 mod window_tone;
 mod other_audio;
 mod music_remote;
+mod music_control_api;
+mod music_account_import;
+mod music_spotify_account;
+mod music_recognize;
+mod music_cast;
 mod music_room;
 mod music_presence;
 mod music_profile;
@@ -34,6 +39,8 @@ pub use music_playlist_import::read_public_playlist as preview_spotify_playlist;
 mod music_offline;
 mod music_local;
 mod music_lyrics;
+mod music_segments;
+mod music_scrobble;
 mod music_word_lyrics;
 mod music_translate;
 mod child_job;
@@ -605,6 +612,7 @@ fn common_folders() -> Vec<(String, String)> {
         .collect()
 }
 
+pub(crate) const YOUTUBE_SIGNED_IN: &[&str] = &["LOGIN_INFO"];
 const YOUTUBE_SIGN_IN: &str = "https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F";
 const SESSION_URLS: [&str; 4] = ["https://www.youtube.com/", "https://music.youtube.com/", "https://accounts.google.com/", "https://www.google.com/"];
 
@@ -641,7 +649,9 @@ impl Site {
 }
 
 static SITES: [Site; 4] = [
-    Site { key: "youtube", name: "YouTube", sign_in: YOUTUBE_SIGN_IN, hosts: &["youtube.com", "youtu.be", "google.com"], signed_in: &["LOGIN_INFO", "SID", "__Secure-3PSID"] },
+    // Only YouTube's own LOGIN_INFO proves a YouTube session: a Google SID or the third-party cookies remain after
+    // YouTube signs a stale session out, and saving that set would replace a working sign-in with a dead one.
+    Site { key: "youtube", name: "YouTube", sign_in: YOUTUBE_SIGN_IN, hosts: &["youtube.com", "youtu.be", "google.com"], signed_in: YOUTUBE_SIGNED_IN },
     Site { key: "instagram", name: "Instagram", sign_in: "https://www.instagram.com/accounts/login/", hosts: &["instagram.com"], signed_in: &["sessionid"] },
     Site { key: "tiktok", name: "TikTok", sign_in: "https://www.tiktok.com/login", hosts: &["tiktok.com"], signed_in: &["sessionid"] },
     Site { key: "x", name: "X", sign_in: "https://x.com/i/flow/login", hosts: &["x.com", "twitter.com"], signed_in: &["auth_token"] },
@@ -819,6 +829,11 @@ async fn site_sign_out(app: tauri::AppHandle, engine: tauri::State<'_, Engine>, 
     Ok(())
 }
 
+// A Google page other than the sign-in itself: the account or one of its checks, reached once signed in.
+fn after_google_sign_in(host: &str) -> bool {
+    (host == "google.com" || host.ends_with(".google.com")) && host != "accounts.google.com"
+}
+
 #[tauri::command]
 async fn open_youtube(app: tauri::AppHandle, engine: tauri::State<'_, Engine>, sign_in: bool) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("youtube") {
@@ -827,6 +842,8 @@ async fn open_youtube(app: tauri::AppHandle, engine: tauri::State<'_, Engine>, s
         return Ok(());
     }
     let address = if sign_in { YOUTUBE_SIGN_IN } else { "https://www.youtube.com/" };
+    // Once per window, so a Google page that keeps returning cannot loop.
+    let redirected = Arc::new(AtomicBool::new(false));
     let url = address.parse().map_err(|e| format!("Invalid YouTube address: {e}"))?;
     let dir = engine.dir.clone();
     let builder = tauri::WebviewWindowBuilder::new(&app, "youtube", tauri::WebviewUrl::External(url))
@@ -836,6 +853,9 @@ async fn open_youtube(app: tauri::AppHandle, engine: tauri::State<'_, Engine>, s
         .on_page_load(move |window, payload| {
             if payload.event() != tauri::webview::PageLoadEvent::Finished { return; }
             let host = payload.url().host_str().unwrap_or("").to_ascii_lowercase();
+            // After the password Google may show its own pages (a security checkup, recovery details) instead of
+            // returning to YouTube. Those are past the sign-in: continue to YouTube, which saves it and closes.
+            if sign_in && after_google_sign_in(&host) && !redirected.swap(true, Ordering::Relaxed) { let _ = window.navigate(YOUTUBE_SIGN_IN.parse().unwrap()); return; }
             if host != "youtube.com" && !host.ends_with(".youtube.com") { return; }
             let dir = dir.clone();
             // Reading cookies on the page-load thread deadlocks WebView2.
@@ -865,6 +885,9 @@ async fn youtube_sign_out(app: tauri::AppHandle, engine: tauri::State<'_, Engine
     #[cfg(target_os = "macos")]
     clear_site_cookies(&app, &SITES[0]).await?;
     if let Some(window) = app.get_webview_window("youtube") { let _ = window.destroy(); }
+    // The profile folder may stay locked a while; its sign-in cookies go now, so the next sign-in can choose another account.
+    #[cfg(not(target_os = "macos"))]
+    { let _ = clear_profile_cookies(&app, "youtube", youtube_profile(&app)?, SITES[0].hosts).await; }
     let file = session_file(&engine.dir);
     if file.exists() { fs::remove_file(&file).map_err(|e| format!("Could not remove the saved sign-in: {e}"))?; }
     let profile = youtube_profile(&app)?;
@@ -878,6 +901,26 @@ async fn youtube_sign_out(app: tauri::AppHandle, engine: tauri::State<'_, Engine
     }).await.map_err(|e| e.to_string())?;
     let _ = app.emit("youtube-session", false);
     Ok(())
+}
+
+// Deletes a sign-in profile's cookies for the given sites through WebView2 itself, which works while the profile
+// folder is still in use and cannot be removed. Without it a new sign-in finds the old account and closes at once.
+#[cfg(not(target_os = "macos"))]
+pub(crate) async fn clear_profile_cookies(app: &tauri::AppHandle, key: &str, profile: PathBuf, hosts: &[&str]) -> Result<(), String> {
+    let window = tauri::WebviewWindowBuilder::new(app, format!("signout-{key}"), tauri::WebviewUrl::External("about:blank".parse().unwrap()))
+        .visible(false).data_directory(profile).build().map_err(|e| e.to_string())?;
+    let hosts: Vec<String> = hosts.iter().map(|h| h.to_string()).collect();
+    let result = tauri::async_runtime::spawn_blocking({ let window = window.clone(); move || {
+        for host in &hosts {
+            for address in [format!("https://{host}/"), format!("https://www.{host}/"), format!("https://accounts.{host}/"), format!("https://music.{host}/"), format!("https://open.{host}/"), format!("https://myaccount.{host}/")] {
+                let Ok(url) = address.parse() else { continue };
+                for cookie in window.cookies_for_url(url).map_err(|e| e.to_string())? { let _ = window.delete_cookie(cookie); }
+            }
+        }
+        Ok::<(), String>(())
+    }}).await.map_err(|e| e.to_string());
+    let _ = window.destroy();
+    result?
 }
 
 // Older macOS versions share WKWebsiteDataStore. Delete only this site's cookies,
@@ -983,9 +1026,19 @@ async fn export_download_profiles(app: tauri::AppHandle, text: String) -> Result
     }).await.map_err(|e| e.to_string())?
 }
 
+// Every music request asks for the proxy; the settings file is parsed again only when it changed on disk.
 fn stored_proxy(dir: &Path) -> String {
-    read_store(dir).get("network").and_then(|network| network["proxy"].as_str())
-        .and_then(|proxy| model::parse_proxy(proxy).ok()).unwrap_or_default()
+    static CACHE: Mutex<Option<(PathBuf, Option<std::time::SystemTime>, u64, String)>> = Mutex::new(None);
+    let file = dir.join("library.json");
+    let stamp = fs::metadata(&file).ok().map(|m| (m.modified().ok(), m.len()));
+    let (modified, len) = stamp.unwrap_or((None, 0));
+    if let Some((path, at, size, proxy)) = CACHE.lock().unwrap().as_ref() {
+        if *path == file && *at == modified && *size == len && modified.is_some() { return proxy.clone(); }
+    }
+    let proxy = read_store(dir).get("network").and_then(|network| network["proxy"].as_str())
+        .and_then(|proxy| model::parse_proxy(proxy).ok()).unwrap_or_default();
+    *CACHE.lock().unwrap() = Some((file, modified, len, proxy.clone()));
+    proxy
 }
 
 #[tauri::command]
@@ -3250,6 +3303,8 @@ pub fn run() {
                 if ["running", "cancelling", "pausing"].contains(&job.status.as_str()) || (job.status == "queued" && job.scheduled_at.is_none()) { job.status = "interrupted".into(); }
             }
             save(&dir, &data).map_err(std::io::Error::other)?;
+            music::set_account_session(session_file(&dir));
+            music_control_api::restore(app.handle(), &dir);
             let engine = Engine { data: Arc::new(Mutex::new(data)), dir, shutdown: Arc::new(AtomicBool::new(false)) };
             app.manage(engine.clone());
             let saver = engine.clone();
@@ -3303,7 +3358,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![lyric_card::save_lyric_card, lyric_card::copy_lyric_card, lyrics_overlay::lyrics_overlay_open, lyrics_overlay::lyrics_overlay_close, lyrics_overlay::lyrics_line_update, lyrics_overlay::lyrics_overlay_action, window_tone::window_background, other_audio::other_audio_watch, music_engine::music_loudness, cinema_embed::cinema_embed, cinema_embed::cinema_open_youtube, cinema::cinema_search, cinema::cinema_cancel_search, cinema::cinema_entries, cinema::cinema_stream, cinema::cinema_cancel, gallery_info, gallery_install, gallery_inspect, quick_cut::quick_cut_plan, quick_cut::quick_cut_export, quick_cut::quick_cut_stop, settings_backup::settings_backup_data, settings_backup::inspect_settings_backup, settings_backup::restore_settings_backup, settings_backup::export_settings_backup, set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_site_browser, open_releases, open_support, window_action, apply_download_auth, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, export_download_profiles, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, site_sign_in, site_sign_out, site_sessions, music::music_catalog, music::music_suggestions, music_discovery::music_discovery, music::music_prepare, music_engine::music_cache, music_engine::music_clip_stream, custom_background::custom_background_choose, custom_background::custom_background_allow, custom_background::custom_background_clear, music_engine::music_engine_update, music_engine::music_diagnostics, music_engine::export_music_diagnostics, music_local::music_local_choose, music_local::music_local_scan, music_local::music_local_list, music_local::equivalent::music_local_equivalent, music_local::exact::music_local_exact, music_offline::music_downloaded, music_offline::music_offline_source, music_lyrics::music_lyrics, music_word_lyrics::music_word_lyrics, music_translate::music_translate_lyrics, music_motion::music_motion, music::music_stream, music::music_recovery_allowed, music::music_cancel_stream, music_controls::set_music_controls, music_remote::music_remote_start, music_remote::music_remote_update, music_remote::music_remote_stop, music_room::music_room_create, music_room::music_room_update, music_room::music_room_poll, music_room::music_room_stop, music_mini::music_mini_open, music_mini::music_mini_update, music_mini::music_mini_state, music_mini::music_mini_action, music_mini::music_mini_queue, music_presence::music_presence, music_profile::export_music_profile, music_import::read_music_import, music_playlist_import::music_import_spotify_playlist, open_music_import_help, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, relink_media, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
+        .invoke_handler(tauri::generate_handler![lyric_card::save_lyric_card, lyric_card::copy_lyric_card, lyrics_overlay::lyrics_overlay_open, lyrics_overlay::lyrics_overlay_close, lyrics_overlay::lyrics_line_update, lyrics_overlay::lyrics_overlay_action, window_tone::window_background, other_audio::other_audio_watch, music_engine::music_loudness, cinema_embed::cinema_embed, cinema_embed::cinema_open_youtube, cinema::cinema_search, cinema::cinema_cancel_search, cinema::cinema_entries, cinema::cinema_stream, cinema::cinema_cancel, gallery_info, gallery_install, gallery_inspect, quick_cut::quick_cut_plan, quick_cut::quick_cut_export, quick_cut::quick_cut_stop, settings_backup::settings_backup_data, settings_backup::inspect_settings_backup, settings_backup::restore_settings_backup, settings_backup::export_settings_backup, set_close_to_tray, set_tray_labels, open_network_settings, update_ytdlp, open_site_browser, open_releases, open_support, window_action, apply_download_auth, snapshot, diagnostics, common_folders, open_youtube, youtube_sign_out, ytdlp_info, ui_store, save_ui_store, export_download_profiles, save_ui_project, set_proxy, find_legacy, import_legacy, check_app_update, install_app_update, job_command, read_link_list, autostart_status, set_autostart, set_tray_state, watch::watch_list, watch::watch_add, watch::watch_remove, watch::watch_check, open_devil_cut, preflight_download, youtube_login_status, site_sign_in, site_sign_out, site_sessions, music::music_catalog, music::music_suggestions, music_discovery::music_discovery, music::music_prepare, music_engine::music_cache, music_engine::music_clip_stream, custom_background::custom_background_choose, custom_background::custom_background_allow, custom_background::custom_background_clear, music_engine::music_engine_update, music_engine::music_diagnostics, music_engine::export_music_diagnostics, music_local::music_local_choose, music_local::music_local_scan, music_local::music_local_list, music_local::equivalent::music_local_equivalent, music_local::exact::music_local_exact, music_offline::music_downloaded, music_offline::music_offline_source, music_lyrics::music_lyrics, music_segments::music_skip_segments, music_scrobble::scrobble_status, music_scrobble::scrobble_connect_listenbrainz, music_scrobble::scrobble_lastfm_begin, music_scrobble::scrobble_lastfm_finish, music_scrobble::scrobble_disconnect, music_scrobble::scrobble_open_help, music_scrobble::scrobble_now_playing, music_scrobble::scrobble_listen, music_word_lyrics::music_word_lyrics, music_translate::music_translate_lyrics, music_motion::music_motion, music::music_stream, music::music_recovery_allowed, music::music_cancel_stream, music_controls::set_music_controls, music_remote::music_remote_start, music_remote::music_remote_update, music_remote::music_remote_stop, music_control_api::music_control_api_status, music_control_api::music_control_api_set, music_account_import::music_import_youtube_account, music_account_import::music_youtube_liked, music_spotify_account::spotify_account_status, music_spotify_account::spotify_sign_in, music_spotify_account::spotify_sign_out, music_spotify_account::music_import_spotify_account, music_recognize::music_recognize, music_recognize::music_capture_output, music_recognize::music_recognize_file, music_cast::music_cast_devices, music_cast::music_cast_start, music_cast::music_cast_load, music_cast::music_cast_control, music_cast::music_cast_status, music_room::music_room_create, music_room::music_room_update, music_room::music_room_poll, music_room::music_room_stop, music_mini::music_mini_open, music_mini::music_mini_update, music_mini::music_mini_state, music_mini::music_mini_action, music_mini::music_mini_queue, music_presence::music_presence, music_profile::export_music_profile, music_profile::export_music_library, music_import::read_music_import, music_playlist_import::music_import_spotify_playlist, open_music_import_help, search_media, inspect_media, playlist_entries, enqueue, change_job, set_recording_limit, move_job, clear_finished, remove_job, remove_from_library, clear_library, reveal_download, reveal_file, open_downloads, set_default_folder, convert::open_converter, convert::convert_pending, convert::convert_probe, convert::convert_file, convert::convert_stop, power::set_after_downloads, power::cancel_power, set_media_server, check_media_server, measure_library, relink_media, editor_info, editor_frame, editor_thumbnails, editor_waveform, editor_render, export_options, editor_save_frame, media_source, audio_info, audio_save_tags, audio_normalize, find_duplicates, player_metadata, share::phone_start, share::phone_send, share::phone_status, share::phone_answer, share::phone_stop, share::phone_forget])
         .build(tauri::generate_context!()).expect("failed to start Deviload")
         .run(|app, event| {
             #[cfg(target_os = "macos")]
@@ -3575,16 +3630,28 @@ mod engine_tests {
         assert_eq!(ytdlp_command_with(Path::new("yt-dlp"), "").get_args().count(), 2);
     }
     #[test]
+    fn google_pages_after_the_password_lead_back_to_youtube() {
+        assert!(after_google_sign_in("myaccount.google.com"));
+        assert!(after_google_sign_in("gds.google.com"));
+        assert!(!after_google_sign_in("accounts.google.com"), "the sign-in itself, challenges included, stays");
+        assert!(!after_google_sign_in("www.youtube.com"));
+        assert!(!after_google_sign_in("evilgoogle.com"));
+    }
+    #[test]
     fn cookie_export_keeps_only_youtube_and_google_domains() {
-        let auth = tauri::webview::Cookie::build(("SID", "secret"))
+        let auth = tauri::webview::Cookie::build(("LOGIN_INFO", "secret"))
             .domain(".youtube.com").path("/").secure(true).build();
         let unrelated = tauri::webview::Cookie::build(("SID", "other"))
             .domain(".example.com").path("/").build();
         let content = cookie_file_content(&[auth, unrelated.clone()], &SITES[0]).unwrap();
         assert!(content.contains(".youtube.com\tTRUE\t/\tTRUE"), "{content}");
-        assert!(content.contains("\tSID\tsecret"));
+        assert!(content.contains("\tLOGIN_INFO\tsecret"));
         assert!(!content.contains("example.com"));
         assert!(cookie_file_content(&[unrelated], &SITES[0]).is_none());
+        // What a signed-out YouTube window still holds: Google's SID and YouTube's third-party cookies. Not a session.
+        let google = tauri::webview::Cookie::build(("SID", "g")).domain(".google.com").path("/").secure(true).build();
+        let third = tauri::webview::Cookie::build(("__Secure-3PSID", "t")).domain(".youtube.com").path("/").secure(true).build();
+        assert!(cookie_file_content(&[google, third], &SITES[0]).is_none());
     }
     #[test]
     fn each_site_keeps_its_own_session_and_links_use_their_own() {

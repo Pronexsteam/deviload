@@ -38,6 +38,8 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          DEVILOAD_LASTFM_KEY: ${{ secrets.LASTFM_API_KEY }}
+          DEVILOAD_LASTFM_SECRET: ${{ secrets.LASTFM_SHARED_SECRET }}
         run: ./scripts/package.ps1
       - name: Publish the release
         shell: pwsh
@@ -79,6 +81,8 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          DEVILOAD_LASTFM_KEY: ${{ secrets.LASTFM_API_KEY }}
+          DEVILOAD_LASTFM_SECRET: ${{ secrets.LASTFM_SHARED_SECRET }}
         run: npm run tauri build -- --target universal-apple-darwin --bundles app --config src-tauri/tauri.macos-bundle.conf.json --config '{"bundle":{"createUpdaterArtifacts":true}}'
       - name: Attach the app to the release
         env:
@@ -125,6 +129,8 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          DEVILOAD_LASTFM_KEY: ${{ secrets.LASTFM_API_KEY }}
+          DEVILOAD_LASTFM_SECRET: ${{ secrets.LASTFM_SHARED_SECRET }}
         run: npm run tauri build
       - name: Attach the packages to the release
         env:

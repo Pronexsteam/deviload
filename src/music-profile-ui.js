@@ -1,6 +1,7 @@
 import { t, onLanguageChange, errorText } from "./i18n.js";
 import { exportMusicProfile, importMusicProfile } from "./music-profile.js";
 import { readCollectionTransfer, mergeCollectionTransfer } from "./music-collection-transfer.js";
+import { exportLibrary, libraryLists } from "./music-library-export.js";
 
 export function wireMusicProfile({ invoke, read, restore }) {
   const root = document.getElementById("music-profile"),
@@ -43,6 +44,34 @@ export function wireMusicProfile({ invoke, read, restore }) {
       );
   }
   onLanguageChange(describe);
+  // The library for other apps: a spreadsheet, a playlist file for players, or plain data.
+  const shelf = document.createElement("div"),
+    shelfLabel = document.createElement("label"),
+    format = document.createElement("select"),
+    exportLibraryButton = document.createElement("button");
+  shelf.className = "setting-actions music-library-export";
+  exportLibraryButton.type = "button";
+  exportLibraryButton.className = "outline small";
+  for (const value of ["csv", "m3u", "json"]) {
+    const option = document.createElement("option");
+    option.value = value;
+    format.append(option);
+  }
+  shelfLabel.append(format);
+  shelf.append(exportLibraryButton, shelfLabel);
+  exporting.closest(".setting-actions")?.after(shelf);
+  const shelfText = () => {
+    exportLibraryButton.textContent = t("Export library");
+    format.setAttribute("aria-label", t("File format"));
+    const names = {
+      csv: t("CSV · for Excel and Google Sheets"),
+      m3u: t("M3U · playlist for players"),
+      json: t("JSON · plain data"),
+    };
+    for (const option of format.options) option.textContent = names[option.value];
+  };
+  shelfText();
+  onLanguageChange(shelfText);
   async function run(action) {
     if (busy) return;
     busy = true;
@@ -77,6 +106,19 @@ export function wireMusicProfile({ invoke, read, restore }) {
         "Music profile exported ({size} KB). Keep the file to restore your preferences.",
         { size: Math.max(1, Math.ceil(new TextEncoder().encode(data).length / 1024)) },
       );
+    }),
+  );
+  exportLibraryButton.addEventListener("click", () =>
+    run(async () => {
+      const { saved } = read(),
+        likedName = t("Liked songs");
+      if (!libraryLists(saved, likedName).length) {
+        status.textContent = t("Your library is empty: like songs or make a playlist first.");
+        return;
+      }
+      const text = exportLibrary(saved, format.value, { likedName });
+      if (!(await invoke("export_music_library", { text, format: format.value }))) return;
+      status.textContent = t("Library exported.");
     }),
   );
   importing.addEventListener("click", () => file.click());

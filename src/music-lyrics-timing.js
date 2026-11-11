@@ -81,6 +81,12 @@ export function leadSinger(lines) {
   return [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] || "";
 }
 
+// A sung line often ends a breath before the next one starts. A pause this short keeps it lit until the next
+// line begins: clearing it for a tenth of a second made fast lyrics flicker and jump on every line. A real
+// break between verses is longer and still clears the focus.
+export const LINE_HOLD_SECONDS = 2;
+export const TAIL_SECONDS = 0.6;
+
 export function lyricFrame(lines, time, duration = Infinity) {
   if (!Number.isFinite(time) || time < 0 || time >= duration) return [];
   const active = [];
@@ -93,7 +99,23 @@ export function lyricFrame(lines, time, duration = Infinity) {
       next = i + 1;
       while (next < lines.length && lines[next].at === line.at) next++;
     }
-    const end = Math.min(line.end ?? lines[next]?.at ?? duration, duration);
+    const following = lines[next]?.at,
+      held =
+        line.end != null && following > line.end && following - line.end <= LINE_HOLD_SECONDS
+          ? following
+          : null,
+      // A line whose end runs a breath into the next one (timing that is slightly off) would keep two lines lit
+      // at once and make the focus flicker. A longer overlap is a second voice on purpose, and a duet always is.
+      duet = line.agent && lines[next]?.agent && line.agent !== lines[next].agent,
+      tail =
+        line.end != null &&
+        following != null &&
+        line.end > following &&
+        line.end - following <= TAIL_SECONDS &&
+        !duet
+          ? following
+          : null;
+    const end = Math.min(tail ?? held ?? line.end ?? following ?? duration, duration);
     if (time >= end) continue;
     const state = (word, index, words) => {
       if (time < word.at) return { state: "upcoming", progress: 0 };

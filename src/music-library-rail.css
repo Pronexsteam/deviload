@@ -310,3 +310,135 @@
     transition: none;
   }
 }
+
+/* The rail shows each place once: Liked songs and Downloaded music already sit among the section icons above. */
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music.music-library-rail
+  .music-library-sidebar-list
+  > .music-library-nav-item:is([data-collection="favorites"], [data-collection="offline"]) {
+  display: none !important;
+}
+/* Folders open flat in the rail: their playlists join the one column at the same size, without a cramped head. */
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music.music-library-rail
+  :is(.music-library-folder, .music-library-folder-items) {
+  display: contents !important;
+}
+:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-folder-head {
+  display: none !important;
+}
+/* Any number of playlists: the covers scroll inside the rail, which never grows past the window. */
+:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-sidebar-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  padding: 3px 0 18px !important;
+  scrollbar-width: none;
+  mask-image: linear-gradient(#000 calc(100% - 28px), transparent);
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music.music-library-rail
+  .music-library-sidebar-list::-webkit-scrollbar {
+  display: none;
+}
+:root[data-theme] body main[data-page="music"] #devil-music.music-library-rail .music-library-nav-item {
+  flex: none;
+}
+
+/* The open library names its actions instead of three grey icons: bringing music over is how people start. */
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music:not(.music-library-rail)
+  .music-sidebar-controls
+  > .music-heading-actions {
+  flex-direction: column !important;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 2px;
+  /* A column of named actions, not the pill of icons the folded rail uses. */
+  width: 100%;
+  max-width: 100%;
+  margin: 6px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music:not(.music-library-rail)
+  .music-sidebar-controls
+  > .music-heading-actions
+  > button {
+  flex: none !important;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 36px;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--workspace-ink);
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music:not(.music-library-rail)
+  .music-sidebar-controls
+  > .music-heading-actions
+  > button
+  > span:not(.icon) {
+  display: block !important;
+  position: static !important;
+  width: auto !important;
+  height: auto !important;
+  clip-path: none !important;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music:not(.music-library-rail)
+  .music-sidebar-controls
+  > .music-heading-actions
+  > #music-import-open {
+  background: color-mix(in srgb, var(--player-primary, #9ad0ff) 16%, transparent);
+}
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music:not(.music-library-rail)
+  .music-sidebar-controls
+  > .music-heading-actions
+  > #music-import-open:hover {
+  background: color-mix(in srgb, var(--player-primary, #9ad0ff) 24%, transparent);
+}
+/* Refreshing the music is in the home page and on F5; the library does not need its own button for it. */
+:root[data-theme]
+  body
+  main[data-page="music"]
+  #devil-music:not(.music-library-rail)
+  .music-sidebar-controls
+  > .music-heading-actions
+  > #music-refresh {
+  display: none !important;
+}

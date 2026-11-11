@@ -21,7 +21,7 @@ test("home never fetches regional shelves, while explicit search remains availab
   selectView(){},t:s=>s,status(){},skeleton(){},render(){},homeSections:()=>[],personalize(){},
   language:()=> 'ru',audio:{paused:false},invoke:async(command,args)=>{calls.push({command,...args});return {sections:base};},
   homeCache:{sections:base},saved:{showRegional:true},listFilter:'',listSort:'',view:'home',lastQuery:{kind:'home'},
-  continuation:null,morePending:false,loading:false,sections:[],loaded:false};
+  continuation:null,morePending:false,loading:false,sections:[],loaded:false,moodShelves:{get:()=>null,set(){}},readMoodsAhead(){}};
  const load=runInNewContext(`(()=>{${source.slice(source.indexOf('  async function load('),source.indexOf('  function renderInterestPool('))};return load;})()`,ctx);
  await load('home');await load('home','','',true);assert.equal(calls.length,0);
  await load('search','Any artist');assert.equal(calls.length,1);
@@ -30,7 +30,7 @@ test("home never fetches regional shelves, while explicit search remains availab
 });
 function home(showRegional){
   const ctx={saved:{favorites:[],recent:[recent],showRegional,sourceBindings:[],interestMixes:[],playlists:[],collections:[]},taste:{},queue:[],request:1,personalization:0,playbackContext:[],playbackSourceContext:{kind:"manual"},followedCursor:0,privateSession:false,recommendationReasons:new Map(),current:null,sections:[],audio:{paused:true},prepared:[],tracks:items=>items,intent:{enter:id=>ctx.prepared.push(id)},captureListening(){},tasteSeeds:()=>[liked],radio:async()=>[personal],createRecordingView,recommendationSession:{seeds:(_,seeds)=>seeds,contextItems:()=>[],preferenceItems:()=>[],mergePools:pools=>({items:pools.flatMap(pool=>pool.items),scores:new Map()}),allowed:items=>items},recommendationOptions:()=>({}),rankMusicRecommendations:items=>items.map(item=>({item,reason:{code:"catalog"}})),t:s=>s,render(){}};
-  Object.assign(ctx,{publicDiscovery:{candidates:async()=>[],clear(){}},publicGeneration:0,sourceRevision:0,navigator:{},resolveRecordingSource,language:()=>"en",view:"home",lastQuery:{kind:"home"},recommendationRevision:0,listeningRevision:0,homeListeningRevision:0,homeBuiltAt:0,distinctSongs,homeRefreshRevision:-1,nextHomeCandidates:[],homeSeedRotation:0});
+  Object.assign(ctx,{newReleases:{cached:()=>[],load:async()=>[]},publicDiscovery:{candidates:async()=>[],clear(){}},publicGeneration:0,sourceRevision:0,navigator:{},resolveRecordingSource,language:()=>"en",view:"home",lastQuery:{kind:"home"},recommendationRevision:0,listeningRevision:0,homeListeningRevision:0,homeBuiltAt:0,distinctSongs,homeRefreshRevision:-1,nextHomeCandidates:[],homeSeedRotation:0});
   return {ctx,...runInNewContext(`(()=>{${code};return {personalize,homeSections};})()`,ctx)};
 }
 

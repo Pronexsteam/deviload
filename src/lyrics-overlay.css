@@ -71,8 +71,9 @@ body {
   text-shadow: none;
   filter: drop-shadow(0 2px 8px #000b);
 }
+/* The same karaoke as in the lyrics pane: bright where sung, dim ahead, a soft edge between, words stay put. */
 .lyric-cap-word {
-  background: linear-gradient(90deg, var(--strip-accent) var(--fill, 0%), #ffffff73 var(--fill, 0%));
+  background: linear-gradient(90deg, #fff calc(var(--fill, 0%) - 6%), #ffffff73 calc(var(--fill, 0%) + 6%));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -80,7 +81,7 @@ body {
   transition: translate 0.25s;
 }
 .lyric-cap-word.is-sung {
-  translate: 0 -1px;
+  translate: none;
 }
 .lyric-cap-line.is-leaving {
   animation: strip-out 0.36s ease forwards;

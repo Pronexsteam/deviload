@@ -109,6 +109,34 @@ export function selectImportMatch(entry, candidates) {
     : { item: null, confidence: "none" };
 }
 
+// Songs already in the library are matched from it by the same strict rules as a catalog search, so reading a
+// library again asks YouTube Music only about the songs that are new. Files on this computer are left out: an
+// imported list should not depend on a file that may be moved.
+export function createLibraryIndex(items) {
+  const byId = new Map(),
+    byTitle = new Map();
+  for (const value of Array.isArray(items) ? items : []) {
+    if (!value || typeof value.title !== "string" || !/^[\w-]{11}$/.test(value.id) || byId.has(value.id))
+      continue;
+    byId.set(value.id, value);
+    const key = matchingTitle(value);
+    if (!key) continue;
+    const pool = byTitle.get(key);
+    if (!pool) byTitle.set(key, [value]);
+    else if (pool.length < 8) pool.push(value);
+  }
+  return {
+    size: byId.size,
+    find(entry) {
+      if (/^[\w-]{11}$/.test(entry?.videoId || "")) return byId.get(entry.videoId) || null;
+      const pool = byTitle.get(matchingTitle(entry || {}));
+      if (!pool) return null;
+      const match = selectImportMatch(entry, pool);
+      return match.confidence === "exact" ? match.item : null;
+    },
+  };
+}
+
 function importId(source, name) {
   const key = JSON.stringify([source, name]);
   let first = 2166136261,

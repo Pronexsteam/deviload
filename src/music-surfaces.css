@@ -377,6 +377,8 @@
   border-radius: 20px;
   background: color-mix(in srgb, var(--theme-bg, #101318) 90%, var(--workspace-ink, #fff) 10%);
   box-shadow: 0 18px 44px -18px #000c;
+  /* Nothing in the menu scrolls sideways: long names end with an ellipsis instead. */
+  overflow-x: hidden;
 }
 .music-dock-menu:popover-open {
   display: grid;
@@ -404,6 +406,13 @@
 }
 #music-dock-menu > button::after {
   content: attr(aria-label);
+  min-width: 0;
+  /* Room for letters that go below the line (g, p, y): the clipping for the ellipsis must not cut them. */
+  line-height: 1.45;
+  padding-block: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 @media (min-width: 900px) {
   :root[data-theme] body.music-page .music-dock {
@@ -1767,8 +1776,8 @@
 .music-clip-captions .lyric-cap-word {
   background: linear-gradient(
     90deg,
-    var(--strip-accent) var(--fill, 0%),
-    rgba(255, 255, 255, 0.5) var(--fill, 0%)
+    #fff calc(var(--fill, 0%) - 6%),
+    rgba(255, 255, 255, 0.5) calc(var(--fill, 0%) + 6%)
   );
   -webkit-background-clip: text;
   background-clip: text;
@@ -1784,7 +1793,7 @@
   transition: translate 0.3s cubic-bezier(0.2, 1.12, 0.32, 1);
 }
 .music-clip-captions .lyric-cap-word.is-sung {
-  translate: 0 -2px;
+  translate: none;
 }
 .music-clip-captions .lyric-cap-line.is-leaving {
   animation: music-caption-out 0.36s ease forwards;

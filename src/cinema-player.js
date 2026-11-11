@@ -73,6 +73,9 @@ export function createCinema({
       }
     },
     onError(code) {
+      // A label refused the embedded player: play its picture here, with the song's sound beside it.
+      if (dialog.open && (code === 101 || code === 150) && queue.current?.kind === "online-video")
+        return playWithSound(queue.current, currentToken);
       if (dialog.open)
         failed(
           t(
@@ -200,10 +203,68 @@ export function createCinema({
     // Stop on a preparation/decoder failure. Automatically skipping failures
     // can silently walk the entire online queue and issue unwanted requests.
   }
+  // YouTube serves a label's video without sound to apps, and the song's sound through the music engine. The
+  // picture plays in the player as usual and the sound follows it: play, pause, jumps, speed and volume.
+  let currentToken = null;
+  async function playWithSound(item, token) {
+    youtube.stop();
+    status(t("Preparing video…"));
+    try {
+      const [picture, sound] = await Promise.all([
+        invoke("cinema_stream", { id: item.id, silent: true }),
+        invoke("music_stream", { id: item.id, preload: true }),
+      ]);
+      if (!queue.valid(token) || !dialog.open || queue.current !== item) return;
+      metadataCleanup();
+      const follow = force => {
+        if (Math.abs(audio.currentTime - video.currentTime) > (force ? 0.05 : 0.3))
+          audio.currentTime = video.currentTime;
+      };
+      const handlers = {
+        play: () => {
+          follow(true);
+          audio.play().catch(() => {});
+        },
+        playing: () => audio.play().catch(() => {}),
+        pause: () => audio.pause(),
+        waiting: () => audio.pause(),
+        ended: () => audio.pause(),
+        seeked: () => follow(true),
+        timeupdate: () => follow(false),
+        ratechange: () => (audio.playbackRate = video.playbackRate),
+        volumechange: () => {
+          audio.volume = video.volume;
+          audio.muted = video.muted;
+        },
+        loadedmetadata: () => {
+          item.status = "ready";
+          render();
+          status(t("This video plays with the song's sound from Devil Music."));
+          onCurrent(item);
+          video.play().catch(() => status(t("Press play to start the video.")));
+        },
+      };
+      for (const [name, handler] of Object.entries(handlers)) video.addEventListener(name, handler);
+      metadataCleanup = () => {
+        for (const [name, handler] of Object.entries(handlers)) video.removeEventListener(name, handler);
+      };
+      audio.hidden = true;
+      audio.volume = video.volume;
+      audio.muted = video.muted;
+      audio.src = sound.url;
+      audio.load();
+      video.hidden = false;
+      video.src = picture.url;
+      video.load();
+    } catch (error) {
+      if (queue.valid(token) && dialog.open) failed(errorText(error));
+    }
+  }
   async function select(position, shouldPlay = false) {
     save();
     const token = queue.select(position);
     if (token === null) return;
+    currentToken = token;
     stop(queue.current?.kind === "online-video");
     show();
     const item = queue.current;

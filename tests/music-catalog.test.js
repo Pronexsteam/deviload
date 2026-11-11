@@ -22,7 +22,7 @@ test("timed lyrics preserve repeated lines, sort timestamps and reject invalid m
   assert.equal(parseLyrics(null).length,0);assert.equal(parseLyrics('[999999:01]bad').length,0);
 });
 test("untrusted sound settings cannot enable arbitrary gains or transitions",()=>{
-  assert.deepEqual(JSON.parse(JSON.stringify(soundSettings({preset:"evil",soft:"true",level:"true",transition:999}))),{preset:"flat",bands:[0,0,0,0,0,0],custom:[],selected:"",bypass:false,soft:false,level:false,transition:0,seamless:true,rate:1});
+  assert.deepEqual(JSON.parse(JSON.stringify(soundSettings({preset:"evil",soft:"true",level:"true",skipSilence:"true",transition:999}))),{preset:"flat",bands:[0,0,0,0,0,0],custom:[],selected:"",bypass:false,soft:false,level:false,transition:0,seamless:true,skipSilence:false,skipSegments:false,rate:1});
 });
 test("an existing download takes priority over the network and a missing file falls back",async()=>{
   for(const bound of [false,true]){

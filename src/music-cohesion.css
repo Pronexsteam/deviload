@@ -382,30 +382,7 @@ body :is(.music-track-options, .music-search-suggestions, .quick-theme-menu) but
 :root[data-theme] .music-lyric-line.active.has-word-sync {
   text-decoration: none;
 }
-.music-lyric-line.active.has-word-sync .music-lyric-word {
-  color: color-mix(in srgb, var(--lyric-ink) 36%, transparent);
-}
-.music-lyric-line.active.has-word-sync .music-lyric-word[data-state="sung"] {
-  color: color-mix(in srgb, var(--lyric-ink) 78%, transparent);
-}
-.music-lyric-line.active.has-word-sync .music-lyric-word[data-state="current"] {
-  color: transparent;
-  background: linear-gradient(
-    90deg,
-    var(--lyric-ink) calc(var(--word-progress) - 18%),
-    var(--lyric-shine) calc(var(--word-progress) - 4%),
-    var(--lyric-aura) var(--word-progress),
-    color-mix(in srgb, var(--lyric-ink) 36%, transparent) calc(var(--word-progress) + 10%)
-  );
-  background-clip: text;
-  -webkit-background-clip: text;
-  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--lyric-aura) 38%, transparent));
-}
-:root[data-theme="glass-light"]
-  .music-lyric-line.active.has-word-sync
-  .music-lyric-word[data-state="current"] {
-  filter: drop-shadow(0 0 4px #416cac26);
-}
+/* Word colours live in lyrics-flow.css only: one fill, no second shine or glow on top. */
 @media (prefers-reduced-motion: reduce) {
   .music-lyric-word {
     transition: none;

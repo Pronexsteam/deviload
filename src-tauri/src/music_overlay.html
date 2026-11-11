@@ -1,0 +1,154 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Deviload · Now playing</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: transparent;
+        overflow: hidden;
+        font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+      }
+      .card {
+        position: fixed;
+        left: 24px;
+        bottom: 24px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        width: min(440px, calc(100vw - 48px));
+        padding: 12px 18px 12px 12px;
+        box-sizing: border-box;
+        border: 1px solid rgb(255 255 255 / 0.14);
+        border-radius: 18px;
+        background: rgb(14 16 22 / 0.78);
+        color: #fff;
+        box-shadow: 0 18px 50px rgb(0 0 0 / 0.35);
+        opacity: 0;
+        translate: 0 12px;
+        transition:
+          opacity 0.4s ease,
+          translate 0.5s cubic-bezier(0.2, 0.85, 0.15, 1);
+      }
+      .card.shown {
+        opacity: 1;
+        translate: 0 0;
+      }
+      .light .card {
+        border-color: rgb(0 0 0 / 0.08);
+        background: rgb(255 255 255 / 0.86);
+        color: #111;
+      }
+      .cover {
+        width: 64px;
+        height: 64px;
+        flex: none;
+        border-radius: 12px;
+        object-fit: cover;
+        background: rgb(255 255 255 / 0.08);
+      }
+      .copy {
+        display: grid;
+        gap: 3px;
+        min-width: 0;
+        flex: 1;
+      }
+      .title,
+      .artist {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .title {
+        font-size: 17px;
+        font-weight: 650;
+      }
+      .artist {
+        font-size: 14px;
+        opacity: 0.72;
+      }
+      .bar {
+        height: 4px;
+        margin-top: 6px;
+        border-radius: 4px;
+        background: rgb(127 127 127 / 0.3);
+        overflow: hidden;
+      }
+      .bar span {
+        display: block;
+        height: 100%;
+        width: 0;
+        border-radius: inherit;
+        background: currentColor;
+      }
+      .no-bar .bar {
+        display: none;
+      }
+      .paused .cover {
+        filter: grayscale(0.6);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card" role="status">
+      <img class="cover" alt="" />
+      <div class="copy">
+        <div class="title"></div>
+        <div class="artist"></div>
+        <div class="bar"><span></span></div>
+      </div>
+    </div>
+    <script>
+      // The song playing in Devil Music, for an OBS browser source. It reads only the player's public state,
+      // with the token from this page's own address; it cannot steer the player.
+      const query = new URLSearchParams(location.search);
+      const token = query.get("token") || "";
+      if (query.get("theme") === "light") document.body.classList.add("light");
+      if (query.get("progress") === "0") document.body.classList.add("no-bar");
+      const card = document.querySelector(".card"),
+        cover = document.querySelector(".cover"),
+        title = document.querySelector(".title"),
+        artist = document.querySelector(".artist"),
+        fill = document.querySelector(".bar span");
+      let state = null,
+        at = 0,
+        song = "";
+      const safe = url => (/^https:\/\//.test(url || "") ? url : "");
+      async function poll() {
+        try {
+          const answer = await fetch("/api/v1/state?token=" + encodeURIComponent(token), { cache: "no-store" });
+          if (answer.ok) {
+            state = await answer.json();
+            at = performance.now();
+            const key = state.title + "\u0000" + state.artist;
+            if (key !== song) {
+              song = key;
+              title.textContent = state.title || "";
+              artist.textContent = state.artist || "";
+              const image = safe(state.image);
+              cover.hidden = !image;
+              if (image) cover.src = image;
+            }
+          }
+        } catch {
+          state = null;
+        }
+        card.classList.toggle("shown", !!(state && state.active && state.title));
+        document.body.classList.toggle("paused", !!state && !state.playing);
+      }
+      function frame() {
+        if (state && state.duration > 0) {
+          const moved = state.playing ? ((performance.now() - at) / 1000) * (state.rate || 1) : 0;
+          const position = Math.min(state.duration, state.position + moved);
+          fill.style.width = ((position / state.duration) * 100).toFixed(2) + "%";
+        }
+        requestAnimationFrame(frame);
+      }
+      poll();
+      setInterval(poll, 1000);
+      requestAnimationFrame(frame);
+    </script>
+  </body>
+</html>

@@ -1,10 +1,13 @@
 // A music download must never inherit a video draft's links, clip or schedule.
 export async function downloadMusic(invoke, item, settings) {
   if (!invoke) throw new Error("Open the installed Deviload app to download.");
-  if (item?.kind !== "song" || !/^[A-Za-z0-9_-]{11}$/.test(item.id)) throw new Error("Invalid music request");
+  // One song, or a whole playlist at once for listening offline.
+  const items = Array.isArray(item) ? item : [item];
+  if (!items.length || items.some(song => song?.kind !== "song" || !/^[A-Za-z0-9_-]{11}$/.test(song.id)))
+    throw new Error("Invalid music request");
   const mode = settings.cookiesMode;
   const request = {
-    text: `https://www.youtube.com/watch?v=${item.id}`,
+    text: items.map(song => `https://www.youtube.com/watch?v=${song.id}`).join("\n"),
     options: {
       folder: settings.folder,
       quality: "mp3",

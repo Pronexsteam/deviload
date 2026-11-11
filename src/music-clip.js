@@ -122,6 +122,10 @@ export function createMusicClip({
   onState = () => {},
   onBuffering = () => {},
   storage = globalThis.localStorage,
+  // Seconds from the song's clock to this video's: a video with a longer intro runs later than the song.
+  getOffset = () => 0,
+  // The video chosen for the song, so its own timing can be measured.
+  onClip = () => {},
 }) {
   let enabled = false,
     quality = 720;
@@ -134,6 +138,7 @@ export function createMusicClip({
   if (returning)
     setTimeout(() => invoke("music_clip_stream", { id: null, warm: true }).catch(() => {}), 5000);
   let track = null,
+    clipId = "",
     key = "",
     serial = 0,
     video = null,
@@ -168,17 +173,21 @@ export function createMusicClip({
     pulse();
   };
   const found = new Map();
-  // The music engine streams the video like the audio; the video player's source is the reserve.
+  // The music engine streams the video like the audio; the video player's source is the reserve. Once the
+  // engine's stream of this video broke, the retry goes straight to the reserve: the engine would only hand
+  // back the same stream, which YouTube had just stopped (it does while it checks a session's token).
   async function source(id, token) {
-    try {
-      const result = await invoke("music_clip_stream", { id, height: quality });
-      if (result?.url) {
-        streaming = true;
-        return result;
-      }
-    } catch {}
+    if (retried !== key)
+      try {
+        const result = await invoke("music_clip_stream", { id, height: quality });
+        if (result?.url) {
+          streaming = true;
+          return result;
+        }
+      } catch {}
     if (token !== serial) return null;
-    const reserve = () => invoke("cinema_stream", { id, quality });
+    // The picture only: the clip plays muted, and YouTube serves the silent format for label videos too.
+    const reserve = () => invoke("cinema_stream", { id, quality, silent: true });
     const result = await reserve().catch(async () => {
       await pause(1500);
       return token === serial ? reserve() : null;
@@ -273,7 +282,7 @@ export function createMusicClip({
       return;
     }
     // The picture shows at once while sound reaches the speakers later, so it follows what is heard.
-    const heard = Math.max(0, audio.currentTime - getLatency());
+    const heard = Math.max(0, audio.currentTime - getLatency() + (Number(getOffset(clipId)) || 0));
     const rate = audio.playbackRate || 1,
       target = Math.min(heard, Math.max(0, (video.duration || heard) - 0.05)),
       drift = video.currentTime - target;
@@ -379,6 +388,8 @@ export function createMusicClip({
         report({ enabled, ready: false, loading: false, missing: true });
         return;
       }
+      clipId = id;
+      onClip(id);
       const stream = await source(id, token);
       if (token !== serial || !enabled || !stream) return;
       offer = {

@@ -52,7 +52,7 @@ fn matching_files(jobs: &[crate::model::Job], id: &str) -> Vec<String> {
     }
     files
 }
-fn offline_path(engine: &crate::Engine, id: &str) -> Option<PathBuf> {
+pub(crate) fn offline_path(engine: &crate::Engine, id: &str) -> Option<PathBuf> {
     if id.len()!=11||!id.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'-'||b==b'_'){return None;}
     let candidates={let data=engine.data.lock().unwrap();matching_files(&data.jobs,id)};
     candidates.iter().find_map(|file|audio_path(file))

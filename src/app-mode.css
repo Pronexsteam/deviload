@@ -96,21 +96,37 @@ dialog.app-mode-welcome > p {
 :root[data-theme] body #music-preferences .app-mode-toggle {
   display: grid !important;
   grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
   justify-content: stretch;
+  column-gap: 10px;
+  row-gap: 8px;
+  margin: 0 0 20px !important;
+  padding: 0 0 20px !important;
+  border: 0 !important;
+  border-bottom: 1px solid #ffffff12 !important;
+  border-radius: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
   text-align: left;
+  font-weight: 600;
+}
+/* The note sits under the switch at the left edge, like the notes of the rows below it. */
+:root[data-theme] body #music-preferences .app-mode-toggle small {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--workspace-muted, #b9bcc6);
 }
 :root[data-theme] body #music-preferences .app-mode-toggle input {
   margin: 0;
 }
-/* Pause while another app plays: two plain switches with a note, aligned like the rest of the panel. */
+/* Pause while another app plays: two switches and a note, laid out like the other settings rows. */
 :root[data-theme] body #music-preferences .music-yield {
   display: grid;
-  gap: 8px;
-  margin: 12px 0 4px;
-  padding: 12px 14px;
-  border: 1px solid var(--surf-line, #ffffff1c);
-  border-radius: 14px;
-  background: var(--surf-fill, #ffffff06);
+  gap: 10px;
   min-width: 0;
 }
 :root[data-theme] body #music-preferences .music-yield label {
@@ -132,6 +148,197 @@ dialog.app-mode-welcome > p {
 }
 .music-yield-note {
   margin: 0;
+  font-size: 13px;
+  color: var(--workspace-muted, #b9bcc6);
+}
+/* Scrobbling: one block per service, name above its state, actions on one wrapping row. */
+#music-preferences .music-scrobbling-service {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+}
+#music-preferences .music-scrobbling-service > span {
+  font-size: 13px;
+  color: var(--workspace-muted, #b9bcc6);
+}
+#music-preferences .music-scrobbling-service .setting-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+#music-preferences .music-scrobbling-service input[type="password"] {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.music-scrobbling-note {
+  margin: 10px 0 0;
   font-size: 12px;
   color: var(--workspace-muted, #b9bcc6);
+}
+
+/* The YouTube account row: its state and a note on the left, one button on the right. */
+/* Accounts: YouTube Music and Spotify side by side, each with its logo and its own sign-in button. */
+#music-preferences .music-accounts {
+  display: grid;
+  gap: 10px;
+}
+#music-preferences .music-accounts-title {
+  font-size: 14px;
+}
+#music-preferences .music-accounts-note {
+  opacity: 0.65;
+}
+#music-preferences .music-account-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+}
+#music-preferences .music-account-logo {
+  width: 32px;
+  height: 32px;
+}
+#music-preferences .music-account-logo-youtube {
+  display: block;
+  background: #ff0033;
+  mask: url("assets/brands/youtubemusic.svg") center / contain no-repeat;
+}
+#music-preferences .music-account-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+#music-preferences .music-account-name {
+  font-weight: 600;
+}
+#music-preferences .music-account-copy small {
+  opacity: 0.72;
+  line-height: 1.4;
+}
+#music-preferences .music-account-row[data-signed-in="true"] .music-account-name::after {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 8px;
+  border-radius: 50%;
+  background: #3ecf6e;
+  vertical-align: middle;
+}
+:root[data-theme] body :is(#music-preferences, .music-import-dialog) .music-account-in {
+  min-height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px -10px currentColor;
+  transition:
+    filter 150ms ease,
+    transform 150ms ease;
+}
+:root[data-theme] body :is(#music-preferences, .music-import-dialog) .music-account-in:not(:disabled):hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+:root[data-theme] body :is(#music-preferences, .music-import-dialog) .music-account-in:disabled {
+  opacity: 0.6;
+}
+/* The services' own colours: YouTube red with white, Spotify green with black. */
+:root[data-theme] body :is(#music-preferences, .music-import-dialog) .music-account-in-youtube {
+  background: #ff0033;
+  color: #fff;
+}
+:root[data-theme] body :is(#music-preferences, .music-import-dialog) .music-account-in-spotify {
+  background: #1ed760;
+  color: #000;
+}
+/* Bringing YouTube Music likes over: only while signed in, under the account's name. */
+#music-preferences .music-account-row[data-signed-in="false"] .music-account-addon {
+  display: none;
+}
+#music-preferences .music-likes-sync {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 8px;
+}
+#music-preferences .music-likes-sync-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+#music-preferences .music-likes-sync .music-likes-sync-when {
+  flex-basis: 100%;
+  opacity: 0.6;
+}
+@media (max-width: 520px) {
+  #music-preferences .music-account-row {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+  #music-preferences .music-account-row > button {
+    grid-column: 1 / -1;
+  }
+}
+#music-preferences .music-control-api {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+#music-preferences .music-control-api small {
+  display: block;
+  margin-top: 2px;
+  opacity: 0.72;
+}
+#music-preferences .music-control-api code {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.82em;
+  opacity: 0.85;
+  user-select: text;
+}
+#music-preferences .music-control-api-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* Music settings under plain headings: accounts, playback, suggestions, privacy, integrations, the app. */
+#music-preferences .music-settings-group {
+  display: grid;
+  gap: 10px;
+  margin-top: 26px;
+}
+#music-preferences .music-settings-group[hidden] {
+  display: none;
+}
+#music-preferences .music-settings-group > * {
+  margin-block: 0;
+}
+#music-preferences .music-settings-group-title {
+  margin: 0;
+  padding-inline: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+/* The group heading already says Accounts. */
+#music-preferences .music-settings-group .music-accounts-title {
+  display: none;
+}
+#music-preferences .music-settings-group .music-tour-replay {
+  justify-self: start;
 }

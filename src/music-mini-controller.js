@@ -1,6 +1,8 @@
 import { t, errorText, onLanguageChange } from "./i18n.js";
 export function createMusicMiniPlayer({ invoke, button, extras, getState, getQueue = () => [], notify }) {
   let opened = false,
+    // The local control API reads the same state, so it is kept current while the API is on.
+    shared = document.documentElement.dataset?.controlApi === "on",
     last = "",
     pending = false,
     lightPending = false,
@@ -27,7 +29,7 @@ export function createMusicMiniPlayer({ invoke, button, extras, getState, getQue
     variant: document.documentElement.dataset.variant || "",
   });
   async function sync() {
-    if (!opened || pending) return;
+    if ((!opened && !shared) || pending) return;
     const value = state(),
       signature = JSON.stringify({ ...value, position: Math.floor(value.position) });
     if (signature === last) return;
@@ -77,6 +79,11 @@ export function createMusicMiniPlayer({ invoke, button, extras, getState, getQue
   });
   window.__TAURI__?.event?.listen("music-mini-show", () => document.querySelector("#music-tab")?.click());
   document.addEventListener("deviload-theme-change", sync);
+  document.addEventListener("music-control-api", event => {
+    shared = !!event.detail;
+    last = "";
+    sync();
+  });
   setInterval(sync, 1000);
   return {
     sync,

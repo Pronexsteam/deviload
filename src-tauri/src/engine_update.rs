@@ -15,6 +15,11 @@ pub fn json_output(command: &mut Command, timeout: Duration) -> Result<Output, S
     json_output_cancellable(command, timeout, &|| false)
 }
 
+// A whole music library (thousands of songs as JSON) can pass 8 MB; library reads get room for it.
+pub fn json_output_large(command: &mut Command, timeout: Duration) -> Result<Output, String> {
+    run(command, timeout, 64 * 1024 * 1024, false, &|| false)
+}
+
 pub fn json_output_cancellable(command: &mut Command, timeout: Duration, cancelled: &dyn Fn() -> bool) -> Result<Output, String> {
     run(command, timeout, 8 * 1024 * 1024, false, cancelled)
 }

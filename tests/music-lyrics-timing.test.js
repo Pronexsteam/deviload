@@ -64,3 +64,30 @@ test('the singer with the most lines leads, and unattributed lyrics have no lead
  assert.equal(leadSinger([{agent:'v1'},{agent:'v2'},{agent:'v2'}]),'v2');
  assert.equal(leadSinger([{text:'a'},{agent:''}]),'');
 });
+
+test('a short breath between sung lines keeps the line lit, a real break still clears it',()=>{
+ // Fast lyrics: each line's words end a tenth of a second before the next line starts.
+ const lines=timedLyrics([
+  {text:'One',at:1,end:2.9,words:[{text:'One',at:1,end:2.9}]},
+  {text:'Two',at:3,end:4.8,words:[{text:'Two',at:3,end:4.8}]},
+  {text:'Three',at:9,end:10,words:[{text:'Three',at:9,end:10}]},
+ ]);
+ assert.equal(lyricFrame(lines,2.95).length,1,'lit through the short breath');
+ assert.equal(lyricFrame(lines,2.95)[0].index,0);
+ // All its words are sung while it waits for the next line.
+ assert.deepEqual(lyricFrame(lines,2.95)[0].words.map(w=>w.state),['sung']);
+ assert.equal(lyricFrame(lines,3)[0].index,1);
+ // Four seconds of music before the next verse is a break: the focus clears.
+ assert.deepEqual(lyricFrame(lines,4.9),[]);
+ assert.deepEqual(lyricFrame(lines,5),[]);
+ assert.equal(lyricFrame(lines,9)[0].index,2);
+});
+
+test('a line ending a breath after the next one starts hands the focus over, a real second voice keeps both',()=>{
+ const lines=[{at:1,end:3.4,text:'First'},{at:3,end:5,text:'Second'}];
+ assert.deepEqual(lyricFrame(lines,3.2).map(s=>s.index),[1]);
+ const duet=[{at:1,end:3.4,text:'Her',agent:'v1'},{at:3,end:5,text:'Him',agent:'v2'}];
+ assert.deepEqual(lyricFrame(duet,3.2).map(s=>s.index),[0,1]);
+ const choir=[{at:1,end:4.5,text:'Lead'},{at:3,end:5,text:'Choir'}];
+ assert.deepEqual(lyricFrame(choir,3.5).map(s=>s.index),[0,1]);
+});

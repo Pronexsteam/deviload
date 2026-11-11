@@ -10,7 +10,11 @@ pub mod exact;
 pub mod equivalent;
 
 #[derive(Clone, Default, Deserialize, Serialize)]
-struct Entry { id: String, path: PathBuf, size: u64, modified: u128, hash: String, title: String, artist: String, album: String, duration: f64, image: bool, #[serde(default)] needs_scan:bool }
+struct Entry { id: String, path: PathBuf, size: u64, modified: u128, hash: String, title: String, artist: String, album: String, duration: f64, image: bool, #[serde(default)] needs_scan:bool, #[serde(default)] lossless: Option<bool> }
+// Lossless audio: FLAC, ALAC, plain PCM (WAV/AIFF) and the other bit-exact codecs. MP3, AAC, Ogg and Opus are not.
+fn lossless_codec(codec:&str)->bool { matches!(codec,"flac"|"alac"|"wavpack"|"ape"|"tta"|"mlp"|"truehd") || codec.starts_with("pcm_") }
+// Files scanned before the codec was recorded: only extensions that are always lossless count; an .m4a may be AAC.
+fn lossless_by_name(path:&Path)->bool { path.extension().and_then(|v|v.to_str()).is_some_and(|s| ["flac","wav","aiff","aif","alac"].contains(&s.to_ascii_lowercase().as_str())) }
 #[derive(Default, Deserialize, Serialize)]
 struct Index { roots: Vec<PathBuf>, entries: BTreeMap<String, Entry> }
 #[derive(Default)]
@@ -52,8 +56,8 @@ fn capture(cmd: &mut std::process::Command, limit: u64) -> Result<Vec<u8>,String
     if !status.success(){return Err("Local music metadata could not be read.".into());}
     use std::io::{Seek, SeekFrom};temp.seek(SeekFrom::Start(0)).map_err(|e|e.to_string())?;let mut data=Vec::new();temp.take(limit+1).read_to_end(&mut data).map_err(|e|e.to_string())?;if data.len() as u64>limit{return Err("Local music metadata could not be read.".into());}Ok(data)
 }
-fn inspect(path: &Path, dir: &Path, hash: &str) -> Result<(String,String,String,f64,bool),String> {
-    let probe=crate::binary("ffprobe")?;let bytes=capture(crate::command(&probe).args(["-v","error","-protocol_whitelist","file,pipe","-max_alloc","33554432","-show_entries","format=duration:format_tags=title,artist,album:stream=codec_type:stream_disposition=attached_pic","-of","json"]).arg(path),262144)?;
+fn inspect(path: &Path, dir: &Path, hash: &str) -> Result<(String,String,String,f64,bool,bool),String> {
+    let probe=crate::binary("ffprobe")?;let bytes=capture(crate::command(&probe).args(["-v","error","-protocol_whitelist","file,pipe","-max_alloc","33554432","-show_entries","format=duration:format_tags=title,artist,album:stream=codec_type,codec_name:stream_disposition=attached_pic","-of","json"]).arg(path),262144)?;
     let info:Value=serde_json::from_slice(&bytes).map_err(|e|e.to_string())?;
     if !info["streams"].as_array().is_some_and(|a|a.iter().any(|s|s["codec_type"]=="audio")){return Err("The selected file has no audio.".into());}
     let tag=|key:&str|info["format"]["tags"].as_object().and_then(|tags|tags.iter().find(|(k,_)|k.eq_ignore_ascii_case(key))).and_then(|(_,v)|v.as_str()).unwrap_or("").chars().filter(|c|!c.is_control()).take(240).collect::<String>();
@@ -64,7 +68,8 @@ fn inspect(path: &Path, dir: &Path, hash: &str) -> Result<(String,String,String,
     if !image && info["streams"].as_array().is_some_and(|a|a.iter().any(|s|s["disposition"]["attached_pic"]==1)){
         if let Ok(ffmpeg)=crate::binary("ffmpeg") {if let Ok(data)=capture(crate::command(&ffmpeg).args(["-hide_banner","-loglevel","error","-nostdin","-protocol_whitelist","file,pipe","-max_alloc","33554432","-i"]).arg(path).args(["-map","0:v:0","-frames:v","1","-vf","scale=512:512:force_original_aspect_ratio=decrease","-c:v","mjpeg","-f","image2pipe","-"]),1_048_576){if data.starts_with(&[255,216]){fs::write(&art_path,data).map_err(|e|e.to_string())?;image=true;}}}
     }
-    Ok((title,tag("artist"),tag("album"),duration,image))
+    let lossless=info["streams"].as_array().is_some_and(|a|a.iter().any(|s|s["codec_type"]=="audio"&&s["codec_name"].as_str().is_some_and(lossless_codec)));
+    Ok((title,tag("artist"),tag("album"),duration,image,lossless))
 }
 fn scan(roots: Vec<PathBuf>) -> Result<(),String> {
     let (dir,previous)={let s=state().lock().map_err(|e|e.to_string())?;(s.dir.clone(),s.index.entries.clone())};
@@ -85,8 +90,8 @@ fn scan(roots: Vec<PathBuf>) -> Result<(),String> {
             if by_path.get(&path).is_some_and(|e|!e.needs_scan&&e.size==size&&e.modified==modified){return Ok(());}
             let hash=fingerprint(&path)?;
             let id=by_path.get(&path).map(|e|e.id.clone()).or_else(||by_hash.get(&hash).cloned()).or_else(||seen_hash.get(&hash).cloned()).unwrap_or_else(||format!("local:{hash}"));
-            let (title,artist,album,duration,image)=inspect(&path,&dir,&hash)?;
-            let entry=Entry{id:id.clone(),path,size,modified,hash:hash.clone(),title,artist,album,duration,image,needs_scan:false};seen_hash.insert(hash,id.clone());
+            let (title,artist,album,duration,image,lossless)=inspect(&path,&dir,&hash)?;
+            let entry=Entry{id:id.clone(),path,size,modified,hash:hash.clone(),title,artist,album,duration,image,needs_scan:false,lossless:Some(lossless)};seen_hash.insert(hash,id.clone());
             let mut s=state().lock().map_err(|e|e.to_string())?;s.index.entries.insert(id,entry);s.changed+=1;
             if s.changed%100==0 {save(&s)?;}Ok::<(),String>(())
         })();
@@ -124,7 +129,7 @@ pub async fn music_local_list(window:tauri::WebviewWindow,engine:tauri::State<'_
 fn page(s:&mut State,offset:usize,generation:Option<u64>)->Result<Value,String>{
     if offset==0{s.snapshot=s.index.entries.values().cloned().collect();s.generation=s.generation.wrapping_add(1);}
     else if generation!=Some(s.generation){return Err("The local music list changed. Refresh it and try again.".into());}
-    let items:Vec<_>=s.snapshot.iter().skip(offset).take(400).map(|e|json!({"id":e.id,"kind":"song","title":e.title,"subtitle":e.artist,"artists":if e.artist.is_empty(){vec![]}else{vec![e.artist.clone()]},"album":e.album,"duration":e.duration,"contentHash":e.hash,"image":if e.image{format!("music-art://localhost/{}.jpg",e.hash)}else{String::new()}})).collect();
+    let items:Vec<_>=s.snapshot.iter().skip(offset).take(400).map(|e|json!({"id":e.id,"kind":"song","title":e.title,"subtitle":e.artist,"artists":if e.artist.is_empty(){vec![]}else{vec![e.artist.clone()]},"album":e.album,"duration":e.duration,"contentHash":e.hash,"lossless":e.lossless.unwrap_or_else(||lossless_by_name(&e.path)),"image":if e.image{format!("music-art://localhost/{}.jpg",e.hash)}else{String::new()}})).collect();
     Ok(json!({"items":items,"total":s.snapshot.len(),"generation":s.generation,"scanning":SCANNING.load(Ordering::Acquire),"scanned":s.scanned,"changed":s.changed,"failed":s.failed,"error":s.error}))
 }
 pub fn source(id:&str,dir:&Path)->Result<PathBuf,String>{
@@ -186,5 +191,18 @@ mod tests {
         CANCEL.store(true,Ordering::Relaxed);assert!(fingerprint(&relocated.join("renamed.flac")).is_err());CANCEL.store(false,Ordering::Relaxed);
         let corrupt=dir.path().join("corrupt");fs::create_dir(&corrupt).unwrap();fs::write(corrupt.join("music-local-index.json"),"bad data").unwrap();assert!(load(&corrupt).is_err());assert_eq!(fs::read_to_string(corrupt.join("music-local-index.json")).unwrap(),"bad data");
         for id in ["local:../secret","local:https://remote","local:abc",&format!("local:{}","A".repeat(64))]{assert!(!local_id(id));}
+    }
+}
+
+#[cfg(test)]
+mod lossless_tests {
+    use super::*;
+    #[test]
+    fn lossless_means_bit_exact_codecs_and_old_entries_fall_back_to_sure_extensions() {
+        for codec in ["flac", "alac", "pcm_s16le", "pcm_s24be", "wavpack", "ape"] { assert!(lossless_codec(codec), "{codec}"); }
+        for codec in ["mp3", "aac", "opus", "vorbis", "wmav2", ""] { assert!(!lossless_codec(codec), "{codec}"); }
+        assert!(lossless_by_name(Path::new("C:/Music/a.FLAC")) && lossless_by_name(Path::new("b.wav")) && lossless_by_name(Path::new("c.aiff")));
+        // An .m4a may hold AAC as well as ALAC, so only its codec decides.
+        assert!(!lossless_by_name(Path::new("d.m4a")) && !lossless_by_name(Path::new("e.mp3")));
     }
 }

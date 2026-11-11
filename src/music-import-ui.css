@@ -238,14 +238,54 @@
 .music-import-start[hidden],
 .music-import-step[hidden],
 .music-import-link-area[hidden],
+.music-import-account-area[hidden],
 .music-import-file-area[hidden] {
   display: none;
 }
+/* The start: the two accounts side by side, one field for any link, and a quiet way to a data export. */
 .music-import-cards {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-top: 16px;
+}
+.music-import-link-start {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--surf-line, #ffffff1a);
+}
+.music-import-or {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--workspace-muted, #aab);
+}
+.music-import-file-link {
+  margin-top: 12px;
+  opacity: 0.8;
+}
+@media (max-width: 560px) {
+  .music-import-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Whether the account behind a card is signed in. */
+.music-import-chip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 650;
+  vertical-align: 1px;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: var(--workspace-muted, #aab);
+}
+.music-import-chip[data-signed-in="true"] {
+  background: rgb(62 207 110 / 0.16);
+  color: #3ecf6e;
+}
+.music-import-chip[hidden] {
+  display: none;
 }
 .music-import-card {
   display: grid;
@@ -410,4 +450,373 @@
   .music-import-step {
     animation: none !important;
   }
+}
+
+/* A library read through the person's own sign-in: its state, then Sign in and Read my library side by side. */
+.music-import-account-area {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+.music-import-account-area > p {
+  flex-basis: 100%;
+  margin: 0 0 2px;
+}
+.music-import-account-area button[hidden] {
+  display: none;
+}
+
+/* One-colour brand marks drawn in their brand colour. */
+.music-import-mark {
+  display: block;
+  width: 26px;
+  height: 26px;
+  background: #ff0033;
+  mask: center / contain no-repeat;
+}
+.music-import-mark-youtubemusic {
+  mask-image: url("assets/brands/youtubemusic.svg");
+}
+.music-import-mark-youtube {
+  mask-image: url("assets/brands/youtube.svg");
+}
+/* The account step: its state, the service's own sign-in, and a moving bar while the library is read. */
+.music-import-account-head {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.music-import-account-state {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+  background: color-mix(in srgb, currentColor 9%, transparent);
+  color: var(--workspace-muted, #aab);
+}
+.music-import-account-state[data-signed-in="true"] {
+  background: rgb(62 207 110 / 0.16);
+  color: #3ecf6e;
+}
+.music-import-account-state[data-signed-in="true"]::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 1px;
+}
+.music-import-reading {
+  flex-basis: 100%;
+}
+.music-import-reading[hidden] {
+  display: none;
+}
+/* A bar with no end in sight: a light runs along it while the library is read. */
+.music-import-bar {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.music-import-bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 38%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #3ecf6e, var(--player-primary, #9ad0ff));
+  animation: music-import-slide 1.4s ease-in-out infinite;
+}
+@keyframes music-import-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(270%);
+  }
+}
+.music-import-hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+.music-import-hint[hidden] {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .music-import-bar > span {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
+  }
+}
+
+/* Find my music: a short summary, three buttons for where the songs go, a moving search and one line per song. */
+.music-import-coverage {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+.music-import-field {
+  display: grid;
+  gap: 8px;
+}
+.music-import-field-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.music-import-segments {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border-radius: 14px;
+  background: color-mix(in srgb, currentColor 7%, transparent);
+}
+.music-import-dialog .music-import-segment {
+  min-height: 34px;
+  margin: 0;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+  opacity: 0.75;
+  box-shadow: none;
+  transition:
+    background-color 0.16s,
+    opacity 0.16s;
+}
+.music-import-dialog .music-import-segment:hover {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+.music-import-dialog .music-import-segment[aria-pressed="true"] {
+  opacity: 1;
+  font-weight: 700;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  box-shadow: 0 1px 8px -3px #0009;
+}
+.music-import-meter {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+.music-import-meter[hidden] {
+  display: none;
+}
+.music-import-meter-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.music-import-meter-text::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3ecf6e;
+}
+.music-import-meter.is-running .music-import-meter-text::before {
+  background: var(--player-primary, #9ad0ff);
+  animation: music-import-pulse 1.1s ease-in-out infinite;
+}
+.music-import-meter .music-import-progress {
+  width: 100%;
+  height: 8px;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  appearance: none;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.music-import-meter .music-import-progress::-webkit-progress-bar {
+  background: transparent;
+}
+.music-import-meter .music-import-progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: linear-gradient(90deg, #3ecf6e, var(--player-primary, #9ad0ff));
+  transition: width 0.35s ease;
+}
+/* While searching, a sheen runs along the filled part. */
+.music-import-meter.is-running .music-import-progress::-webkit-progress-value {
+  background:
+    linear-gradient(100deg, transparent 30%, #ffffff66 50%, transparent 70%) 0 0 / 200% 100%,
+    linear-gradient(90deg, #3ecf6e, var(--player-primary, #9ad0ff));
+  animation: music-import-sheen 1.4s linear infinite;
+}
+@keyframes music-import-sheen {
+  from {
+    background-position:
+      200% 0,
+      0 0;
+  }
+  to {
+    background-position:
+      -200% 0,
+      0 0;
+  }
+}
+@keyframes music-import-pulse {
+  50% {
+    transform: scale(1.6);
+    opacity: 0.45;
+  }
+}
+.music-import-dialog .music-import-result {
+  display: grid;
+  grid-template-columns: auto 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  animation: music-import-arrive 0.32s ease both;
+}
+.music-import-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+.music-import-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.music-import-result-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.music-import-result-copy > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.music-import-from {
+  opacity: 0.6;
+}
+.music-import-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  white-space: nowrap;
+  background: color-mix(in srgb, currentColor 9%, transparent);
+}
+.music-import-result[data-state="review"] .music-import-pill {
+  background: rgb(255 196 0 / 0.16);
+  color: #ffc400;
+}
+.music-import-result[data-state="none"] {
+  opacity: 0.6;
+}
+.music-import-result[data-state="added"] .music-import-pill {
+  background: rgb(62 207 110 / 0.16);
+  color: #3ecf6e;
+}
+@keyframes music-import-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.music-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.music-import-actions [hidden] {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .music-import-dialog .music-import-result,
+  .music-import-meter.is-running .music-import-meter-text::before,
+  .music-import-meter.is-running .music-import-progress::-webkit-progress-value {
+    animation: none;
+  }
+}
+
+/* One scroll: the window scrolls, the list of songs does not scroll inside it. Adding stays in reach at the bottom. */
+.music-import-dialog .music-import-results {
+  max-height: none;
+  overflow: visible;
+  margin: 10px 0;
+}
+.music-import-dialog .music-import-actions {
+  position: sticky;
+  bottom: -26px;
+  z-index: 2;
+  margin: 0 -26px -26px;
+  padding: 14px 26px 22px;
+  border-top: 1px solid #ffffff14;
+  background: color-mix(in srgb, #161519 92%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+.music-import-dialog .music-import-actions:not(:has(> :not([hidden]))) {
+  display: none;
+}
+/* Our own ticks, in the player's colour, instead of the system's blue squares. */
+.music-import-dialog input[type="checkbox"] {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  margin: 0;
+  border: 1.5px solid color-mix(in srgb, currentColor 38%, transparent);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+.music-import-dialog input[type="checkbox"]::after {
+  content: "";
+  width: 5px;
+  height: 10px;
+  margin-top: -2px;
+  border: solid #10131a;
+  border-width: 0 2px 2px 0;
+  rotate: 45deg;
+  scale: 0;
+  transition: scale 0.15s cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+.music-import-dialog input[type="checkbox"]:checked {
+  border-color: var(--player-primary, #9ad0ff);
+  background: var(--player-primary, #9ad0ff);
+}
+.music-import-dialog input[type="checkbox"]:checked::after {
+  scale: 1;
+}
+.music-import-dialog input[type="checkbox"]:hover:not(:disabled) {
+  border-color: color-mix(in srgb, currentColor 60%, transparent);
+}
+.music-import-dialog input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--player-primary, #9ad0ff);
+  outline-offset: 2px;
+}
+.music-import-dialog input[type="checkbox"]:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.music-import-dialog .music-import-result {
+  cursor: pointer;
+  border-radius: 10px;
+}
+.music-import-dialog .music-import-result:hover {
+  background: color-mix(in srgb, currentColor 4%, transparent);
 }

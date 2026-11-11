@@ -910,6 +910,15 @@ dialog pre {
 .icon[data-icon="magnifying-glass"] {
   --glyph: url("assets/icons/magnifying-glass.svg");
 }
+.icon[data-icon="microphone"] {
+  --glyph: url("assets/icons/microphone.svg");
+}
+.icon[data-icon="waveform"] {
+  --glyph: url("assets/icons/waveform.svg");
+}
+.icon[data-icon="cast"] {
+  --glyph: url("assets/icons/cast.svg");
+}
 .icon[data-icon="trash"] {
   --glyph: url("assets/icons/trash.svg");
 }

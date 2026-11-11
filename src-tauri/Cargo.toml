@@ -1,6 +1,6 @@
 [package]
 name = "deviload"
-version = "2.12.0"
+version = "2.15.0"
 description = "Deviload: desktop front-end for yt-dlp and FFmpeg"
 authors = ["Samvel Avetisyan"]
 edition = "2021"
@@ -32,7 +32,7 @@ zip = { version = "4.6.1", default-features = false, features = ["deflate-flate2
 minisign-verify = "0.2.5"
 fs2 = "0.4"
 rand = "0.9"
-reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls-no-provider", "socks"] }
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls-no-provider", "socks", "gzip", "brotli"] }
 httpdate = "1"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 tauri-plugin-updater = "2"
