@@ -132,33 +132,7 @@
   background-color: color-mix(in srgb, var(--lyric-ink) 7%, transparent);
 }
 
-:root[data-theme] body #music-now-playing .music-lyric-line.active.has-word-sync .music-lyric-word {
-  color: color-mix(in srgb, var(--lyric-ink) 40%, transparent);
-  text-shadow: none;
-  transition: transform 0.3s var(--ctl-ease);
-}
-:root[data-theme]
-  body
-  #music-now-playing
-  .music-lyric-line.active.has-word-sync
-  .music-lyric-word[data-state="sung"] {
-  color: var(--lyric-ink);
-}
-:root[data-theme]
-  body
-  #music-now-playing
-  .music-lyric-line.active.has-word-sync
-  .music-lyric-word[data-state="current"] {
-  color: transparent;
-  background: linear-gradient(
-    90deg,
-    var(--lyric-ink) var(--word-progress),
-    color-mix(in srgb, var(--lyric-ink) 40%, transparent) calc(var(--word-progress) + 14%)
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  transform: translateY(-0.03em);
-}
+/* Word colours come from lyrics-flow.css; words stay on the line instead of rising as they are sung. */
 :root[data-theme] body #music-now-playing .music-lyric-background {
   font-size: 0.62em;
   font-weight: 600;
@@ -241,27 +215,6 @@
     .music-lyric-line:not(.active) {
     opacity: 0.6;
     filter: none;
-  }
-  :root[data-theme] body #music-now-playing .music-lyric-line.active.has-word-sync .music-lyric-word {
-    transition:
-      transform 0.45s cubic-bezier(0.2, 1.12, 0.32, 1),
-      color 0.25s,
-      text-shadow 0.3s;
-  }
-  :root[data-theme]
-    body
-    #music-now-playing
-    .music-lyric-line.active.has-word-sync
-    .music-lyric-word[data-state="sung"] {
-    transform: translateY(-2px);
-  }
-  :root[data-theme]
-    body
-    #music-now-playing
-    .music-lyric-line.active.has-word-sync
-    .music-lyric-word[data-state="current"] {
-    transform: translateY(-1px);
-    text-shadow: 0 0 18px color-mix(in srgb, var(--lyric-aura, #fff) 55%, transparent);
   }
 }
 :root[data-theme] body #music-now-playing.is-immersive .music-lyric-background {

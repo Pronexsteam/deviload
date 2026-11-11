@@ -433,6 +433,21 @@
   color: var(--workspace-muted);
   margin: 0 0 18px;
 }
+/* The top song's artist is a link to the artist page; it keeps the subtitle's place and look. */
+#devil-music .music-best-result .music-best-artist {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 18px;
+  padding: 0;
+  font-size: 13px;
+  color: var(--workspace-muted);
+  text-align: left;
+}
+#devil-music .music-best-result .music-best-artist:hover {
+  color: var(--workspace-ink);
+  text-decoration: underline;
+}
 #devil-music .music-best-result .music-primary {
   border-radius: 100px;
   padding: 9px 22px;

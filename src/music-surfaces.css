@@ -1773,8 +1773,8 @@
 .music-clip-captions .lyric-cap-word {
   background: linear-gradient(
     90deg,
-    var(--strip-accent) var(--fill, 0%),
-    rgba(255, 255, 255, 0.5) var(--fill, 0%)
+    #fff calc(var(--fill, 0%) - 6%),
+    rgba(255, 255, 255, 0.5) calc(var(--fill, 0%) + 6%)
   );
   -webkit-background-clip: text;
   background-clip: text;
@@ -1790,7 +1790,7 @@
   transition: translate 0.3s cubic-bezier(0.2, 1.12, 0.32, 1);
 }
 .music-clip-captions .lyric-cap-word.is-sung {
-  translate: 0 -2px;
+  translate: none;
 }
 .music-clip-captions .lyric-cap-line.is-leaving {
   animation: music-caption-out 0.36s ease forwards;

@@ -82,3 +82,12 @@ test('a short breath between sung lines keeps the line lit, a real break still c
  assert.deepEqual(lyricFrame(lines,5),[]);
  assert.equal(lyricFrame(lines,9)[0].index,2);
 });
+
+test('a line ending a breath after the next one starts hands the focus over, a real second voice keeps both',()=>{
+ const lines=[{at:1,end:3.4,text:'First'},{at:3,end:5,text:'Second'}];
+ assert.deepEqual(lyricFrame(lines,3.2).map(s=>s.index),[1]);
+ const duet=[{at:1,end:3.4,text:'Her',agent:'v1'},{at:3,end:5,text:'Him',agent:'v2'}];
+ assert.deepEqual(lyricFrame(duet,3.2).map(s=>s.index),[0,1]);
+ const choir=[{at:1,end:4.5,text:'Lead'},{at:3,end:5,text:'Choir'}];
+ assert.deepEqual(lyricFrame(choir,3.5).map(s=>s.index),[0,1]);
+});

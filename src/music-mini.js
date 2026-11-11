@@ -44,14 +44,16 @@ try {
   lyricsOn = localStorage.getItem("deviload-mini-lyrics") === "1";
 } catch {}
 const queueView = wireMiniQueue({ invoke });
-registerPlaybackRange($("mini-progress"), () =>
-  state.duration
-    ? Math.min(
-        state.duration,
-        state.position +
-          (state.playing ? Math.min(1.1, (performance.now() - receivedAt) / 1000) * (state.rate || 1) : 0),
-      ) / state.duration
-    : 0,
+registerPlaybackRange(
+  $("mini-progress"),
+  () =>
+    state.duration
+      ? Math.min(
+          state.duration,
+          state.position +
+            (state.playing ? Math.min(1.1, (performance.now() - receivedAt) / 1000) * (state.rate || 1) : 0),
+        ) / state.duration
+      : 0,
   () => !!state.playing,
 );
 $("mini-progress").step = "any";

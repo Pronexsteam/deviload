@@ -3997,10 +3997,20 @@ export function createMusic({ invoke, onDownload, storage }) {
         art.replaceChildren(playableCover(best));
         // Video results have wide YouTube frames; a square would cut their sides off.
         if (/^https:\/\/i\.ytimg\.com\//.test(best.image || "")) art.classList.add("is-wide");
+        // The artist under a top song opens the artist page, as it does in every song row and card.
+        const byline =
+          best.kind !== "artist" && best.artists?.length
+            ? button(
+                displaySubtitle(best),
+                null,
+                () => showArtist(best),
+                "music-artist-link music-best-artist",
+              )
+            : el("p", "", displaySubtitle(best));
         copy.append(
           el("span", "music-eyebrow", t("Top result")),
           el("h2", "", best.title),
-          el("p", "", displaySubtitle(best)),
+          byline,
           button(
             best.kind === "song" ? t("Play") : t("Open {title}", { title: best.title }),
             best.kind === "song" ? "play" : "arrow-right",

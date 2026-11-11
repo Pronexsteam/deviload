@@ -169,6 +169,30 @@ export function createMusicLyrics({
   body.addEventListener("keydown", event => {
     if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"].includes(event.key)) manualScroll();
   });
+  // A translation or romanisation arriving changes the rows' heights at once. Whatever the rows above the current
+  // line grew or shrank by is added to the scroll, glide included, so the current line stays where it is instead
+  // of the pane sliding a whole verse later. The current line itself is left to the normal glide.
+  const heights = new WeakMap();
+  const anchor = new ResizeObserver(entries => {
+    let shift = 0;
+    for (const entry of entries) {
+      const row = entry.target,
+        height = row.getBoundingClientRect().height,
+        before = heights.get(row);
+      heights.set(row, height);
+      if (before == null || active < 0) continue;
+      const index = Array.prototype.indexOf.call(body.children, row);
+      if (index >= 0 && index < active) shift += height - before;
+    }
+    if (!shift || body.classList.contains("is-browsing")) return;
+    body.scrollTop += shift;
+    scrollAt += shift;
+    scrollGoal += shift;
+  });
+  new MutationObserver(() => {
+    anchor.disconnect();
+    for (const row of body.children) anchor.observe(row);
+  }).observe(body, { childList: true });
   function follow(row) {
     // A pane in transit between the sidebar and full player has no layout yet; retry on the next tick.
     if (!row || !body.clientHeight || !row.getClientRects().length) return;
