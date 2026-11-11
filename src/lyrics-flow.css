@@ -87,9 +87,11 @@
 }
 /* Karaoke as people expect it: in the current line, words not yet sung are dim, sung words are bright, and the
    word being sung fills from left to right with a soft edge. One ink colour, no cover tint inside the letters. */
+/* No colour transition here: the word being sung is drawn by its fill with a transparent colour, so fading the
+   colour in once it is sung made every word go dark for a moment and light up again. */
 :root body .music-lyric-line.active.has-word-sync .music-lyric-word {
   color: color-mix(in srgb, var(--lyric-ink) 40%, transparent);
-  transition: color 0.18s ease;
+  transition: none !important;
 }
 :root body .music-lyric-line.active.has-word-sync .music-lyric-word[data-state="sung"] {
   color: var(--lyric-ink);

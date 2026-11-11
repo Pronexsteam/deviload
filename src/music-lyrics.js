@@ -137,21 +137,22 @@ export function createMusicLyrics({
         host.getClientRects().length &&
         (!host.closest("dialog") || host.closest("dialog").open),
       ));
+  // The next line comes up in one even movement, slow at both ends, instead of jumping most of the way at once and
+  // creeping the rest. Positions land on whole screen pixels so the letters do not shimmer while they move.
+  const GLIDE_MS = 520;
   let scrollFrame = 0,
     scrollAt = 0,
     scrollGoal = 0,
-    scrollTick = 0;
+    scrollFrom = 0,
+    scrollStart = 0;
+  const pixel = value => Math.round(value * (devicePixelRatio || 1)) / (devicePixelRatio || 1);
   const glide = now => {
-    const step = Math.min(48, now - scrollTick || 16);
-    scrollTick = now;
-    scrollAt += (scrollGoal - scrollAt) * (1 - Math.exp(-step / 130));
-    if (Math.abs(scrollGoal - scrollAt) < 0.5) {
-      body.scrollTop = scrollGoal;
-      scrollFrame = 0;
-      return;
-    }
-    body.scrollTop = scrollAt;
-    scrollFrame = requestAnimationFrame(glide);
+    scrollStart ||= now;
+    const progress = Math.min(1, (now - scrollStart) / GLIDE_MS),
+      eased = progress < 0.5 ? 4 * progress ** 3 : 1 - (-2 * progress + 2) ** 3 / 2;
+    scrollAt = scrollFrom + (scrollGoal - scrollFrom) * eased;
+    body.scrollTop = pixel(scrollAt);
+    scrollFrame = progress < 1 ? requestAnimationFrame(glide) : 0;
   };
   const manualScroll = () => {
     cancelAnimationFrame(scrollFrame);
@@ -187,6 +188,7 @@ export function createMusicLyrics({
     if (!shift || body.classList.contains("is-browsing")) return;
     body.scrollTop += shift;
     scrollAt += shift;
+    scrollFrom += shift;
     scrollGoal += shift;
   });
   new MutationObserver(() => {
@@ -211,10 +213,13 @@ export function createMusicLyrics({
       body.scrollTop = target;
       return;
     }
-    scrollGoal = target;
+    // Already on its way there: a repeated call must not restart the movement.
+    if (scrollFrame && Math.abs(target - scrollGoal) < 1) return;
+    if (!scrollFrame && Math.abs(target - body.scrollTop) < 1) return;
     cancelAnimationFrame(scrollFrame);
-    scrollAt = body.scrollTop;
-    scrollTick = 0;
+    scrollFrom = scrollFrame ? scrollAt : body.scrollTop;
+    scrollGoal = target;
+    scrollStart = 0;
     scrollFrame = requestAnimationFrame(glide);
   }
   async function load() {
