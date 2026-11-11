@@ -120,7 +120,7 @@ import { selectTrackRange, smartPlaylists, folderName, playlistFolders } from ".
 import { createWeeklyStats } from "./music-weekly.js";
 import { openArtistPicker } from "./music-artist-picker.js";
 import { wireMusicImport } from "./music-import-ui.js";
-import { mergeMusicImport } from "./music-import-model.js";
+import { mergeMusicImport, createLibraryIndex } from "./music-import-model.js";
 import { enhanceMusicShelves } from "./music-shelf-navigation.js";
 import { createMusicLibrarySidebar } from "./music-library-sidebar.js";
 
@@ -969,7 +969,8 @@ export function createMusic({ invoke, onDownload, storage }) {
     () => localLibrary.open(),
     "outline small music-settings-open",
   );
-  localOpen.append(el("span", "", t("Add local music")));
+  // A short name fits the narrow library column; the full one stays for the tooltip and screen readers.
+  localOpen.append(el("span", "", t("Add files")));
   document.querySelector(".music-heading-actions").prepend(localOpen);
   $("music-discovery").value = taste.mode;
   $("music-public-discovery").checked = saved.publicDiscovery !== false;
@@ -1009,6 +1010,9 @@ export function createMusic({ invoke, onDownload, storage }) {
     invoke,
     button,
     storage,
+    // Songs already saved are matched from the library instead of searched again.
+    library: () =>
+      createLibraryIndex([...saved.favorites, ...(saved.playlists || []).flatMap(list => list.items || [])]),
     commit: async (batch, options) => {
       captureListening();
       const result = mergeMusicImport(saved, taste, batch, options);
@@ -5242,10 +5246,8 @@ export function createMusic({ invoke, onDownload, storage }) {
     offlineTab.textContent = t("Downloaded music");
     offlineTab.title = t("Downloaded music");
     offlineTab.setAttribute("aria-label", t("Downloaded music"));
-    localOpen.querySelector("span:not(.icon)").textContent =
-      localOpen.title =
-      localOpen.ariaLabel =
-        t("Add local music");
+    localOpen.querySelector("span:not(.icon)").textContent = t("Add files");
+    localOpen.title = localOpen.ariaLabel = t("Add local music");
     const labels = { all: "All results", songs: "Songs", albums: "Albums", artists: "Artists" };
     for (const node of filters.children) {
       const label = t(labels[node.dataset.filter]);

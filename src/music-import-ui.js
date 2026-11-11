@@ -15,7 +15,13 @@ export const formatElapsed = seconds => {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
 };
 
-export function wireMusicImport({ invoke, button, commit, storage = window.localStorage }) {
+export function wireMusicImport({
+  invoke,
+  button,
+  commit,
+  storage = window.localStorage,
+  library = () => null,
+}) {
   const matchMemory = createMatchMemory(storage);
   function open() {
     const modal = el("dialog", "music-import-dialog"),
@@ -273,12 +279,14 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
         found: found.length,
         check: found.filter(row => row.confidence === "review" && !applied.has(row.entry.key)).length,
         missing: mine.filter(row => !row.item).length,
+        known: found.filter(row => row.known).length,
       };
     };
     const finalMeter = () => {
       const now = tally();
       return [
         t("Found {found} of {total}", { found: now.found, total: now.total }),
+        now.known ? t("{count} already in your library", { count: now.known }) : "",
         now.check ? t("{count} to check", { count: now.check }) : "",
         now.missing ? t("{count} not found", { count: now.missing }) : "",
       ]
@@ -301,6 +309,7 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
         language: language(),
         signal,
         memory: matchMemory,
+        library: library(),
         onRow: row => {
           rows.push(row);
           showRow(row);
@@ -654,9 +663,11 @@ export function wireMusicImport({ invoke, button, commit, storage = window.local
           ? t(row.error)
           : row.confidence === "review"
             ? t("Check this version before selecting")
-            : row.item
-              ? ""
-              : t("No match found");
+            : row.known
+              ? t("In your library")
+              : row.item
+                ? ""
+                : t("No match found");
       label.dataset.state = applied.has(row.entry.key) ? "added" : row.item ? row.confidence : "none";
       label.append(box, cover, copy);
       if (status) label.append(el("small", "music-import-pill", status));

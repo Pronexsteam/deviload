@@ -71,27 +71,124 @@ function caller(invoke, signal, delay) {
 }
 
 const matchCaches = new WeakMap();
+function inLibrary(library, entry) {
+  try {
+    const item = library?.find(entry);
+    return item ? sanitizeMusicTrack(item) : null;
+  } catch {
+    return null;
+  }
+}
 
 // Songs already matched stay matched: the next import of the same library, or one more playlist from it, asks
-// YouTube Music only about songs it has not seen. Only certain matches are kept, the oldest go first, and a full
-// browser storage simply stops the remembering.
+// YouTube Music only about songs it has not seen. Only certain matches are kept and the oldest go first. They live
+// in the page's database, which holds a whole large library; without it, a smaller set fits in local storage. A
+// full storage simply stops the remembering.
 export const MATCH_MEMORY_KEY = "deviload.music.import-matches.v1";
-export function createMatchMemory(storage, { now = Date.now, limit = 2500, maxAge = 90 * 86400000 } = {}) {
-  let table = null,
-    dirty = false;
-  const load = () => {
-    if (table) return table;
+const DATABASE = "deviload-music-import",
+  STORE = "matches";
+const settled = request =>
+  new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+const finished = transaction =>
+  new Promise((resolve, reject) => {
+    transaction.oncomplete = resolve;
+    transaction.onerror = transaction.onabort = () => reject(transaction.error);
+  });
+export function createMatchMemory(
+  storage,
+  { now = Date.now, limit = 20000, maxAge = 90 * 86400000, database = globalThis.indexedDB } = {},
+) {
+  // Insertion order is age order: a song matched again moves to the end, and the oldest leave from the front.
+  const table = new Map(),
+    changed = new Set(),
+    removed = new Set();
+  let opened = null,
+    loading = null;
+  const put = (key, row) => {
+    table.delete(key);
+    table.set(key, row);
+  };
+  const legacy = () => {
     try {
       const value = JSON.parse(storage?.getItem(MATCH_MEMORY_KEY) || "{}");
-      table = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+      return value && typeof value === "object" && !Array.isArray(value) ? Object.entries(value) : [];
     } catch {
-      table = {};
+      return [];
     }
-    return table;
   };
+  const trim = max => {
+    for (const key of table.keys()) {
+      if (table.size <= max) break;
+      table.delete(key);
+      changed.delete(key);
+      removed.add(key);
+    }
+  };
+  async function open() {
+    if (!database) return null;
+    const request = database.open(DATABASE, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(STORE);
+    return settled(request);
+  }
+  function ready() {
+    loading ||= (async () => {
+      try {
+        opened = await open();
+      } catch {
+        opened = null;
+      }
+      const rows = [];
+      if (opened) {
+        try {
+          const store = opened.transaction(STORE, "readonly").objectStore(STORE);
+          const [keys, values] = await Promise.all([settled(store.getAllKeys()), settled(store.getAll())]);
+          keys.forEach((key, index) => rows.push([key, values[index]]));
+        } catch {
+          /* An unreadable database starts empty. */
+        }
+      }
+      // Matches kept by an older version move into the database once.
+      const old = legacy();
+      if (opened) old.forEach(([key]) => changed.add(key));
+      rows.push(...old);
+      rows
+        .filter(([, row]) => row && typeof row.at === "number")
+        .sort((a, b) => a[1].at - b[1].at)
+        .forEach(([key, row]) => put(key, row));
+      trim(opened ? limit : Math.min(limit, 2500));
+      if (opened && old.length) await flush().catch(() => {});
+    })();
+    return loading;
+  }
+  async function flush() {
+    if (!changed.size && !removed.size) return;
+    const writes = [...changed],
+      deletes = [...removed];
+    changed.clear();
+    removed.clear();
+    try {
+      if (opened) {
+        const transaction = opened.transaction(STORE, "readwrite"),
+          store = transaction.objectStore(STORE);
+        for (const key of writes) if (table.has(key)) store.put(table.get(key), key);
+        for (const key of deletes) store.delete(key);
+        await finished(transaction);
+        storage?.removeItem?.(MATCH_MEMORY_KEY);
+      } else storage?.setItem(MATCH_MEMORY_KEY, JSON.stringify(Object.fromEntries(table)));
+    } catch {
+      /* Storage is full: matching still works, it is only not remembered. */
+    }
+  }
   return {
+    ready,
+    get size() {
+      return table.size;
+    },
     get(key) {
-      const row = load()[key];
+      const row = table.get(key);
       if (!row || typeof row.at !== "number" || now() - row.at > maxAge) return null;
       try {
         return { item: sanitizeMusicTrack(row.item), confidence: "exact" };
@@ -101,28 +198,14 @@ export function createMatchMemory(storage, { now = Date.now, limit = 2500, maxAg
     },
     set(key, match) {
       if (!match?.item || match.confidence !== "exact") return;
-      const rows = load();
-      rows[key] = { at: now(), item: match.item };
-      const keys = Object.keys(rows);
-      if (keys.length > limit)
-        keys
-          .sort((a, b) => rows[a].at - rows[b].at)
-          .slice(0, keys.length - limit)
-          .forEach(old => delete rows[old]);
-      dirty = true;
+      put(key, { at: now(), item: match.item });
+      changed.add(key);
+      removed.delete(key);
+      trim(opened ? limit : Math.min(limit, 2500));
     },
-    flush() {
-      if (!dirty) return;
-      dirty = false;
-      try {
-        storage?.setItem(MATCH_MEMORY_KEY, JSON.stringify(load()));
-      } catch {
-        /* Storage is full: matching still works, it is only not remembered. */
-      }
-    },
+    flush,
   };
-}
-// Large libraries use the same bounded, paced resolver. A stopped batch must
+} // Large libraries use the same bounded, paced resolver. A stopped batch must
 // not start hundreds of additional requests after a rate limit or cancellation.
 export async function resolveMusicImportLibrary(entries, options = {}) {
   if (!Array.isArray(entries)) throw Error("Invalid music import.");
@@ -150,11 +233,14 @@ export async function resolveMusicImport(
     delay = sleep,
     concurrency = 4,
     memory = null,
+    library = null,
   } = {},
 ) {
   if (!Array.isArray(entries)) throw Error("Invalid music import.");
   if (entries.length > 500) throw Error("Match up to 500 songs at a time.");
   if (typeof invoke !== "function") throw Error("Music catalog is unavailable.");
+  check(signal);
+  await memory?.ready?.();
   check(signal);
   const rows = new Array(entries.length);
   let cursor = 0,
@@ -187,9 +273,12 @@ export async function resolveMusicImport(
       check(signal);
       const index = cursor++,
         entry = entries[index];
-      let row = { entry, item: null, confidence: "none" };
+      let row = { entry, item: null, confidence: "none" },
+        known = null;
       if (limited) row.error = RATE_LIMIT;
       else if (!entry || typeof entry !== "object") row.error = "Invalid music import.";
+      else if ((known = inLibrary(library, entry)))
+        row = { entry, item: known, confidence: "exact", known: true };
       else if (validId(entry.videoId) && text(entry.title)) {
         row = {
           entry,
@@ -281,7 +370,7 @@ export async function resolveMusicImport(
     await Promise.all(Array.from({ length: count }, worker));
   } finally {
     // Matches found before a stop or a limit are kept too.
-    memory?.flush();
+    await memory?.flush();
   }
   check(signal);
   if (fatal) throw fatal;

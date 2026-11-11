@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {resolveMusicImport,resolveMusicImportLibrary,readPlaylistLink,createMatchMemory,MATCH_MEMORY_KEY} from "../src/music-import-resolver.js";
 import {parseMusicImport} from "../src/music-import-format.js";
+import {createLibraryIndex} from "../src/music-import-model.js";
 const delay=()=>Promise.resolve(),song=(n=1)=>({kind:"song",id:String(n).padStart(11,"0"),title:"Song "+n,artists:["Artist"],subtitle:"Artist"}),entry=n=>({key:"source:"+n,title:"Song "+n,artists:["Artist"],liked:false,plays:0});
 const catalog=items=>({sections:[{items}]}),link="https://music.youtube.com/playlist?list=PLabcdefghijk123";
 
@@ -139,4 +140,42 @@ test("matches are remembered across sessions, only certain ones, and a full stor
  const full={getItem:()=>null,setItem(){throw Error("QuotaExceededError");}};
  const rows=await resolveMusicImport([entry(5)],{invoke,delay,memory:createMatchMemory(full)});
  assert.equal(rows[0].confidence,"exact");
+});
+
+test("songs already in the library are matched from it without a search, by the same strict rules",async()=>{
+ const local={kind:"song",id:"local:abc",title:"Song 3",artists:["Artist"]};
+ const library=createLibraryIndex([song(1),song(1),{...song(2),title:"Song 2 (Live)"},local,song(4),{...song(9),id:"00000000044",artists:["Artist"],title:"Song 4"}]);
+ assert.equal(library.find(entry(1)).id,song(1).id);
+ assert.equal(library.find({...entry(5),videoId:song(1).id}).id,song(1).id);
+ // A live recording is not the studio song, a file on this computer is left out, and two equal songs stay a question.
+ assert.equal(library.find(entry(2)),null);
+ assert.equal(library.find(entry(3)),null);
+ assert.equal(library.find(entry(4)),null);
+ let calls=0;const invoke=async(_,args)=>{calls++;return catalog([song(Number(args.value.match(/Song (\d+)/)[1]))]);};
+ const rows=await resolveMusicImport([entry(1),entry(2)],{invoke,delay,library});
+ assert.equal(calls,1);
+ assert.deepEqual(rows.map(row=>[row.item.id,!!row.known]),[[song(1).id,true],[song(2).id,false]]);
+});
+
+// Just enough of the page database for the match memory: one store, read whole, written in one transaction.
+function fakeDatabase(){
+ const stores=new Map();
+ const request=run=>{const value={};queueMicrotask(()=>{try{value.result=run();value.onsuccess?.();}catch(error){value.error=error;value.onerror?.();}});return value;};
+ const db={transaction:()=>{const tx={objectStore:()=>({getAllKeys:()=>request(()=>[...stores.keys()]),getAll:()=>request(()=>[...stores.values()].map(v=>structuredClone(v))),put:(v,k)=>stores.set(k,structuredClone(v)),delete:k=>stores.delete(k)})};queueMicrotask(()=>queueMicrotask(()=>tx.oncomplete?.()));return tx;},createObjectStore(){}};
+ return {stores,open:()=>{const value={};queueMicrotask(()=>{value.result=db;value.onupgradeneeded?.();value.onsuccess?.();});return value;}};
+}
+
+test("the match memory keeps a large library in the page database and moves old matches into it",async()=>{
+ const database=fakeDatabase(),old=new Map(),storage={getItem:k=>old.get(k)??null,setItem:(k,v)=>old.set(k,v),removeItem:k=>old.delete(k)};
+ old.set(MATCH_MEMORY_KEY,JSON.stringify({legacy:{at:Date.now(),item:song(7)}}));
+ const memory=createMatchMemory(storage,{database,limit:3000});
+ await memory.ready();
+ assert.equal(memory.get("legacy").item.id,song(7).id);
+ assert.ok(database.stores.has("legacy"));assert.equal(old.has(MATCH_MEMORY_KEY),false);
+ for(let n=0;n<3005;n++)memory.set("k"+n,{item:song(n%50+1),confidence:"exact"});
+ await memory.flush();
+ assert.equal(database.stores.size,3000);assert.equal(database.stores.has("legacy"),false);assert.ok(database.stores.has("k3004"));
+ const again=createMatchMemory(storage,{database,limit:3000});
+ await again.ready();
+ assert.equal(again.size,3000);assert.ok(again.get("k3004"));assert.equal(again.get("k0"),null);
 });

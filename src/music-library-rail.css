@@ -367,7 +367,15 @@
   align-items: stretch;
   justify-content: flex-start;
   gap: 2px;
+  /* A column of named actions, not the pill of icons the folded rail uses. */
+  width: 100%;
   max-width: 100%;
+  margin: 6px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
 }
 :root[data-theme]
   body
