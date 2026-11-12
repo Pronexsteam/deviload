@@ -5389,6 +5389,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     },
     help: () => shortcutHelp.open(),
     recognize: () => recognizer.listen(),
+    mini: () => $("music-mini-open")?.click(),
     refresh: () => {
       if (!$("music-refresh").disabled) $("music-refresh").click();
     },
@@ -5714,9 +5715,18 @@ export function createMusic({ invoke, onDownload, storage }) {
     extras,
     button,
     workspace: $("devil-music"),
-    direct: [$("music-expand"), $("music-clip-open"), quickSpeed.badge, cast.badge],
-    // The mini player and the phone remote live in the menu only: each action has one place, and the dock keeps
-    // what is used during a song.
+    // The mini player sits on the dock beside the full player, where people look for it; the phone remote lives
+    // in the menu. Each action has one place.
+    direct: [
+      $("music-expand"),
+      $("music-mini-open"),
+      $("music-clip-open"),
+      quickSpeed.badge,
+      cast.badge,
+      cast.quickStop,
+      musicRoom?.badge,
+      musicRoom?.quickClose,
+    ],
     shortcuts: [],
     items: [
       quickSpeed.row,
@@ -5725,8 +5735,9 @@ export function createMusic({ invoke, onDownload, storage }) {
       sleepButton,
       downloadButton,
       el("div", "music-dock-menu-sep"),
-      ...["music-mini-open", "music-room-open", "music-remote-open"].map($),
+      ...["music-room-open", "music-remote-open"].map($),
       cast.trigger,
+      cast.menuStop,
       el("div", "music-dock-menu-sep"),
       desktopItem,
       // Edit layout lives in the Themes menu only.
@@ -5884,6 +5895,7 @@ export function createMusic({ invoke, onDownload, storage }) {
       else if (payload === "repeat") repeatButton.click();
       else if (payload === "shuffle") shuffleButton.click();
       else if (payload === "mute") volumeMark.click();
+      else if (payload === "mini") $("music-mini-open")?.click();
     })
     .then(() => syncDock())
     .catch(() => {});

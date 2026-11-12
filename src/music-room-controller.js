@@ -21,7 +21,11 @@ export function createMusicRoom({
     lastTrack = "",
     loading = false,
     retryAt = 0,
-    live = false;
+    live = false,
+    listeners = 0,
+    failingSince = 0;
+  // The host's app answers this once the room is gone (see music_room.rs).
+  const ENDED = "The host closed the listening room.";
   const node = (tag, text) => {
     const n = document.createElement(tag);
     if (text) n.textContent = text;
@@ -112,7 +116,7 @@ export function createMusicRoom({
     },
     "outline small",
   );
-  async function leave() {
+  async function leave(note = t("You left the listening room.")) {
     const previous = mode;
     ++generation;
     if (previous === "guest") getAudio().pause();
@@ -121,14 +125,29 @@ export function createMusicRoom({
     lastTrack = "";
     retryAt = 0;
     live = false;
+    listeners = 0;
+    failingSince = 0;
     getAudio().playbackRate = 1;
     onModeChange(mode);
     if (previous === "guest") onLeave();
     await invoke("music_room_stop").catch(() => {});
-    state.textContent = t("You left the listening room.");
+    state.textContent = note;
+    if (previous && note !== t("You left the listening room.")) notify(note);
     refresh();
   }
-  const stop = button(t("Leave listening room"), null, leave, "outline small");
+  const stop = button(t("Leave listening room"), null, () => leave(), "outline small");
+  // On the dock while in a room: who is listening, and a cross to close or leave it in one click.
+  const badge = button(t("Listen together"), "users", () => openRoom(), "music-cast-badge music-room-badge");
+  badge.hidden = true;
+  const badgeText = node("span");
+  badge.append(badgeText);
+  const quickClose = button(
+    t("Close the room"),
+    "x-circle",
+    () => leave(),
+    "music-icon-button music-cast-stop music-room-quit",
+  );
+  quickClose.hidden = true;
   const copy = button(
     t("Copy room link"),
     "link-simple",
@@ -186,12 +205,13 @@ export function createMusicRoom({
   intro.className = "music-room-intro";
   dialog.append(head, intro, choices, room, about);
   document.body.append(dialog);
-  const trigger = button(t("Listen together"), "users", () => {
+  function openRoom() {
     if (!dialog.open) {
       dialog.showModal();
       (mode ? copy : create).focus({ focusVisible: false });
     }
-  });
+  }
+  const trigger = button(t("Listen together"), "users", openRoom);
   trigger.id = "music-room-open";
   trigger.setAttribute("aria-haspopup", "dialog");
   extras.append(trigger);
@@ -209,6 +229,15 @@ export function createMusicRoom({
     create.disabled = join.disabled = !!mode || starting;
     copy.hidden = mode !== "host";
     stop.hidden = !mode && !starting;
+    stop.textContent = mode === "host" ? t("Close the room") : t("Leave listening room");
+    badge.hidden = quickClose.hidden = !mode;
+    badgeText.textContent = mode === "host" ? String(listeners) : "";
+    badge.title = badge.ariaLabel =
+      mode === "host"
+        ? t("Listening room: {count} connected", { count: listeners })
+        : t("In a friend's listening room");
+    quickClose.title = quickClose.ariaLabel =
+      mode === "host" ? t("Close the room") : t("Leave listening room");
     trigger.setAttribute("aria-pressed", String(!!mode));
     trigger.title = trigger.ariaLabel = t("Listen together");
     intro.textContent = t("Hear the same song as a friend on another PC, at the same moment.");
@@ -285,8 +314,9 @@ export function createMusicRoom({
         const result = await invoke("music_room_update", { state: getState() });
         if (token === generation) {
           live = !!result.connected;
-          state.textContent = result.connected
-            ? t("Your friend is connected.")
+          listeners = Number(result.listeners) || (result.connected ? 1 : 0);
+          state.textContent = listeners
+            ? t("Listening with you: {count}", { count: listeners })
             : t("Room ready. Send the full link to your friend.");
           refresh();
         }
@@ -296,6 +326,7 @@ export function createMusicRoom({
         const applied = await apply(packet, token);
         if (applied !== false && token === generation) {
           failures = 0;
+          failingSince = 0;
           live = true;
           state.textContent = t("Listening together. The host controls playback; your volume stays yours.");
           refresh();
@@ -303,6 +334,15 @@ export function createMusicRoom({
       }
     } catch (error) {
       if (token !== generation) return;
+      // The host closed the room, or it has been out of reach for half a minute: the guest leaves it, so their
+      // own music plays again instead of waiting for a room that is gone.
+      if (mode === "guest") {
+        failingSince ||= performance.now();
+        if (String(error?.message ?? error).includes(ENDED))
+          return leave(t("The host closed the listening room. Your music is yours again."));
+        if (performance.now() - failingSince > 30000)
+          return leave(t("The listening room is out of reach, so you left it. Your music is yours again."));
+      }
       state.textContent = errorText(error);
       live = false;
       refresh();
@@ -320,5 +360,5 @@ export function createMusicRoom({
   window.addEventListener("pagehide", () => {
     if (mode === "host") invoke("music_room_stop").catch(() => {});
   });
-  return { isGuest: () => mode === "guest", leave };
+  return { isGuest: () => mode === "guest", leave, badge, quickClose };
 }

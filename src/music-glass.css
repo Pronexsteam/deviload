@@ -544,6 +544,10 @@
   opacity: 0.7;
 }
 .music-cast-dialog button[hidden],
+/* Stop casting: only while casting, on the dock and in the More menu. */
+:is(.music-cast-stop, #music-cast-stop)[hidden] {
+  display: none !important;
+}
 .music-cast-badge[hidden] {
   display: none;
 }

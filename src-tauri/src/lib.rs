@@ -3050,6 +3050,7 @@ fn open_support() -> Result<(), String> {
 
 struct TrayItems {
     open: tauri::menu::MenuItem<tauri::Wry>,
+    mini: tauri::menu::MenuItem<tauri::Wry>,
     quit: tauri::menu::MenuItem<tauri::Wry>,
     previous: tauri::menu::MenuItem<tauri::Wry>,
     play: tauri::menu::MenuItem<tauri::Wry>,
@@ -3057,9 +3058,10 @@ struct TrayItems {
 }
 
 #[tauri::command]
-fn set_tray_labels(open: String, quit: String, items: tauri::State<'_, TrayItems>) -> Result<(), String> {
+fn set_tray_labels(open: String, quit: String, mini: Option<String>, items: tauri::State<'_, TrayItems>) -> Result<(), String> {
     let clean = |value: &str| value.chars().filter(|c| !c.is_control()).take(60).collect::<String>();
     items.open.set_text(clean(&open)).map_err(|e| e.to_string())?;
+    if let Some(mini) = mini { items.mini.set_text(clean(&mini)).map_err(|e| e.to_string())?; }
     items.quit.set_text(clean(&quit)).map_err(|e| e.to_string())
 }
 
@@ -3240,12 +3242,14 @@ pub fn run() {
             }
             let open = tauri::menu::MenuItem::with_id(app, "tray-open", "Open Deviload", true, None::<&str>)?;
             let quit = tauri::menu::MenuItem::with_id(app, "tray-quit", "Quit Deviload", true, None::<&str>)?;
+            // With the window closed to the tray, the mini player opens from here without bringing the window back.
+            let mini = tauri::menu::MenuItem::with_id(app, "music-mini", "Mini player", true, None::<&str>)?;
             let previous = tauri::menu::MenuItem::with_id(app, "music-previous", "Previous track", false, None::<&str>)?;
             let play = tauri::menu::MenuItem::with_id(app, "music-play", "Play", false, None::<&str>)?;
             let next = tauri::menu::MenuItem::with_id(app, "music-next", "Next track", false, None::<&str>)?;
             let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
-            let menu = tauri::menu::Menu::with_items(app, &[&open, &previous, &play, &next, &separator, &quit])?;
-            app.manage(TrayItems { open: open.clone(), quit: quit.clone(), previous, play, next });
+            let menu = tauri::menu::Menu::with_items(app, &[&open, &mini, &previous, &play, &next, &separator, &quit])?;
+            app.manage(TrayItems { open: open.clone(), mini: mini.clone(), quit: quit.clone(), previous, play, next });
             tauri::tray::TrayIconBuilder::with_id("main")
                 .icon(tray_icon()?)
                 .icon_as_template(cfg!(target_os = "macos"))
@@ -3260,6 +3264,7 @@ pub fn run() {
                     "music-previous" => music_controls::dispatch(app, "previous"),
                     "music-play" => music_controls::dispatch(app, "play"),
                     "music-next" => music_controls::dispatch(app, "next"),
+                    "music-mini" => { let _ = app.emit_to("main", "music-control", "mini"); }
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {

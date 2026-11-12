@@ -124,6 +124,24 @@ test("a device taken over by something else ends casting and brings the sound ba
   assert.ok(!calls.some(([command, args]) => command === "music_cast_control" && args.action === "stop"));
 });
 
+test("stopping is one click from the dock or the menu, and only offered while casting", async () => {
+  const { cast, calls, decks, notes } = setup();
+  assert.equal(cast.quickStop.hidden, true);
+  assert.equal(cast.menuStop.hidden, true);
+  cast.open();
+  await settle();
+  await document.body.children.at(-1).children[3].children[0].handlers.click();
+  assert.equal(cast.quickStop.hidden, false);
+  assert.equal(cast.menuStop.hidden, false);
+  await cast.quickStop.handlers.click();
+  assert.ok(!isCasting());
+  assert.deepEqual(calls.at(-1), ["music_cast_control", { action: "stop" }]);
+  assert.ok(decks.nodes.every(node => !node.muted));
+  assert.equal(cast.quickStop.hidden, true);
+  assert.equal(cast.menuStop.hidden, true);
+  assert.equal(notes.at(-1)[0], t("Casting to {device} ended.", { device: "Kitchen" }));
+});
+
 test("no devices found explains where they must be", async () => {
   const { cast } = setup([]);
   cast.open();
