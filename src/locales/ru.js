@@ -2522,4 +2522,12 @@ export default {
 "Looking for OpenRGB…": "Ищем OpenRGB…",
 "OpenRGB was not found. Start OpenRGB (openrgb.org) and turn on its SDK server.": "OpenRGB не найден. Запустите OpenRGB (openrgb.org) и включите в нём SDK Server.",
 "Your keyboard, mouse and strips take the cover's colour and pulse with the bass. Works through OpenRGB.": "Клавиатура, мышь и ленты берут цвет обложки и пульсируют в такт басам. Работает через OpenRGB.",
+"Sound moods in More on the player bar: Slowed + reverb, Nightcore and 8D.": "Настроение звука в «Ещё» на панели плеера: Slowed + reverb, Nightcore и 8D.",
+"Turn a few sung lines into a vertical video with the song's sound for stories and shorts.": "Пара строк песни превращается в вертикальное видео со звуком — для сторис и шортс.",
+"A map of the artists you listen to in statistics, with covers and constellations.": "Карта ваших артистов в статистике — с обложками и созвездиями.",
+"RGB lighting through OpenRGB takes the cover's colour and pulses with the bass.": "RGB-подсветка через OpenRGB берёт цвет обложки и пульсирует в такт басам.",
+"Close to the tray, queue tools, song notifications, lyrics search and a source per song.": "Сворачивание в трей, инструменты очереди, уведомления о песнях, поиск по тексту и выбор источника текста.",
+"The mini player opens again on wide windows.": "Мини-плеер снова открывается на широких окнах.",
+"Leaving a listening room the host closed gives you your own music back.": "Если хозяин закрыл комнату, ваша музыка снова играет.",
+"Right-click and browser keys no longer show the web view's menu or reload the app.": "Правый клик и браузерные клавиши больше не показывают меню браузера и не перезагружают приложение.",
 };

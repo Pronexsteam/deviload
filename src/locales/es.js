@@ -2472,4 +2472,12 @@ export default {
 "Looking for OpenRGB…": "Buscando OpenRGB…",
 "OpenRGB was not found. Start OpenRGB (openrgb.org) and turn on its SDK server.": "No se encontró OpenRGB. Abre OpenRGB (openrgb.org) y activa su servidor SDK.",
 "Your keyboard, mouse and strips take the cover's colour and pulse with the bass. Works through OpenRGB.": "El teclado, el ratón y las tiras toman el color de la portada y laten con los graves. Funciona con OpenRGB.",
+"Sound moods in More on the player bar: Slowed + reverb, Nightcore and 8D.": "Ambientes de sonido en Más del reproductor: Slowed + reverb, Nightcore y 8D.",
+"Turn a few sung lines into a vertical video with the song's sound for stories and shorts.": "Convierte unos versos en un vídeo vertical con el sonido de la canción para historias y shorts.",
+"A map of the artists you listen to in statistics, with covers and constellations.": "Un mapa de los artistas que escuchas en las estadísticas, con portadas y constelaciones.",
+"RGB lighting through OpenRGB takes the cover's colour and pulses with the bass.": "La iluminación RGB con OpenRGB toma el color de la portada y late con los graves.",
+"Close to the tray, queue tools, song notifications, lyrics search and a source per song.": "Cerrar a la bandeja, herramientas de cola, avisos de canciones, búsqueda en la letra y fuente por canción.",
+"The mini player opens again on wide windows.": "El minirreproductor vuelve a abrirse en ventanas anchas.",
+"Leaving a listening room the host closed gives you your own music back.": "Si el anfitrión cierra la sala, tu música vuelve a sonar.",
+"Right-click and browser keys no longer show the web view's menu or reload the app.": "El clic derecho y las teclas del navegador ya no muestran su menú ni recargan la app.",
 };
