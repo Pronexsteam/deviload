@@ -30,6 +30,7 @@ import { wireMusicAccount } from "./music-account.js";
 import { createLikesSync, likesSyncControls } from "./music-likes-sync.js";
 import { createRecordingAlign } from "./music-recording-align.js";
 import { groupMusicSettings } from "./music-settings-groups.js";
+import { wireSongNotice } from "./music-song-notice.js";
 import { createNewReleases } from "./music-new-releases.js";
 import { wireMusicControlApi } from "./music-control-api.js";
 import { wireMusicRecognize } from "./music-recognize.js";
@@ -343,6 +344,11 @@ export function createMusic({ invoke, onDownload, storage }) {
       duration: Number.isFinite(audio.duration) ? audio.duration : 0,
     }),
   });
+  // The whole queue taken away by Clear, so one click brings it back.
+  let cleared = null;
+  // Set up with the settings; the dock reports each change of song to it.
+  let songNotice = null,
+    nowPlayingLine = "";
   let removed = null,
     dragged = null,
     queueList = null;
@@ -917,6 +923,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     notify: (message, error) => status(message, error),
     add: async entries => addFavorites(entries),
   });
+  songNotice = wireSongNotice({ host: $("music-preferences") });
   wireMusicAccount({
     invoke,
     host: $("music-preferences"),
@@ -1790,6 +1797,14 @@ export function createMusic({ invoke, onDownload, storage }) {
   function syncDock() {
     dock.hidden = !current && document.querySelector("main").dataset.page !== "music";
     losslessBadge.hidden = !current?.lossless;
+    // The song playing, for a notification when it starts unseen and for the tray icon's tooltip.
+    const playingNow = !!current && !audio.paused;
+    songNotice?.update(current && { ...current, subtitle: displaySubtitle(current) }, playingNow);
+    const line = playingNow ? `${current.title} — ${displaySubtitle(current)}` : "";
+    if (line !== nowPlayingLine) {
+      nowPlayingLine = line;
+      document.dispatchEvent(new CustomEvent("deviload:now-playing", { detail: line }));
+    }
     ambient.update();
     if (dock.hidden && queueOpen) {
       queueOpen = false;
@@ -1978,6 +1993,42 @@ export function createMusic({ invoke, onDownload, storage }) {
       button(t("Close"), "x-circle", closeQueue),
     );
     queuePanel.append(head);
+    // The queue as a playlist, the songs still to come in a new order, or a fresh start keeping the current song.
+    const tools = el("div", "music-queue-tools");
+    const tool = (label, glyph, action, disabled) => {
+      const node = button(label, glyph, action, "quiet small music-queue-tool");
+      node.append(el("span", "", label));
+      node.disabled = disabled;
+      return node;
+    };
+    const ahead = queue.length - (index >= 0 ? index + 1 : 0);
+    // With shuffle on the order is already mixed, so the button steps aside.
+    tools.append(
+      tool(t("Save as playlist"), "playlist", saveQueue, !tracks(queue).length),
+      ...(shuffle ? [] : [tool(t("Shuffle the rest"), "shuffle", shuffleRest, ahead < 2)]),
+      tool(t("Clear queue"), "trash", clearQueue, queue.length <= (current ? 1 : 0)),
+    );
+    queuePanel.append(tools);
+    if (cleared)
+      queuePanel.append(
+        button(
+          t("Undo clearing"),
+          "arrow-clockwise",
+          () => {
+            const playing = current;
+            queue = cleared.filter(item => item.id !== playing?.id);
+            const at = Math.min(
+              cleared.findIndex(item => item.id === playing?.id),
+              queue.length,
+            );
+            if (playing) queue.splice(Math.max(0, at), 0, playing);
+            cleared = null;
+            order.sequential();
+            syncQueue();
+          },
+          "music-queue-undo",
+        ),
+      );
     const option = el("label", "music-autoplay"),
       toggle = el("input", "");
     toggle.type = "checkbox";
@@ -2007,7 +2058,23 @@ export function createMusic({ invoke, onDownload, storage }) {
       );
       queuePanel.append(undo);
     }
-    if (!queue.length) queuePanel.append(el("p", "music-empty-copy", t("Pick a song to start your queue.")));
+    if (!queue.length) {
+      const empty = el("div", "music-empty music-queue-empty");
+      empty.append(
+        icon("music-notes"),
+        el("p", "", t("Pick a song to start your queue.")),
+        button(
+          t("Search music"),
+          "magnifying-glass",
+          () => {
+            closeQueue();
+            $("music-query").focus();
+          },
+          "music-primary music-text-button",
+        ),
+      );
+      queuePanel.append(empty);
+    }
     const upcoming = queue[plannedNext()]?.id,
       shown = displayedQueue();
     const list = el("div", "music-queue-list");
@@ -2106,7 +2173,36 @@ export function createMusic({ invoke, onDownload, storage }) {
     };
     queueList = mountMusicList(list, shown, renderRow);
   }
+  function saveQueue() {
+    const date = new Intl.DateTimeFormat(language(), { day: "numeric", month: "long" }).format(new Date());
+    library.createFrom(tracks(queue), t("Queue · {date}", { date }));
+  }
+  // Songs after the current one in a new order, once; the shuffle mode stays as it was.
+  function shuffleRest() {
+    if (shuffle || index < -1) return;
+    const start = index + 1,
+      rest = queue.slice(start);
+    for (let i = rest.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [rest[i], rest[j]] = [rest[j], rest[i]];
+    }
+    queue = [...queue.slice(0, start), ...rest];
+    order.sequential();
+    syncQueue();
+    status(t("The rest of the queue is shuffled."));
+  }
+  function clearQueue() {
+    if (queue.length <= (current ? 1 : 0)) return;
+    cleared = [...queue];
+    removed = null;
+    queue = current ? [current] : [];
+    order.sequential();
+    syncQueue();
+    status(t("Queue cleared. The current song keeps playing."));
+  }
   function syncQueue() {
+    // Undo for Clear lasts until something new joins the queue.
+    if (cleared && queue.length > (current ? 1 : 0)) cleared = null;
     const retained = new Set(queue.map(item => item.id));
     for (const id of automaticQueueIds) if (!retained.has(id)) automaticQueueIds.delete(id);
     index = current ? queue.findIndex(item => item.id === current.id) : -1;
@@ -4054,7 +4150,7 @@ export function createMusic({ invoke, onDownload, storage }) {
               "music-primary music-text-button",
             );
       actions.append(start);
-      $("music-library-tools").hidden = playlist.items.length < 12;
+      $("music-library-tools").hidden = playlist.items.length < 2;
       if (!playlist.smart)
         actions.append(
           ...pageMenu([
@@ -4184,8 +4280,17 @@ export function createMusic({ invoke, onDownload, storage }) {
       if (["favorites", "recent", "offline"].includes(view) && !listFilter)
         $("music-library-tools").hidden = true;
       const empty = el("div", "music-empty");
+      // Each empty page shows what belongs there: a heart for likes, a clock for history, a download for offline.
       empty.append(
-        icon("music-notes"),
+        icon(
+          view === "favorites"
+            ? "heart"
+            : view === "recent"
+              ? "clock"
+              : view === "offline"
+                ? "download-simple"
+                : "music-notes",
+        ),
         el(
           "h4",
           "",
@@ -4289,7 +4394,11 @@ export function createMusic({ invoke, onDownload, storage }) {
         items = items.filter(item =>
           `${item.title} ${item.subtitle || ""}`.toLocaleLowerCase().includes(query),
         );
-        if (listSort !== "original")
+        // Liked songs are kept newest first; playlists keep the order songs were added in.
+        if (listSort === "recent") items = view === "favorites" ? items : [...items].reverse();
+        else if (listSort === "duration")
+          items = [...items].sort((a, b) => (Number(b.duration) || 0) - (Number(a.duration) || 0));
+        else if (listSort !== "original")
           items = [...items].sort((a, b) =>
             (listSort === "artist" ? a.artists?.[0] || a.subtitle || "" : a.title || "").localeCompare(
               listSort === "artist" ? b.artists?.[0] || b.subtitle || "" : b.title || "",
@@ -4826,6 +4935,13 @@ export function createMusic({ invoke, onDownload, storage }) {
       if (kind === "browse") {
         ({ item: browseItem, sections } = applyBrowseArtwork(browseItem, sections, result.artwork, value));
         sections = creditAlbumTracks(browseItem, sections);
+        // Similar artists right after the music itself, not below videos and playlists where nobody scrolls.
+        const similar = artistPage
+          ? sections.findIndex(
+              section => section.items.length && section.items.every(item => item.kind === "artist"),
+            )
+          : -1;
+        if (similar > 3) sections.splice(3, 0, ...sections.splice(similar, 1));
       }
       const notice =
         result.notice === "cached"

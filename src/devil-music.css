@@ -3200,3 +3200,27 @@ body.music-focus .music-library-sidebar {
   text-align: center;
   opacity: 0.6;
 }
+
+/* Queue tools under its title: save, shuffle the rest, clear. */
+:root body .music-queue-panel .music-queue-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 10px;
+}
+:root[data-theme] body .music-queue-panel .music-queue-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+:root[data-theme] body .music-queue-panel .music-queue-tool .icon {
+  width: 14px;
+  height: 14px;
+}
+:root[data-theme] body .music-queue-panel .music-queue-tool:disabled {
+  opacity: 0.4;
+}

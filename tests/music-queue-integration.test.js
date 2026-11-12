@@ -12,7 +12,7 @@ const miniControl=between('  window.__TAURI__?.event\n    ?.listen("music-mini-q
 const song=n=>({id:String(n).padStart(11,'0'),kind:'song',title:`Song ${n}`});
 function queueUI(){
  let miniHandler;const queue=Array.from({length:8},(_,n)=>song(n)),ctx={queue,current:queue[2],index:2,shuffle:true,repeat:'off',sourceRevision:0,nextPlan:null,
-  order:createPlaybackOrder(()=>.7),automaticQueueIds:new Set(),insertNext,reorderTrack,musicRoom:null,displaySubtitle:()=>'',
+  order:createPlaybackOrder(()=>.7),automaticQueueIds:new Set(),insertNext,reorderTrack,musicRoom:null,cleared:null,displaySubtitle:()=>'',
   syncDock(){},persistSession(){},renderQueue(){},status(){},t:value=>value,queuePanel:{querySelector:()=>null},miniPlayer:null,roomControlsPlayback:()=>false,
   window:{__TAURI__:{event:{listen:(_name,handler)=>{miniHandler=handler;return Promise.resolve();}}}}};
  ctx.playbackCandidates=()=>ctx.queue;ctx.order.visit(queue[0].id,queue);ctx.order.visit(queue[2].id,queue);

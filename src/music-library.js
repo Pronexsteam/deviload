@@ -62,7 +62,8 @@ export function createMusicLibrary({ saved, commit, onOpen, notify, button, cove
     modal.showModal();
     return modal;
   }
-  function edit(id, item) {
+  // item: one song for a new playlist, or a list of songs (the play queue); name: a suggested name.
+  function edit(id, item, suggested = "") {
     const existing = find(id);
     const modal = dialog(existing ? t("Edit playlist") : t("Create playlist"), (body, close) => {
       const form = el("form", "music-playlist-form"),
@@ -71,7 +72,7 @@ export function createMusicLibrary({ saved, commit, onOpen, notify, button, cove
       name.type = "text";
       name.required = true;
       name.maxLength = 60;
-      name.value = existing?.name || "";
+      name.value = existing?.name || suggested;
       label.append(name);
       const descriptionLabel = el("label", "", t("Description")),
         description = el("textarea", "");
@@ -181,7 +182,10 @@ export function createMusicLibrary({ saved, commit, onOpen, notify, button, cove
           return;
         }
         const playlist = {
-          ...(existing || { id: crypto.randomUUID(), items: item ? [item] : [] }),
+          ...(existing || {
+            id: crypto.randomUUID(),
+            items: Array.isArray(item) ? tracks(item) : item ? [item] : [],
+          }),
           name: title,
           description: description.value.trim(),
           cover: artwork,
@@ -454,6 +458,7 @@ export function createMusicLibrary({ saved, commit, onOpen, notify, button, cove
     transfer,
     removeTracks,
     create: () => edit(),
+    createFrom: (items, name) => edit(null, items, name),
     rename: id => edit(id),
     remove,
     invalidateUndo() {

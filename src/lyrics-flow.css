@@ -151,3 +151,36 @@
     color: var(--lyric-ink);
   }
 }
+
+/* Find in lyrics: the field in the tools, and the lines that hold the words. */
+.music-lyrics-tools .music-lyrics-find {
+  width: 170px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+:root[data-theme] body .music-lyrics-scroll .music-lyric-line.is-match {
+  opacity: 0.85;
+  background-color: color-mix(in srgb, var(--player-primary, #9ad0ff) 10%, transparent);
+}
+:root[data-theme] body .music-lyrics-scroll .music-lyric-line.is-match-current {
+  opacity: 1;
+  background-color: color-mix(in srgb, var(--player-primary, #9ad0ff) 22%, transparent);
+}
+
+.music-lyrics-tools .music-lyrics-source-pick {
+  min-height: 30px;
+  max-width: 180px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+}

@@ -189,15 +189,25 @@ async function loadStore() {
 let folderPaths = {};
 let missingComponents = null;
 // The tray icon gets a small dot while downloading and when something failed.
-let trayShown = "";
+let trayShown = "",
+  trayArgs = ["", 0],
+  trayMusic = "";
+// The tray tooltip names the song playing when nothing is downloading.
+document.addEventListener("deviload:now-playing", event => {
+  trayMusic = String(event.detail || "").slice(0, 100);
+  syncTray(...trayArgs);
+});
 function syncTray(state, running) {
   if (!invoke) return;
+  trayArgs = [state, running];
   const look = running ? "working" : state === "error" ? "error" : "idle";
   const tooltip = running
     ? tn("Deviload · {count} download", "Deviload · {count} downloads", running)
     : look === "error"
       ? t("Deviload · a download failed")
-      : "Deviload";
+      : trayMusic
+        ? `Deviload · ♪ ${trayMusic}`
+        : "Deviload";
   if (trayShown === look + tooltip) return;
   trayShown = look + tooltip;
   invoke("set_tray_state", { state: look, tooltip }).catch(() => {});

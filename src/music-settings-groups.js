@@ -8,7 +8,7 @@ const GROUPS = [
   {
     key: "playback",
     title: () => t("Playback"),
-    match: [".music-yield", "#music-playback-settings"],
+    match: [".music-yield", ".music-song-notice", "#music-playback-settings"],
   },
   {
     key: "recommendations",
