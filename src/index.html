@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="music-connect.css">
   <link rel="stylesheet" href="music-glass.css">
   <link rel="stylesheet" href="app-mode.css">
-  <link rel="stylesheet" href="ui-motion.css"></head>
+  <link rel="stylesheet" href="ui-motion.css"><script type="module" src="native-menu-guard.js"></script></head>
 <body>
 <div id="reaction-overlay" class="reaction-overlay" role="status" aria-live="polite" hidden><div class="reaction-burst" aria-hidden="true"></div><strong id="reaction-title"></strong><span id="reaction-detail"></span></div>
 <div class="window-drag-strip" aria-hidden="true"></div>
@@ -60,7 +60,7 @@
   <div id="music-moods" class="music-moods" role="group" aria-label="Pick a mood"><button type="button" data-music-mood="">Explore</button><button type="button" data-music-mood="chill">Unwind</button><button type="button" data-music-mood="focus">Focus</button><button type="button" data-music-mood="jazz">Jazz club</button><button type="button" data-music-mood="electronic">After hours</button><button type="button" data-music-mood="rock">Turn it up</button><button type="button" data-music-mood="fresh">New this week</button><button type="button" data-music-mood="hits">Top hits</button><button type="button" data-music-mood="workout">Workout</button><button type="button" data-music-mood="road">Road trip</button></div>
   <div class="music-content-heading"><div><span id="music-kicker" class="music-eyebrow">PRESS PLAY</span><h3 id="music-heading">Discover your next favorite</h3></div></div>
   <div id="music-status" class="music-status" role="status" aria-live="polite" hidden></div>
-  <div id="music-library-tools" class="music-library-tools" hidden><input id="music-library-filter" type="search" placeholder="Filter this list" aria-label="Filter this list"><select id="music-library-sort" aria-label="Sort songs"><option value="original">Original order</option><option value="title">Song title</option><option value="artist">Artist name</option></select></div>
+  <div id="music-library-tools" class="music-library-tools" hidden><input id="music-library-filter" type="search" placeholder="Filter this list" aria-label="Filter this list"><select id="music-library-sort" aria-label="Sort songs"><option value="original">Original order</option><option value="recent">Newest first</option><option value="title">Song title</option><option value="artist">Artist name</option><option value="duration">Longest first</option></select></div>
   <div id="music-shelves" class="music-shelves"></div>
   <p class="music-attribution">Music catalog · YouTube Music</p>
 </section>

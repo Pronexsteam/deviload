@@ -55,7 +55,107 @@ export function createMusicLyrics({
   smaller.textContent = "A−";
   larger.textContent = "A+";
   resume.hidden = true;
-  toolbar.append(smaller, larger, resume);
+  // Find a line in the words: matching lines light up, the first is brought into view, the arrows step through
+  // them and Enter plays the song from the chosen line.
+  const finder = document.createElement("input");
+  finder.type = "search";
+  finder.className = "music-lyrics-find";
+  finder.hidden = true;
+  let matches = [],
+    matchAt = 0;
+  const clearFind = () => {
+    for (const row of body.querySelectorAll(".is-match"))
+      row.classList.remove("is-match", "is-match-current");
+    matches = [];
+    matchAt = 0;
+  };
+  const showMatch = () => {
+    for (const row of matches) row.classList.toggle("is-match-current", row === matches[matchAt]);
+    const row = matches[matchAt];
+    if (!row) return;
+    manualScroll();
+    body.scrollTo({
+      top:
+        body.scrollTop +
+        row.getBoundingClientRect().top -
+        body.getBoundingClientRect().top -
+        body.clientHeight * 0.3,
+      behavior: "smooth",
+    });
+  };
+  const find = button(t("Find in lyrics"), "magnifying-glass", () => {
+    finder.hidden = !finder.hidden;
+    find.setAttribute("aria-pressed", String(!finder.hidden));
+    if (finder.hidden) {
+      finder.value = "";
+      clearFind();
+    } else finder.focus();
+  });
+  find.setAttribute("aria-pressed", "false");
+  finder.addEventListener("input", () => {
+    clearFind();
+    const query = finder.value.trim().toLocaleLowerCase();
+    if (query.length < 2) return;
+    matches = [...body.children].filter(row => row.textContent.toLocaleLowerCase().includes(query));
+    for (const row of matches) row.classList.add("is-match");
+    showMatch();
+  });
+  finder.addEventListener("keydown", event => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!matches.length) return;
+      matchAt = (matchAt + (event.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length;
+      showMatch();
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      matches[matchAt]?.click();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      find.click();
+    }
+  });
+  // Which service the words come from, per song: Automatic picks the best fit; the others are for when it picked
+  // wrong words or wrong timing.
+  const SOURCE_KEY = "deviload-lyrics-source-v1";
+  let sourceChoices = {},
+    choice = "auto";
+  try {
+    const value = JSON.parse(localStorage.getItem(SOURCE_KEY) || "{}");
+    if (value && typeof value === "object" && !Array.isArray(value)) sourceChoices = value;
+  } catch {}
+  const sourcePick = document.createElement("select");
+  sourcePick.className = "music-lyrics-source-pick";
+  for (const value of ["auto", "lrclib", "better", "unison"]) {
+    const option = document.createElement("option");
+    option.value = value;
+    sourcePick.append(option);
+  }
+  sourcePick.addEventListener("change", () => {
+    const id = getTrack()?.id;
+    if (!id) return;
+    if (sourcePick.value === "auto") delete sourceChoices[id];
+    else sourceChoices[id] = sourcePick.value;
+    const keys = Object.keys(sourceChoices);
+    for (const old of keys.slice(0, Math.max(0, keys.length - 300))) delete sourceChoices[old];
+    try {
+      localStorage.setItem(SOURCE_KEY, JSON.stringify(sourceChoices));
+    } catch {}
+    load();
+  });
+  function labelSourcePick() {
+    sourcePick.title = sourcePick.ariaLabel = t("Lyrics source");
+    finder.placeholder = finder.ariaLabel = t("A word or line");
+    const names = {
+      auto: t("Source: automatic"),
+      lrclib: "LRCLIB",
+      better: "Better Lyrics",
+      unison: t("Unison (timed for this video)"),
+    };
+    for (const option of sourcePick.options) option.textContent = names[option.value];
+  }
+  labelSourcePick();
+  toolbar.append(smaller, larger, find, finder, sourcePick, resume);
   setSize(fontSize);
   const extras = lyricsExtras({
     invoke,
@@ -273,6 +373,8 @@ export function createMusicLyrics({
         return;
       }
       offset = offsets[track.id] || 0;
+      choice = sourceChoices[track.id] || "auto";
+      sourcePick.value = choice;
       timingLabel();
       const args = {
         title: track.title,
@@ -420,9 +522,12 @@ export function createMusicLyrics({
         body.textContent = errorText(failure);
         body.append(button(t("Retry"), null, () => load(), "music-lyrics-retry"));
       };
-      if (token !== request || result?.instrumental || hasWords) return;
-      let candidate = parseTtml(enriched?.ttml, duration);
-      if (!richerLyricsFit(candidate, result)) {
+      // Automatic keeps the line lyrics when they already carry word timing; a chosen source always gets its turn.
+      if (token !== request || result?.instrumental || (hasWords && choice === "auto")) return;
+      if (choice === "lrclib") return offerRetry();
+      const fits = value => (choice === "auto" ? richerLyricsFit(value, result) : value?.length > 0);
+      let candidate = choice === "unison" ? [] : parseTtml(enriched?.ttml, duration);
+      if (!fits(candidate) && choice !== "better") {
         const communityKey = "unison:" + key;
         if (!cache.has(communityKey) && !loading.has(communityKey)) {
           loading.set(
@@ -446,7 +551,12 @@ export function createMusicLyrics({
         if (token !== request) return;
         candidate = parseTtml(enriched?.ttml, duration, globalThis.DOMParser, enriched?.duration);
       }
-      if (richerLyricsFit(candidate, result)) {
+      if (choice !== "auto" && !fits(candidate)) {
+        const service = choice === "unison" ? "Unison" : "Better Lyrics";
+        extraNote = t("{source} has no lyrics for this song.", { source: service });
+        updateCredit();
+      }
+      if (fits(candidate)) {
         source = enriched.source || "Better Lyrics";
         if (frame) cancelAnimationFrame(frame);
         frame = 0;
@@ -603,6 +713,8 @@ export function createMusicLyrics({
     dialog.ariaLabel = body.ariaLabel = t("Lyrics");
     close.title = close.ariaLabel = t("Close");
     smaller.title = smaller.ariaLabel = t("Smaller lyrics");
+    find.title = find.ariaLabel = t("Find in lyrics");
+    labelSourcePick();
     larger.title = larger.ariaLabel = t("Larger lyrics");
     resume.textContent = resume.title = resume.ariaLabel = t("Follow current line");
     if (host) heading.textContent = t("Lyrics");
@@ -628,6 +740,11 @@ export function createMusicLyrics({
           text: line.text || "",
           at: line.at - clock(),
           end: (line.end ?? lines[index + 1]?.at ?? line.at + 5) - clock(),
+          words: (line.words || []).map(word => ({
+            text: word.text,
+            at: word.at - clock(),
+            end: (word.end ?? word.at) - clock(),
+          })),
         })),
       };
     },

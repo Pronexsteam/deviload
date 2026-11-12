@@ -10,12 +10,12 @@ Discover and listen with Devil Music. Save with yt-dlp. Create with Devil Cut an
 <br>
 Built with Rust and Tauri 2 · English, Russian and Spanish
 
-[![Windows download](docs/downloads/windows.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.12.0/Deviload-2.12.0-setup.exe)
-[![macOS download](docs/downloads/macos.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.12.0/Deviload-2.12.0-macos-test.zip)
+[![Windows download](docs/downloads/windows.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.16.0/Deviload-2.16.0-setup.exe)
+[![macOS download](docs/downloads/macos.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.16.0/Deviload-2.16.0-macos-test.zip)
 [![Linux download](docs/downloads/linux.svg)](#install-on-linux)
 [![Devil Music for Android](docs/downloads/android.svg)](https://github.com/Pronexsteam/DevilMusic/releases/download/v0.0.18/Devil-Music-0.0.18-android.apk)
 
-Desktop downloads: **2.12.0** · Android: **0.0.18 preview**
+Desktop downloads: **2.16.0** · Android: **0.0.18 preview**
 
 <p>
 <a href="https://github.com/Pronexsteam/deviload/releases/latest"><img src="https://img.shields.io/github/v/release/Pronexsteam/deviload?style=flat&amp;label=Release&amp;logo=github&amp;logoColor=d5e5df&amp;color=252d34&amp;labelColor=151b20" height="28" alt="Latest release"></a>
@@ -98,9 +98,9 @@ Add a live link to record from that moment, then stop when you have what you nee
 
 ## Latest update
 
-**Deviload 2.15.0 times the lyrics to the recording that plays.** Devil Music measures each version of a song once and shifts the words to it, so they meet the voice on music videos and re-uploads too, without flicker. Identify song listens to the room, this computer's sound or a file, new YouTube Music likes come over by themselves, and the home brings new releases from artists you follow and moods that open at once. An OBS overlay, library export, playlists for offline listening and label videos with sound in Cinema are new too.
+**Deviload 2.16.0 brings sound moods, lyric videos, a map of your taste and lights that follow the music.** Play a song Slowed + reverb, as Nightcore or in 8D, turn a few sung lines into a vertical video with the song's sound, see the artists you listen to as a star chart, and light your keyboard and strips in the cover's colour on every beat through OpenRGB. Deviload closes to the tray, the queue saves as a playlist, lyrics can be searched, and listening rooms show who is listening and end cleanly.
 
-Read the [2.15.0 release notes](.github/release-notes/v2.15.0.md).
+Read the [2.16.0 release notes](.github/release-notes/v2.16.0.md).
 
 ## Installation
 

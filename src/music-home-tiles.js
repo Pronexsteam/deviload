@@ -45,7 +45,15 @@ export function createMusicHomeTiles({ hero, button, cover, getPlaylists, onView
     // with the panel open, the same space shows more playlists.
     const lists = [...getPlaylists()].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned)).slice(0, 5);
     grid.replaceChildren(hero, ...SHORTCUTS.map(shortcut), ...lists.map(playlist));
+    requestAnimationFrame(balance);
   }
+  // Four visible tiles make two rows of two, not three and one left alone. Which tiles show depends on the side
+  // panel, so the count is taken from the page whenever the grid changes size.
+  function balance() {
+    const shown = [...grid.children].filter(node => node.offsetParent !== null).length;
+    grid.classList.toggle("is-four", shown === 4);
+  }
+  if (globalThis.ResizeObserver) new ResizeObserver(() => balance()).observe(grid);
   onLanguageChange(render);
   render();
   return { render };

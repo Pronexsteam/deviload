@@ -69,6 +69,9 @@ import { wireDownloadDetails, inspectionKey, sourceEstimate } from "./download-o
 keepPresses();
 
 const $ = id => document.getElementById(id);
+// The close button hides Deviload to the tray unless the person turned that off: downloads, watched channels
+// and music keep going, and Quit in the tray menu ends the app.
+const closesToTray = () => localStorage.getItem("deviload-tray") !== "false";
 const invoke = window.__TAURI__?.core?.invoke;
 const convertFileSrc = window.__TAURI__?.core?.convertFileSrc;
 const heroOrb = new MediaPulse($("queue-orb"));
@@ -186,15 +189,25 @@ async function loadStore() {
 let folderPaths = {};
 let missingComponents = null;
 // The tray icon gets a small dot while downloading and when something failed.
-let trayShown = "";
+let trayShown = "",
+  trayArgs = ["", 0],
+  trayMusic = "";
+// The tray tooltip names the song playing when nothing is downloading.
+document.addEventListener("deviload:now-playing", event => {
+  trayMusic = String(event.detail || "").slice(0, 100);
+  syncTray(...trayArgs);
+});
 function syncTray(state, running) {
   if (!invoke) return;
+  trayArgs = [state, running];
   const look = running ? "working" : state === "error" ? "error" : "idle";
   const tooltip = running
     ? tn("Deviload · {count} download", "Deviload · {count} downloads", running)
     : look === "error"
       ? t("Deviload · a download failed")
-      : "Deviload";
+      : trayMusic
+        ? `Deviload · ♪ ${trayMusic}`
+        : "Deviload";
   if (trayShown === look + tooltip) return;
   trayShown = look + tooltip;
   invoke("set_tray_state", { state: look, tooltip }).catch(() => {});
@@ -377,7 +390,7 @@ function syncSwitch(id, on) {
   $(id).setAttribute("aria-checked", String(on));
 }
 function syncSystemPreferences() {
-  syncSwitch("tray-toggle", localStorage.getItem("deviload-tray") === "true");
+  syncSwitch("tray-toggle", closesToTray());
   syncSwitch("os-notify-toggle", localStorage.getItem("deviload-os-notify") === "true");
 }
 syncSystemPreferences();
@@ -485,7 +498,7 @@ $("settings-open").addEventListener("click", () => {
 $("settings-close").addEventListener("click", () => $("app-settings-dialog").close());
 $("tray-toggle").addEventListener("click", async () => {
   if (!invoke) return;
-  const enabled = localStorage.getItem("deviload-tray") !== "true";
+  const enabled = !closesToTray();
   try {
     await invoke("set_close_to_tray", { enabled });
     localStorage.setItem("deviload-tray", String(enabled));
@@ -4100,7 +4113,7 @@ async function init() {
         $("app-version").textContent = "Deviload " + version;
       })
       .catch(() => {});
-    await invoke("set_close_to_tray", { enabled: localStorage.getItem("deviload-tray") === "true" });
+    await invoke("set_close_to_tray", { enabled: closesToTray() });
     const deps = await invoke("diagnostics");
     missingComponents = deps.filter(([, ok]) => !ok).map(([name]) => name);
     renderEngines();
@@ -4132,7 +4145,11 @@ function syncLanguageButtons() {
     option.setAttribute("aria-checked", String(option.dataset.lang === language()));
 }
 function syncTrayLabels() {
-  invoke?.("set_tray_labels", { open: t("Open Deviload"), quit: t("Quit Deviload") }).catch(() => {});
+  invoke?.("set_tray_labels", {
+    open: t("Open Deviload"),
+    quit: t("Quit Deviload"),
+    mini: t("Mini player"),
+  }).catch(() => {});
 }
 for (const option of document.querySelectorAll("[data-lang]"))
   option.textContent = languageNames[option.dataset.lang];

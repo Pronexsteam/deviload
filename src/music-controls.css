@@ -95,6 +95,25 @@
   transform: scale(var(--ctl-press));
   transition-duration: var(--ctl-quick), var(--ctl-quick), 60ms;
 }
+/* On the dock the mini player is one icon among the others, beside the full player; its name is in the tooltip. */
+:root[data-theme]
+  body
+  :is(.music-dock, .music-stage)
+  .music-dock-extras
+  > #music-mini-open.music-mini-launch {
+  width: var(--ctl-size);
+  min-width: var(--ctl-size);
+  padding: 0;
+  justify-content: center;
+}
+:root[data-theme]
+  body
+  :is(.music-dock, .music-stage)
+  .music-dock-extras
+  > #music-mini-open
+  > span:not(.icon) {
+  display: none;
+}
 :root body :is(.music-dock, .music-stage) .music-transport-buttons {
   gap: 10px;
   min-height: 48px;

@@ -8,6 +8,8 @@ use std::{fs,io::{Read,Write,BufRead,BufReader},net::{TcpListener,TcpStream},pat
 const DOWNLOAD:&str="https://github.com/cloudflare/cloudflared/releases/download/2026.10.3/cloudflared-windows-amd64.exe";
 const CHECKSUM:&str="76b2805253d0d6ffacb092a7acfbee99e7af6917835c0c5410e23f3ef5052da2";
 const FAILURE: &str = "Could not connect the listening room. Try again or create a new room.";
+// The host closed the room or quit the app: Cloudflare answers for a tunnel that is gone, or the host says so.
+const ENDED: &str = "The host closed the listening room.";
 #[derive(Clone,Default,Serialize,Deserialize)]
 pub struct RoomState{#[serde(default)]pub id:String,#[serde(default)]pub title:String,#[serde(default)]pub artists:Vec<String>,#[serde(default)]pub image:String,#[serde(default)]pub position:f64,#[serde(default)]pub duration:f64,#[serde(default)]pub playing:bool}
 fn checked(mut s:RoomState)->Result<RoomState,String>{
@@ -16,7 +18,10 @@ fn checked(mut s:RoomState)->Result<RoomState,String>{
  s.image=if s.image.len()<=256&&url::Url::parse(&s.image).is_ok_and(|u|u.scheme()=="https"&&matches!(u.host_str(),Some("i.ytimg.com"|"lh3.googleusercontent.com"|"yt3.googleusercontent.com"))){s.image}else{String::new()};
  s.position=s.position.clamp(0.,86400.);s.duration=s.duration.clamp(0.,86400.);if s.id.is_empty(){s.playing=false;}Ok(s)
 }
-struct Clock{state:RoomState,updated:Instant,guest:Option<Instant>}
+// Each guest app names itself with a random id per run, so the host can count who is listening.
+struct Clock{state:RoomState,updated:Instant,guests:std::collections::HashMap<String,Instant>}
+fn listeners(clock:&mut Clock)->usize{clock.guests.retain(|_,at|at.elapsed()<Duration::from_secs(5));clock.guests.len()}
+fn guest_id()->&'static str{static ID:OnceLock<String>=OnceLock::new();ID.get_or_init(||{let mut bytes=[0u8;8];rand::rng().fill_bytes(&mut bytes);bytes.iter().map(|b|format!("{b:02x}")).collect()})}
 struct Host{clock:Mutex<Clock>,token:String,stopped:AtomicBool,child:Mutex<Option<Child>>}
 impl Host{fn stop(&self){self.stopped.store(true,Ordering::Relaxed);if let Some(mut child)=self.child.lock().unwrap().take(){let _=child.kill();let _=child.wait();}}}
 static ROOM:OnceLock<Mutex<Option<Arc<Host>>>>=OnceLock::new();
@@ -28,6 +33,11 @@ fn allowed(window:&tauri::WebviewWindow)->Result<(),String>{if window.label()=="
 fn client()->Result<reqwest::blocking::Client,String>{let _=rustls::crypto::ring::default_provider().install_default();reqwest::blocking::Client::builder().timeout(Duration::from_secs(8)).redirect(reqwest::redirect::Policy::none()).build().map_err(|_|FAILURE.into())}
 type DnsEntries=std::collections::HashMap<String,(Instant,Vec<std::net::SocketAddr>)>;
 static ROOM_DNS:OnceLock<Mutex<DnsEntries>>=OnceLock::new();
+// 410: the host stopped the room. 502, 530 and 404: Cloudflare has no tunnel or no app behind that address any more.
+fn checked_status(response:reqwest::blocking::Response)->Result<reqwest::blocking::Response,String>{
+ let code=response.status().as_u16();
+ if response.status().is_success(){Ok(response)}else if matches!(code,404|410|502|530){Err(ENDED.into())}else{Err(FAILURE.into())}
+}
 fn room_request(url:&str,token:&str)->Result<reqwest::blocking::Response,String>{
  let _=rustls::crypto::ring::default_provider().install_default();
  let parsed=url::Url::parse(url).map_err(|_|FAILURE)?;let hostname=parsed.host_str().ok_or(FAILURE)?;
@@ -36,10 +46,10 @@ fn room_request(url:&str,token:&str)->Result<reqwest::blocking::Response,String>
  let request=|addresses:Option<&[std::net::SocketAddr]>|{
   let mut builder=reqwest::blocking::Client::builder().timeout(Duration::from_secs(8)).redirect(reqwest::redirect::Policy::none());
   if let Some(addresses)=addresses{builder=builder.resolve_to_addrs(hostname,addresses);}
-  builder.build()?.get(url).header("X-Room-Token",token).send()
+  builder.build()?.get(url).header("X-Room-Token",token).header("X-Room-Guest",guest_id()).send()
  };
  match request(cached.as_deref()){
-  Ok(response)=>return response.error_for_status().map_err(|_|FAILURE.into()),
+  Ok(response)=>return checked_status(response),
   Err(error) if !error.is_connect()=>return Err(FAILURE.into()),
   Err(_)=>{}
  }
@@ -53,7 +63,7 @@ fn room_request(url:&str,token:&str)->Result<reqwest::blocking::Response,String>
   let o=ip.octets();!ip.is_private()&&!ip.is_loopback()&&!ip.is_link_local()&&!ip.is_unspecified()&&!ip.is_documentation()&&o[0]<224&&o[0]!=0&&!(o[0]==100&&(64..=127).contains(&o[1]))&&!(o[0]==198&&(18..=19).contains(&o[1]))
  }).take(8).map(|ip|std::net::SocketAddr::new(ip.into(),443)).collect();
  if addresses.is_empty(){return Err(FAILURE.into());}
- let response=request(Some(&addresses)).and_then(|r|r.error_for_status()).map_err(|_|FAILURE)?;
+ let response=request(Some(&addresses)).map_err(|_|FAILURE.to_string()).and_then(checked_status)?;
  let mut entries=cache.lock().unwrap();if entries.len()>=8{entries.clear();}entries.insert(hostname.into(),(Instant::now(),addresses));Ok(response)
 }
 
@@ -73,17 +83,17 @@ fn helper(dir:&Path)->Result<PathBuf,String>{
 #[derive(Serialize,Deserialize)]
 pub struct Packet{pub state:RoomState,pub age_ms:u64,#[serde(default)]pub transport_ms:u64}
 #[derive(Serialize)]
-pub struct HostStatus{connected:bool}
+pub struct HostStatus{connected:bool,listeners:usize}
 fn response(stream:&mut TcpStream,code:u16,body:&[u8])->std::io::Result<()>{write!(stream,"HTTP/1.1 {code} Response\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\n\r\n",body.len())?;stream.write_all(body)}
 fn serve(mut stream:TcpStream,host:&Host)->std::io::Result<()>{
  stream.set_read_timeout(Some(Duration::from_secs(1)))?;stream.set_write_timeout(Some(Duration::from_secs(1)))?;
  let mut bytes=Vec::new();let mut byte=[0];let started=Instant::now();
  while !bytes.ends_with(b"\r\n\r\n"){if bytes.len()>=8192||started.elapsed()>Duration::from_secs(2){return response(&mut stream,400,b"{}");}stream.read_exact(&mut byte)?;bytes.push(byte[0]);}
  let text=String::from_utf8_lossy(&bytes);let mut lines=text.split("\r\n");if lines.next()!=Some("GET /state HTTP/1.1"){return response(&mut stream,404,b"{}");}
- let mut token=None;for line in lines{if let Some((key,value))=line.split_once(':'){if key.eq_ignore_ascii_case("x-room-token"){if token.is_some(){return response(&mut stream,403,b"{}");}token=Some(value.trim());}}}
+ let mut token=None;let mut guest="anonymous".to_string();for line in lines{if let Some((key,value))=line.split_once(':'){if key.eq_ignore_ascii_case("x-room-token"){if token.is_some(){return response(&mut stream,403,b"{}");}token=Some(value.trim());}else if key.eq_ignore_ascii_case("x-room-guest"){let value=value.trim();if !value.is_empty()&&value.len()<=32&&value.bytes().all(|b|b.is_ascii_hexdigit()){guest=value.to_string();}}}}
  if token!=Some(host.token.as_str()){return response(&mut stream,403,b"{}");}
  let mut clock=host.clock.lock().unwrap();if host.stopped.load(Ordering::Relaxed)||clock.updated.elapsed()>Duration::from_secs(30){return response(&mut stream,410,b"{}");}
- clock.guest=Some(Instant::now());let packet=Packet{state:clock.state.clone(),age_ms:clock.updated.elapsed().as_millis() as u64,transport_ms:0};
+ listeners(&mut clock);if clock.guests.len()<32||clock.guests.contains_key(&guest){clock.guests.insert(guest,Instant::now());}let packet=Packet{state:clock.state.clone(),age_ms:clock.updated.elapsed().as_millis() as u64,transport_ms:0};
  response(&mut stream,200,&serde_json::to_vec(&packet)?)
 }
 fn connection(link:&str)->Result<(String,String),String>{
@@ -100,7 +110,7 @@ fn start_host(dir:&Path,state:RoomState)->Result<String,String>{
   let mut child=crate::command(&exe).args(["tunnel","--no-autoupdate","--url",&format!("http://{address}"),"--protocol","http2"]).stdout(Stdio::null()).stderr(Stdio::piped()).stdin(Stdio::null()).spawn().map_err(|_|FAILURE)?;crate::child_job::bind(&child);
   let stderr=child.stderr.take().ok_or(FAILURE)?;let (tx,rx)=std::sync::mpsc::channel();
   thread::spawn(move||{for line in BufReader::new(stderr).lines().map_while(Result::ok){for word in line.split_whitespace(){let candidate=word.trim_matches(|c:char|!c.is_ascii_alphanumeric()&&c!=':'&&c!='/'&&c!='.'&&c!='-');if candidate.starts_with("https://")&&candidate.ends_with(".trycloudflare.com"){let _=tx.send(candidate.to_string());}}}});
-  let host=Arc::new(Host{clock:Mutex::new(Clock{state,updated:Instant::now(),guest:None}),token,stopped:AtomicBool::new(false),child:Mutex::new(Some(child))});
+  let host=Arc::new(Host{clock:Mutex::new(Clock{state,updated:Instant::now(),guests:Default::default()}),token,stopped:AtomicBool::new(false),child:Mutex::new(Some(child))});
   *slot().lock().unwrap()=Some(host.clone());let worker=host.clone();
   thread::spawn(move||{while !worker.stopped.load(Ordering::Relaxed){if worker.clock.lock().unwrap().updated.elapsed()>Duration::from_secs(90){break;}match listener.accept(){Ok((stream,_))=>{let _=serve(stream,&worker);},Err(e) if e.kind()==std::io::ErrorKind::WouldBlock=>thread::sleep(Duration::from_millis(20)),Err(_)=>break}}worker.stop();});
   match rx.recv_timeout(Duration::from_secs(50)){Ok(url)=>{let link=format!("{url}/#{}",host.token);if connection(&link).is_err()||generation!=GENERATION.load(Ordering::SeqCst){host.stop();return Err(FAILURE.into());}host.clock.lock().unwrap().updated=Instant::now();Ok(link)},Err(_)=>{host.stop();Err(FAILURE.into())}}
@@ -114,7 +124,7 @@ pub async fn music_room_create(window:tauri::WebviewWindow,engine:tauri::State<'
 }
 #[tauri::command]
 pub fn music_room_update(window:tauri::WebviewWindow,state:RoomState)->Result<HostStatus,String>{
- allowed(&window)?;let state=checked(state)?;let stored=slot().lock().unwrap();let host=stored.as_ref().filter(|h|!h.stopped.load(Ordering::Relaxed)).ok_or(FAILURE)?;let mut clock=host.clock.lock().unwrap();clock.state=state;clock.updated=Instant::now();Ok(HostStatus{connected:clock.guest.is_some_and(|at|at.elapsed()<Duration::from_secs(5))})
+ allowed(&window)?;let state=checked(state)?;let stored=slot().lock().unwrap();let host=stored.as_ref().filter(|h|!h.stopped.load(Ordering::Relaxed)).ok_or(FAILURE)?;let mut clock=host.clock.lock().unwrap();clock.state=state;clock.updated=Instant::now();let count=listeners(&mut clock);Ok(HostStatus{connected:count>0,listeners:count})
 }
 #[tauri::command]
 pub fn music_room_stop(window:tauri::WebviewWindow)->Result<(),String>{allowed(&window)?;stop();Ok(())}
@@ -133,10 +143,19 @@ pub async fn music_room_poll(window:tauri::WebviewWindow,link:String)->Result<Pa
  }
  #[test]fn room_metadata_is_bounded_and_does_not_accept_arbitrary_artwork(){let s=checked(RoomState{title:"x".repeat(999),image:"file:///secret".into(),artists:vec!["a".repeat(100);20],position:-10.,duration:1e9,..Default::default()}).unwrap();assert_eq!(s.title.len(),240);assert_eq!(s.artists.len(),4);assert_eq!(s.image,"");assert!(!s.playing);assert_eq!(s.position,0.);assert_eq!(s.duration,86400.);assert!(checked(RoomState{position:f64::NAN,..Default::default()}).is_err());}
  #[test]fn listener_only_serves_authenticated_metadata(){
-  let host=Arc::new(Host{clock:Mutex::new(Clock{state:RoomState::default(),updated:Instant::now(),guest:None}),token:"private".into(),stopped:AtomicBool::new(false),child:Mutex::new(None)});
+  let host=Arc::new(Host{clock:Mutex::new(Clock{state:RoomState::default(),updated:Instant::now(),guests:Default::default()}),token:"private".into(),stopped:AtomicBool::new(false),child:Mutex::new(None)});
   for(request,expected)in [("GET /state HTTP/1.1\r\nHost: localhost\r\n\r\n",403),("GET /state HTTP/1.1\r\nX-Room-Token: private\r\n\r\n",200),("POST /action HTTP/1.1\r\nX-Room-Token: private\r\n\r\n",404)]{
    let listener=TcpListener::bind("127.0.0.1:0").unwrap();let mut client=TcpStream::connect(listener.local_addr().unwrap()).unwrap();let h=host.clone();let thread=thread::spawn(move||serve(listener.accept().unwrap().0,&h).unwrap());client.write_all(request.as_bytes()).unwrap();let mut response=String::new();client.read_to_string(&mut response).unwrap();thread.join().unwrap();assert!(response.starts_with(&format!("HTTP/1.1 {expected}")));
   }
+ }
+ #[test]fn the_host_counts_each_guest_once(){
+  let host=Arc::new(Host{clock:Mutex::new(Clock{state:RoomState::default(),updated:Instant::now(),guests:Default::default()}),token:"private".into(),stopped:AtomicBool::new(false),child:Mutex::new(None)});
+  for guest in ["aa11","bb22","aa11","zz-not-hex",""]{
+   let listener=TcpListener::bind("127.0.0.1:0").unwrap();let mut client=TcpStream::connect(listener.local_addr().unwrap()).unwrap();let h=host.clone();let thread=thread::spawn(move||serve(listener.accept().unwrap().0,&h).unwrap());
+   client.write_all(format!("GET /state HTTP/1.1\r\nX-Room-Token: private\r\nX-Room-Guest: {guest}\r\n\r\n").as_bytes()).unwrap();let mut response=String::new();client.read_to_string(&mut response).unwrap();thread.join().unwrap();
+  }
+  // Two named guests, and the two without a usable id count as one anonymous guest.
+  assert_eq!(listeners(&mut host.clock.lock().unwrap()),3);
  }
 
  // Opt-in network smoke check: never contacts Cloudflare in the normal suite.

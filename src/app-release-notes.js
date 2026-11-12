@@ -79,6 +79,21 @@ export function wireReleaseNotes(workspace) {
     // Every release with its notes, newest first.
     const releases = [
       {
+        version: "2.16.0",
+        changes: [
+          t("Sound moods in More on the player bar: Slowed + reverb, Nightcore and 8D."),
+          t("Turn a few sung lines into a vertical video with the song's sound for stories and shorts."),
+          t("A map of the artists you listen to in statistics, with covers and constellations."),
+          t("RGB lighting through OpenRGB takes the cover's colour and pulses with the bass."),
+          t("Close to the tray, queue tools, song notifications, lyrics search and a source per song."),
+        ],
+        fixes: [
+          t("The mini player opens again on wide windows."),
+          t("Leaving a listening room the host closed gives you your own music back."),
+          t("Right-click and browser keys no longer show the web view's menu or reload the app."),
+        ],
+      },
+      {
         version: "2.15.0",
         changes: [
           t(

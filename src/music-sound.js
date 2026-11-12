@@ -7,6 +7,8 @@ import {
   createMusicRate,
   createSilenceWatch,
   SILENCE,
+  vibeOf,
+  reverbTail,
 } from "./music-sound-model.js";
 import { createSegmentSkip } from "./music-skip-segments.js";
 export { soundSettings } from "./music-sound-model.js";
@@ -31,7 +33,14 @@ export function createMusicSound({
     graphs = [],
     revision = 0;
   const trims = new Map();
-  const speed = createMusicRate(nodes, () => settings.rate);
+  const speed = createMusicRate(
+    nodes,
+    () => settings.rate,
+    () => (settings.bypass ? null : vibeOf(settings.vibe)),
+  );
+  // One circling motion and one reverb tail serve both players.
+  let orbit = null,
+    tail = null;
   const segments = createSegmentSkip({
     invoke: invoke || (async () => null),
     enabled: () => !!invoke && settings.skipSegments,
@@ -56,6 +65,58 @@ export function createMusicSound({
       graph.filters.forEach((filter, i) => ramp(filter.gain, bands[i]));
       ramp(graph.compressor.threshold, !settings.bypass && settings.soft ? -24 : 0);
       ramp(graph.compressor.ratio, !settings.bypass && settings.soft ? 3 : 1);
+      space(graph);
+    }
+  }
+  // Mood effects after the equalizer: a reverb beside the dry sound, and a panner that walks around the head.
+  function space(graph) {
+    const vibe = settings.bypass ? null : vibeOf(settings.vibe),
+      reverb = vibe?.reverb || 0,
+      circling = !!vibe?.orbit;
+    if (reverb && !graph.reverbOn) {
+      if (!tail) {
+        const channels = reverbTail(context.sampleRate);
+        tail = context.createBuffer(2, channels[0].length, context.sampleRate);
+        channels.forEach((data, i) => tail.copyToChannel(data, i));
+      }
+      graph.convolver.buffer ||= tail;
+      graph.compressor.connect(graph.convolver);
+      graph.reverbOn = true;
+    } else if (!reverb && graph.reverbOn) {
+      graph.compressor.disconnect(graph.convolver);
+      graph.reverbOn = false;
+    }
+    ramp(graph.wet.gain, reverb);
+    ramp(graph.dry.gain, 1 - reverb * 0.4);
+    if (circling && !graph.circling) {
+      if (!orbit) {
+        const turn = 1 / vibe.orbit,
+          sine = context.createOscillator(),
+          cosine = context.createOscillator(),
+          radius = context.createGain(),
+          depth = context.createGain();
+        sine.frequency.value = cosine.frequency.value = turn;
+        cosine.setPeriodicWave(
+          context.createPeriodicWave(new Float32Array([0, 1]), new Float32Array([0, 0])),
+        );
+        radius.gain.value = depth.gain.value = 1.6;
+        sine.connect(radius);
+        cosine.connect(depth);
+        sine.start();
+        cosine.start();
+        orbit = { radius, depth };
+      }
+      orbit.radius.connect(graph.panner.positionX);
+      orbit.depth.connect(graph.panner.positionZ);
+      graph.bus.disconnect();
+      graph.bus.connect(graph.panner);
+      graph.circling = true;
+    } else if (!circling && graph.circling) {
+      orbit.radius.disconnect(graph.panner.positionX);
+      orbit.depth.disconnect(graph.panner.positionZ);
+      graph.bus.disconnect();
+      graph.bus.connect(context.destination);
+      graph.circling = false;
     }
   }
   async function activate() {
@@ -81,15 +142,34 @@ export function createMusicSound({
           output = filter;
         }
         output.connect(compressor);
-        compressor.connect(context.destination);
-        graphs.push({ node, filters, preamp, compressor });
+        const dry = context.createGain(),
+          wet = context.createGain(),
+          bus = context.createGain(),
+          convolver = context.createConvolver(),
+          panner = context.createPanner();
+        wet.gain.value = 0;
+        panner.panningModel = "HRTF";
+        panner.distanceModel = "linear";
+        panner.rolloffFactor = 0;
+        panner.positionX.value = panner.positionY.value = panner.positionZ.value = 0;
+        compressor.connect(dry);
+        dry.connect(bus);
+        convolver.connect(wet);
+        wet.connect(bus);
+        bus.connect(context.destination);
+        panner.connect(context.destination);
+        graphs.push({ node, filters, preamp, compressor, dry, wet, bus, convolver, panner });
       }
     }
     apply();
     await context.resume();
   }
   const needsGraph = () =>
-    settings.soft || settings.level || settings.skipSilence || settings.bands.some(Boolean);
+    settings.soft ||
+    settings.level ||
+    settings.skipSilence ||
+    settings.bands.some(Boolean) ||
+    !!(vibeOf(settings.vibe)?.reverb || vibeOf(settings.vibe)?.orbit);
   // The analyser is a side branch, never a second connection to the speakers.
   function tap(graph) {
     if (graph.analyser) return;
@@ -155,6 +235,7 @@ export function createMusicSound({
       storage?.setItem("devil-music-sound", JSON.stringify(settings));
       speed.refresh();
       onRateChange();
+      globalThis.dispatchEvent?.(new Event("music-vibe-change"));
       if (context || needsGraph()) await activate();
       watchSilence();
     } catch (error) {
@@ -290,7 +371,8 @@ export function createMusicSound({
     transition = choice(value => (settings.transition = Number(value))),
     seamless = toggle(value => (settings.seamless = value)),
     skipSilence = toggle(value => (settings.skipSilence = value)),
-    skipSegments = toggle(value => (settings.skipSegments = value));
+    skipSegments = toggle(value => (settings.skipSegments = value)),
+    vibe = choice(value => (settings.vibe = value));
   const rateRow = node("label"),
     rateLabel = node("span"),
     rate = node("input"),
@@ -338,6 +420,12 @@ export function createMusicSound({
     );
     input.value = value;
   };
+  const vibeChoices = () => [
+    ["", t("Normal")],
+    ["slowed", t("Slowed + reverb")],
+    ["nightcore", t("Nightcore")],
+    ["8d", t("8D sound")],
+  ];
   function refresh() {
     heading.textContent = t("Sound and transitions");
     intro.textContent = t("Shape your sound. Your original files stay unchanged.");
@@ -402,6 +490,9 @@ export function createMusicSound({
     skipSilence.label.title = t(
       "Quiet stretches inside and around a song pass quickly. Listening rooms keep normal time.",
     );
+    vibe.label.textContent = t("Sound mood");
+    options(vibe.input, vibeChoices(), settings.vibe);
+    vibe.input.disabled = settings.bypass;
     rateLabel.textContent = rate.ariaLabel = t("Playback speed");
     rate.value = settings.rate;
     rateValue.textContent = settings.rate.toFixed(2) + "\u00d7";
@@ -475,6 +566,14 @@ export function createMusicSound({
       return true;
     },
     rateBlocked: () => speed.reason(getAudio()),
+    get vibe() {
+      return settings.vibe;
+    },
+    vibes: () => vibeChoices(),
+    setVibe(value) {
+      settings.vibe = vibeOf(value) ? value : "";
+      commit();
+    },
     get seamless() {
       return settings.seamless;
     },

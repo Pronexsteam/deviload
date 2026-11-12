@@ -8,7 +8,7 @@ const GROUPS = [
   {
     key: "playback",
     title: () => t("Playback"),
-    match: [".music-yield", "#music-playback-settings"],
+    match: [".music-yield", ".music-song-notice", "#music-playback-settings"],
   },
   {
     key: "recommendations",
@@ -23,7 +23,7 @@ const GROUPS = [
   {
     key: "integrations",
     title: () => t("Integrations"),
-    match: [":has(#music-discord-presence)", ".music-control-api", ".music-scrobbling"],
+    match: [":has(#music-discord-presence)", ".music-control-api", ".music-scrobbling", ".music-lighting"],
   },
   { key: "app", title: () => t("App"), match: [".app-mode-toggle", ".music-tour-replay"] },
 ];

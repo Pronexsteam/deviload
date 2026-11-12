@@ -6,7 +6,7 @@ export const LAYOUT_ZONES = Object.freeze({
   home: Object.freeze(["welcome", "quick", "moods"]),
   greeting: Object.freeze(["stats"]),
   sidebar: Object.freeze(["navigation", "playlists"]),
-  dock: Object.freeze(["lyrics", "queue", "panel", "expand", "clip", "mini", "remote", "volume"]),
+  dock: Object.freeze(["lyrics", "queue", "panel", "expand", "mini", "clip", "remote", "volume"]),
 });
 
 // Blocks that may also move to a zone other than the one they start in.

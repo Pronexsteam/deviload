@@ -42,6 +42,22 @@ export function createMusicCast({
   badge.hidden = true;
   const badgeText = document.createElement("span");
   badge.append(badgeText);
+  // Stopping is one click wherever the person looks: a cross beside the badge on the dock, and an entry in the
+  // More menu under TV and speakers. Both appear only while casting.
+  const quickStop = button(
+    t("Stop casting"),
+    "x-circle",
+    () => end(true),
+    "music-icon-button music-cast-stop",
+  );
+  quickStop.hidden = true;
+  const menuStop = button(t("Stop casting"), "x-circle", () => end(true));
+  menuStop.id = "music-cast-stop";
+  menuStop.hidden = true;
+  const showCasting = on => {
+    badge.hidden = quickStop.hidden = menuStop.hidden = !on;
+    trigger.setAttribute("aria-pressed", String(on));
+  };
 
   const dialog = document.createElement("dialog");
   dialog.className = "music-cast-dialog";
@@ -66,6 +82,7 @@ export function createMusicCast({
     trigger.title = text;
     trigger.ariaLabel = device ? t("Casting to {device}", { device: device.name }) : t("TV and speakers");
     badge.title = badge.ariaLabel = text;
+    quickStop.title = quickStop.ariaLabel = menuStop.title = menuStop.ariaLabel = t("Stop casting");
     badgeText.textContent = device?.name || "";
     heading.textContent = device
       ? t("Casting to {device}", { device: device.name })
@@ -149,8 +166,7 @@ export function createMusicCast({
     // Silence the player here; it keeps time for lyrics, history and the queue.
     muted = decks.nodes.map(node => [node, node.muted]);
     for (const node of decks.nodes) node.muted = true;
-    trigger.setAttribute("aria-pressed", "true");
-    badge.hidden = false;
+    showCasting(true);
     label();
     dialog.close();
     notify(t("Casting to {device}", { device: found.name }));
@@ -166,8 +182,7 @@ export function createMusicCast({
     timer = null;
     for (const [node, value] of muted) node.muted = value;
     muted = [];
-    trigger.setAttribute("aria-pressed", "false");
-    badge.hidden = true;
+    showCasting(false);
     label();
     if (dialog.open) dialog.close();
     if (ask) await invoke("music_cast_control", { action: "stop" }).catch(() => {});
@@ -239,6 +254,8 @@ export function createMusicCast({
   return {
     trigger,
     badge,
+    quickStop,
+    menuStop,
     open,
     end,
     get device() {
