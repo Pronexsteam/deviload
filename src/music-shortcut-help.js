@@ -23,6 +23,7 @@ export function createShortcutHelp({ button }) {
     [t("Slower or faster"), "[ ]"],
     [t("Refresh music"), "F5"],
     [t("Recognize a song playing nearby"), "W"],
+    [t("Mini player"), "I"],
     [t("Mute"), "M"],
     [t("Like this song"), "L"],
     [t("Shuffle"), "S"],

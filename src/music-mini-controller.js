@@ -43,7 +43,7 @@ export function createMusicMiniPlayer({ invoke, button, extras, getState, getQue
       pending = false;
     }
   }
-  const open = button(t("Mini player"), "arrows-in", async () => {
+  const open = button(t("Mini player"), "mini-player-card", async () => {
     if (opening) return;
     opening = true;
     open.disabled = true;

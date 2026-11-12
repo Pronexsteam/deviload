@@ -6,6 +6,8 @@ const LETTERS = {
   KeyS: "shuffle",
   KeyR: "repeat",
   KeyW: "recognize",
+  // I, as in YouTube: the mini player.
+  KeyI: "mini",
   BracketLeft: "slower",
   BracketRight: "faster",
 };

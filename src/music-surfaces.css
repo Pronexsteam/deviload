@@ -1153,17 +1153,6 @@
 #devil-music:not(.library-panel-open) .music-quick-grid > .music-quick-playlist:nth-child(n + 7) {
   display: none;
 }
-/* Mini player and phone remote sit on wide docks; narrower windows keep them in the menu. */
-@media (max-width: 1099px) {
-  :root[data-theme] body .music-dock .music-dock-extras > .music-dock-shortcut {
-    display: none;
-  }
-}
-@media (min-width: 1100px) {
-  #music-dock-menu > :is(#music-mini-open, #music-remote-open) {
-    display: none;
-  }
-}
 /* Light themes keep the Now Playing panel light instead of the dark cover stage. */
 :root[data-theme="glass-light"]
   body

@@ -913,6 +913,9 @@ dialog pre {
 .icon[data-icon="microphone"] {
   --glyph: url("assets/icons/microphone.svg");
 }
+.icon[data-icon="mini-player-card"] {
+  --glyph: url("assets/icons/mini-player-card.svg");
+}
 .icon[data-icon="waveform"] {
   --glyph: url("assets/icons/waveform.svg");
 }

@@ -54,7 +54,7 @@ export function wireMusicLayout({
     panel: () => one(extras()?.querySelector(":scope>.music-panel-toggle")),
     expand: () => one(extras()?.querySelector(":scope>#music-expand")),
     clip: () => one(extras()?.querySelector(":scope>#music-clip-open")),
-    mini: () => one(extras()?.querySelector(':scope>[data-mirror="music-mini-open"]')),
+    mini: () => one(extras()?.querySelector(":scope>#music-mini-open")),
     remote: () => one(extras()?.querySelector(':scope>[data-mirror="music-remote-open"]')),
     volume: () => [
       ...(extras()?.querySelectorAll(':scope>:is(.music-volume-mark,input[type="range"])') || []),
