@@ -3843,7 +3843,7 @@ export function createMusic({ invoke, onDownload, storage }) {
       next === "home" ||
       next === "library" ||
       next === "search" ||
-      (next === "browse" && browseItem?.kind === "album");
+      (next === "browse" && ["album", "artist"].includes(browseItem?.kind));
     $("music-library-filter").value = listFilter;
   }
   function card(item, items, personal = false, contextItems = items) {
@@ -4068,7 +4068,23 @@ export function createMusic({ invoke, onDownload, storage }) {
         () => toggleCollection(browseItem),
         "music-filter-chip",
       );
-      save.setAttribute("aria-pressed", String(saved.collections.some(value => value.id === browseItem.id)));
+      // Says what it does and what is true now: Follow / Following, Save / Saved.
+      const kept = saved.collections.some(value => value.id === browseItem.id);
+      save.setAttribute("aria-pressed", String(kept));
+      if (kept) save.querySelector(".icon")?.setAttribute("data-icon", "check");
+      save.append(
+        el(
+          "span",
+          "",
+          browseItem.kind === "artist"
+            ? kept
+              ? t("Following")
+              : t("Follow")
+            : kept
+              ? t("Saved")
+              : t("Save"),
+        ),
+      );
       actions.append(start, save);
       if (browseItem.kind === "artist")
         actions.append(
@@ -5404,6 +5420,32 @@ export function createMusic({ invoke, onDownload, storage }) {
             : showLocal(b.dataset.musicView),
       ),
     );
+  // The moods slide sideways; arrows at both ends reach the rest with a mouse and step aside at either end.
+  {
+    const row = $("music-moods");
+    const arrow = (back, glyph) => {
+      const node = button(
+        back ? t("Previous moods") : t("More moods"),
+        glyph,
+        () => row.scrollBy({ left: (back ? -1 : 1) * row.clientWidth * 0.7, behavior: "smooth" }),
+        "music-icon-button music-moods-arrow",
+      );
+      node.dataset.side = back ? "start" : "end";
+      return node;
+    };
+    const back = arrow(true, "caret-left"),
+      forward = arrow(false, "caret-right");
+    row.prepend(back);
+    row.append(forward);
+    const sync = () => {
+      const max = row.scrollWidth - row.clientWidth;
+      back.hidden = row.scrollLeft <= 2;
+      forward.hidden = max - row.scrollLeft <= 2;
+    };
+    row.addEventListener("scroll", sync, { passive: true });
+    new ResizeObserver(sync).observe(row);
+    sync();
+  }
   document.querySelectorAll("[data-music-mood]").forEach(b =>
     b.addEventListener("click", () => {
       activeMood = b.dataset.musicMood;

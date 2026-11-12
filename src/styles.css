@@ -958,6 +958,12 @@ dialog pre {
 .icon[data-icon="fire"] {
   --glyph: url("assets/icons/fire.svg");
 }
+.icon[data-icon="caret-left"] {
+  --glyph: url("assets/icons/caret-left.svg");
+}
+.icon[data-icon="caret-right"] {
+  --glyph: url("assets/icons/caret-right.svg");
+}
 .icon[data-icon="caret-down"] {
   --glyph: url("assets/icons/caret-down.svg");
 }
