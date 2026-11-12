@@ -18,10 +18,12 @@ Built with Rust and Tauri 2 · English, Russian and Spanish
 Desktop downloads: **2.16.0** · Android: **0.0.18 preview**
 
 <p>
-<a href="https://github.com/Pronexsteam/deviload/releases/latest"><img src="https://img.shields.io/github/v/release/Pronexsteam/deviload?style=flat&amp;label=Release&amp;logo=github&amp;logoColor=d5e5df&amp;color=252d34&amp;labelColor=151b20" height="28" alt="Latest release"></a>
-<a href="https://github.com/Pronexsteam/deviload/releases"><img src="https://img.shields.io/github/downloads/Pronexsteam/deviload/total?style=flat&amp;label=Downloads&amp;color=252d34&amp;labelColor=151b20" height="28" alt="Total release downloads"></a>
-<a href="https://github.com/Pronexsteam/deviload"><img src="https://img.shields.io/github/stars/Pronexsteam/deviload?style=flat&amp;label=Stars&amp;logo=github&amp;logoColor=d5e5df&amp;color=252d34&amp;labelColor=151b20" height="28" alt="GitHub stars"></a>
-<a href="https://github.com/Pronexsteam/deviload/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Pronexsteam/deviload/ci.yml?style=flat&amp;label=Checks&amp;logo=githubactions&amp;logoColor=d5e5df&amp;labelColor=151b20" height="28" alt="CI checks"></a>
+<a href="https://github.com/Pronexsteam/deviload/releases/latest"><img src="https://img.shields.io/github/v/release/Pronexsteam/deviload?style=for-the-badge&amp;label=Release&amp;logo=github&amp;logoColor=white&amp;color=e8284c&amp;labelColor=161b22" height="40" alt="Latest release"></a>
+<a href="https://github.com/Pronexsteam/deviload/releases"><img src="https://img.shields.io/github/downloads/Pronexsteam/deviload/total?style=for-the-badge&amp;label=Downloads&amp;color=e8284c&amp;labelColor=161b22" height="40" alt="Total release downloads"></a>
+</p>
+<p>
+<a href="https://github.com/Pronexsteam/deviload"><img src="https://img.shields.io/github/stars/Pronexsteam/deviload?style=for-the-badge&amp;label=Stars&amp;logo=github&amp;logoColor=white&amp;color=30363d&amp;labelColor=161b22" height="28" alt="GitHub stars"></a>
+<a href="https://github.com/Pronexsteam/deviload/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Pronexsteam/deviload/ci.yml?style=for-the-badge&amp;label=Checks&amp;logo=githubactions&amp;logoColor=white&amp;labelColor=161b22" height="28" alt="CI checks"></a>
 </p>
 
 [![Support on Ko-fi](docs/downloads/kofi.svg)](https://ko-fi.com/pronexsteam)
