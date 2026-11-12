@@ -92,6 +92,214 @@ dialog.music-stats-dialog::backdrop {
   scrollbar-width: thin;
 }
 
+/* Taste map: a sky with the stars, and beside it the constellations that light one group up. */
+dialog.music-stats-dialog:has(.music-taste-map) {
+  width: min(960px, calc(100vw - 40px));
+}
+.music-stats-body.is-map {
+  overflow: hidden;
+}
+.music-taste-map {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 230px;
+  gap: 16px;
+}
+.music-taste-map-sky {
+  position: relative;
+  min-width: 0;
+}
+.music-taste-map canvas {
+  display: block;
+  width: 100%;
+  height: min(540px, calc(100dvh - 260px));
+  min-height: 320px;
+  border-radius: 20px;
+  background: radial-gradient(ellipse at 50% 45%, #10121a 0%, #08090d 70%);
+  box-shadow: inset 0 0 0 1px #ffffff14;
+  outline: none;
+}
+.music-taste-map canvas:focus-visible {
+  box-shadow:
+    inset 0 0 0 1px #ffffff17,
+    0 0 0 2px var(--player-primary, #9ad0ff);
+}
+.music-taste-map-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 24px;
+  text-align: center;
+  color: #ffffffb3;
+  pointer-events: none;
+}
+.music-taste-map-empty[hidden] {
+  display: none;
+}
+.music-taste-map-card {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  gap: 3px;
+  width: 190px;
+  padding: 11px 14px 12px;
+  border: 1px solid #ffffff1f;
+  border-left: 2px solid var(--group, #fff);
+  border-radius: 10px;
+  background: #0b0c11f0;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 12px 30px #0008;
+  color: #fff;
+  font-size: 12px;
+  pointer-events: none;
+  opacity: 0;
+  translate: 0 4px;
+  transition:
+    opacity 140ms ease,
+    translate 140ms ease;
+}
+.music-taste-map-card.is-shown {
+  opacity: 1;
+  translate: 0 0;
+}
+.music-taste-map-card strong {
+  font-size: 14px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.music-taste-map-card span {
+  color: #ffffffc0;
+}
+.music-taste-map-card small {
+  margin-top: 4px;
+  color: #ffffff80;
+  font-weight: 500;
+}
+.music-taste-map-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+.music-taste-map-side[hidden] {
+  display: none;
+}
+.music-taste-map-side-title {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--workspace-muted, #b9bcc6);
+}
+.music-taste-map-groups {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+.music-taste-map-group {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #ffffff14;
+  border-radius: 14px;
+  background: #ffffff0a;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
+}
+.music-taste-map-group:hover {
+  background: #ffffff14;
+}
+.music-taste-map-group[aria-pressed="true"] {
+  border-color: #ffffff38;
+  background: #ffffff17;
+}
+.music-taste-map-group > i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--group);
+}
+.music-taste-map-group-names {
+  display: grid;
+  min-width: 0;
+}
+.music-taste-map-group-names strong,
+.music-taste-map-group-names small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.music-taste-map-group-names strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+.music-taste-map-group-names small {
+  font-size: 11.5px;
+  color: var(--workspace-muted, #b9bcc6);
+}
+.music-taste-map-group-count {
+  min-width: 22px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #ffffff12;
+  font-size: 11px;
+  font-weight: 650;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.music-taste-map-legend {
+  display: grid;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid #ffffff12;
+  font-size: 11.5px;
+  color: var(--workspace-muted, #b9bcc6);
+}
+.music-taste-map-legend span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.music-taste-map-legend-size::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0 32%, #ffffff33 48%, transparent 72%);
+}
+.music-taste-map-legend-line::before {
+  content: "";
+  width: 12px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: #c9cff5;
+}
+@media (max-width: 760px) {
+  .music-taste-map {
+    grid-template-columns: 1fr;
+  }
+  .music-taste-map canvas {
+    height: 52vh;
+  }
+}
+
 .music-stats-tiles {
   display: grid;
   grid-template-columns: 1.4fr repeat(3, 1fr);

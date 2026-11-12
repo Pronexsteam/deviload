@@ -740,6 +740,11 @@ export function createMusicLyrics({
           text: line.text || "",
           at: line.at - clock(),
           end: (line.end ?? lines[index + 1]?.at ?? line.at + 5) - clock(),
+          words: (line.words || []).map(word => ({
+            text: word.text,
+            at: word.at - clock(),
+            end: (word.end ?? word.at) - clock(),
+          })),
         })),
       };
     },

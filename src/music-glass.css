@@ -471,6 +471,10 @@
 :root[data-theme] body #music-dock-menu .music-speed-chip:disabled {
   opacity: 0.35;
 }
+/* Sound moods share the speed row's look, two by two, so the longer names fit in any language. */
+.music-dock-menu .music-vibe-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 .music-speed-badge {
   align-self: center;
   padding: 2px 8px;
@@ -575,4 +579,33 @@
   height: 1px;
   margin: 4px 10px;
   background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+/* A new feature behind this control: a small dot until its tip has been shown once. */
+[data-news] {
+  position: relative;
+}
+[data-news]::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--player-primary, #ff4d5e);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--workspace-bg, #111) 80%, transparent);
+  pointer-events: none;
+  animation: music-news-pulse 2.4s ease-in-out infinite;
+}
+@keyframes music-news-pulse {
+  50% {
+    transform: scale(1.25);
+    opacity: 0.75;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-news]::after {
+    animation: none;
+  }
 }

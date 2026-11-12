@@ -6,6 +6,15 @@ export const presets = {
   voice: [-3, -2, 1, 3, 2, 0],
   night: [-2, -1, 0, 1, -1, -3],
 };
+// Sound moods. Slowed and Nightcore change speed and pitch together, the way those edits are made; 8D circles
+// the song around the listener's head. [shift] multiplies the speed, [reverb] is the wet share, [orbit] the
+// seconds one turn takes.
+export const VIBES = {
+  slowed: { shift: 0.85, reverb: 0.5, orbit: 0 },
+  nightcore: { shift: 1.25, reverb: 0, orbit: 0 },
+  "8d": { shift: 1, reverb: 0.22, orbit: 8 },
+};
+export const vibeOf = key => (Object.hasOwn(VIBES, key) ? VIBES[key] : null);
 const gains = value =>
   frequencies.map((_, i) => (Number.isFinite(value?.[i]) ? Math.max(-12, Math.min(12, value[i])) : 0));
 export function soundSettings(raw = {}) {
@@ -30,6 +39,7 @@ export function soundSettings(raw = {}) {
     skipSilence: raw.skipSilence === true,
     skipSegments: raw.skipSegments === true,
     rate: Number.isFinite(raw.rate) ? Math.round(Math.max(0.5, Math.min(2, raw.rate)) * 20) / 20 : 1,
+    vibe: vibeOf(raw.vibe) ? raw.vibe : "",
   };
 }
 // RBJ peaking response for the same Q and frequencies as the Web Audio graph.
@@ -58,21 +68,23 @@ export function equalizerHeadroom(bands, sampleRate = 48000) {
   }
   return peak > 1.00001 ? 1 / (peak * 10 ** (0.5 / 20)) : 1;
 }
-export function createMusicRate(nodes, getRate) {
+export function createMusicRate(nodes, getRate, getVibe = () => null) {
   const fast = new WeakMap();
   let mode = "";
   const pitchSupported = nodes.every(
     node => "preservesPitch" in node || "webkitPreservesPitch" in node || "mozPreservesPitch" in node,
   );
   function apply(node) {
+    // A listening room keeps normal time, so a mood that changes speed keeps only its sound there.
+    const shift = mode ? 1 : (getVibe()?.shift ?? 1);
     for (const key of ["preservesPitch", "webkitPreservesPitch", "mozPreservesPitch"])
-      if (key in node) node[key] = true;
+      if (key in node) node[key] = shift === 1;
     // Guest synchronization owns playbackRate, including its drift correction.
     if (mode === "guest") {
       node.defaultPlaybackRate = 1;
       return;
     }
-    const rate = mode || !pitchSupported ? 1 : getRate();
+    const rate = Math.round((mode || !pitchSupported ? 1 : getRate()) * shift * 1000) / 1000;
     // Silence has no pitch to preserve, so it may pass faster even where pitch correction is missing.
     node.playbackRate = (!mode && fast.get(node)) || rate;
     node.defaultPlaybackRate = rate;
@@ -108,6 +120,22 @@ export function createMusicRate(nodes, getRate) {
       return mode ? "room" : !pitchSupported ? "pitch" : "";
     },
   };
+}
+// A room-like tail made from decaying noise, darker as it fades, so no recording has to ship with the app.
+export function reverbTail(sampleRate, seconds = 2.6, random = Math.random) {
+  const length = Math.max(1, Math.round(sampleRate * seconds)),
+    channels = [new Float32Array(length), new Float32Array(length)],
+    delay = Math.round(sampleRate * 0.012);
+  for (const data of channels) {
+    let smooth = 0;
+    for (let i = delay; i < length; i++) {
+      const at = (i - delay) / (length - delay),
+        dark = 0.15 + 0.8 * at;
+      smooth += (random() * 2 - 1 - smooth) * (1 - dark);
+      data[i] = smooth * (1 - at) ** 3;
+    }
+  }
+  return channels;
 }
 // Silence is played through quickly rather than cut, so a song that returns after a pause loses nothing
 // but the few milliseconds it takes to hear it. Short breaths between phrases stay untouched.

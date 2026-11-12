@@ -18,6 +18,7 @@ export function createStatsWindow({
   findItem = () => null,
   cover = () => make("span", "music-art"),
   motion = () => true,
+  tasteMap = null,
 }) {
   const dialog = make("dialog", "music-stats-dialog");
   dialog.setAttribute("aria-labelledby", "music-stats-title");
@@ -27,8 +28,10 @@ export function createStatsWindow({
     period = "week";
 
   function render() {
+    tasteMap?.unmount();
     // The week from day-by-day data; a month or the year from the monthly archive (Recap).
-    const week = period === "week",
+    const map = period === "map",
+      week = period === "week" || map,
       summary = weekly.summary(),
       days = weekly.daily(),
       recap = week ? null : weekly.recap(period);
@@ -44,15 +47,17 @@ export function createStatsWindow({
       : period === "month"
         ? new Intl.DateTimeFormat(locale(), { month: "long", year: "numeric" }).format(new Date())
         : String(new Date().getFullYear());
-    const heading = week
-      ? t("Your week in music")
-      : period === "month"
-        ? t("Your month in music")
-        : t("Your year in music");
+    const heading = map
+      ? t("Your taste map")
+      : week
+        ? t("Your week in music")
+        : period === "month"
+          ? t("Your month in music")
+          : t("Your year in music");
     titles.append(
-      make("span", "music-eyebrow", week ? t("Your last 7 days") : t("Recap")),
+      make("span", "music-eyebrow", week && !map ? t("Your last 7 days") : t("Recap")),
       Object.assign(make("h2", "", heading), { id: "music-stats-title" }),
-      make("p", "music-stats-range", subtitle),
+      make("p", "music-stats-range", map ? t("Artists you listen to on this device") : subtitle),
     );
     const tabs = make("div", "music-stats-tabs");
     tabs.setAttribute("role", "tablist");
@@ -60,10 +65,12 @@ export function createStatsWindow({
       ["week", t("Week")],
       ["month", t("Month")],
       ["year", t("Year")],
+      ...(tasteMap ? [["map", t("Map")]] : []),
     ]) {
       const tab = make("button", "", label);
       tab.type = "button";
       tab.setAttribute("role", "tab");
+      tab.dataset.period = key;
       tab.setAttribute("aria-selected", String(key === period));
       tab.addEventListener("click", () => {
         if (period === key) return;
@@ -204,6 +211,12 @@ export function createStatsWindow({
           : t("Recap counts listening on this device since the update that added it."),
     );
     const body = make("div", "music-stats-body");
+    if (map) {
+      body.classList.add("is-map");
+      dialog.replaceChildren(head, body);
+      tasteMap.mount(body);
+      return close;
+    }
     body.append(tiles);
     if (period !== "month") body.append(chart);
     body.append(lists, note);
@@ -269,6 +282,7 @@ export function createStatsWindow({
         closing = null;
       });
   }
+  dialog.addEventListener("close", () => tasteMap?.unmount());
   dialog.addEventListener("cancel", event => {
     event.preventDefault();
     hide();

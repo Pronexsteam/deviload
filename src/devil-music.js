@@ -24,6 +24,7 @@ import { wireMusicLayout } from "./music-layout.js";
 import { wireMusicTopbar } from "./music-topbar.js";
 import { wireLyricsLines } from "./music-lyrics-desktop.js";
 import { createStatsWindow } from "./music-stats-window.js";
+import { createTasteMap } from "./music-taste-map.js";
 import { runTour, tourSeen, forgetTour } from "./music-tour.js";
 import { wireMusicYield } from "./music-yield.js";
 import { wireMusicAccount } from "./music-account.js";
@@ -31,6 +32,7 @@ import { createLikesSync, likesSyncControls } from "./music-likes-sync.js";
 import { createRecordingAlign } from "./music-recording-align.js";
 import { groupMusicSettings } from "./music-settings-groups.js";
 import { wireSongNotice } from "./music-song-notice.js";
+import { wireMusicLighting } from "./music-lighting.js";
 import { createNewReleases } from "./music-new-releases.js";
 import { wireMusicControlApi } from "./music-control-api.js";
 import { wireMusicRecognize } from "./music-recognize.js";
@@ -44,6 +46,8 @@ import { transitionPlan } from "./music-transition-model.js";
 import { createSleepTimer, sleepLabel, SLEEP_MINUTES } from "./music-sleep.js";
 import { musicShortcut } from "./music-shortcuts.js";
 import { wireMusicSpeed } from "./music-speed.js";
+import { wireMusicVibe } from "./music-vibe.js";
+import { wireWhatsNew } from "./music-whats-new.js";
 import { createShortcutHelp } from "./music-shortcut-help.js";
 import {
   collectionFacts,
@@ -866,7 +870,13 @@ export function createMusic({ invoke, onDownload, storage }) {
   );
   lyrics.addTool(desktopTool);
   // A picture of a sung line to share: from the lyrics tools, or a right click on a line.
-  const lyricCard = createLyricCard({ invoke, button, lyrics, getSong: () => current });
+  const lyricCard = createLyricCard({
+    invoke,
+    button,
+    lyrics,
+    getSong: () => current,
+    getAudio: () => audio,
+  });
   lyrics.addTool(lyricCard.button);
   wireTimeline({ seek, elapsed, duration, getAudio: () => audio, lyrics, time });
   wireHoverLight($("devil-music"));
@@ -924,6 +934,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     add: async entries => addFavorites(entries),
   });
   songNotice = wireSongNotice({ host: $("music-preferences") });
+  wireMusicLighting({ host: $("music-preferences"), invoke, sound, getAudio: () => audio });
   wireMusicAccount({
     invoke,
     host: $("music-preferences"),
@@ -5708,6 +5719,14 @@ export function createMusic({ invoke, onDownload, storage }) {
       findItem,
       cover: item => cover(item, "", 96),
       motion: () => !matchMedia("(prefers-reduced-motion: reduce)").matches,
+      tasteMap: createTasteMap({
+        getData: () => ({ entries: Object.values(taste.entries || {}), recent: saved.recent }),
+        onArtist: name => {
+          statsWindow.close();
+          showArtist({ artists: [name] });
+        },
+        motion: () => !matchMedia("(prefers-reduced-motion: reduce)").matches,
+      }),
     });
     const card = librarySidebar.stats;
     card.tabIndex = 0;
@@ -5869,6 +5888,8 @@ export function createMusic({ invoke, onDownload, storage }) {
   });
   // Quick speed: common speeds in More, a badge beside it when the speed is not normal, and [ and ].
   const quickSpeed = wireMusicSpeed({ sound, button, notify: message => status(message) });
+  const quickVibe = wireMusicVibe({ sound, button });
+  wireWhatsNew();
   wireMusicDockMenu({
     extras,
     button,
@@ -5880,6 +5901,7 @@ export function createMusic({ invoke, onDownload, storage }) {
       $("music-mini-open"),
       $("music-clip-open"),
       quickSpeed.badge,
+      quickVibe.badge,
       cast.badge,
       cast.quickStop,
       musicRoom?.badge,
@@ -5888,6 +5910,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     shortcuts: [],
     items: [
       quickSpeed.row,
+      quickVibe.row,
       saveToPlaylist,
       soundButton,
       sleepButton,
