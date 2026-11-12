@@ -26,7 +26,7 @@
   <g transform="translate(8 8)" color="#fff"><path d="M3 5.5 14.5 4v11H3ZM16.5 3.7 29 2v13H16.5ZM3 17h11.5v11L3 26.5ZM16.5 17H29v13l-12.5-1.7Z" fill="currentColor"/></g>
 </g>
 <text x="76" y="37" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI Variable Display','Segoe UI',Inter,Helvetica,Arial,sans-serif" font-size="17" font-weight="650" fill="#fff" letter-spacing="-.2">Windows</text>
-<text x="76" y="56" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI Variable Display','Segoe UI',Inter,Helvetica,Arial,sans-serif" font-size="12" fill="#fff" fill-opacity=".66">Installer · Portable</text>
+<text x="76" y="56" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI Variable Display','Segoe UI',Inter,Helvetica,Arial,sans-serif" font-size="12" fill="#fff" fill-opacity=".66">Setup · Windows 10/11</text>
 <circle cx="236" cy="40" r="15" fill="url(#wlens)"/>
 <circle cx="236" cy="40" r="14.5" fill="none" stroke="url(#wlensEdge)"/>
 <path d="M236 30v13m-5-5 5 5 5-5" stroke="#fff" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
