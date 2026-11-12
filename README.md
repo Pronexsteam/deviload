@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 <img src="src/assets/themes/mark-midnight.svg" alt="Deviload" width="64">
 
@@ -8,14 +8,14 @@
 
 Discover and listen with Devil Music. Save with yt-dlp. Create with Devil Cut and Devil Convert.
 <br>
-Built with Rust and Tauri 2 · English, Russian and Spanish
+Built with Rust and Tauri 2 В· English, Russian and Spanish
 
 [![Windows download](docs/downloads/windows.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.16.0/Deviload-2.16.0-setup.exe)
 [![macOS download](docs/downloads/macos.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.16.0/Deviload-2.16.0-macos-test.zip)
 [![Linux download](docs/downloads/linux.svg)](#install-on-linux)
 [![Devil Music for Android](docs/downloads/android.svg)](https://github.com/Pronexsteam/DevilMusic/releases/download/v0.0.18/Devil-Music-0.0.18-android.apk)
 
-Desktop downloads: **2.16.0** · Android: **0.0.18 preview**
+Desktop downloads: **2.16.0** В· Android: **0.0.18 preview**
 
 <p>
 <a href="https://github.com/Pronexsteam/deviload/releases/latest"><img src="https://img.shields.io/github/v/release/Pronexsteam/deviload?style=for-the-badge&amp;label=Release&amp;logo=github&amp;logoColor=white&amp;color=e8284c&amp;labelColor=161b22" height="40" alt="Latest release"></a>
@@ -30,11 +30,11 @@ Desktop downloads: **2.16.0** · Android: **0.0.18 preview**
 
 Deviload is free. If it saves you time, a coffee helps me keep building it.
 
-**[Devil Music](#devil-music)** · **[What can I do with it?](#what-can-i-do-with-it)** · **[Install](#installation)** · **[Screenshots](#screenshots)** · **[Report an issue](https://github.com/Pronexsteam/deviload/issues/new)**
+**[Devil Music](#devil-music)** В· **[What can I do with it?](#what-can-i-do-with-it)** В· **[Install](#installation)** В· **[Screenshots](#screenshots)** В· **[Report an issue](https://github.com/Pronexsteam/deviload/issues/new)**
 
 </div>
 
-![Devil Music with the Your own theme: a silent looping video behind the workspace while the library folds into a rail of covers and opens again](docs/screenshots/music-video-background.gif)
+![Devil Music with the Your own theme: a silent looping video behind the workspace while the library folds into a rail of covers and opens again](docs/screenshots/music-video-background.webp)
 
 Deviload is a free, open-source desktop app for discovering music, keeping a local media collection and making clips. Listen in **Devil Music**, save video or audio with [yt-dlp](https://github.com/yt-dlp/yt-dlp), and send downloaded files to **Devil Cut** or **Devil Convert**.
 
@@ -74,7 +74,7 @@ Playback and catalog availability depend on YouTube, your region and your connec
 
 Devil Music is built into Deviload on desktop. A **native Android preview** brings the player to phones and tablets. Discover music, keep a queue, turn the picture disc and switch to lyrics in a layout that adapts to portrait and landscape.
 
-[**Visit Devil Music →**](https://github.com/Pronexsteam/DevilMusic) · [**Download the Android APK →**](https://github.com/Pronexsteam/DevilMusic/releases/download/v0.0.18/Devil-Music-0.0.18-android.apk)
+[**Visit Devil Music в†’**](https://github.com/Pronexsteam/DevilMusic) В· [**Download the Android APK в†’**](https://github.com/Pronexsteam/DevilMusic/releases/download/v0.0.18/Devil-Music-0.0.18-android.apk)
 
 ![Devil Music Android on a tablet with a real album cover](docs/screenshots/devil-music-android.png)
 
@@ -111,10 +111,10 @@ Windows opens the x64 installer; macOS opens the unsigned test-build archive. Li
 | System | Release asset | Instructions |
 |---|---|---|
 | Windows x64 | `Deviload-<version>-setup.exe` or `Deviload-<version>-windows-x64-portable.zip` | [Windows installation](#install-on-windows) |
-| macOS · test build | `Deviload-<version>-macos-test.zip` | [macOS installation](#install-on-macos-test-build) · unsigned and not notarized |
+| macOS В· test build | `Deviload-<version>-macos-test.zip` | [macOS installation](#install-on-macos-test-build) В· unsigned and not notarized |
 | Linux x86_64 | `Deviload-<version>-amd64.deb` or `Deviload-<version>-x86_64.AppImage` | [Linux installation](#install-on-linux) |
 
-**Documentation:** [Requirements](#requirements) · [Build from source](#build-from-source-windows) · [Releases](#releases) · [Data and privacy](#data-and-privacy) · [Translations](#translations)
+**Documentation:** [Requirements](#requirements) В· [Build from source](#build-from-source-windows) В· [Releases](#releases) В· [Data and privacy](#data-and-privacy) В· [Translations](#translations)
 
 ## Features
 
@@ -149,7 +149,7 @@ Windows opens the x64 installer; macOS opens the unsigned test-build archive. Li
   - split at the playhead, select multiple clips to delete or duplicate together, drag to reorder, drag edges to trim, enter precise in/out boundaries, undo and redo, zoom from a two-hour project down to single frames, full screen; long videos stay smooth;
   - detach a clip's sound and move, trim or split it on its own track;
   - transitions between clips (crossfade, through black, slide, wipe, circle) and a sound wave on the tracks;
-  - per clip: speed 0.5× to 3×, volume, smooth start and end, rotation, mirror, brightness, contrast, saturation and a caption;
+  - per clip: speed 0.5Г— to 3Г—, volume, smooth start and end, rotation, mirror, brightness, contrast, saturation and a caption;
   - frame formats 16:9, 9:16, 1:1 and 4:5 with fit, fill or a blurred background; export to MP4 at the original size, 4K, 1440p, 1080p, 720p or 480p in H.264 or H.265, GIF or MP3 with progress, into the folder the video came from or one you choose;
   - projects are saved automatically, and source files are never changed.
 - **Audio tools** for MP3, FLAC and WAV: tags and loudness normalization, saved as a new copy.
@@ -165,7 +165,7 @@ Windows opens the x64 installer; macOS opens the unsigned test-build archive. Li
 - **Updates**: Deviload checks GitHub at start and hourly while the app is visible and updates itself in one click on Windows, macOS and in the AppImage, all from one release (the portable zip and the .deb package point to the releases page); yt-dlp updates itself to the nightly build once a day when nothing is downloading, which can be turned off in the settings.
 - **Proxy** for downloads, search, link checks and yt-dlp updates (HTTP, HTTPS, SOCKS4 and SOCKS5).
 - **Moving from Deviload 1.x**: the history, settings and the list of downloaded videos of the old portable version move over in one click; cookies are not copied.
-- Tray mode and start with Windows, OS notifications, clipboard link suggestions, links from a text file, a copyable yt-dlp command in every task log, keyboard shortcuts (Ctrl/⌘+L links, Ctrl/⌘+K queue search, Ctrl/⌘+Enter download, Escape closes dialogs) and a short guided tour. Only one copy of Deviload runs at a time; starting it again brings the open window forward.
+- Tray mode and start with Windows, OS notifications, clipboard link suggestions, links from a text file, a copyable yt-dlp command in every task log, keyboard shortcuts (Ctrl/вЊ+L links, Ctrl/вЊ+K queue search, Ctrl/вЊ+Enter download, Escape closes dialogs) and a short guided tour. Only one copy of Deviload runs at a time; starting it again brings the open window forward.
 
 </details>
 
@@ -209,7 +209,7 @@ The archive includes yt-dlp, FFmpeg and Deno. The in-app updater signature is se
 
 ## Install on Linux
 
-**Download 2.9.0:** [Debian / Ubuntu (.deb)](https://github.com/Pronexsteam/deviload/releases/download/v2.9.0/Deviload-2.9.0-amd64.deb) · [AppImage (x86_64)](https://github.com/Pronexsteam/deviload/releases/download/v2.9.0/Deviload-2.9.0-x86_64.AppImage)
+**Download 2.9.0:** [Debian / Ubuntu (.deb)](https://github.com/Pronexsteam/deviload/releases/download/v2.9.0/Deviload-2.9.0-amd64.deb) В· [AppImage (x86_64)](https://github.com/Pronexsteam/deviload/releases/download/v2.9.0/Deviload-2.9.0-x86_64.AppImage)
 
 
 `sudo apt install ./Deviload-<version>-amd64.deb` on Debian or Ubuntu, or make the AppImage executable (`chmod +x Deviload-<version>-x86_64.AppImage`) and run it. Both bring yt-dlp, FFmpeg and Deno along; the AppImage updates itself from inside the app, the .deb package is updated by installing the new one. The built-in player uses the system's GStreamer, so MKV playback needs its usual plugins (`gstreamer1.0-plugins-good`).
