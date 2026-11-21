@@ -10,6 +10,9 @@ import {
 import { downloadProgress } from "./music-download-progress.js";
 import { wireCanvasSettings } from "./music-canvas-settings.js";
 import { createMusicGhost } from "./music-ghost.js";
+
+// The Devil Music ghost, switched off until it is finished.
+const GHOST = false;
 import { findLocalRecording } from "./music-auto-local.js";
 import { mountMusicList } from "./music-virtual-list.js";
 import { wireQueueHandle } from "./music-queue-drag.js";
@@ -6050,65 +6053,53 @@ export function createMusic({ invoke, onDownload, storage }) {
     notify: (message, error) => status(message, error),
   });
   wireMusicConnectionShortcuts(button, librarySidebar.stats);
-  // The ghost beside the greeting enters once, then follows what the player is doing.
-  ghost = createMusicGhost({ onClick: () => ghost.play("happy") });
-  document.querySelector(".music-welcome")?.prepend(ghost.node);
-  ghost.play("appear");
-  syncGhost();
-  // The library panel opens into the ghost (it gets bumped) and closes under its shove.
-  {
-    const workspace = $("devil-music");
-    let panelOpen = workspace.classList.contains("library-panel-open");
-    // On the home page the ghost shoves the library shut: a click on a collapse control waits for the shove to
-    // land (about a third of a second), then the panel goes with a jolt.
-    let shoving = false,
-      shoved = false;
-    document.addEventListener(
-      "click",
-      event => {
-        const control = event.target.closest?.(
-          ".music-library-panel-toggle, .music-library-collapse",
-        );
-        if (
-          !control ||
-          shoving ||
-          !panelOpen ||
-          workspace.dataset.view !== "home" ||
-          !ghost.node.getClientRects().length ||
-          matchMedia("(prefers-reduced-motion: reduce)").matches
-        )
-          return;
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        ghost.play("push");
-        ghost.shove(control, {
-          impact: 330,
-          onImpact: () => {
-            const panel = $("music-library-panel");
-            panel?.classList.add("is-shoved-shut");
-            shoving = shoved = true;
-            control.click();
-            shoving = false;
-            setTimeout(() => {
-              shoved = false;
-              panel?.classList.remove("is-shoved-shut");
-            }, 600);
-          },
-        });
-      },
-      true,
-    );
-    new MutationObserver(() => {
-      const open = workspace.classList.contains("library-panel-open");
-      if (open === panelOpen) return;
-      panelOpen = open;
-      // A shove already played its clip.
-      if (!open && shoved) return;
-      if (workspace.dataset.view === "home") {
-        ghost.play(open ? "bump" : "push");
-        if (open) ghost.knock();
-      }
-    }).observe(workspace, { attributes: true, attributeFilter: ["class"] });
+  // The ghost beside the greeting (music-ghost.js) is paused for now; GHOST turns it back on. Its clips are kept
+  // outside the app, in Deviload-tools/ghost/app-clips, and go back into assets/ghost when it returns.
+  if (GHOST) {
+    // The ghost beside the greeting enters once, then follows what the player is doing.
+    ghost = createMusicGhost({ onClick: () => ghost.play("happy") });
+    document.querySelector(".music-welcome")?.prepend(ghost.node);
+    ghost.play("appear");
+    syncGhost();
+    // The library panel opens into the ghost (it gets bumped) and closes under its shove.
+    {
+      const workspace = $("devil-music");
+      let panelOpen = workspace.classList.contains("library-panel-open");
+      // On the home page the ghost shoves the library shut. The click is never held back (the panel answers at
+      // once); the ghost darts to where the control was and lands its push as the panel starts to fold, so the panel
+      // seems to go from its shove.
+      let shoved = false;
+      document.addEventListener(
+        "click",
+        event => {
+          const control = event.target.closest?.(".music-library-panel-toggle, .music-library-collapse");
+          if (
+            !control ||
+            !panelOpen ||
+            workspace.dataset.view !== "home" ||
+            !ghost.node.getClientRects().length ||
+            matchMedia("(prefers-reduced-motion: reduce)").matches
+          )
+            return;
+          shoved = true;
+          setTimeout(() => (shoved = false), 400);
+          ghost.play("push");
+          ghost.shove(control, { impact: 150 });
+        },
+        true,
+      );
+      new MutationObserver(() => {
+        const open = workspace.classList.contains("library-panel-open");
+        if (open === panelOpen) return;
+        panelOpen = open;
+        // A shove already played its clip.
+        if (!open && shoved) return;
+        if (workspace.dataset.view === "home") {
+          ghost.play(open ? "bump" : "push");
+          if (open) ghost.knock();
+        }
+      }).observe(workspace, { attributes: true, attributeFilter: ["class"] });
+    }
   }
   const shortcutsOpen = button(t("Keyboard shortcuts"), "keyboard", () => shortcutHelp.open());
   onLanguageChange(() => {

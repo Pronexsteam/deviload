@@ -1647,7 +1647,8 @@
   flex: none;
   width: 96px;
   height: 96px;
-  margin: -14px 0 -14px -8px;
+  /* Room on the right, so it never crowds the greeting. */
+  margin: -14px 14px -14px -8px;
   cursor: pointer;
 }
 /* It leans toward the cursor and swells with the bass (transform set by music-ghost.js), glowing a little more. */
@@ -1683,21 +1684,4 @@
 }
 .music-ghost-clip.is-front {
   opacity: 1;
-}
-/* The library panel takes the ghost's shove: a jolt toward the edge as it folds away. */
-#music-library-panel.is-shoved-shut {
-  animation: music-library-shoved 0.45s cubic-bezier(0.2, 0.9, 0.3, 1);
-}
-@keyframes music-library-shoved {
-  30% {
-    translate: -14px 0;
-  }
-  65% {
-    translate: 3px 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  #music-library-panel.is-shoved-shut {
-    animation: none;
-  }
 }

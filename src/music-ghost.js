@@ -34,19 +34,35 @@ export function createMusicGhost({
   node.setAttribute("aria-hidden", "true");
   body.className = "music-ghost-body";
   node.append(body);
-  // Two decks, so a new clip fades in over the one playing instead of flashing.
-  const decks = [0, 1].map(() => {
+  // One video per clip, all loaded up front: switching only rewinds and shows a clip that is already decoded,
+  // so a reaction never waits for a file in the middle of the moment it belongs to.
+  const clips = new Map();
+  for (const name of [...LOOPS, ...SHOTS]) {
     // Decorative: starting a song pauses every other media element on the page, but not these.
     const video = markDecorative(document.createElement("video"));
     video.muted = true;
     video.playsInline = true;
     video.preload = "auto";
+    video.loop = LOOPS.includes(name);
     video.className = "music-ghost-clip";
+    video.src = ghostClip(name);
+    video.addEventListener("error", () => {
+      // Not rendered yet: remembered, and the ghost stays in its loop.
+      missing.add(name);
+      if (shown === name) {
+        shown = "";
+        if (SHOTS.includes(name)) settle();
+        else if (name !== "idle") show("idle");
+      }
+    });
+    video.addEventListener("ended", () => {
+      if (shown === name && SHOTS.includes(name)) settle();
+    });
     body.append(video);
-    return video;
-  });
+    clips.set(name, video);
+  }
   const missing = new Set();
-  let front = 0,
+  let current = null,
     base = "idle",
     shot = "",
     shown = "";
@@ -61,41 +77,30 @@ export function createMusicGhost({
       return;
     }
     shown = name;
-    const next = decks[1 - front],
-      prev = decks[front];
-    next.loop = LOOPS.includes(name);
-    next.src = ghostClip(name);
+    const next = clips.get(name),
+      prev = current;
     next.currentTime = 0;
     const reveal = () => {
       if (shown !== name) return;
       next.classList.add("is-front");
-      prev.classList.remove("is-front");
-      front = 1 - front;
-      setTimeout(() => {
-        if (decks[1 - front] === prev && !prev.classList.contains("is-front")) prev.pause();
-      }, 300);
-    };
-    next.addEventListener("playing", reveal, { once: true });
-    next.onerror = () => {
-      // Not rendered yet: remembered, and the ghost stays in its loop.
-      missing.add(name);
-      if (shown === name) {
-        shown = "";
-        if (SHOTS.includes(name)) settle();
-        else if (name !== "idle") show("idle");
+      if (prev && prev !== next) {
+        prev.classList.remove("is-front");
+        setTimeout(() => {
+          if (current !== prev) prev.pause();
+        }, 260);
       }
+      current = next;
     };
     if (reduced()) {
       // Still picture only: the clip's first frame.
-      next.addEventListener("loadeddata", reveal, { once: true });
+      if (next.readyState >= 2) reveal();
+      else next.addEventListener("loadeddata", reveal, { once: true });
       return;
     }
     next.play().catch(() => {});
+    if (next.readyState >= 3) reveal();
+    else next.addEventListener("playing", reveal, { once: true });
   }
-  for (const video of decks)
-    video.addEventListener("ended", () => {
-      if (video === decks[front] && SHOTS.includes(shown)) settle();
-    });
 
   // Lean toward the cursor and swell with the bass, on one frame loop that sleeps when nothing changes.
   let lean = { x: 0, y: 0 },
@@ -156,7 +161,7 @@ export function createMusicGhost({
     // Goes over to a control and leans on it: a small wind-up away, a glide that stops with its side against the
     // control, the push landing at `impact` ms (the control dips, a ripple spreads from the contact point), a short
     // hold, and a springy glide home.
-    shove(control, { impact = 330, onImpact = () => {} } = {}) {
+    shove(control, { impact = 220, onImpact = () => {} } = {}) {
       const from = node.getBoundingClientRect(),
         to = control.getBoundingClientRect();
       const dx = to.left + to.width / 2 - (from.left + from.width / 2),
@@ -165,7 +170,7 @@ export function createMusicGhost({
       const reach = Math.max(0, distance - from.width * 0.4),
         x = (dx / distance) * reach,
         y = (dy / distance) * reach;
-      const total = impact + 700,
+      const total = impact + 640,
         at = impact / total;
       // On the way it crosses into the panel, past the edge of the scrolling content that would clip it: for the
       // trip it floats above the page, and a placeholder keeps its place in the greeting.
@@ -183,28 +188,42 @@ export function createMusicGhost({
         for (const key of ["position", "left", "top", "margin", "zIndex"]) node.style[key] = "";
         hold.remove();
       };
-      if (reduced()) setTimeout(home, total);
-      else
-        node
-          .animate(
-            [
-              { translate: "0 0", easing: "cubic-bezier(.45,0,.55,1)" },
-              {
-                translate: `${-x * 0.07}px ${-y * 0.07}px`,
-                offset: at * 0.32,
-                easing: "cubic-bezier(.6,0,.15,1)",
-              },
-              { translate: `${x}px ${y}px`, offset: at, easing: "ease-out" },
-              {
-                translate: `${x * 0.94}px ${y * 0.94}px`,
-                offset: at + (1 - at) * 0.28,
-                easing: "cubic-bezier(.3,1.3,.4,1)",
-              },
-              { translate: "0 0" },
-            ],
-            { duration: total },
-          )
-          .finished.finally(home);
+      if (reduced()) {
+        setTimeout(home, total);
+      } else {
+        // Out to the control: a wind-up, then the glide that lands on it.
+        const out = node.animate(
+          [
+            { translate: "0 0", easing: "cubic-bezier(.45,0,.55,1)" },
+            { translate: `${-x * 0.07}px ${-y * 0.07}px`, offset: 0.32, easing: "cubic-bezier(.6,0,.15,1)" },
+            { translate: `${x}px ${y}px` },
+          ],
+          { duration: impact, fill: "forwards" },
+        );
+        // And back: the panel it pushed may move its home (the greeting slides over as the library folds), so it
+        // glides to wherever the placeholder is on each frame, with a little overshoot.
+        setTimeout(() => {
+          out.cancel();
+          node.style.translate = `${x}px ${y}px`;
+          const start = performance.now(),
+            back = 620;
+          const ease = t => 1 + 2.2 * (t - 1) ** 3 + 1.2 * (t - 1) ** 2;
+          const step = now => {
+            const t = Math.min(1, (now - start) / back),
+              place = hold.getBoundingClientRect(),
+              tx = place.left - from.left,
+              ty = place.top - from.top,
+              p = t < 0.18 ? 0 : ease((t - 0.18) / 0.82);
+            node.style.translate = `${x + (tx - x) * p}px ${y + (ty - y) * p}px`;
+            if (t < 1) requestAnimationFrame(step);
+            else {
+              node.style.translate = "";
+              home();
+            }
+          };
+          requestAnimationFrame(step);
+        }, impact);
+      }
       setTimeout(() => {
         if (!reduced()) {
           control.animate([{ scale: 1 }, { scale: 0.84 }, { scale: 1 }], {
