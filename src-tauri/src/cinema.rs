@@ -15,7 +15,11 @@ const PAGE: usize = 50;
 const STREAM_TEMPLATE: &str = "%(.{id,ext,vcodec,acodec,url,filesize,http_headers,height,is_live,has_drm})j";
 const FORMAT_TEMPLATE: &str = "%(formats.:.{height,ext,vcodec,acodec,protocol})j";
 const STREAM_KEYS: &[&str] = &["id","ext","vcodec","acodec","url","filesize","http_headers","height","is_live","has_drm"];
-struct CachedVideo { id:String, quality:Option<u32>, silent:bool, proxy:String, value:Value, created:Instant, source:Weak<crate::music_audio::Source> }
+struct CachedVideo { id:String, quality:Option<u32>, silent:bool, proxy:String, value:Value, created:Instant, source:Weak<crate::music_audio::Source>, lifetime:Duration }
+// A verified stream is reused for three minutes; an address looked up ahead of time (Canvas, the next song) is kept
+// for twenty, as long as YouTube's own expiry allows, so a song skipped to early still finds it ready.
+const VERIFIED_LIFETIME:Duration=Duration::from_secs(180);
+const PREPARED_LIFETIME:Duration=Duration::from_secs(1200);
 static VERIFIED_STREAMS: OnceLock<Mutex<Vec<CachedVideo>>> = OnceLock::new();
 fn compact_stream(value:&Value)->Value {
     let mut result=Value::Object(STREAM_KEYS.iter().filter_map(|key|value.get(*key).map(|v|((*key).to_owned(),v.clone()))).collect());
@@ -37,8 +41,8 @@ fn parse_stream_output(bytes:&[u8])->Result<Value,String>{
     if let Some(formats)=rows.next(){selected["formats"]=formats.map_err(|_|UNSUPPORTED)?;}
     if rows.next().is_some(){return Err(UNSUPPORTED.into());}Ok(compact_stream(&selected))
 }
-fn cache_fresh(value:&Value, age:Duration, now:u64)->bool {
-    if age>=Duration::from_secs(180){return false;}
+fn cache_fresh(value:&Value, age:Duration, now:u64, lifetime:Duration)->bool {
+    if age>=lifetime{return false;}
     let Some(url)=value["url"].as_str().and_then(|raw|url::Url::parse(raw).ok()) else{return false;};
     crate::music_audio::trusted_url(&url)&&url.query_pairs().find(|(key,_)|key=="expire")
         .and_then(|(_,v)|v.parse::<u64>().ok()).is_some_and(|expiry|expiry>now.saturating_add(60))
@@ -46,7 +50,7 @@ fn cache_fresh(value:&Value, age:Duration, now:u64)->bool {
 fn cached_stream(id:&str,quality:Option<u32>,silent:bool,proxy:&str)->Option<Value> {
     let now=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
     let mut entries=VERIFIED_STREAMS.get_or_init(Default::default).lock().unwrap();
-    entries.retain(|entry|cache_fresh(&entry.value,entry.created.elapsed(),now)&&!entry.source.upgrade().is_some_and(|source|source.failed()));
+    entries.retain(|entry|cache_fresh(&entry.value,entry.created.elapsed(),now,entry.lifetime)&&!entry.source.upgrade().is_some_and(|source|source.failed()));
     entries.iter().find(|entry|entry.id==id&&entry.quality==quality&&entry.silent==silent&&entry.proxy==proxy).map(|entry|entry.value.clone())
 }
 fn forget_stream(id:&str){VERIFIED_STREAMS.get_or_init(Default::default).lock().unwrap().retain(|entry|entry.id!=id);}
@@ -55,7 +59,7 @@ fn remember_stream(id:&str,quality:Option<u32>,silent:bool,proxy:&str,value:&Val
     // Keep only two tiny descriptors, no video buffers or library/profile data.
     let mut entries=VERIFIED_STREAMS.get_or_init(Default::default).lock().unwrap();
     entries.retain(|entry|entry.id!=id||entry.quality!=quality||entry.silent!=silent);if entries.len()>=2 {entries.remove(0);}
-    entries.push(CachedVideo{id:id.into(),quality,silent,proxy:proxy.into(),value,created:Instant::now(),source:Arc::downgrade(source)});
+    entries.push(CachedVideo{id:id.into(),quality,silent,proxy:proxy.into(),value,created:Instant::now(),source:Arc::downgrade(source),lifetime:VERIFIED_LIFETIME});
 }
 const UNSUPPORTED: &str = "No compatible video with audio is available. Download the video to watch it.";
 pub(crate) fn source_failure(error: crate::music_audio::SourceError) -> &'static str {
@@ -203,6 +207,46 @@ fn selected_source(id: &str, value: &Value, proxy: &str, silent: bool) -> Result
     video_source(value,proxy,silent)
 }
 
+// One extractor run for a video's stream address and its quality levels.
+fn extract(id:&str,quality:Option<u32>,silent:bool,proxy:&str,cancelled:&dyn Fn()->bool)->Result<Value,String> {
+    let mut cmd=crate::ytdlp_command_with(&crate::binary("yt-dlp")?,proxy);
+    if let Ok(deno)=crate::binary("deno"){cmd.args(["--js-runtimes",&format!("deno:{}",deno.display())]);}
+    let limit=quality.map(|height|format!("[height<={height}]")).unwrap_or_default();
+    let format=if silent {format!("bestvideo[ext=mp4][vcodec^=avc1][protocol=https]{limit}")} else {format!("best[ext=mp4][vcodec^=avc1][acodec^=mp4a][protocol=https]{limit}")};
+    if silent {cmd.args(["--extractor-args","youtube:player_client=visionos,web_embedded;skip=hls,dash"]);}
+    cmd.args(["--ignore-config","--no-plugin-dirs","--no-playlist","--skip-download","--print",STREAM_TEMPLATE,"--print",FORMAT_TEMPLATE,"--no-warnings","--no-colors","--socket-timeout","10","--retries","0","--extractor-retries","0","-f",&format])
+        .arg("--").arg(format!("https://www.youtube.com/watch?v={id}"));
+    let output=stage("extractor-process",crate::engine_update::json_output_cancellable(&mut cmd,Duration::from_secs(40),cancelled))?;
+    if !output.status.success(){return stage("extractor-exit",Err(UNSUPPORTED.into()));}
+    stage("extractor-json",parse_stream_output(&output.stdout))
+}
+static PREPARING: Mutex<()> = Mutex::new(());
+// A prepared address has no source yet: it lives only until the cache's own age and expiry limits.
+fn remember_prepared(id:&str,quality:Option<u32>,silent:bool,proxy:&str,value:&Value){
+    let mut entries=VERIFIED_STREAMS.get_or_init(Default::default).lock().unwrap();
+    entries.retain(|entry|entry.id!=id||entry.quality!=quality||entry.silent!=silent);if entries.len()>=2 {entries.remove(0);}
+    entries.push(CachedVideo{id:id.into(),quality,silent,proxy:proxy.into(),value:compact_stream(value),created:Instant::now(),source:Weak::new(),lifetime:PREPARED_LIFETIME});
+}
+
+/// Looks a video up ahead of time (the song after this one, for Canvas), so the next cinema_stream for it starts
+/// from the cache instead of a new extractor run. Nothing plays, and the video now on screen is left alone.
+#[tauri::command]
+pub async fn cinema_prepare(id: String, quality: Option<u32>, silent: Option<bool>, engine: tauri::State<'_,crate::Engine>) -> Result<bool,String> {
+    let silent=silent.unwrap_or(false);
+    if !video_id(&id){return Err("Unavailable video".into());}
+    let quality=quality.filter(|height|(144..=4320).contains(height));
+    let proxy=crate::stored_proxy(&engine.dir);
+    tauri::async_runtime::spawn_blocking(move||{
+        if cached_stream(&id,quality,silent,&proxy).is_some(){return Ok(true);}
+        // One lookup ahead at a time; a second request while one runs is simply skipped.
+        let Ok(_busy)=PREPARING.try_lock() else {return Ok(false);};
+        let value=extract(&id,quality,silent,&proxy,&||false)?;
+        if value["id"].as_str()!=Some(id.as_str()){return Ok(false);}
+        remember_prepared(&id,quality,silent,&proxy,&value);
+        Ok(true)
+    }).await.map_err(|_|"Could not prepare the video.".to_owned())?
+}
+
 #[tauri::command]
 // silent: a music video playing muted beside its song. It needs only the picture, which YouTube also
 // serves for label videos through the visionos client (the progressive format with sound is refused).
@@ -217,18 +261,7 @@ pub async fn cinema_stream(id: String, quality: Option<u32>, silent: Option<bool
         let cancelled=||PLAYBACK.load(Ordering::SeqCst)!=generation;
         if cancelled(){return Err("Cancelled".into());}
         let began=Instant::now();let cached=cached_stream(&id,quality,silent,&proxy);let reused=cached.is_some();
-        let value:Value=if let Some(value)=cached {value} else {
-        let mut cmd=crate::ytdlp_command_with(&crate::binary("yt-dlp")?,&proxy);
-        if let Ok(deno)=crate::binary("deno"){cmd.args(["--js-runtimes",&format!("deno:{}",deno.display())]);}
-        let limit=quality.map(|height|format!("[height<={height}]")).unwrap_or_default();
-        let format=if silent {format!("bestvideo[ext=mp4][vcodec^=avc1][protocol=https]{limit}")} else {format!("best[ext=mp4][vcodec^=avc1][acodec^=mp4a][protocol=https]{limit}")};
-        if silent {cmd.args(["--extractor-args","youtube:player_client=visionos,web_embedded;skip=hls,dash"]);}
-        cmd.args(["--ignore-config","--no-plugin-dirs","--no-playlist","--skip-download","--print",STREAM_TEMPLATE,"--print",FORMAT_TEMPLATE,"--no-warnings","--no-colors","--socket-timeout","10","--retries","0","--extractor-retries","0","-f",&format])
-            .arg("--").arg(format!("https://www.youtube.com/watch?v={id}"));
-        let output=stage("extractor-process",crate::engine_update::json_output_cancellable(&mut cmd,Duration::from_secs(40),&cancelled))?;
-        if !output.status.success(){return stage("extractor-exit",Err(UNSUPPORTED.into()));}
-        stage("extractor-json",parse_stream_output(&output.stdout))?
-        };
+        let value:Value=if let Some(value)=cached {value} else {extract(&id,quality,silent,&proxy,&cancelled)?};
         eprintln!("Cinema timing: metadata_ms={}, reused={reused}",began.elapsed().as_millis());
         if cancelled(){return Err("Cancelled".into());}
         let source=Arc::new(stage("source-selection",selected_source(&id,&value,&proxy,silent)).inspect_err(|_|forget_stream(&id))?);
@@ -276,11 +309,13 @@ mod tests {
     }
     #[test] fn verified_descriptor_cache_expires_before_signed_address_and_has_a_hard_age_limit() {
         let value=json!({"url":"https://rr1.googlevideo.com/a?expire=1000"});
-        assert!(cache_fresh(&value,Duration::from_secs(1),939));
-        assert!(!cache_fresh(&value,Duration::from_secs(1),940));
-        assert!(!cache_fresh(&value,Duration::from_secs(180),100));
-        assert!(!cache_fresh(&json!({"url":"https://rr1.googlevideo.com/a"}),Duration::ZERO,100));
-        assert!(!cache_fresh(&json!({"url":"https://example.com/a?expire=1000"}),Duration::ZERO,100));
+        assert!(cache_fresh(&value,Duration::from_secs(1),939,VERIFIED_LIFETIME));
+        assert!(!cache_fresh(&value,Duration::from_secs(1),940,VERIFIED_LIFETIME));
+        assert!(!cache_fresh(&value,Duration::from_secs(180),100,VERIFIED_LIFETIME));
+        assert!(cache_fresh(&value,Duration::from_secs(600),100,PREPARED_LIFETIME));
+        assert!(!cache_fresh(&value,Duration::from_secs(1200),100,PREPARED_LIFETIME));
+        assert!(!cache_fresh(&json!({"url":"https://rr1.googlevideo.com/a"}),Duration::ZERO,100,VERIFIED_LIFETIME));
+        assert!(!cache_fresh(&json!({"url":"https://example.com/a?expire=1000"}),Duration::ZERO,100,VERIFIED_LIFETIME));
     }
     #[test] fn verified_descriptors_are_small_bounded_and_separate_by_proxy() {
         let expires=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()+600;

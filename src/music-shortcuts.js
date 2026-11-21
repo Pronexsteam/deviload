@@ -8,6 +8,8 @@ const LETTERS = {
   KeyW: "recognize",
   // I, as in YouTube: the mini player.
   KeyI: "mini",
+  // J, to jump to the song playing in the list.
+  KeyJ: "locate",
   BracketLeft: "slower",
   BracketRight: "faster",
 };

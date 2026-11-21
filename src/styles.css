@@ -940,6 +940,9 @@ dialog pre {
 .icon[data-icon="x-circle"] {
   --glyph: url("assets/icons/x-circle.svg");
 }
+.icon[data-icon="crosshair"] {
+  --glyph: url("assets/icons/crosshair.svg");
+}
 .icon[data-icon="video"] {
   --glyph: url("assets/icons/video.svg");
 }

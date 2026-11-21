@@ -317,6 +317,8 @@ body.music-mini-page #mini-play:hover {
   content: "";
   width: 19px;
   height: 19px;
+  /* The text label beside the arrow is gone, so is its gap: the arrow sits in the middle of its circle. */
+  margin: 0;
   background: currentColor;
   -webkit-mask: var(--nav-glyph) center/contain no-repeat;
   mask: var(--nav-glyph) center/contain no-repeat;
@@ -592,5 +594,88 @@ body:not(.music-page) .music-panel-toggle,
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+/* The song playing stands out without hiding what is behind the list: tinted glass in the cover's colour, a lit
+   edge, and bars that move like music. Every theme. */
+:root[data-theme] body #devil-music .music-track-list .music-track-row.active {
+  --row-accent: var(--cover-lyric-light, #f0a08a);
+  border-color: color-mix(in srgb, var(--row-accent) 30%, transparent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--row-accent) 16%, rgb(255 255 255 / 0.04)),
+    rgb(255 255 255 / 0.03) 70%
+  );
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow: inset 3px 0 0 var(--row-accent);
+}
+:root[data-theme="glass-light"] body #devil-music .music-track-list .music-track-row.active {
+  --row-accent: var(--cover-lyric-dark, #405b80);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--row-accent) 14%, rgb(255 255 255 / 0.5)),
+    rgb(255 255 255 / 0.3) 70%
+  );
+}
+:root[data-theme] body #devil-music .music-track-list .music-track-row.active .music-track-copy strong {
+  color: color-mix(in srgb, var(--row-accent) 45%, currentColor);
+}
+:root[data-theme]
+  body
+  #devil-music
+  .music-track-list
+  .music-track-row.active.is-playing
+  .music-track-number::before {
+  width: 17px;
+  height: 15px;
+  color: var(--row-accent);
+  background:
+    linear-gradient(currentColor 0 0) 0 100% / 3px 45% no-repeat,
+    linear-gradient(currentColor 0 0) 33.3% 100% / 3px 90% no-repeat,
+    linear-gradient(currentColor 0 0) 66.6% 100% / 3px 60% no-repeat,
+    linear-gradient(currentColor 0 0) 100% 100% / 3px 75% no-repeat;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, currentColor 70%, transparent));
+}
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme]
+    body
+    #devil-music
+    .music-track-list
+    .music-track-row.active.is-playing
+    .music-track-number::before {
+    animation: music-row-dance 1.1s ease-in-out infinite;
+  }
+}
+@keyframes music-row-dance {
+  0%,
+  100% {
+    background-size:
+      3px 45%,
+      3px 90%,
+      3px 60%,
+      3px 75%;
+  }
+  25% {
+    background-size:
+      3px 95%,
+      3px 40%,
+      3px 85%,
+      3px 30%;
+  }
+  50% {
+    background-size:
+      3px 30%,
+      3px 75%,
+      3px 40%,
+      3px 95%;
+  }
+  75% {
+    background-size:
+      3px 80%,
+      3px 55%,
+      3px 100%,
+      3px 45%;
   }
 }

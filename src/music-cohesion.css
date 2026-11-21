@@ -392,8 +392,13 @@ body :is(.music-track-options, .music-search-suggestions, .quick-theme-menu) but
   }
 }
 .music-lyrics-scroll[data-lyrics-state="instrumental"],
-.music-lyrics-scroll[data-lyrics-state="missing"] {
+.music-lyrics-scroll[data-lyrics-state="missing"],
+.music-lyrics-scroll[data-lyrics-state="offer"] {
   display: grid;
   place-content: center;
   text-align: center;
+}
+.music-lyrics-scroll > .music-lyrics-online {
+  justify-self: center;
+  margin-top: 14px;
 }

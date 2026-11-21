@@ -7,6 +7,9 @@ import {
   setExactLocalCopy,
   exactLocalPlaybackSource,
 } from "./music-local-model.js";
+import { downloadProgress } from "./music-download-progress.js";
+import { wireCanvasSettings } from "./music-canvas-settings.js";
+import { createMusicGhost } from "./music-ghost.js";
 import { findLocalRecording } from "./music-auto-local.js";
 import { mountMusicList } from "./music-virtual-list.js";
 import { wireQueueHandle } from "./music-queue-drag.js";
@@ -227,6 +230,8 @@ function playableCover(item, glyph = "play", size = 320) {
 }
 
 export function createMusic({ invoke, onDownload, storage }) {
+  // The Devil Music ghost (music-ghost.js), created with the greeting.
+  let ghost = null;
   const diagnostics = createMusicDiagnostics();
   const loadArtistCatalog = createArtistCatalog(invoke);
   const newReleases = createNewReleases({ loadArtist: loadArtistCatalog, storage });
@@ -528,7 +533,13 @@ export function createMusic({ invoke, onDownload, storage }) {
   info.append(title, artistLine, changeSource);
   const like = button(t("Like this song"), null, toggleLike, "music-icon-button music-like");
   like.textContent = "♡";
-  identity.append(artwork, info, like);
+  const locate = button(
+    t("Find the song playing"),
+    "crosshair",
+    () => locatePlaying(),
+    "music-icon-button music-locate",
+  );
+  identity.append(artwork, info, like, locate);
   const transport = el("div", "music-transport"),
     controls = el("div", "music-transport-buttons");
   const shuffleButton = button(t("Shuffle"), "shuffle", toggleShuffle);
@@ -797,6 +808,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     onLevels: levels => {
       miniPlayer?.ambient(levels);
       orb.energy(levels?.[0]);
+      ghost?.pulse(Math.min(1, 1.6 * Math.max(0, ...(levels || [0]))));
     },
   });
   // Which upload of the song is heard, and how far it is shifted from the studio recording the lyrics are timed
@@ -935,6 +947,15 @@ export function createMusic({ invoke, onDownload, storage }) {
   });
   songNotice = wireSongNotice({ host: $("music-preferences") });
   wireMusicLighting({ host: $("music-preferences"), invoke, sound, getAudio: () => audio });
+  const canvasSettings = wireCanvasSettings({
+    place: box => {
+      const menu = $("quick-theme-menu");
+      if (menu) menu.insertBefore(box, $("quick-theme-status"));
+    },
+    isEnabled: () => presentation.canvas.enabled,
+    setEnabled: value => presentation.canvas.set(value),
+  });
+  presentation.canvas.watch(() => canvasSettings.refresh());
   wireMusicAccount({
     invoke,
     host: $("music-preferences"),
@@ -1757,6 +1778,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     try {
       if (!onDownload) throw new Error(t("Open the installed Deviload app to download."));
       const count = await onDownload(items);
+      if (count) followDownloads(items);
       status(
         count
           ? t("Added to downloads: {count} songs. They will play offline once downloaded.", { count })
@@ -1777,7 +1799,9 @@ export function createMusic({ invoke, onDownload, storage }) {
     notify(t("Adding MP3 to downloads…"));
     try {
       if (!onDownload) throw new Error(t("Open the installed Deviload app to download."));
-      const count = await onDownload(resolveRecordingSource(item, saved.sourceBindings));
+      const source = resolveRecordingSource(item, saved.sourceBindings);
+      const count = await onDownload(source);
+      if (count) followDownloads([{ ...source, title: item.title }]);
       notify(
         count
           ? t("MP3 added to downloads: {title}", { title: item.title })
@@ -1836,6 +1860,8 @@ export function createMusic({ invoke, onDownload, storage }) {
       repeat === "one" ? t("Repeat one song") : repeat === "all" ? t("Repeat queue") : t("Repeat off");
     repeatButton.dataset.repeat = repeat;
     saveToPlaylist.disabled = !current;
+    locate.disabled = !current;
+    syncGhost();
     play.disabled = !current && !queue.length;
     previous.disabled = index < 0;
     next.disabled = !current || radioPending || (!autoplay && plannedNext() < 0);
@@ -1851,6 +1877,8 @@ export function createMusic({ invoke, onDownload, storage }) {
         : "",
       duration: knownDuration || current?.duration || 0,
       offline: resolvedOffline,
+      // The song after this one, so the video behind the player can be ready when it starts.
+      upcoming: queue[plannedNext()] || null,
     });
     if (view === "home")
       homeHero?.update(
@@ -1887,6 +1915,7 @@ export function createMusic({ invoke, onDownload, storage }) {
   function toggleLike() {
     if (!current) return;
     if (!changeFavorite(current)) return;
+    if (saved.favorites.some(item => item.id === current.id)) ghost?.play("like");
     syncDock();
     if (view === "favorites") showLocal("favorites");
   }
@@ -4459,6 +4488,151 @@ export function createMusic({ invoke, onDownload, storage }) {
       root.append(more);
     }
   }
+  // The ghost's loop: busy while a song downloads, vibing while music plays, dozing after two quiet minutes,
+  // floating otherwise; a glance when the song changes. It exists only once the page is built, so earlier calls do
+  // nothing.
+  let ghostTrack = null,
+    ghostDozing = false,
+    lastStir = Date.now();
+  function syncGhost() {
+    if (!ghost) return;
+    const playing = !!current && !audio.paused;
+    if (playing || followed.length) ghostDozing = false;
+    ghost.setBase(followed.length ? "working" : playing ? "listening" : ghostDozing ? "sleep" : "idle");
+    if (current?.id && ghostTrack && current.id !== ghostTrack && playing) ghost.play("trackchange");
+    if (current?.id) ghostTrack = current.id;
+  }
+  function stirGhost() {
+    lastStir = Date.now();
+    if (!ghostDozing) return;
+    ghostDozing = false;
+    syncGhost();
+  }
+  for (const type of ["pointermove", "pointerdown", "keydown", "wheel"])
+    addEventListener(type, stirGhost, { passive: true });
+  setInterval(() => {
+    if (!ghost || ghostDozing || document.hidden || Date.now() - lastStir < 120000) return;
+    if ((current && !audio.paused) || followed.length) return;
+    ghostDozing = true;
+    syncGhost();
+  }, 10000);
+  // Songs downloaded from here, followed through the downloader's queue: a badge on the dock shows how far they
+  // got, then where the file went.
+  let followed = [],
+    seenJobs = [],
+    lastDownload = null,
+    lastDownloadTimer = 0,
+    downloadBadge = null;
+  function downloadBadgeNode() {
+    if (downloadBadge) return downloadBadge;
+    downloadBadge = button(t("Downloading"), "download-simple", () => {
+      if (!followed.length && lastDownload?.status === "done")
+        invoke("reveal_download", { id: lastDownload.jobId }).catch(error => status(errorText(error), true));
+      else document.getElementById("downloads-tab")?.click();
+    });
+    downloadBadge.classList.add("music-cast-badge", "music-download-badge");
+    downloadBadge.append(el("span", "music-download-badge-text"));
+    downloadBadge.hidden = true;
+    return downloadBadge;
+  }
+  function followDownloads(items) {
+    const after = seenJobs.reduce((top, job) => Math.max(top, Number(job?.id) || 0), 0),
+      added = Date.now();
+    for (const item of items)
+      if (!followed.some(song => song.id === item.id))
+        followed.push({ id: item.id, title: item.title || "", after, added });
+    renderDownloadBadge(downloadProgress(followed, seenJobs));
+  }
+  function syncDownloads(jobs) {
+    seenJobs = Array.isArray(jobs) ? jobs : [];
+    if (!followed.length) return;
+    const view = downloadProgress(followed, seenJobs);
+    followed = view.active.map(({ id, title, after, added }) => ({ id, title, after, added }));
+    const finished = view.finished.at(-1);
+    if (finished) {
+      lastDownload = finished;
+      if (finished.status === "done") {
+        status(t("Saved: {title}", { title: finished.title }));
+        ghost?.play("happy");
+      } else
+        status(t("Could not download {title}. Details are in Downloads.", { title: finished.title }), true);
+      clearTimeout(lastDownloadTimer);
+      lastDownloadTimer = setTimeout(() => {
+        lastDownload = null;
+        renderDownloadBadge(downloadProgress(followed, seenJobs));
+      }, 30000);
+    }
+    renderDownloadBadge(view);
+  }
+  function renderDownloadBadge(view) {
+    const badge = downloadBadgeNode(),
+      glyph = badge.querySelector(".icon"),
+      text = badge.querySelector(".music-download-badge-text");
+    if (view.active.length) {
+      const first = view.active[0];
+      text.textContent =
+        view.active.length > 1 ? `${view.active.length} · ${view.percent}%` : `${view.percent}%`;
+      badge.title = badge.ariaLabel =
+        view.active.length > 1
+          ? t("Songs downloading: {count}, {percent}%. Press to open Downloads.", {
+              count: view.active.length,
+              percent: view.percent,
+            })
+          : t("Downloading {title}: {percent}%. Press to open Downloads.", {
+              title: first.title,
+              percent: view.percent,
+            });
+      glyph.dataset.icon = "download-simple";
+      badge.dataset.state = "active";
+    } else if (lastDownload) {
+      const done = lastDownload.status === "done";
+      text.textContent = done ? t("Show in folder") : t("Download failed");
+      badge.title = badge.ariaLabel = done
+        ? t("Saved: {title}. Press to show the file in its folder.", { title: lastDownload.title })
+        : t("Could not download {title}. Details are in Downloads.", { title: lastDownload.title });
+      glyph.dataset.icon = done ? "folder-open" : "warning";
+      badge.dataset.state = done ? "done" : "error";
+    }
+    badge.hidden = !view.active.length && !lastDownload;
+    syncGhost();
+  }
+  // Shuffle through a big library and a song worth keeping comes up: this scrolls the open list to it and lights it
+  // up. When the open page does not hold it, it opens the place that does: music on this device and downloads,
+  // liked songs, or recently played.
+  let locating = 0;
+  function revealPlaying(id) {
+    let row = null;
+    for (const list of virtualLists) row ||= list.reveal(id);
+    if (!row) {
+      row = document.querySelector(`.music-main-content .music-track-row[data-track-id="${CSS.escape(id)}"]`);
+      row?.scrollIntoView({ block: "center", behavior: "instant" });
+    }
+    if (!row) return false;
+    row.classList.remove("is-located");
+    void row.offsetWidth;
+    row.classList.add("is-located");
+    setTimeout(() => row.classList.remove("is-located"), 2400);
+    row.querySelector(".music-track-select")?.focus({ preventScroll: true });
+    return true;
+  }
+  function locatePlaying() {
+    if (!current) return;
+    if (document.getElementById("music-now-playing")?.open) presentation.close();
+    if (document.querySelector("main").dataset.page !== "music")
+      document.getElementById("music-tab")?.click();
+    if (revealPlaying(current.id)) return;
+    const id = current.id,
+      until = Date.now() + 8000,
+      attempt = ++locating;
+    if (isLocalMusicId(id) || offlineItems.some(item => item.id === id)) showOffline();
+    else if (saved.favorites.some(item => item.id === id)) showLocal("favorites");
+    else showLocal("recent");
+    // The page may still be loading its list; look again each frame for a few seconds.
+    const retry = () => {
+      if (attempt === locating && Date.now() < until && !revealPlaying(id)) requestAnimationFrame(retry);
+    };
+    requestAnimationFrame(retry);
+  }
   async function loadMore() {
     if (morePending || !continuation) return;
     morePending = true;
@@ -5559,6 +5733,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     help: () => shortcutHelp.open(),
     recognize: () => recognizer.listen(),
     mini: () => $("music-mini-open")?.click(),
+    locate: () => locatePlaying(),
     refresh: () => {
       if (!$("music-refresh").disabled) $("music-refresh").click();
     },
@@ -5875,6 +6050,66 @@ export function createMusic({ invoke, onDownload, storage }) {
     notify: (message, error) => status(message, error),
   });
   wireMusicConnectionShortcuts(button, librarySidebar.stats);
+  // The ghost beside the greeting enters once, then follows what the player is doing.
+  ghost = createMusicGhost({ onClick: () => ghost.play("happy") });
+  document.querySelector(".music-welcome")?.prepend(ghost.node);
+  ghost.play("appear");
+  syncGhost();
+  // The library panel opens into the ghost (it gets bumped) and closes under its shove.
+  {
+    const workspace = $("devil-music");
+    let panelOpen = workspace.classList.contains("library-panel-open");
+    // On the home page the ghost shoves the library shut: a click on a collapse control waits for the shove to
+    // land (about a third of a second), then the panel goes with a jolt.
+    let shoving = false,
+      shoved = false;
+    document.addEventListener(
+      "click",
+      event => {
+        const control = event.target.closest?.(
+          ".music-library-panel-toggle, #music-library-panel .music-library-sidebar-actions > button:last-child",
+        );
+        if (
+          !control ||
+          shoving ||
+          !panelOpen ||
+          workspace.dataset.view !== "home" ||
+          !ghost.node.getClientRects().length ||
+          matchMedia("(prefers-reduced-motion: reduce)").matches
+        )
+          return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        ghost.play("push");
+        ghost.shove(control, {
+          impact: 330,
+          onImpact: () => {
+            const panel = $("music-library-panel");
+            panel?.classList.add("is-shoved-shut");
+            shoving = shoved = true;
+            control.click();
+            shoving = false;
+            setTimeout(() => {
+              shoved = false;
+              panel?.classList.remove("is-shoved-shut");
+            }, 600);
+          },
+        });
+      },
+      true,
+    );
+    new MutationObserver(() => {
+      const open = workspace.classList.contains("library-panel-open");
+      if (open === panelOpen) return;
+      panelOpen = open;
+      // A shove already played its clip.
+      if (!open && shoved) return;
+      if (workspace.dataset.view === "home") {
+        ghost.play(open ? "bump" : "push");
+        if (open) ghost.knock();
+      }
+    }).observe(workspace, { attributes: true, attributeFilter: ["class"] });
+  }
   const shortcutsOpen = button(t("Keyboard shortcuts"), "keyboard", () => shortcutHelp.open());
   onLanguageChange(() => {
     shortcutsOpen.title = shortcutsOpen.ariaLabel = t("Keyboard shortcuts");
@@ -5902,6 +6137,7 @@ export function createMusic({ invoke, onDownload, storage }) {
       $("music-clip-open"),
       quickSpeed.badge,
       quickVibe.badge,
+      downloadBadgeNode(),
       cast.badge,
       cast.quickStop,
       musicRoom?.badge,
@@ -6148,5 +6384,7 @@ export function createMusic({ invoke, onDownload, storage }) {
       )
         load("home");
     },
+    // The downloader's tasks, each time it looks at its queue.
+    downloads: syncDownloads,
   };
 }

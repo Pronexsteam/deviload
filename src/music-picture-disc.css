@@ -25,7 +25,9 @@ body .picture-disc-rotor {
     #3c4d45 235deg,
     #13201d 260deg
   );
-  mask: radial-gradient(circle, transparent 0 3.6%, #000 4%);
+  /* No mask on the turning layer: on some graphics cards WebView2 drew a masked, rotating layer as a flat green
+     square. The spindle on top (::after) already covers the centre, and a clip-path keeps the print round. */
+  clip-path: circle(50%);
   animation: picture-disc-turn 16s linear infinite;
   animation-play-state: paused;
 }
@@ -35,6 +37,7 @@ body .picture-disc-rotor > img {
   width: 100%;
   height: 100%;
   border-radius: 50%;
+  clip-path: circle(50%);
   object-fit: cover;
   box-shadow: none;
 }

@@ -219,7 +219,9 @@ export function createMusicLyrics({
     followPending = false,
     frame = 0;
   const cache = new Map(),
-    loading = new Map();
+    loading = new Map(),
+    // Local songs the listener chose to look up online this session.
+    onlineLocal = new Set();
   let activeRows = new Set(),
     nearRows = new Set(),
     lastFrameAt = 0,
@@ -361,9 +363,35 @@ export function createMusicLyrics({
     followPending = false;
     body.scrollTop = 0;
     try {
-      if (isLocalMusicId(track.id)) {
-        body.textContent = t("Online lyrics are not requested for local files.");
-        body.dataset.lyricsState = "missing";
+      // A local file brings its own lyrics: a .lrc beside it or the lyrics tag inside it. Its name goes online only
+      // when the listener asks for it, song by song.
+      if (isLocalMusicId(track.id) && !onlineLocal.has(track.id)) {
+        const own = await invoke("music_local_lyrics", { id: track.id }).catch(() => null);
+        if (token !== request) return;
+        if (own?.plain || own?.synced) {
+          source = own.source === "lrc" ? t("Lyrics file (.lrc)") : t("Lyrics from the file");
+          render(own);
+          return;
+        }
+        // Nothing names a source yet, and the full player keeps this column open for the offer.
+        source = "";
+        updateCredit();
+        const note = document.createElement("p");
+        note.className = "music-lyrics-plain";
+        note.textContent = t("This file has no lyrics inside.");
+        body.replaceChildren(
+          note,
+          button(
+            t("Search online"),
+            null,
+            () => {
+              onlineLocal.add(track.id);
+              load();
+            },
+            "outline small music-lyrics-online",
+          ),
+        );
+        body.dataset.lyricsState = "offer";
         return;
       }
       const duration = getAudio().duration;

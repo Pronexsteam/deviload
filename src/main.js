@@ -2550,6 +2550,7 @@ function render(data) {
   if (data.options) syncSavedAuthSource(data.options);
   // A task being removed is hidden at once; it is really removed only once its Undo is gone.
   jobs = (data.jobs || []).filter(job => !pendingRemovals.has(job.id));
+  devilMusic.downloads(jobs);
   if (noticeReady)
     for (const job of jobs) {
       const old = knownJobStates.get(job.id);

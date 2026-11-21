@@ -29,6 +29,7 @@ export function createShortcutHelp({ button }) {
     [t("Shuffle"), "S"],
     [t("Repeat mode"), "R"],
     [t("Play queue"), "Q"],
+    [t("Find the song playing"), "J"],
     [t("Full player"), "F"],
     [t("Search music"), "Ctrl K"],
     [t("Keyboard shortcuts"), "?"],
