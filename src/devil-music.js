@@ -6067,7 +6067,7 @@ export function createMusic({ invoke, onDownload, storage }) {
       "click",
       event => {
         const control = event.target.closest?.(
-          ".music-library-panel-toggle, #music-library-panel .music-library-sidebar-actions > button:last-child",
+          ".music-library-panel-toggle, .music-library-collapse",
         );
         if (
           !control ||

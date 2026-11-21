@@ -87,6 +87,8 @@ export function createMusicLibrarySidebar({
     onCreate();
   });
   const close = makeButton("music-icon-button", "sidebar-simple", () => setOpen(!opened, true, true));
+  // The layout may move this control out of the panel; the class finds it wherever it ends up.
+  close.classList.add("music-library-collapse");
   headActions.append(create, close);
   header.append(title, headActions);
   const searchWrap = el("div", "music-library-sidebar-search"),

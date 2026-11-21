@@ -167,25 +167,44 @@ export function createMusicGhost({
         y = (dy / distance) * reach;
       const total = impact + 700,
         at = impact / total;
-      if (!reduced())
-        node.animate(
-          [
-            { translate: "0 0", easing: "cubic-bezier(.45,0,.55,1)" },
-            {
-              translate: `${-x * 0.07}px ${-y * 0.07}px`,
-              offset: at * 0.32,
-              easing: "cubic-bezier(.6,0,.15,1)",
-            },
-            { translate: `${x}px ${y}px`, offset: at, easing: "ease-out" },
-            {
-              translate: `${x * 0.94}px ${y * 0.94}px`,
-              offset: at + (1 - at) * 0.28,
-              easing: "cubic-bezier(.3,1.3,.4,1)",
-            },
-            { translate: "0 0" },
-          ],
-          { duration: total },
-        );
+      // On the way it crosses into the panel, past the edge of the scrolling content that would clip it: for the
+      // trip it floats above the page, and a placeholder keeps its place in the greeting.
+      const hold = document.createElement("div");
+      hold.className = "music-ghost music-ghost-hold";
+      node.before(hold);
+      Object.assign(node.style, {
+        position: "fixed",
+        left: `${from.left}px`,
+        top: `${from.top}px`,
+        margin: "0",
+        zIndex: "400",
+      });
+      const home = () => {
+        for (const key of ["position", "left", "top", "margin", "zIndex"]) node.style[key] = "";
+        hold.remove();
+      };
+      if (reduced()) setTimeout(home, total);
+      else
+        node
+          .animate(
+            [
+              { translate: "0 0", easing: "cubic-bezier(.45,0,.55,1)" },
+              {
+                translate: `${-x * 0.07}px ${-y * 0.07}px`,
+                offset: at * 0.32,
+                easing: "cubic-bezier(.6,0,.15,1)",
+              },
+              { translate: `${x}px ${y}px`, offset: at, easing: "ease-out" },
+              {
+                translate: `${x * 0.94}px ${y * 0.94}px`,
+                offset: at + (1 - at) * 0.28,
+                easing: "cubic-bezier(.3,1.3,.4,1)",
+              },
+              { translate: "0 0" },
+            ],
+            { duration: total },
+          )
+          .finished.finally(home);
       setTimeout(() => {
         if (!reduced()) {
           control.animate([{ scale: 1 }, { scale: 0.84 }, { scale: 1 }], {
