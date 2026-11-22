@@ -5,6 +5,7 @@ import { isLocalMusicId } from "./music-track-id.js";
 import { clampLyricsOffset, readLyricsOffsets, saveLyricsOffset } from "./music-lyrics-preferences.js";
 import { parseTtml, richerLyricsFit } from "./music-ttml.js";
 import { songAlbum } from "./music-ui-model.js";
+import { rendered } from "./rendered.js";
 export { parseLyrics } from "./music-lyrics-timing.js";
 export function createMusicLyrics({
   invoke,
@@ -240,10 +241,7 @@ export function createMusicLyrics({
     !document.hidden &&
     (dialog.open ||
       Boolean(
-        host &&
-        !host.hidden &&
-        host.getClientRects().length &&
-        (!host.closest("dialog") || host.closest("dialog").open),
+        host && !host.hidden && rendered(host) && (!host.closest("dialog") || host.closest("dialog").open),
       ));
   // The next line comes up in one even movement, slow at both ends, instead of jumping most of the way at once and
   // creeping the rest. Positions land on whole screen pixels so the letters do not shimmer while they move.
@@ -361,7 +359,12 @@ export function createMusicLyrics({
     active = -1;
     manualUntil = 0;
     followPending = false;
-    body.scrollTop = 0;
+    // Back to the top on the next frame: written here it would lay the page out in the middle of whatever opened
+    // the lyrics, and again after the rest of that change. Lyrics that arrived sooner and already follow a line
+    // keep their place.
+    requestAnimationFrame(() => {
+      if (token === request && !scrollFrame && active < 0 && body.scrollTop) body.scrollTop = 0;
+    });
     try {
       // A local file brings its own lyrics: a .lrc beside it or the lyrics tag inside it. Its name goes online only
       // when the listener asks for it, song by song.

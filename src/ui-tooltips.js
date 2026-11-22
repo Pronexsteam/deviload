@@ -55,7 +55,12 @@ if (typeof tip.showPopover === "function") {
   });
   document.addEventListener("focusin", event => {
     const node = event.target.closest(selector);
-    if (node?.matches(":focus-visible")) show(node);
+    // On the next frame: focus often moves while a dialog opens, and placing the tip at once would lay the page
+    // out in the middle of that.
+    if (node?.matches(":focus-visible"))
+      requestAnimationFrame(() => {
+        if (document.activeElement === node) show(node);
+      });
   });
   document.addEventListener("focusout", hide);
   document.addEventListener("pointerdown", hide);

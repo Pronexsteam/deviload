@@ -2,6 +2,7 @@ import { createMotionCover } from "./music-motion.js";
 import { createMusicCanvas, createCanvasSources, applyCanvasLook, readCanvasLook } from "./music-canvas.js";
 import { t, onLanguageChange } from "./i18n.js";
 import { flyFrom, fadeIn } from "./music-transitions.js";
+import { rendered } from "./rendered.js";
 import { createMusicClip } from "./music-clip.js";
 import { createClipView } from "./music-clip-view.js";
 
@@ -190,9 +191,7 @@ export function createNowPlaying({
     getHost: () => (stage.open ? artwork : previewArt),
     // With Canvas on, the full player shows the moving picture behind everything instead of in the cover.
     isVisible: () =>
-      stage.open
-        ? !canvas.enabled
-        : !preview.hidden && !previewLyricsOn && preview.getClientRects().length > 0,
+      stage.open ? !canvas.enabled : !preview.hidden && !previewLyricsOn && rendered(preview),
     isPlaying: () => playing,
   });
 
@@ -317,7 +316,15 @@ export function createNowPlaying({
     if (clipView.isOpen) clipView.setItem(item);
     clip.update(item);
   }
-  const previewVisibility = new ResizeObserver(() => showMedia(current));
+  // Only appearing and disappearing matter to the moving cover, not every size the preview passes through while
+  // the library beside it glides open or shut.
+  let previewShown = null;
+  const previewVisibility = new ResizeObserver(([entry]) => {
+    const shown = entry.contentRect.width > 0 && entry.contentRect.height > 0;
+    if (shown === previewShown) return;
+    previewShown = shown;
+    showMedia(current);
+  });
   previewVisibility.observe(preview);
   function wake() {
     stage.classList.remove("music-stage-idle");
@@ -364,11 +371,13 @@ export function createNowPlaying({
     stage.showModal();
     if (previewLyricsOn && !queuePanel.hidden) lyrics?.unmount();
     showLyrics(true);
-    close.focus();
     showMedia(current);
     wake();
     fadeIn(stage);
+    // Every change to the page comes first and the one measurement last, so opening lays the page out once
+    // instead of after each step; the button is in view already, so focusing it needs no scroll.
     flyFrom(artwork, origin, { radius: "50%" });
+    close.focus({ preventScroll: true });
   }
   stage.addEventListener("close", () => {
     clearTimeout(idleTimer);
@@ -385,7 +394,7 @@ export function createNowPlaying({
     else artwork.replaceChildren(cover(current, "", 128));
     document.body.classList.remove("music-stage-open");
     showMedia(current);
-    returnFocus?.focus();
+    returnFocus?.focus({ preventScroll: true });
     fadeIn(dock, 200);
   });
   function labels() {

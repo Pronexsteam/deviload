@@ -316,9 +316,11 @@ export function wireMusicPanels(workspace) {
     pending = true;
     requestAnimationFrame(() => setTimeout(settle, 0));
   };
-  // A resize is reported after layout, when reading the width is free.
-  new ResizeObserver(() => {
-    width = workspace.clientWidth;
+  // The width comes with the report itself: reading clientWidth here would lay the page out again whenever an
+  // earlier observer in the same round changed it. The workspace has no side padding, so its content box is
+  // the width clientWidth would give.
+  new ResizeObserver(([entry]) => {
+    width = Math.round(entry.contentRect.width);
     fit();
     scheduleHandles();
   }).observe(workspace);

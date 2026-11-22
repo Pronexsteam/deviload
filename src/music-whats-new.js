@@ -1,5 +1,6 @@
 import { t } from "./i18n.js";
 import { showTip, tourSeen } from "./music-tour.js";
+import { rendered } from "./rendered.js";
 
 // New features, shown once to everyone, including people who update and never read the notes: a small dot sits
 // on the control that leads to the feature, and the first time the person opens it a single tip points at the
@@ -30,7 +31,12 @@ export const NEWS = [
   },
 ];
 
-const shown = node => node instanceof Element && node.getClientRects().length > 0;
+// Inside a closed menu or dialog it is hidden, and saying so takes only a selector match; the styles are asked only
+// for a feature that may really be on screen. This runs on every frame the page changes while tips are pending.
+const shown = node =>
+  node instanceof Element &&
+  !node.closest("dialog:not([open]), [popover]:not(:popover-open), [hidden]") &&
+  rendered(node);
 
 export function wireWhatsNew({ storage = globalThis.localStorage, root = document } = {}) {
   let pending = NEWS.filter(item => !tourSeen(item.key, storage));
