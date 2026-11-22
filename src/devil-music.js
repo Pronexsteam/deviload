@@ -520,16 +520,19 @@ export function createMusic({ invoke, onDownload, storage }) {
   const losslessBadge = el("span", "music-lossless", t("Lossless"));
   losslessBadge.hidden = true;
   artistLine.append(artist, losslessBadge);
+  // Shown when a song would not start: a small one-line chip under the message, not a block that pushes it aside.
   const changeSource = button(
     t("Choose track version"),
-    "music-notes",
+    null,
     () => chooseRecording(current),
     "music-change-source",
   );
-  changeSource.textContent = t("Choose track version");
+  const changeSourceLabel = el("span", "", t("Another version"));
+  changeSource.replaceChildren(icon("arrows-left-right"), changeSourceLabel);
   changeSource.hidden = true;
   onLanguageChange(() => {
-    changeSource.textContent = changeSource.title = changeSource.ariaLabel = t("Choose track version");
+    changeSource.title = changeSource.ariaLabel = t("Choose track version");
+    changeSourceLabel.textContent = t("Another version");
     losslessBadge.textContent = t("Lossless");
     losslessBadge.title = t("Lossless audio: FLAC, ALAC or WAV on this device");
   });
@@ -1657,12 +1660,15 @@ export function createMusic({ invoke, onDownload, storage }) {
   toast.setAttribute("role", "status");
   toast.hidden = true;
   document.body.append(toast);
+  function flash(text) {
+    toast.textContent = text;
+    toast.hidden = false;
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => (toast.hidden = true), 3200);
+  }
   function status(text, isError = false) {
     if (!isError && statusMessages.has(text)) {
-      toast.textContent = text;
-      toast.hidden = false;
-      clearTimeout(statusTimer);
-      statusTimer = setTimeout(() => (toast.hidden = true), 3200);
+      flash(text);
       return;
     }
     $("music-status").textContent = text;
@@ -3040,6 +3046,7 @@ export function createMusic({ invoke, onDownload, storage }) {
       if (autoplay) await startAudio();
       if (token !== playRequest || resolvedTrack !== id) return;
       needsRefresh = false;
+      unplayableInARow = 0;
       artist.textContent = displaySubtitle(current) || "YouTube Music";
       status("");
       if (!musicRoom?.isGuest()) recommendationSession.recover(current.id);
@@ -3112,6 +3119,7 @@ export function createMusic({ invoke, onDownload, storage }) {
       artist.title = t(failure.message);
       status(t(failure.message), true);
       changeSource.hidden = isLocalMusicId(current.id) || origin === "room" || failure.code === "cancelled";
+      if (autoplay && error?.name !== "AbortError") skipUnplayable(current, failure);
     } finally {
       if (token === playRequest) {
         streamLoading = false;
@@ -3305,6 +3313,30 @@ export function createMusic({ invoke, onDownload, storage }) {
   function roomControlsPlayback() {
     if (!musicRoom?.isGuest()) return false;
     status(t("The room host controls the track. Leave the room to play your own music."));
+    return true;
+  }
+  // A song that will not start, even after the retries and the search for another version of it, is skipped
+  // instead of leaving the music stopped, with a short note saying so. Only failures of that one song count:
+  // a connection, a busy engine or a YouTube limit would fail the next song too, and asking for it would only
+  // make a limit worse, so those stop with the message and the version button. Several in a row also stop.
+  // A restriction counts only when it names the song (another region, gone from YouTube): a denied stream or a
+  // sign-in request would meet the next song as well, and a denied one is offered another publication instead.
+  const UNPLAYABLE = new Set(["decode", "unsupported", "invalid_response", "failed"]);
+  const songRestriction = /unavailable in your region|unavailable from YouTube/;
+  let unplayableInARow = 0;
+  function skipUnplayable(item, { code, message = "" } = {}) {
+    const ownFault = UNPLAYABLE.has(code) || (code === "restricted" && songRestriction.test(message));
+    if (!item || !ownFault || unplayableInARow >= 3 || navigator.onLine === false) return false;
+    if (playbackOrigin === "room" || roomControlsPlayback() || musicRoom?.isGuest()) return false;
+    const next = plannedNext();
+    if (next < 0 || queue[next]?.id === item.id) return false;
+    unplayableInARow++;
+    flash(t("“{title}” would not play, so the next song is on.", { title: item.title || "" }));
+    playAt(next, {
+      skipped: true,
+      transitionIntent: "navigation",
+      origin: automaticQueueIds.has(queue[next].id) ? "recommendation" : "manual",
+    });
     return true;
   }
   async function advance(skipped = false) {
@@ -3739,6 +3771,8 @@ export function createMusic({ invoke, onDownload, storage }) {
       status(t(detail.code === code ? detail.message : playbackFailure(code).message), true);
       changeSource.hidden = isLocalMusicId(current.id) || playbackOrigin === "room" || code === "cancelled";
       syncDock();
+      // Only a song that never really got going; one that broke off midway stays, paused where it stopped.
+      if (resume < 1) skipUnplayable(current, detail.code === code ? detail : playbackFailure(code));
     }
     const pending = retryProgressedAlternate(code, earlyEnd, resume) || attemptEquivalent(code, resume);
     if (pending)
@@ -5424,6 +5458,12 @@ export function createMusic({ invoke, onDownload, storage }) {
       });
     }
     render();
+    // The fresh picks settle in as a wave instead of replacing the old cards in one jump.
+    try {
+      cascadeIn($("music-shelves"), { limit: 14, step: 24 });
+    } catch {
+      /* The page is already shown. */
+    }
     prepareHomeSelection();
   }
   function prepareHomeSelection() {

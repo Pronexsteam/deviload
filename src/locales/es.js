@@ -1668,6 +1668,8 @@ export default {
   "Based on {count} playlists": "Basado en {count} playlists",
   "Play mix": "Reproducir mix",
   "Choose track version": "Elegir versión de la canción",
+  "Another version": "Otra versión",
+  "“{title}” would not play, so the next song is on.": "«{title}» no se pudo reproducir: suena la siguiente.",
   "Source choice saved.": "Elección de fuente guardada.",
   "Finding songs for this interest…": "Buscando canciones para este mix…",
   "Keep listening to build this mix.": "Sigue escuchando para completar este mix.",

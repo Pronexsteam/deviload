@@ -95,11 +95,16 @@ export function loadArtwork(img, raw, size = 320) {
     }
   };
   img.addEventListener("error", fallback);
+  const born = performance.now();
   img.addEventListener("load", () => {
     if (size > 480 && index + 1 < urls.length && img.naturalWidth <= 120) {
       fallback();
       return;
     }
+    // A cover that had to be fetched fades in instead of popping into an empty square; one already in the cache
+    // is there at once, so a list drawn again does not blink.
+    if (performance.now() - born > 80 && !matchMedia("(prefers-reduced-motion: reduce)").matches)
+      img.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 320, easing: "ease-out" });
     fallbackChoices.delete(preferred);
     if (urls[index] !== preferred) {
       fallbackChoices.set(preferred, {

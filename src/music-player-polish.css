@@ -1546,16 +1546,33 @@
   }
 }
 .music-now-info > .music-change-source:not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   width: fit-content;
   max-width: 100%;
-  padding: 3px 8px;
+  height: 22px;
+  margin-top: 3px;
+  padding: 0 9px 0 7px;
+  overflow: hidden;
   border: 1px solid var(--workspace-line);
-  border-radius: 6px;
+  border-radius: 999px;
   color: var(--workspace-ink);
   background: var(--workspace-hover);
   font: inherit;
-  font-size: 12px;
+  font-size: 11.5px;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
+}
+.music-now-info > .music-change-source > .icon {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+.music-now-info > .music-change-source > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .music-motion-cover.is-wide {
   object-fit: cover;

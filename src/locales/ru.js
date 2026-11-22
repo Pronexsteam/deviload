@@ -1718,6 +1718,8 @@ export default {
   "Based on {count} playlists": "На основе плейлистов: {count}",
   "Play mix": "Слушать микс",
   "Choose track version": "Выбрать версию трека",
+  "Another version": "Другая версия",
+  "“{title}” would not play, so the next song is on.": "«{title}» не включилась — играет следующая.",
   "Source choice saved.": "Выбор источника сохранён.",
   "Finding songs for this interest…": "Ищем песни для этого микса…",
   "Keep listening to build this mix.": "Продолжайте слушать музыку, чтобы наполнить этот микс.",
