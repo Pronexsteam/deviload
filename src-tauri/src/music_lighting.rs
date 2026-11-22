@@ -484,7 +484,8 @@ mod tests {
         openrgb_in(root.path(), 2, &mut found);
         assert_eq!(found, vec![inner.join(name)]);
         assert!(is_openrgb(&inner.join(name)));
-        assert!(!is_openrgb(&inner.join("OpenRGB.json").with_file_name("OpenRGB")), "a missing file is not OpenRGB");
+        // Checked where no copy is: a Mac's disk ignores case, so "OpenRGB" beside "openrgb" would be that file.
+        assert!(!is_openrgb(&root.path().join("OpenRGB")), "a missing file is not OpenRGB");
         assert_eq!(find_openrgb(Some(inner.join(name).to_str().unwrap())), Some(inner.join(name)), "a chosen copy wins");
     }
 
