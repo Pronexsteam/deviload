@@ -11,14 +11,14 @@ Discover and listen with Devil Music. Save with yt-dlp. Create with Devil Cut an
 Built with Rust and Tauri 2 · English, Russian and Spanish
 
 <p>
-<a href="https://github.com/Pronexsteam/deviload/releases/download/v2.16.0/Deviload-2.16.0-setup.exe"><img src="docs/downloads/windows.svg" width="264" alt="Windows download"></a>
-<a href="https://github.com/Pronexsteam/deviload/releases/download/v2.16.0/Deviload-2.16.0-macos-test.zip"><img src="docs/downloads/macos.svg" width="264" alt="macOS download"></a>
+<a href="https://github.com/Pronexsteam/deviload/releases/download/v2.17.0/Deviload-2.17.0-setup.exe"><img src="docs/downloads/windows.svg" width="264" alt="Windows download"></a>
+<a href="https://github.com/Pronexsteam/deviload/releases/download/v2.17.0/Deviload-2.17.0-macos-test.zip"><img src="docs/downloads/macos.svg" width="264" alt="macOS download"></a>
 <br>
 <a href="#install-on-linux"><img src="docs/downloads/linux.svg" width="264" alt="Linux download"></a>
 <a href="https://github.com/Pronexsteam/DevilMusic/releases/download/v0.0.18/Devil-Music-0.0.18-android.apk"><img src="docs/downloads/android.svg" width="264" alt="Devil Music for Android"></a>
 </p>
 
-Desktop downloads: **2.16.0** · Android: **0.0.18 preview**
+Desktop downloads: **2.17.0** · Android: **0.0.18 preview**
 
 <p>
 <a href="https://github.com/Pronexsteam/deviload/releases/latest"><img src="https://img.shields.io/github/v/release/Pronexsteam/deviload?style=for-the-badge&amp;label=Release&amp;logo=github&amp;logoColor=white&amp;color=e8284c&amp;labelColor=161b22" height="48" alt="Latest release"></a>
@@ -105,9 +105,9 @@ Add a live link to record from that moment, then stop when you have what you nee
 
 ## Latest update
 
-**Deviload 2.16.0 brings sound moods, lyric videos, a map of your taste and lights that follow the music.** Play a song Slowed + reverb, as Nightcore or in 8D, turn a few sung lines into a vertical video with the song's sound, see the artists you listen to as a star chart, and light your keyboard and strips in the cover's colour on every beat through OpenRGB. Deviload closes to the tray, the queue saves as a playlist, lyrics can be searched, and listening rooms show who is listening and end cleanly.
+**Deviload 2.17.0 puts the song's video behind the music.** Canvas plays a looping piece of the official video behind the full player, and the new Live theme plays it behind the whole music page. Your own files show their lyrics from a .lrc beside them or from the file itself, the crosshair on the player bar or the J key finds the song playing, and songs you download from Devil Music show their progress on the bar. A song that will not start is skipped instead of stopping the music, and the player, page switches and the home refresh are smoother.
 
-Read the [2.16.0 release notes](.github/release-notes/v2.16.0.md).
+Read the [2.17.0 release notes](.github/release-notes/v2.17.0.md).
 
 ## Installation
 

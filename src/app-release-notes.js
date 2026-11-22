@@ -79,6 +79,28 @@ export function wireReleaseNotes(workspace) {
     // Every release with its notes, newest first.
     const releases = [
       {
+        version: "2.17.0",
+        changes: [
+          t(
+            "Canvas: a looping piece of the song's video plays behind the full player, with dimming and quality in Themes.",
+          ),
+          t("The Live theme plays the song's video behind the whole music page."),
+          t("Lyrics for your own files: a .lrc file beside the song or the lyrics stored inside it."),
+          t("Find the song playing with the crosshair on the player bar or the J key."),
+          t(
+            "Songs downloaded from Devil Music show their progress on the player bar and open their folder in one click.",
+          ),
+        ],
+        fixes: [
+          t("A song that will not start is skipped with a note instead of stopping the music."),
+          t("The full player opens, page switches and the home refresh run smoother."),
+          t("The full player lost its stripe on the right, and the sound mood badge no longer covers Next."),
+          t(
+            "The vinyl disc no longer turns into a green square, and the playing row stands out in every theme.",
+          ),
+        ],
+      },
+      {
         version: "2.16.0",
         changes: [
           t("Sound moods in More on the player bar: Slowed + reverb, Nightcore and 8D."),

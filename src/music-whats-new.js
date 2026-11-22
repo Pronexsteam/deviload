@@ -7,35 +7,48 @@ import { rendered } from "./rendered.js";
 // feature itself. After the tip (or a skip) the dot goes and the feature is never announced again.
 export const NEWS = [
   {
-    key: "new-sound-mood",
-    entry: ".music-dock-more",
-    target: ".music-vibe-row",
-    title: () => t("New: sound moods"),
+    key: "new-canvas",
+    entry: "#music-expand",
+    target: "#music-now-playing .music-canvas-toggle",
+    title: () => t("New: Canvas"),
     text: () =>
-      t("Slowed + reverb, Nightcore and 8D, one click away. The badge on the dock turns it back off."),
+      t("A looping piece of the song's video plays behind the full player. This button turns it off."),
   },
   {
-    key: "new-lyric-video",
-    entry: ".music-lyric-card-open",
-    target: '.music-lyric-card-dialog [data-format="video"]',
-    title: () => t("New: lyric videos"),
+    key: "new-live-theme",
+    entry: "#quick-theme-button",
+    target: '#quick-theme-menu [data-theme-choice="live"]',
+    title: () => t("New: the Live theme"),
     text: () =>
-      t("Turn a few sung lines into a vertical video with the song's sound, ready for stories and shorts."),
+      t(
+        "The song's video plays behind the whole music page. Dimming and quality are at the bottom of this menu.",
+      ),
   },
   {
-    key: "new-taste-map",
-    entry: ".music-sidebar-stats",
-    target: '.music-stats-tabs [data-period="map"]',
-    title: () => t("New: your taste map"),
-    text: () => t("The artists you listen to as a galaxy. Bigger stars are the ones you play most."),
+    key: "new-locate-song",
+    entry: ".music-dock .music-locate",
+    target: ".music-dock .music-locate",
+    title: () => t("New: find the song playing"),
+    text: () => t("Scrolls the list to the song that plays and makes it glow. The J key does the same."),
+  },
+  {
+    key: "new-download-progress",
+    entry: ".music-dock .music-download-badge",
+    target: ".music-dock .music-download-badge",
+    title: () => t("New: download progress"),
+    text: () => t("A song you download shows its progress here, then opens its folder in one click."),
   },
 ];
 
 // Inside a closed menu or dialog it is hidden, and saying so takes only a selector match; the styles are asked only
 // for a feature that may really be on screen. This runs on every frame the page changes while tips are pending.
+// Behind an open window (the release notes, settings) a tip would point at something that cannot be reached.
 const shown = node =>
   node instanceof Element &&
   !node.closest("dialog:not([open]), [popover]:not(:popover-open), [hidden]") &&
+  [...node.ownerDocument.querySelectorAll("dialog[open]")].every(
+    dialog => !dialog.matches(":modal") || dialog.contains(node),
+  ) &&
   rendered(node);
 
 export function wireWhatsNew({ storage = globalThis.localStorage, root = document } = {}) {
