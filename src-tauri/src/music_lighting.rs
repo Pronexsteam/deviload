@@ -174,8 +174,13 @@ fn stop_session(session: &mut Session) {
 /// The OpenRGB that Deviload started itself, so it can be closed again when the lights are turned off.
 static LAUNCHED: Mutex<Option<Child>> = Mutex::new(None);
 
+/// The program itself: "OpenRGB.exe" on Windows, a bare "openrgb" elsewhere, never its "OpenRGB.json" settings.
 fn is_openrgb(path: &Path) -> bool {
-    path.is_file() && path.file_stem().and_then(|s| s.to_str()).is_some_and(|s| s.eq_ignore_ascii_case("openrgb"))
+    let program = match path.extension() {
+        None => true,
+        Some(ext) => ext.eq_ignore_ascii_case("exe"),
+    };
+    program && path.is_file() && path.file_stem().and_then(|s| s.to_str()).is_some_and(|s| s.eq_ignore_ascii_case("openrgb"))
 }
 
 /// OpenRGB inside [dir] or in a folder up to two levels down, such as an unpacked "OpenRGB_1.1_Windows_64/OpenRGB Windows 64-bit".
