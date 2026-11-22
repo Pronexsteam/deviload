@@ -9,6 +9,7 @@ test('letter shortcuts follow the physical key, so a Russian layout works too',(
  assert.equal(musicShortcut(press('KeyL',{key:'\u0434'})),'like');
  assert.equal(musicShortcut(press('KeyM',{key:'\u044c'})),'mute');
  assert.equal(musicShortcut(press('KeyL',{repeat:true})),null);
+ assert.equal(musicShortcut(press('KeyJ',{key:'\u043e'})),'locate');
 });
 
 test('typing never triggers a shortcut, while a slider keeps letters and its own arrows',()=>{

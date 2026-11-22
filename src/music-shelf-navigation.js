@@ -100,12 +100,14 @@ export function enhanceMusicShelves(root) {
     });
     return button;
   };
-  // New shelves are wrapped once the page has painted: reading each grid's flow in the middle of a render
-  // would make the browser restyle the whole new page before showing it.
+  // New shelves are wrapped in the same moment they are rendered, so the page is laid out and painted once with
+  // its arrows; wrapping them a frame later laid every card out a second time. Shelves added after a render
+  // are picked up once the page has painted.
   let wrapTimer = 0;
   const refresh = () => {
     if (destroyed) return;
     for (const [grid, row] of rows) if (!root.contains(grid)) detach(grid, row);
+    wrap();
     clearTimeout(wrapTimer);
     view.requestAnimationFrame(() => {
       clearTimeout(wrapTimer);
@@ -115,7 +117,9 @@ export function enhanceMusicShelves(root) {
   const wrap = () => {
     if (destroyed) return;
     for (const grid of root.querySelectorAll(".music-card-grid")) {
-      if (rows.has(grid) || !view.getComputedStyle(grid).gridAutoFlow.includes("column")) continue;
+      // Shelves scroll sideways everywhere except in result lists, which wrap into rows. Told by the selector, not
+      // by asking the styles, which in the middle of a render would restyle the whole new page.
+      if (rows.has(grid) || grid.closest(".music-results")) continue;
       const wrapper = root.ownerDocument.createElement("div");
       wrapper.className = "music-shelf-navigation";
       const generatedId = !grid.id;

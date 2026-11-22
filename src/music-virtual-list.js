@@ -118,6 +118,19 @@ export function mountMusicList(container, items, renderRow, onVisible = () => {}
   if (scrollRoot !== window) resize.observe(scrollRoot);
   draw();
   return {
+    // Scrolls the row for this item to the middle of the view and returns it, drawn.
+    reveal(id) {
+      const index = items.findIndex(item => item.id === id);
+      if (index < 0 || disposed || !container.isConnected) return null;
+      const rect = container.getBoundingClientRect(),
+        view = scrollRoot === window ? { top: 0, height: innerHeight } : scrollRoot.getBoundingClientRect();
+      scrollRoot.scrollBy({
+        top: rect.top - view.top + (index + 0.5) * height - view.height / 2,
+        behavior: "instant",
+      });
+      draw();
+      return nodes.get(index) || null;
+    },
     destroy() {
       disposed = true;
       cancelAnimationFrame(frame);

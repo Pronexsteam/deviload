@@ -5,6 +5,7 @@ import { isLocalMusicId } from "./music-track-id.js";
 import { clampLyricsOffset, readLyricsOffsets, saveLyricsOffset } from "./music-lyrics-preferences.js";
 import { parseTtml, richerLyricsFit } from "./music-ttml.js";
 import { songAlbum } from "./music-ui-model.js";
+import { rendered } from "./rendered.js";
 export { parseLyrics } from "./music-lyrics-timing.js";
 export function createMusicLyrics({
   invoke,
@@ -219,7 +220,9 @@ export function createMusicLyrics({
     followPending = false,
     frame = 0;
   const cache = new Map(),
-    loading = new Map();
+    loading = new Map(),
+    // Local songs the listener chose to look up online this session.
+    onlineLocal = new Set();
   let activeRows = new Set(),
     nearRows = new Set(),
     lastFrameAt = 0,
@@ -238,10 +241,7 @@ export function createMusicLyrics({
     !document.hidden &&
     (dialog.open ||
       Boolean(
-        host &&
-        !host.hidden &&
-        host.getClientRects().length &&
-        (!host.closest("dialog") || host.closest("dialog").open),
+        host && !host.hidden && rendered(host) && (!host.closest("dialog") || host.closest("dialog").open),
       ));
   // The next line comes up in one even movement, slow at both ends, instead of jumping most of the way at once and
   // creeping the rest. Positions land on whole screen pixels so the letters do not shimmer while they move.
@@ -359,11 +359,42 @@ export function createMusicLyrics({
     active = -1;
     manualUntil = 0;
     followPending = false;
-    body.scrollTop = 0;
+    // Back to the top on the next frame: written here it would lay the page out in the middle of whatever opened
+    // the lyrics, and again after the rest of that change. Lyrics that arrived sooner and already follow a line
+    // keep their place.
+    requestAnimationFrame(() => {
+      if (token === request && !scrollFrame && active < 0 && body.scrollTop) body.scrollTop = 0;
+    });
     try {
-      if (isLocalMusicId(track.id)) {
-        body.textContent = t("Online lyrics are not requested for local files.");
-        body.dataset.lyricsState = "missing";
+      // A local file brings its own lyrics: a .lrc beside it or the lyrics tag inside it. Its name goes online only
+      // when the listener asks for it, song by song.
+      if (isLocalMusicId(track.id) && !onlineLocal.has(track.id)) {
+        const own = await invoke("music_local_lyrics", { id: track.id }).catch(() => null);
+        if (token !== request) return;
+        if (own?.plain || own?.synced) {
+          source = own.source === "lrc" ? t("Lyrics file (.lrc)") : t("Lyrics from the file");
+          render(own);
+          return;
+        }
+        // Nothing names a source yet, and the full player keeps this column open for the offer.
+        source = "";
+        updateCredit();
+        const note = document.createElement("p");
+        note.className = "music-lyrics-plain";
+        note.textContent = t("This file has no lyrics inside.");
+        body.replaceChildren(
+          note,
+          button(
+            t("Search online"),
+            null,
+            () => {
+              onlineLocal.add(track.id);
+              load();
+            },
+            "outline small music-lyrics-online",
+          ),
+        );
+        body.dataset.lyricsState = "offer";
         return;
       }
       const duration = getAudio().duration;

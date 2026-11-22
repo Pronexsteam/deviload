@@ -58,7 +58,7 @@ function player(invoke,items=[song(1)]){
     wireMusicProfile:options=>{ctx.profileActions=options;},library:{invalidateUndo(){},find(){}},musicGain,previousVolume:.7,syncVolume(){},showLocal(){},load(){},newReleases:{cached:()=>[],load:async()=>[]},
     request:0,loading:false,loaded:false,sections:[],continuation:null,morePending:false,listFilter:"",listSort:"original",rememberNavigation(){},selectView:next=>{ctx.view=next;},skeleton(){},render(){ctx.rendered=ctx.sections;},prepareHomeSelection(){},showPlaylist(){},
     $:id=>{if(!controls.has(id))controls.set(id,field());return controls.get(id);},
-    captureListening(){},persist(){},persistSession(){},syncDock(){},renderQueue(){},status(message){ctx.message=message;},
+    captureListening(){},persist(){},persistSession(){},syncDock(){},renderQueue(){},status(message){ctx.message=message;},flash(message){ctx.flashed=message;},
     document:{querySelectorAll:()=>[],addEventListener(){}},navigator:{},performance,DOMException,
     setTimeout(fn){const id=++serial;timers.set(id,fn);return id;},clearTimeout(id){timers.delete(id);}};
   Object.assign(ctx,{publicDiscovery:{candidates:async()=>[],clear(){}},publicGeneration:0});
@@ -242,6 +242,16 @@ test("seeking to the genuine end advances even if the catalog gives a longer dur
   const p=player(async(_,args)=>({url:args.id}),[{...song(1),duration:300},song(2)]);
   p.ctx.audio.duration=80;await p.playAt(0);p.ctx.audio.currentTime=80;p.ctx.audio.ended=true;
   p.emit("ended");await settle();assert.equal(p.ctx.index,1);assert.equal(p.ctx.recoveryUsed,false);
+});
+test("a song that cannot start is skipped with a note, but a denial or a limit still stops",async()=>{
+  const p=player(async(cmd,args)=>{if(cmd==="music_catalog")return {sections:[]};if(args.id===song(1).id)throw Error("This track is unavailable");return {url:args.id};},[song(1),song(2)]);
+  await p.playAt(0);await settle();
+  assert.equal(p.ctx.current.id,song(2).id);assert.match(p.ctx.flashed||"",/next song/);
+  for(const reason of ["403 Forbidden denied access","HTTP 429"]){
+    const q=player(async(cmd,args)=>{if(cmd==="music_catalog")return {sections:[]};if(args.id===song(1).id)throw Error(reason);return {url:args.id};},[song(1),song(2)]);
+    await q.playAt(0);await settle();
+    assert.equal(q.ctx.current.id,song(1).id,reason);assert.equal(q.ctx.flashed,undefined,reason);
+  }
 });
 test("a transport denial attached to ended never retries or silently advances",async()=>{
   const calls=[],p=player(async(_,args)=>{calls.push(args);return {url:args.id};},[song(1),song(2)]);

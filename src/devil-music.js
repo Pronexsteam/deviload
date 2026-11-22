@@ -7,6 +7,12 @@ import {
   setExactLocalCopy,
   exactLocalPlaybackSource,
 } from "./music-local-model.js";
+import { downloadProgress } from "./music-download-progress.js";
+import { wireCanvasSettings } from "./music-canvas-settings.js";
+import { createMusicGhost } from "./music-ghost.js";
+
+// The Devil Music ghost, switched off until it is finished.
+const GHOST = false;
 import { findLocalRecording } from "./music-auto-local.js";
 import { mountMusicList } from "./music-virtual-list.js";
 import { wireQueueHandle } from "./music-queue-drag.js";
@@ -227,6 +233,8 @@ function playableCover(item, glyph = "play", size = 320) {
 }
 
 export function createMusic({ invoke, onDownload, storage }) {
+  // The Devil Music ghost (music-ghost.js), created with the greeting.
+  let ghost = null;
   const diagnostics = createMusicDiagnostics();
   const loadArtistCatalog = createArtistCatalog(invoke);
   const newReleases = createNewReleases({ loadArtist: loadArtistCatalog, storage });
@@ -512,23 +520,32 @@ export function createMusic({ invoke, onDownload, storage }) {
   const losslessBadge = el("span", "music-lossless", t("Lossless"));
   losslessBadge.hidden = true;
   artistLine.append(artist, losslessBadge);
+  // Shown when a song would not start: a small one-line chip under the message, not a block that pushes it aside.
   const changeSource = button(
     t("Choose track version"),
-    "music-notes",
+    null,
     () => chooseRecording(current),
     "music-change-source",
   );
-  changeSource.textContent = t("Choose track version");
+  const changeSourceLabel = el("span", "", t("Another version"));
+  changeSource.replaceChildren(icon("arrows-left-right"), changeSourceLabel);
   changeSource.hidden = true;
   onLanguageChange(() => {
-    changeSource.textContent = changeSource.title = changeSource.ariaLabel = t("Choose track version");
+    changeSource.title = changeSource.ariaLabel = t("Choose track version");
+    changeSourceLabel.textContent = t("Another version");
     losslessBadge.textContent = t("Lossless");
     losslessBadge.title = t("Lossless audio: FLAC, ALAC or WAV on this device");
   });
   info.append(title, artistLine, changeSource);
   const like = button(t("Like this song"), null, toggleLike, "music-icon-button music-like");
   like.textContent = "♡";
-  identity.append(artwork, info, like);
+  const locate = button(
+    t("Find the song playing"),
+    "crosshair",
+    () => locatePlaying(),
+    "music-icon-button music-locate",
+  );
+  identity.append(artwork, info, like, locate);
   const transport = el("div", "music-transport"),
     controls = el("div", "music-transport-buttons");
   const shuffleButton = button(t("Shuffle"), "shuffle", toggleShuffle);
@@ -797,6 +814,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     onLevels: levels => {
       miniPlayer?.ambient(levels);
       orb.energy(levels?.[0]);
+      ghost?.pulse(Math.min(1, 1.6 * Math.max(0, ...(levels || [0]))));
     },
   });
   // Which upload of the song is heard, and how far it is shifted from the studio recording the lyrics are timed
@@ -935,6 +953,15 @@ export function createMusic({ invoke, onDownload, storage }) {
   });
   songNotice = wireSongNotice({ host: $("music-preferences") });
   wireMusicLighting({ host: $("music-preferences"), invoke, sound, getAudio: () => audio });
+  const canvasSettings = wireCanvasSettings({
+    place: box => {
+      const menu = $("quick-theme-menu");
+      if (menu) menu.insertBefore(box, $("quick-theme-status"));
+    },
+    isEnabled: () => presentation.canvas.enabled,
+    setEnabled: value => presentation.canvas.set(value),
+  });
+  presentation.canvas.watch(() => canvasSettings.refresh());
   wireMusicAccount({
     invoke,
     host: $("music-preferences"),
@@ -1633,12 +1660,15 @@ export function createMusic({ invoke, onDownload, storage }) {
   toast.setAttribute("role", "status");
   toast.hidden = true;
   document.body.append(toast);
+  function flash(text) {
+    toast.textContent = text;
+    toast.hidden = false;
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => (toast.hidden = true), 3200);
+  }
   function status(text, isError = false) {
     if (!isError && statusMessages.has(text)) {
-      toast.textContent = text;
-      toast.hidden = false;
-      clearTimeout(statusTimer);
-      statusTimer = setTimeout(() => (toast.hidden = true), 3200);
+      flash(text);
       return;
     }
     $("music-status").textContent = text;
@@ -1757,6 +1787,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     try {
       if (!onDownload) throw new Error(t("Open the installed Deviload app to download."));
       const count = await onDownload(items);
+      if (count) followDownloads(items);
       status(
         count
           ? t("Added to downloads: {count} songs. They will play offline once downloaded.", { count })
@@ -1777,7 +1808,9 @@ export function createMusic({ invoke, onDownload, storage }) {
     notify(t("Adding MP3 to downloads…"));
     try {
       if (!onDownload) throw new Error(t("Open the installed Deviload app to download."));
-      const count = await onDownload(resolveRecordingSource(item, saved.sourceBindings));
+      const source = resolveRecordingSource(item, saved.sourceBindings);
+      const count = await onDownload(source);
+      if (count) followDownloads([{ ...source, title: item.title }]);
       notify(
         count
           ? t("MP3 added to downloads: {title}", { title: item.title })
@@ -1836,6 +1869,8 @@ export function createMusic({ invoke, onDownload, storage }) {
       repeat === "one" ? t("Repeat one song") : repeat === "all" ? t("Repeat queue") : t("Repeat off");
     repeatButton.dataset.repeat = repeat;
     saveToPlaylist.disabled = !current;
+    locate.disabled = !current;
+    syncGhost();
     play.disabled = !current && !queue.length;
     previous.disabled = index < 0;
     next.disabled = !current || radioPending || (!autoplay && plannedNext() < 0);
@@ -1851,6 +1886,8 @@ export function createMusic({ invoke, onDownload, storage }) {
         : "",
       duration: knownDuration || current?.duration || 0,
       offline: resolvedOffline,
+      // The song after this one, so the video behind the player can be ready when it starts.
+      upcoming: queue[plannedNext()] || null,
     });
     if (view === "home")
       homeHero?.update(
@@ -1887,6 +1924,7 @@ export function createMusic({ invoke, onDownload, storage }) {
   function toggleLike() {
     if (!current) return;
     if (!changeFavorite(current)) return;
+    if (saved.favorites.some(item => item.id === current.id)) ghost?.play("like");
     syncDock();
     if (view === "favorites") showLocal("favorites");
   }
@@ -3008,6 +3046,7 @@ export function createMusic({ invoke, onDownload, storage }) {
       if (autoplay) await startAudio();
       if (token !== playRequest || resolvedTrack !== id) return;
       needsRefresh = false;
+      unplayableInARow = 0;
       artist.textContent = displaySubtitle(current) || "YouTube Music";
       status("");
       if (!musicRoom?.isGuest()) recommendationSession.recover(current.id);
@@ -3080,6 +3119,7 @@ export function createMusic({ invoke, onDownload, storage }) {
       artist.title = t(failure.message);
       status(t(failure.message), true);
       changeSource.hidden = isLocalMusicId(current.id) || origin === "room" || failure.code === "cancelled";
+      if (autoplay && error?.name !== "AbortError") skipUnplayable(current, failure);
     } finally {
       if (token === playRequest) {
         streamLoading = false;
@@ -3273,6 +3313,30 @@ export function createMusic({ invoke, onDownload, storage }) {
   function roomControlsPlayback() {
     if (!musicRoom?.isGuest()) return false;
     status(t("The room host controls the track. Leave the room to play your own music."));
+    return true;
+  }
+  // A song that will not start, even after the retries and the search for another version of it, is skipped
+  // instead of leaving the music stopped, with a short note saying so. Only failures of that one song count:
+  // a connection, a busy engine or a YouTube limit would fail the next song too, and asking for it would only
+  // make a limit worse, so those stop with the message and the version button. Several in a row also stop.
+  // A restriction counts only when it names the song (another region, gone from YouTube): a denied stream or a
+  // sign-in request would meet the next song as well, and a denied one is offered another publication instead.
+  const UNPLAYABLE = new Set(["decode", "unsupported", "invalid_response", "failed"]);
+  const songRestriction = /unavailable in your region|unavailable from YouTube/;
+  let unplayableInARow = 0;
+  function skipUnplayable(item, { code, message = "" } = {}) {
+    const ownFault = UNPLAYABLE.has(code) || (code === "restricted" && songRestriction.test(message));
+    if (!item || !ownFault || unplayableInARow >= 3 || navigator.onLine === false) return false;
+    if (playbackOrigin === "room" || roomControlsPlayback() || musicRoom?.isGuest()) return false;
+    const next = plannedNext();
+    if (next < 0 || queue[next]?.id === item.id) return false;
+    unplayableInARow++;
+    flash(t("“{title}” would not play, so the next song is on.", { title: item.title || "" }));
+    playAt(next, {
+      skipped: true,
+      transitionIntent: "navigation",
+      origin: automaticQueueIds.has(queue[next].id) ? "recommendation" : "manual",
+    });
     return true;
   }
   async function advance(skipped = false) {
@@ -3707,6 +3771,8 @@ export function createMusic({ invoke, onDownload, storage }) {
       status(t(detail.code === code ? detail.message : playbackFailure(code).message), true);
       changeSource.hidden = isLocalMusicId(current.id) || playbackOrigin === "room" || code === "cancelled";
       syncDock();
+      // Only a song that never really got going; one that broke off midway stays, paused where it stopped.
+      if (resume < 1) skipUnplayable(current, detail.code === code ? detail : playbackFailure(code));
     }
     const pending = retryProgressedAlternate(code, earlyEnd, resume) || attemptEquivalent(code, resume);
     if (pending)
@@ -4458,6 +4524,151 @@ export function createMusic({ invoke, onDownload, storage }) {
       more.disabled = morePending;
       root.append(more);
     }
+  }
+  // The ghost's loop: busy while a song downloads, vibing while music plays, dozing after two quiet minutes,
+  // floating otherwise; a glance when the song changes. It exists only once the page is built, so earlier calls do
+  // nothing.
+  let ghostTrack = null,
+    ghostDozing = false,
+    lastStir = Date.now();
+  function syncGhost() {
+    if (!ghost) return;
+    const playing = !!current && !audio.paused;
+    if (playing || followed.length) ghostDozing = false;
+    ghost.setBase(followed.length ? "working" : playing ? "listening" : ghostDozing ? "sleep" : "idle");
+    if (current?.id && ghostTrack && current.id !== ghostTrack && playing) ghost.play("trackchange");
+    if (current?.id) ghostTrack = current.id;
+  }
+  function stirGhost() {
+    lastStir = Date.now();
+    if (!ghostDozing) return;
+    ghostDozing = false;
+    syncGhost();
+  }
+  for (const type of ["pointermove", "pointerdown", "keydown", "wheel"])
+    addEventListener(type, stirGhost, { passive: true });
+  setInterval(() => {
+    if (!ghost || ghostDozing || document.hidden || Date.now() - lastStir < 120000) return;
+    if ((current && !audio.paused) || followed.length) return;
+    ghostDozing = true;
+    syncGhost();
+  }, 10000);
+  // Songs downloaded from here, followed through the downloader's queue: a badge on the dock shows how far they
+  // got, then where the file went.
+  let followed = [],
+    seenJobs = [],
+    lastDownload = null,
+    lastDownloadTimer = 0,
+    downloadBadge = null;
+  function downloadBadgeNode() {
+    if (downloadBadge) return downloadBadge;
+    downloadBadge = button(t("Downloading"), "download-simple", () => {
+      if (!followed.length && lastDownload?.status === "done")
+        invoke("reveal_download", { id: lastDownload.jobId }).catch(error => status(errorText(error), true));
+      else document.getElementById("downloads-tab")?.click();
+    });
+    downloadBadge.classList.add("music-cast-badge", "music-download-badge");
+    downloadBadge.append(el("span", "music-download-badge-text"));
+    downloadBadge.hidden = true;
+    return downloadBadge;
+  }
+  function followDownloads(items) {
+    const after = seenJobs.reduce((top, job) => Math.max(top, Number(job?.id) || 0), 0),
+      added = Date.now();
+    for (const item of items)
+      if (!followed.some(song => song.id === item.id))
+        followed.push({ id: item.id, title: item.title || "", after, added });
+    renderDownloadBadge(downloadProgress(followed, seenJobs));
+  }
+  function syncDownloads(jobs) {
+    seenJobs = Array.isArray(jobs) ? jobs : [];
+    if (!followed.length) return;
+    const view = downloadProgress(followed, seenJobs);
+    followed = view.active.map(({ id, title, after, added }) => ({ id, title, after, added }));
+    const finished = view.finished.at(-1);
+    if (finished) {
+      lastDownload = finished;
+      if (finished.status === "done") {
+        status(t("Saved: {title}", { title: finished.title }));
+        ghost?.play("happy");
+      } else
+        status(t("Could not download {title}. Details are in Downloads.", { title: finished.title }), true);
+      clearTimeout(lastDownloadTimer);
+      lastDownloadTimer = setTimeout(() => {
+        lastDownload = null;
+        renderDownloadBadge(downloadProgress(followed, seenJobs));
+      }, 30000);
+    }
+    renderDownloadBadge(view);
+  }
+  function renderDownloadBadge(view) {
+    const badge = downloadBadgeNode(),
+      glyph = badge.querySelector(".icon"),
+      text = badge.querySelector(".music-download-badge-text");
+    if (view.active.length) {
+      const first = view.active[0];
+      text.textContent =
+        view.active.length > 1 ? `${view.active.length} · ${view.percent}%` : `${view.percent}%`;
+      badge.title = badge.ariaLabel =
+        view.active.length > 1
+          ? t("Songs downloading: {count}, {percent}%. Press to open Downloads.", {
+              count: view.active.length,
+              percent: view.percent,
+            })
+          : t("Downloading {title}: {percent}%. Press to open Downloads.", {
+              title: first.title,
+              percent: view.percent,
+            });
+      glyph.dataset.icon = "download-simple";
+      badge.dataset.state = "active";
+    } else if (lastDownload) {
+      const done = lastDownload.status === "done";
+      text.textContent = done ? t("Show in folder") : t("Download failed");
+      badge.title = badge.ariaLabel = done
+        ? t("Saved: {title}. Press to show the file in its folder.", { title: lastDownload.title })
+        : t("Could not download {title}. Details are in Downloads.", { title: lastDownload.title });
+      glyph.dataset.icon = done ? "folder-open" : "warning";
+      badge.dataset.state = done ? "done" : "error";
+    }
+    badge.hidden = !view.active.length && !lastDownload;
+    syncGhost();
+  }
+  // Shuffle through a big library and a song worth keeping comes up: this scrolls the open list to it and lights it
+  // up. When the open page does not hold it, it opens the place that does: music on this device and downloads,
+  // liked songs, or recently played.
+  let locating = 0;
+  function revealPlaying(id) {
+    let row = null;
+    for (const list of virtualLists) row ||= list.reveal(id);
+    if (!row) {
+      row = document.querySelector(`.music-main-content .music-track-row[data-track-id="${CSS.escape(id)}"]`);
+      row?.scrollIntoView({ block: "center", behavior: "instant" });
+    }
+    if (!row) return false;
+    row.classList.remove("is-located");
+    void row.offsetWidth;
+    row.classList.add("is-located");
+    setTimeout(() => row.classList.remove("is-located"), 2400);
+    row.querySelector(".music-track-select")?.focus({ preventScroll: true });
+    return true;
+  }
+  function locatePlaying() {
+    if (!current) return;
+    if (document.getElementById("music-now-playing")?.open) presentation.close();
+    if (document.querySelector("main").dataset.page !== "music")
+      document.getElementById("music-tab")?.click();
+    if (revealPlaying(current.id)) return;
+    const id = current.id,
+      until = Date.now() + 8000,
+      attempt = ++locating;
+    if (isLocalMusicId(id) || offlineItems.some(item => item.id === id)) showOffline();
+    else if (saved.favorites.some(item => item.id === id)) showLocal("favorites");
+    else showLocal("recent");
+    // The page may still be loading its list; look again each frame for a few seconds.
+    const retry = () => {
+      if (attempt === locating && Date.now() < until && !revealPlaying(id)) requestAnimationFrame(retry);
+    };
+    requestAnimationFrame(retry);
   }
   async function loadMore() {
     if (morePending || !continuation) return;
@@ -5247,6 +5458,12 @@ export function createMusic({ invoke, onDownload, storage }) {
       });
     }
     render();
+    // The fresh picks settle in as a wave instead of replacing the old cards in one jump.
+    try {
+      cascadeIn($("music-shelves"), { limit: 14, step: 24 });
+    } catch {
+      /* The page is already shown. */
+    }
     prepareHomeSelection();
   }
   function prepareHomeSelection() {
@@ -5559,6 +5776,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     help: () => shortcutHelp.open(),
     recognize: () => recognizer.listen(),
     mini: () => $("music-mini-open")?.click(),
+    locate: () => locatePlaying(),
     refresh: () => {
       if (!$("music-refresh").disabled) $("music-refresh").click();
     },
@@ -5875,6 +6093,54 @@ export function createMusic({ invoke, onDownload, storage }) {
     notify: (message, error) => status(message, error),
   });
   wireMusicConnectionShortcuts(button, librarySidebar.stats);
+  // The ghost beside the greeting (music-ghost.js) is paused for now; GHOST turns it back on. Its clips are kept
+  // outside the app, in Deviload-tools/ghost/app-clips, and go back into assets/ghost when it returns.
+  if (GHOST) {
+    // The ghost beside the greeting enters once, then follows what the player is doing.
+    ghost = createMusicGhost({ onClick: () => ghost.play("happy") });
+    document.querySelector(".music-welcome")?.prepend(ghost.node);
+    ghost.play("appear");
+    syncGhost();
+    // The library panel opens into the ghost (it gets bumped) and closes under its shove.
+    {
+      const workspace = $("devil-music");
+      let panelOpen = workspace.classList.contains("library-panel-open");
+      // On the home page the ghost shoves the library shut. The click is never held back (the panel answers at
+      // once); the ghost darts to where the control was and lands its push as the panel starts to fold, so the panel
+      // seems to go from its shove.
+      let shoved = false;
+      document.addEventListener(
+        "click",
+        event => {
+          const control = event.target.closest?.(".music-library-panel-toggle, .music-library-collapse");
+          if (
+            !control ||
+            !panelOpen ||
+            workspace.dataset.view !== "home" ||
+            !ghost.node.getClientRects().length ||
+            matchMedia("(prefers-reduced-motion: reduce)").matches
+          )
+            return;
+          shoved = true;
+          setTimeout(() => (shoved = false), 400);
+          ghost.play("push");
+          ghost.shove(control, { impact: 150 });
+        },
+        true,
+      );
+      new MutationObserver(() => {
+        const open = workspace.classList.contains("library-panel-open");
+        if (open === panelOpen) return;
+        panelOpen = open;
+        // A shove already played its clip.
+        if (!open && shoved) return;
+        if (workspace.dataset.view === "home") {
+          ghost.play(open ? "bump" : "push");
+          if (open) ghost.knock();
+        }
+      }).observe(workspace, { attributes: true, attributeFilter: ["class"] });
+    }
+  }
   const shortcutsOpen = button(t("Keyboard shortcuts"), "keyboard", () => shortcutHelp.open());
   onLanguageChange(() => {
     shortcutsOpen.title = shortcutsOpen.ariaLabel = t("Keyboard shortcuts");
@@ -5902,6 +6168,7 @@ export function createMusic({ invoke, onDownload, storage }) {
       $("music-clip-open"),
       quickSpeed.badge,
       quickVibe.badge,
+      downloadBadgeNode(),
       cast.badge,
       cast.quickStop,
       musicRoom?.badge,
@@ -6148,5 +6415,7 @@ export function createMusic({ invoke, onDownload, storage }) {
       )
         load("home");
     },
+    // The downloader's tasks, each time it looks at its queue.
+    downloads: syncDownloads,
   };
 }

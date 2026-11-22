@@ -475,6 +475,10 @@ export function createMusicClip({
       }
       report({ enabled, ready, loading });
     },
+    // The song's video id, for Canvas: found once and shared with the clip.
+    find(item) {
+      return item?.id && !isLocalMusicId(item.id) ? lookup(item) : Promise.resolve(null);
+    },
     // A hand on the switch: find the video and let the engine start on it, so a click shows it sooner.
     prepare(item = getItem()) {
       if (enabled || !item?.id || isLocalMusicId(item.id)) return;

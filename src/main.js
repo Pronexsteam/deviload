@@ -280,6 +280,10 @@ function renderEngines() {
     ? t("Missing: {names}", { names: missingComponents.join(", ") })
     : t("Components ready");
 }
+// Whether the window itself is scrolled, kept from its scroll events: asking scrollTo to go to the top when it is
+// already there still lays the whole page out in the middle of switching pages.
+let windowScrolled = false;
+addEventListener("scroll", () => (windowScrolled = scrollY > 0), { passive: true });
 function navigate(page, focus = false) {
   // "Only Devil Music" keeps every route on the music page.
   if (document.documentElement.classList.contains("music-only")) page = "music";
@@ -297,7 +301,7 @@ function navigate(page, focus = false) {
     if (active) $(id).setAttribute("aria-current", "page");
     else $(id).removeAttribute("aria-current");
   }
-  window.scrollTo({ top: 0, behavior: "instant" });
+  if (windowScrolled) window.scrollTo({ top: 0, behavior: "instant" });
   if (focus)
     (page === "cinema" ? $("cinema-home-url") : page === "downloads" ? $("urls") : null)?.focus({
       preventScroll: true,
@@ -2550,6 +2554,7 @@ function render(data) {
   if (data.options) syncSavedAuthSource(data.options);
   // A task being removed is hidden at once; it is really removed only once its Undo is gone.
   jobs = (data.jobs || []).filter(job => !pendingRemovals.has(job.id));
+  devilMusic.downloads(jobs);
   if (noticeReady)
     for (const job of jobs) {
       const old = knownJobStates.get(job.id);

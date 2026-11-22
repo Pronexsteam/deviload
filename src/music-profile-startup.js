@@ -65,6 +65,10 @@ export function initializeMusic({ createMusic, ...options }) {
   onLanguageChange(render);
   start();
   return {
+    // The downloader's tasks, each time it looks at its queue.
+    downloads(jobs) {
+      music?.downloads?.(jobs);
+    },
     open(entering = true) {
       wantsOpen = true;
       music?.open(entering);

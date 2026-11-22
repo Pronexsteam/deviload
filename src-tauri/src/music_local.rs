@@ -45,11 +45,13 @@ fn fingerprint(path: &Path) -> Result<String,String> {
     loop{if CANCEL.load(Ordering::Relaxed){return Err("Local music scan cancelled.".into());}let n=file.read(&mut buffer).map_err(|e|e.to_string())?;if n==0{break;}hash.update(&buffer[..n]);}Ok(format!("{:x}",hash.finalize()))
 }
 // Spool bounded output to a temporary file so a damaged file cannot fill a pipe or memory.
-fn capture(cmd: &mut std::process::Command, limit: u64) -> Result<Vec<u8>,String> {
+fn capture(cmd: &mut std::process::Command, limit: u64) -> Result<Vec<u8>,String> { capture_until(cmd,limit,&CANCEL) }
+// Reading one file for the player must not stop because a library scan was cancelled earlier.
+fn capture_until(cmd: &mut std::process::Command, limit: u64, stop: &AtomicBool) -> Result<Vec<u8>,String> {
     let mut temp=tempfile::tempfile().map_err(|e|e.to_string())?;
     let mut child=cmd.stdin(Stdio::null()).stdout(Stdio::from(temp.try_clone().map_err(|e|e.to_string())?)).stderr(Stdio::null()).spawn().map_err(|e|e.to_string())?;crate::child_job::bind(&child);
     let start=Instant::now();let status=loop{
-        if CANCEL.load(Ordering::Relaxed)||start.elapsed()>Duration::from_secs(15)||temp.metadata().map_err(|e|e.to_string())?.len()>limit {let _=child.kill();let _=child.wait();return Err("Local music metadata could not be read.".into());}
+        if stop.load(Ordering::Relaxed)||start.elapsed()>Duration::from_secs(15)||temp.metadata().map_err(|e|e.to_string())?.len()>limit {let _=child.kill();let _=child.wait();return Err("Local music metadata could not be read.".into());}
         if let Some(status)=child.try_wait().map_err(|e|e.to_string())?{break status;}
         std::thread::sleep(Duration::from_millis(30));
     };
@@ -138,6 +140,45 @@ pub fn source(id:&str,dir:&Path)->Result<PathBuf,String>{
     let path=path.canonicalize().map_err(|_|"Local music file is missing. Add its new folder and scan again.")?;
     if !path.is_file(){return Err("Local music file is missing. Add its new folder and scan again.".into());}Ok(path)
 }
+// Lyrics kept with a local file. A .lrc beside the audio wins, because it is the copy people edit; otherwise the
+// file's own tag as ffprobe names it: ID3 USLT ("lyrics-eng"), Vorbis LYRICS or UNSYNCEDLYRICS, MP4 ©lyr ("lyrics").
+// Nothing leaves the computer.
+fn lyrics_key(key:&str)->bool { let key=key.to_ascii_lowercase(); key=="lyrics"||key.starts_with("lyrics-")||key=="unsyncedlyrics"||key=="unsynced lyrics"||key=="uslt" }
+fn lyrics_text(raw:&str)->Option<String>{
+    let text:String=raw.trim_start_matches('\u{feff}').replace("\r\n","\n").replace('\r',"\n").chars().filter(|c|*c=='\n'||*c=='\t'||!c.is_control()).take(200_000).collect();
+    (!text.trim().is_empty()).then(||text.trim().to_owned())
+}
+fn decode_lrc(bytes:&[u8])->String{
+    let wide=|big:bool|String::from_utf16_lossy(&bytes[2..].chunks_exact(2).map(|p|if big{u16::from_be_bytes([p[0],p[1]])}else{u16::from_le_bytes([p[0],p[1]])}).collect::<Vec<_>>());
+    match bytes { [0xff,0xfe,..]=>wide(false), [0xfe,0xff,..]=>wide(true), _=>String::from_utf8_lossy(bytes).into_owned() }
+}
+fn sidecar_lyrics(path:&Path)->Option<String>{
+    let lrc=path.with_extension("lrc");let meta=lrc.metadata().ok()?;
+    if !meta.is_file()||meta.len()>524_288 {return None;}
+    lyrics_text(&decode_lrc(&fs::read(lrc).ok()?))
+}
+static NEVER: AtomicBool = AtomicBool::new(false);
+fn tagged_lyrics(path:&Path)->Option<String>{
+    let probe=crate::binary("ffprobe").ok()?;
+    let bytes=capture_until(crate::command(&probe).args(["-v","error","-protocol_whitelist","file,pipe","-max_alloc","33554432","-show_entries","format_tags:stream_tags","-of","json"]).arg(path),1_048_576,&NEVER).ok()?;
+    let info:Value=serde_json::from_slice(&bytes).ok()?;
+    let mut tags=vec![&info["format"]["tags"]];
+    if let Some(streams)=info["streams"].as_array(){tags.extend(streams.iter().map(|s|&s["tags"]));}
+    tags.into_iter().filter_map(Value::as_object).flatten().filter(|(key,_)|lyrics_key(key)).find_map(|(_,value)|value.as_str().and_then(lyrics_text))
+}
+// Lines stamped [mm:ss.xx] are synced lyrics; anything else is shown as plain text.
+fn synced(text:&str)->bool {
+    text.lines().filter(|line|{let line=line.trim_start();line.starts_with('[')&&line[1..].split_once(':').is_some_and(|(m,rest)|!m.is_empty()&&m.bytes().all(|b|b.is_ascii_digit())&&rest.starts_with(|c:char|c.is_ascii_digit()))}).take(2).count()>=2
+}
+fn local_lyrics(path:&Path)->Value{
+    let (text,source)=match sidecar_lyrics(path){Some(text)=>(text,"lrc"),None=>match tagged_lyrics(path){Some(text)=>(text,"tag"),None=>return Value::Null}};
+    if synced(&text){json!({"synced":text,"plain":"","source":source})}else{json!({"plain":text,"synced":null,"source":source})}
+}
+#[tauri::command]
+pub async fn music_local_lyrics(engine:tauri::State<'_,crate::Engine>,id:String)->Result<Value,String>{
+    let dir=engine.dir.clone();
+    tauri::async_runtime::spawn_blocking(move||Ok(local_lyrics(&source(&id,&dir)?))).await.map_err(|e|e.to_string())?
+}
 pub fn artwork(app:&tauri::AppHandle,request:tauri::http::Request<Vec<u8>>)->tauri::http::Response<Vec<u8>>{
     let name=request.uri().path().trim_start_matches('/');let valid=name.strip_suffix(".jpg").is_some_and(|hash|local_id(&format!("local:{hash}")));
     let data=if valid {app.try_state::<crate::Engine>().and_then(|engine|{let path=engine.dir.join("music-local-art").join(name);if path.metadata().ok()?.len()>1_048_576{return None;}fs::read(path).ok()})}else{None};
@@ -204,5 +245,29 @@ mod lossless_tests {
         assert!(lossless_by_name(Path::new("C:/Music/a.FLAC")) && lossless_by_name(Path::new("b.wav")) && lossless_by_name(Path::new("c.aiff")));
         // An .m4a may hold AAC as well as ALAC, so only its codec decides.
         assert!(!lossless_by_name(Path::new("d.m4a")) && !lossless_by_name(Path::new("e.mp3")));
+    }
+}
+
+#[cfg(test)]
+mod lyrics_tests {
+    use super::*;
+    fn write(ffmpeg:&Path,file:&Path,tag:&str,value:&str){
+        let status=crate::command(ffmpeg).args(["-hide_banner","-loglevel","error","-nostdin","-y","-f","lavfi","-i","sine=frequency=440:duration=1","-metadata"]).arg(format!("{tag}={value}")).arg(file).status().unwrap();assert!(status.success());
+    }
+    #[test]
+    fn local_files_give_their_own_lyrics_and_an_lrc_beside_them_wins(){
+        let dir=tempfile::tempdir().unwrap();let ffmpeg=crate::binary("ffmpeg").unwrap();
+        for (name,tag) in [("song.mp3","lyrics"),("song.flac","LYRICS"),("song.ogg","UNSYNCEDLYRICS"),("song.m4a","lyrics")] {
+            let file=dir.path().join(name);write(&ffmpeg,&file,tag,"First line\nSecond line");
+            let lyrics=local_lyrics(&file);assert_eq!(lyrics["source"],"tag","{name}");assert_eq!(lyrics["plain"],"First line\nSecond line","{name}");
+        }
+        let file=dir.path().join("timed.flac");write(&ffmpeg,&file,"LYRICS","[00:01.00]One\n[00:02.50]Two");
+        assert_eq!(local_lyrics(&file)["synced"],"[00:01.00]One\n[00:02.50]Two");
+        let plain=dir.path().join("plain.flac");write(&ffmpeg,&plain,"title","No lyrics");assert!(local_lyrics(&plain).is_null());
+        let mut bom=vec![0xff,0xfe];for unit in "[00:03.00]\u{421}\u{43b}\u{43e}\u{432}\u{43e}\r\n[00:04.00]Next".encode_utf16(){bom.extend(unit.to_le_bytes());}
+        fs::write(dir.path().join("plain.lrc"),bom).unwrap();
+        let lyrics=local_lyrics(&plain);assert_eq!(lyrics["source"],"lrc");assert_eq!(lyrics["synced"],"[00:03.00]\u{421}\u{43b}\u{43e}\u{432}\u{43e}\n[00:04.00]Next");
+        assert!(!synced("[ar:Artist]\n[ti:Title]\nPlain words"));
+        assert!(lyrics_key("lyrics-eng")&&lyrics_key("UNSYNCEDLYRICS")&&!lyrics_key("title"));
     }
 }

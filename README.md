@@ -10,23 +10,28 @@ Discover and listen with Devil Music. Save with yt-dlp. Create with Devil Cut an
 <br>
 Built with Rust and Tauri 2 · English, Russian and Spanish
 
-[![Windows download](docs/downloads/windows.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.16.0/Deviload-2.16.0-setup.exe)
-[![macOS download](docs/downloads/macos.svg)](https://github.com/Pronexsteam/deviload/releases/download/v2.16.0/Deviload-2.16.0-macos-test.zip)
-[![Linux download](docs/downloads/linux.svg)](#install-on-linux)
-[![Devil Music for Android](docs/downloads/android.svg)](https://github.com/Pronexsteam/DevilMusic/releases/download/v0.0.18/Devil-Music-0.0.18-android.apk)
-
-Desktop downloads: **2.16.0** · Android: **0.0.18 preview**
-
 <p>
-<a href="https://github.com/Pronexsteam/deviload/releases/latest"><img src="https://img.shields.io/github/v/release/Pronexsteam/deviload?style=for-the-badge&amp;label=Release&amp;logo=github&amp;logoColor=white&amp;color=e8284c&amp;labelColor=161b22" height="40" alt="Latest release"></a>
-<a href="https://github.com/Pronexsteam/deviload/releases"><img src="https://img.shields.io/github/downloads/Pronexsteam/deviload/total?style=for-the-badge&amp;label=Downloads&amp;color=e8284c&amp;labelColor=161b22" height="40" alt="Total release downloads"></a>
-</p>
-<p>
-<a href="https://github.com/Pronexsteam/deviload"><img src="https://img.shields.io/github/stars/Pronexsteam/deviload?style=for-the-badge&amp;label=Stars&amp;logo=github&amp;logoColor=white&amp;color=30363d&amp;labelColor=161b22" height="28" alt="GitHub stars"></a>
-<a href="https://github.com/Pronexsteam/deviload/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Pronexsteam/deviload/ci.yml?style=for-the-badge&amp;label=Checks&amp;logo=githubactions&amp;logoColor=white&amp;labelColor=161b22" height="28" alt="CI checks"></a>
+<a href="https://github.com/Pronexsteam/deviload/releases/download/v2.17.0/Deviload-2.17.0-setup.exe"><img src="docs/downloads/windows.svg" width="264" alt="Windows download"></a>
+<a href="https://github.com/Pronexsteam/deviload/releases/download/v2.17.0/Deviload-2.17.0-macos-test.zip"><img src="docs/downloads/macos.svg" width="264" alt="macOS download"></a>
+<br>
+<a href="#install-on-linux"><img src="docs/downloads/linux.svg" width="264" alt="Linux download"></a>
+<a href="https://github.com/Pronexsteam/DevilMusic/releases/download/v0.0.18/Devil-Music-0.0.18-android.apk"><img src="docs/downloads/android.svg" width="264" alt="Devil Music for Android"></a>
 </p>
 
-[![Support on Ko-fi](docs/downloads/kofi.svg)](https://ko-fi.com/pronexsteam)
+Desktop downloads: **2.17.0** · Android: **0.0.18 preview**
+
+<p>
+<a href="https://github.com/Pronexsteam/deviload/releases/latest"><img src="https://img.shields.io/github/v/release/Pronexsteam/deviload?style=for-the-badge&amp;label=Release&amp;logo=github&amp;logoColor=white&amp;color=e8284c&amp;labelColor=161b22" height="48" alt="Latest release"></a>
+<a href="https://github.com/Pronexsteam/deviload/releases"><img src="https://img.shields.io/github/downloads/Pronexsteam/deviload/total?style=for-the-badge&amp;label=Downloads&amp;logo=github&amp;logoColor=white&amp;color=e8284c&amp;labelColor=161b22" height="48" alt="Total release downloads"></a>
+<a href="https://github.com/Pronexsteam/deviload"><img src="https://img.shields.io/github/stars/Pronexsteam/deviload?style=for-the-badge&amp;label=Stars&amp;logo=github&amp;logoColor=white&amp;color=e8284c&amp;labelColor=161b22" height="48" alt="GitHub stars"></a>
+<br>
+<a href="https://github.com/Pronexsteam/deviload/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Pronexsteam/deviload/ci.yml?style=for-the-badge&amp;label=Checks&amp;logo=githubactions&amp;logoColor=white&amp;labelColor=161b22" height="36" alt="CI checks"></a>
+</p>
+
+<p>
+<a href="https://hub.xerj.org/contributors/Pronexsteam"><img src="docs/downloads/xerj.svg" width="300" alt="Deviload on the XERJ Corpus Hub"></a>
+<a href="https://ko-fi.com/pronexsteam"><img src="docs/downloads/kofi.svg" width="300" alt="Support on Ko-fi"></a>
+</p>
 
 Deviload is free. If it saves you time, a coffee helps me keep building it.
 
@@ -100,9 +105,9 @@ Add a live link to record from that moment, then stop when you have what you nee
 
 ## Latest update
 
-**Deviload 2.16.0 brings sound moods, lyric videos, a map of your taste and lights that follow the music.** Play a song Slowed + reverb, as Nightcore or in 8D, turn a few sung lines into a vertical video with the song's sound, see the artists you listen to as a star chart, and light your keyboard and strips in the cover's colour on every beat through OpenRGB. Deviload closes to the tray, the queue saves as a playlist, lyrics can be searched, and listening rooms show who is listening and end cleanly.
+**Deviload 2.17.0 puts the song's video behind the music.** Canvas plays a looping piece of the official video behind the full player, and the new Live theme plays it behind the whole music page. Your own files show their lyrics from a .lrc beside them or from the file itself, the crosshair on the player bar or the J key finds the song playing, and songs you download from Devil Music show their progress on the bar. A song that will not start is skipped instead of stopping the music, and the player, page switches and the home refresh are smoother.
 
-Read the [2.16.0 release notes](.github/release-notes/v2.16.0.md).
+Read the [2.17.0 release notes](.github/release-notes/v2.17.0.md).
 
 ## Installation
 

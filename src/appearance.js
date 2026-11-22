@@ -7,6 +7,7 @@ export const THEMES = Object.freeze([
   "glass-light",
   "aurora",
   "prism",
+  "live",
   "noir",
   "vinyl",
   "paper",
@@ -17,6 +18,7 @@ const themeLabels = {
   "glass-light": "Light Liquid Glass",
   aurora: "Aurora",
   prism: "Prism",
+  live: "Live",
   noir: "Noir",
   vinyl: "Vinyl",
   paper: "Paper",
@@ -28,6 +30,8 @@ export const THEME_BASE = Object.freeze({
   vinyl: "prism",
   paper: "glass-light",
   custom: "ambient",
+  // Ambient with the playing song's video behind Devil Music instead of the cover wash.
+  live: "ambient",
 });
 export const themeBase = theme => THEME_BASE[theme] || theme;
 export const THEME_COLLECTION_KEY = "deviload-theme-collection";
@@ -213,7 +217,8 @@ export function wireAppearance({
       return;
     }
     if (event.key === "Tab") {
-      closeQuickMenu();
+      // The video settings below the themes are reached with Tab; only a menu of themes alone closes on it.
+      if (!quickMenu.querySelector("input, select")) closeQuickMenu();
       return;
     }
     const index = quickItems.indexOf(event.target);

@@ -1,6 +1,8 @@
 import { createMotionCover } from "./music-motion.js";
+import { createMusicCanvas, createCanvasSources, applyCanvasLook, readCanvasLook } from "./music-canvas.js";
 import { t, onLanguageChange } from "./i18n.js";
 import { flyFrom, fadeIn } from "./music-transitions.js";
+import { rendered } from "./rendered.js";
 import { createMusicClip } from "./music-clip.js";
 import { createClipView } from "./music-clip-view.js";
 
@@ -38,14 +40,18 @@ export function createNowPlaying({
   };
   const stage = make("dialog", "music-stage is-immersive"),
     background = make("div", "music-stage-background"),
+    canvasLayer = make("div", "music-stage-canvas"),
     header = make("header", "music-stage-header");
   stage.id = "music-now-playing";
   background.setAttribute("aria-hidden", "true");
+  canvasLayer.setAttribute("aria-hidden", "true");
   const brand = make("span", "music-stage-brand");
   brand.textContent = "Devil Music";
   const heading = make("span", "music-eyebrow"),
     close = button(t("Back to browsing"), "caret-down", () => stage.close());
-  header.append(brand, heading, close);
+  const canvasToggle = button(t("Canvas"), "film-strip", () => setCanvas(!canvas.enabled));
+  canvasToggle.classList.add("music-stage-tool", "music-canvas-toggle");
+  header.append(brand, heading, canvasToggle, close);
   close.classList.add("music-stage-tool");
   const layout = make("div", "music-stage-layout"),
     art = make("div", "music-stage-art"),
@@ -68,7 +74,7 @@ export function createNowPlaying({
   lyricsPanel.setAttribute("aria-label", t("Lyrics"));
   layout.append(lyricsPanel);
   art.inert = true;
-  stage.append(background, header, layout);
+  stage.append(background, canvasLayer, header, layout);
   document.body.append(stage);
   const expand = button(t("Now playing"), "arrows-out", () => open());
   expand.id = "music-expand";
@@ -183,8 +189,9 @@ export function createNowPlaying({
     invoke,
     convertFileSrc,
     getHost: () => (stage.open ? artwork : previewArt),
+    // With Canvas on, the full player shows the moving picture behind everything instead of in the cover.
     isVisible: () =>
-      stage.open || (!preview.hidden && !previewLyricsOn && preview.getClientRects().length > 0),
+      stage.open ? !canvas.enabled : !preview.hidden && !previewLyricsOn && rendered(preview),
     isPlaying: () => playing,
   });
 
@@ -249,12 +256,75 @@ export function createNowPlaying({
       clipView.setState(state);
     },
   });
+  const canvasSources = createCanvasSources({ invoke, convertFileSrc, findClip: item => clip.find(item) });
+  applyCanvasLook(readCanvasLook());
+  const canvas = createMusicCanvas({
+    host: canvasLayer,
+    sources: canvasSources,
+    isVisible: () => stage.open,
+    isPlaying: () => playing,
+  });
+  const canvasWatchers = new Set();
+  function setCanvas(value) {
+    canvas.setEnabled(value);
+    syncCanvasToggle();
+    for (const watcher of canvasWatchers) watcher(canvas.enabled);
+  }
+  function syncCanvasToggle() {
+    canvasToggle.setAttribute("aria-pressed", String(canvas.enabled));
+    canvasToggle.title = canvasToggle.ariaLabel = canvas.enabled
+      ? t("Canvas is on: a looping video plays behind the player. Press to turn it off.")
+      : t("Canvas is off. Press to play a looping video behind the player.");
+  }
+  syncCanvasToggle();
+  onLanguageChange(syncCanvasToggle);
+  // The Live theme: the same moving picture behind the whole Devil Music page while the full player is closed.
+  const pageLayer = make("div", "music-page-canvas");
+  pageLayer.setAttribute("aria-hidden", "true");
+  document.body.prepend(pageLayer);
+  const liveTheme = () => document.documentElement.dataset.variant === "live";
+  // The next song's video is prepared a few seconds into this one (after this one's own), so it is ready even
+  // when the song is skipped early. A prepared address stays usable for twenty minutes.
+  let upcomingTimer = 0,
+    upcoming = null;
+  function prepareUpcoming(item) {
+    if (item?.id === upcoming?.id) return;
+    upcoming = item || null;
+    clearTimeout(upcomingTimer);
+    upcomingTimer = setTimeout(() => {
+      if (upcoming && (canvas.enabled || liveTheme())) canvasSources.prepare(upcoming);
+    }, 3000);
+  }
+  const pageCanvas = createMusicCanvas({
+    host: pageLayer,
+    sources: canvasSources,
+    isVisible: () =>
+      liveTheme() && document.body.classList.contains("music-page") && !stage.open && !clipView.isOpen,
+    isPlaying: () => playing,
+    // A theme the person chose: the full player's Canvas switch does not turn it off.
+    storage: null,
+  });
+  document.addEventListener("deviload-theme-change", () => pageCanvas.update(current));
+  new MutationObserver(() => pageCanvas.update(current)).observe(document.body, {
+    attributes: true,
+    attributeFilter: ["class"],
+  });
   function showMedia(item) {
     motion.update(item);
+    canvas.update(item);
+    pageCanvas.update(item);
     if (clipView.isOpen) clipView.setItem(item);
     clip.update(item);
   }
-  const previewVisibility = new ResizeObserver(() => showMedia(current));
+  // Only appearing and disappearing matter to the moving cover, not every size the preview passes through while
+  // the library beside it glides open or shut.
+  let previewShown = null;
+  const previewVisibility = new ResizeObserver(([entry]) => {
+    const shown = entry.contentRect.width > 0 && entry.contentRect.height > 0;
+    if (shown === previewShown) return;
+    previewShown = shown;
+    showMedia(current);
+  });
   previewVisibility.observe(preview);
   function wake() {
     stage.classList.remove("music-stage-idle");
@@ -301,11 +371,13 @@ export function createNowPlaying({
     stage.showModal();
     if (previewLyricsOn && !queuePanel.hidden) lyrics?.unmount();
     showLyrics(true);
-    close.focus();
     showMedia(current);
     wake();
     fadeIn(stage);
+    // Every change to the page comes first and the one measurement last, so opening lays the page out once
+    // instead of after each step; the button is in view already, so focusing it needs no scroll.
     flyFrom(artwork, origin, { radius: "50%" });
+    close.focus({ preventScroll: true });
   }
   stage.addEventListener("close", () => {
     clearTimeout(idleTimer);
@@ -322,7 +394,7 @@ export function createNowPlaying({
     else artwork.replaceChildren(cover(current, "", 128));
     document.body.classList.remove("music-stage-open");
     showMedia(current);
-    returnFocus?.focus();
+    returnFocus?.focus({ preventScroll: true });
     fadeIn(dock, 200);
   });
   function labels() {
@@ -351,6 +423,16 @@ export function createNowPlaying({
   onLanguageChange(labels);
   const api = {
     open,
+    // Canvas in the full player, for the music settings.
+    canvas: {
+      get enabled() {
+        return canvas.enabled;
+      },
+      set: setCanvas,
+      watch(watcher) {
+        canvasWatchers.add(watcher);
+      },
+    },
     syncQueueVisibility() {
       if (stage.open) syncRail();
     },
@@ -391,6 +473,10 @@ export function createNowPlaying({
         scene.replaceChildren(cover(item, "", 320));
       }
       scene.hidden = !item;
+      // The video behind the player is looked up as the song starts, so it is ready when the player opens, and the
+      // next song's is prepared before this one ends.
+      if (trackChanged && item && (canvas.enabled || liveTheme())) canvasSources.prefetch(item);
+      prepareUpcoming(meta.upcoming);
       if (trackChanged) {
         notice.hidden = true;
         for (const node of [previewArt, info, artwork]) {
@@ -402,6 +488,8 @@ export function createNowPlaying({
       currentImage = item?.image || "";
       if (playing !== meta.playing) {
         playing = !!meta.playing;
+        canvas.sync();
+        pageCanvas.sync();
         wake();
       }
       const duration = Number(meta.duration) || 0;

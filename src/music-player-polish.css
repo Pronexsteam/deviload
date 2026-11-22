@@ -393,6 +393,11 @@
   scrollbar-color: color-mix(in srgb, var(--workspace-ink, #e6e9ef) 32%, transparent) transparent;
   scrollbar-gutter: stable;
 }
+/* The full player covers the window and its picture fills the box inside any scrollbar, so a reserved gutter showed
+   as a bare stripe down the right edge. The control pill scrolls sideways and needs no gutter either. */
+:root body :is(.music-stage, .music-stage .music-dock-extras) {
+  scrollbar-gutter: auto;
+}
 :root
   body
   :is(#devil-music, #music-now-playing, .music-queue-panel, .music-lyrics-dialog)
@@ -572,6 +577,19 @@
   height: 34px;
   padding: 7px;
   border-radius: 10px;
+}
+/* Badges carry words (Slowed, 1.25×, Casting), so they size to their text instead of the 34px icon square, which
+   pushed the word over the next button. */
+:root body #music-now-playing .music-dock-extras > :is(.music-speed-badge, .music-cast-badge) {
+  width: auto;
+  min-width: 0;
+  height: 28px;
+  padding: 2px 10px;
+  margin-inline: 2px 6px;
+  border-radius: 999px;
+}
+:root body #music-now-playing .music-dock-extras > :is(.music-speed-badge, .music-cast-badge)[hidden] {
+  display: none;
 }
 :root body #music-now-playing .music-dock-extras #music-mini-open {
   width: 34px;
@@ -1528,16 +1546,33 @@
   }
 }
 .music-now-info > .music-change-source:not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   width: fit-content;
   max-width: 100%;
-  padding: 3px 8px;
+  height: 22px;
+  margin-top: 3px;
+  padding: 0 9px 0 7px;
+  overflow: hidden;
   border: 1px solid var(--workspace-line);
-  border-radius: 6px;
+  border-radius: 999px;
   color: var(--workspace-ink);
   background: var(--workspace-hover);
   font: inherit;
-  font-size: 12px;
+  font-size: 11.5px;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
+}
+.music-now-info > .music-change-source > .icon {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+.music-now-info > .music-change-source > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .music-motion-cover.is-wide {
   object-fit: cover;
@@ -1545,4 +1580,125 @@
 /* A wide picture (a video track's frame) fills a square cover rather than showing black bars. */
 :root body :is(#devil-music, #music-now-playing, .music-dock) .music-art img.is-wide {
   object-fit: cover;
+}
+
+/* Canvas: the looping video behind the full player. It lies over the blurred cover wash and under everything else,
+   darkened where the cover, the controls and the lyrics are read. */
+:root body #music-now-playing .music-stage-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.9s ease;
+}
+:root body #music-now-playing .music-stage-canvas.is-ready {
+  opacity: 1;
+}
+:root body #music-now-playing .music-canvas-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: brightness(calc(1 - var(--canvas-dim, 0.3) * 0.85)) saturate(1.08);
+}
+:root body #music-now-playing .music-stage-canvas::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  /* No dimming means no shade either; the slider in music settings sets it. */
+  opacity: min(1, calc(var(--canvas-dim, 0.3) * 2.2));
+  background:
+    radial-gradient(ellipse at 30% 55%, rgb(0 0 0 / 0.12), rgb(0 0 0 / 0.5) 78%),
+    linear-gradient(to top, rgb(0 0 0 / 0.72), transparent 36%),
+    linear-gradient(to bottom, rgb(0 0 0 / 0.45), transparent 18%);
+}
+:root body #music-now-playing.has-lyrics .music-stage-canvas::after {
+  background:
+    radial-gradient(ellipse at 30% 55%, rgb(0 0 0 / 0.12), rgb(0 0 0 / 0.5) 78%),
+    linear-gradient(to left, rgb(0 0 0 / 0.55), transparent 55%),
+    linear-gradient(to top, rgb(0 0 0 / 0.72), transparent 36%),
+    linear-gradient(to bottom, rgb(0 0 0 / 0.45), transparent 18%);
+}
+:root body #music-now-playing .music-canvas-toggle {
+  margin-left: auto;
+}
+:root body #music-now-playing .music-canvas-toggle[aria-pressed="true"] {
+  border-color: rgb(255 255 255 / 0.34);
+  background: rgb(255 255 255 / 0.14);
+}
+:root body #music-now-playing .music-canvas-toggle[aria-pressed="false"] {
+  opacity: 0.55;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root body #music-now-playing .music-stage-canvas {
+    display: none;
+  }
+}
+/* No video for the song: its cover drifts slowly instead. */
+:root body #music-now-playing .music-canvas-cover {
+  object-fit: cover;
+  transform-origin: 50% 40%;
+  animation: music-canvas-drift 28s ease-in-out infinite alternate;
+}
+@keyframes music-canvas-drift {
+  from {
+    transform: scale(1.06) translate(-1.5%, 0.5%);
+  }
+  to {
+    transform: scale(1.18) translate(1.5%, -1.5%);
+  }
+}
+/* A video that starts playing fades in over the cover shown while it loaded. */
+.music-canvas-video {
+  transition: opacity 0.8s ease;
+}
+.music-canvas-video.is-incoming:not(.is-shown) {
+  opacity: 0;
+}
+/* The Devil Music ghost beside the greeting (music-ghost.js): two stacked clips that cross-fade. */
+.music-ghost {
+  position: relative;
+  flex: none;
+  width: 96px;
+  height: 96px;
+  /* Room on the right, so it never crowds the greeting. */
+  margin: -14px 14px -14px -8px;
+  cursor: pointer;
+}
+/* It leans toward the cursor and swells with the bass (transform set by music-ghost.js), glowing a little more. */
+.music-ghost-body {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  filter: drop-shadow(0 0 calc(var(--ghost-glow, 0) * 14px) rgb(150 110 255 / 0.55));
+  will-change: transform;
+}
+/* The ripple where the ghost's push lands on a control. */
+.music-ghost-ripple {
+  position: fixed;
+  z-index: 300;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  border-radius: 50%;
+  border: 2px solid rgb(190 160 255 / 0.85);
+  box-shadow:
+    0 0 14px rgb(150 110 255 / 0.6),
+    inset 0 0 10px rgb(120 170 255 / 0.4);
+  pointer-events: none;
+}
+.music-ghost-clip {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.music-ghost-clip.is-front {
+  opacity: 1;
 }

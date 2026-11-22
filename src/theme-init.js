@@ -1,7 +1,7 @@
 // Apply the new collection before first paint. The Ambient reset happens once.
 (() => {
-  const themes = ["ambient", "glass-light", "aurora", "prism", "noir", "vinyl", "paper", "custom"];
-  const bases = { noir: "prism", vinyl: "prism", paper: "glass-light", custom: "ambient" };
+  const themes = ["ambient", "glass-light", "aurora", "prism", "live", "noir", "vinyl", "paper", "custom"];
+  const bases = { noir: "prism", vinyl: "prism", paper: "glass-light", custom: "ambient", live: "ambient" };
   let theme = "ambient";
   try {
     if (localStorage.getItem("deviload-theme-collection") !== "ambient-aurora-prism-v1") {

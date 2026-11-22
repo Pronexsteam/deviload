@@ -1,11 +1,15 @@
 //! RGB lighting that follows the music, through OpenRGB's SDK server (one free program that drives most keyboards,
 //! mice, RAM, fans, strips and motherboards). Deviload connects on this computer only, puts each device into its
 //! direct mode, paints the colour it is given, and on stop gives every device back the effect it had before.
+//! When OpenRGB is installed but not running, Deviload starts it in the tray with its server on, and closes it again
+//! when the lights are turned off.
 //!
 //! The client speaks protocol version 0, which every OpenRGB server understands: it never asks for a newer version,
 //! so the server answers in the version-0 layout parsed here.
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -167,32 +171,177 @@ fn stop_session(session: &mut Session) {
     let _ = session.stream.flush();
 }
 
+/// The OpenRGB that Deviload started itself, so it can be closed again when the lights are turned off.
+static LAUNCHED: Mutex<Option<Child>> = Mutex::new(None);
+
+/// The program itself: "OpenRGB.exe" on Windows, a bare "openrgb" elsewhere, never its "OpenRGB.json" settings.
+fn is_openrgb(path: &Path) -> bool {
+    let program = match path.extension() {
+        None => true,
+        Some(ext) => ext.eq_ignore_ascii_case("exe"),
+    };
+    program && path.is_file() && path.file_stem().and_then(|s| s.to_str()).is_some_and(|s| s.eq_ignore_ascii_case("openrgb"))
+}
+
+/// OpenRGB inside [dir] or in a folder up to two levels down, such as an unpacked "OpenRGB_1.1_Windows_64/OpenRGB Windows 64-bit".
+fn openrgb_in(dir: &Path, depth: u8, found: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.flatten().take(400) {
+        let path = entry.path();
+        if is_openrgb(&path) && cfg!(windows) == path.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe")) { found.push(path); }
+        else if depth > 0 && path.is_dir() { openrgb_in(&path, depth - 1, found); }
+    }
+}
+
+/// Where OpenRGB usually lives: the file the person chose, the installer's folder, winget's packages, a portable
+/// zip unpacked in Downloads, on the desktop or in Documents, the Applications folder on a Mac, or the PATH. The
+/// newest copy wins.
+fn find_openrgb(chosen: Option<&str>) -> Option<PathBuf> {
+    if let Some(path) = chosen.map(PathBuf::from).filter(|p| is_openrgb(p)) { return Some(path); }
+    let mut found = Vec::new();
+    let mut fixed: Vec<PathBuf> = vec!["/Applications/OpenRGB.app/Contents/MacOS/OpenRGB".into(), "/usr/bin/openrgb".into(), "/usr/local/bin/openrgb".into()];
+    for var in ["ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"] {
+        if let Some(base) = std::env::var_os(var) { fixed.push(Path::new(&base).join("OpenRGB").join("OpenRGB.exe")); }
+    }
+    if let Some(local) = dirs::data_local_dir() { fixed.push(local.join("Programs").join("OpenRGB").join("OpenRGB.exe")); }
+    found.extend(fixed.into_iter().filter(|p| is_openrgb(p)));
+    if let Some(path) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path) {
+            for name in ["openrgb", "OpenRGB.exe"] { let p = dir.join(name); if is_openrgb(&p) { found.push(p); } }
+        }
+    }
+    let mut roots: Vec<PathBuf> = [dirs::download_dir(), dirs::desktop_dir(), dirs::document_dir(), dirs::home_dir()].into_iter().flatten().collect();
+    if let Some(local) = dirs::data_local_dir() { roots.push(local.join("Microsoft").join("WinGet").join("Packages")); }
+    for root in roots {
+        let Ok(entries) = std::fs::read_dir(&root) else { continue };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let named = entry.file_name().to_string_lossy().to_ascii_lowercase().contains("openrgb");
+            if named && path.is_dir() { openrgb_in(&path, 2, &mut found); }
+        }
+    }
+    found.into_iter().max_by_key(|p| p.metadata().and_then(|m| m.modified()).ok())
+}
+
+fn hidden(program: &Path) -> Command {
+    let mut command = Command::new(program);
+    #[cfg(windows)] {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000);
+    }
+    command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    command
+}
+
+/// An OpenRGB that someone opened by hand. Starting a second one would fight it over the same devices.
+fn openrgb_running() -> bool {
+    if cfg!(windows) {
+        hidden(Path::new("tasklist")).stdout(Stdio::piped()).args(["/FI", "IMAGENAME eq OpenRGB.exe", "/NH"]).output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).to_ascii_lowercase().contains("openrgb.exe")).unwrap_or(false)
+    } else {
+        hidden(Path::new("pgrep")).args(["-xi", "openrgb"]).status().map(|s| s.success()).unwrap_or(false)
+    }
+}
+
+fn launched_alive() -> bool {
+    let mut slot = LAUNCHED.lock().unwrap();
+    match slot.as_mut().map(|child| child.try_wait()) {
+        Some(Ok(None)) => true,
+        Some(_) => { *slot = None; false }
+        None => false,
+    }
+}
+
+/// Starts OpenRGB in the tray with its SDK server on, the way it would be set up by hand.
+fn launch(path: &Path, port: u16) -> Result<(), String> {
+    let mut command = hidden(path);
+    command.args(["--startminimized", "--server", "--server-port", &port.to_string(), "--noautoconnect"]);
+    if let Some(dir) = path.parent() { command.current_dir(dir); }
+    let child = command.spawn().map_err(|_| "missing")?;
+    *LAUNCHED.lock().unwrap() = Some(child);
+    Ok(())
+}
+
+/// Closes the OpenRGB that Deviload started, after the devices had a moment to take their own effects back.
+fn close_launched() {
+    if let Some(mut child) = LAUNCHED.lock().unwrap().take() {
+        std::thread::sleep(Duration::from_millis(300));
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+}
+
+/// Connects to OpenRGB, starting it first when it is installed but not running. Right after a start the server may
+/// answer before the devices are found, so it is asked again until some show up.
+fn connect(port: u16, chosen: Option<&str>) -> Result<(Session, Option<PathBuf>), String> {
+    let address = ("127.0.0.1", port).to_socket_addrs().map_err(|_| "unreachable".to_string())?.next().ok_or("unreachable")?;
+    if let Ok(session) = open(address) { return Ok((session, None)); }
+    let mut started = None;
+    if !launched_alive() {
+        if openrgb_running() { return Err("server_off".into()); }
+        let path = find_openrgb(chosen).ok_or("missing")?;
+        launch(&path, port)?;
+        started = Some(path);
+    }
+    let mut last = None;
+    for _ in 0..40 {
+        std::thread::sleep(Duration::from_millis(500));
+        if !launched_alive() { return Err("unreachable".into()); }
+        if let Ok(mut session) = open(address) {
+            if session.devices.iter().any(|d| d.leds > 0) { return Ok((session, started)); }
+            stop_session(&mut session);
+            last = Some(session);
+        }
+    }
+    last.map(|session| (session, started)).ok_or_else(|| "starting".into())
+}
+
 #[derive(serde::Serialize)]
 pub struct LightingStatus {
     connected: bool,
     devices: Vec<String>,
     error: String,
+    /// The OpenRGB Deviload found and started, remembered so the next start does not have to look for it.
+    openrgb: Option<String>,
 }
 
-/// Connects to OpenRGB on this computer (port 6742 unless given) and takes over its devices.
+/// Connects to OpenRGB on this computer (port 6742 unless given) and takes over its devices, starting OpenRGB
+/// first when it is not running ([openrgb] is a copy the person chose).
 #[tauri::command]
-pub async fn music_lighting_start(window: tauri::WebviewWindow, port: Option<u16>) -> LightingStatus {
-    if window.label() != "main" { return LightingStatus { connected: false, devices: vec![], error: "protocol".into() }; }
+pub async fn music_lighting_start(window: tauri::WebviewWindow, port: Option<u16>, openrgb: Option<String>) -> LightingStatus {
+    if window.label() != "main" { return LightingStatus { connected: false, devices: vec![], error: "protocol".into(), openrgb: None }; }
     let port = port.unwrap_or(6742);
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        let address = ("127.0.0.1", port).to_socket_addrs().map_err(|_| "unreachable".to_string())?.next().ok_or("unreachable")?;
-        open(address)
-    }).await.unwrap_or_else(|_| Err("unreachable".into()));
+    let result = tauri::async_runtime::spawn_blocking(move || connect(port, openrgb.as_deref()))
+        .await.unwrap_or_else(|_| Err("unreachable".into()));
     let mut slot = SESSION.lock().unwrap();
     if let Some(old) = slot.as_mut() { stop_session(old); }
     match result {
-        Ok(session) => {
+        Ok((session, started)) => {
             let devices = session.devices.iter().filter(|d| d.leds > 0).map(|d| d.name.clone()).collect();
             *slot = Some(session);
-            LightingStatus { connected: true, devices, error: String::new() }
+            LightingStatus { connected: true, devices, error: String::new(), openrgb: started.map(|p| p.to_string_lossy().into_owned()) }
         }
-        Err(error) => { *slot = None; LightingStatus { connected: false, devices: vec![], error } }
+        Err(error) => { *slot = None; LightingStatus { connected: false, devices: vec![], error, openrgb: None } }
     }
+}
+
+/// Lets the person point at OpenRGB when it lives somewhere Deviload does not look.
+#[tauri::command]
+pub async fn music_lighting_choose_openrgb(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Option<String> {
+    use tauri_plugin_dialog::DialogExt;
+    if window.label() != "main" { return None; }
+    tauri::async_runtime::spawn_blocking(move || {
+        let dialog = app.dialog().file().set_title("OpenRGB");
+        let dialog = if cfg!(windows) { dialog.add_filter("OpenRGB", &["exe"]) } else { dialog };
+        let path = dialog.blocking_pick_file()?.into_path().ok()?;
+        is_openrgb(&path).then(|| path.to_string_lossy().into_owned())
+    }).await.ok().flatten()
+}
+
+/// OpenRGB's download page, for when it is not installed.
+#[tauri::command]
+pub fn music_lighting_get_openrgb() -> Result<(), String> {
+    crate::open_in_browser("https://openrgb.org/releases.html").map_err(|e| e.to_string())
 }
 
 /// Paints every device one colour. Called many times a second while music plays; a lost connection ends the session.
@@ -208,10 +357,11 @@ pub fn music_lighting_set(r: u8, g: u8, b: u8) -> bool {
     true
 }
 
-/// Gives each device its own effect back and disconnects.
+/// Gives each device its own effect back and disconnects, closing OpenRGB if Deviload was the one that started it.
 #[tauri::command]
 pub fn music_lighting_stop() {
     if let Some(mut session) = SESSION.lock().unwrap().take() { stop_session(&mut session); }
+    close_launched();
 }
 
 /// On exit the lights go back to what they were.
@@ -319,6 +469,24 @@ mod tests {
         let seen = worker.join().unwrap();
         let ids: Vec<u32> = seen.iter().map(|(_, id)| *id).collect();
         assert_eq!(ids, vec![SET_CLIENT_NAME, REQUEST_CONTROLLER_COUNT, REQUEST_CONTROLLER_DATA, SET_CUSTOM_MODE, UPDATE_LEDS, UPDATE_MODE]);
+    }
+
+    #[test]
+    fn a_portable_openrgb_is_found_inside_its_unpacked_folders() {
+        let root = tempfile::tempdir().unwrap();
+        let name = if cfg!(windows) { "OpenRGB.exe" } else { "openrgb" };
+        let inner = root.path().join("OpenRGB_1.1_Windows_64").join("OpenRGB Windows 64-bit");
+        std::fs::create_dir_all(&inner).unwrap();
+        std::fs::write(inner.join(name), b"").unwrap();
+        std::fs::write(inner.join("OpenRGB.json"), b"{}").unwrap();
+        std::fs::write(root.path().join("NotOpenRGB.exe"), b"").unwrap();
+        let mut found = Vec::new();
+        openrgb_in(root.path(), 2, &mut found);
+        assert_eq!(found, vec![inner.join(name)]);
+        assert!(is_openrgb(&inner.join(name)));
+        // Checked where no copy is: a Mac's disk ignores case, so "OpenRGB" beside "openrgb" would be that file.
+        assert!(!is_openrgb(&root.path().join("OpenRGB")), "a missing file is not OpenRGB");
+        assert_eq!(find_openrgb(Some(inner.join(name).to_str().unwrap())), Some(inner.join(name)), "a chosen copy wins");
     }
 
     #[test]
