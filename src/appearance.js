@@ -182,7 +182,11 @@ export function wireAppearance({
     quickMenu.style.left =
       Math.max(12, Math.min(bounds.right - width, window.innerWidth - width - 12)) + "px";
     quickMenu.style.top = top + "px";
-    quickMenu.style.maxHeight = Math.max(80, window.innerHeight - top - 12) + "px";
+    // It ends above the player bar when one is showing, and scrolls inside instead of running under it.
+    const dock = document.querySelector?.(".music-dock"),
+      dockTop = dock?.getClientRects?.().length ? dock.getBoundingClientRect().top : window.innerHeight;
+    const floor = dockTop > top + 160 ? dockTop : window.innerHeight;
+    quickMenu.style.maxHeight = Math.max(80, floor - top - 12) + "px";
   };
   const closeQuickMenu = (returnFocus = false) => {
     if (!quickOpen) return;

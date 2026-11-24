@@ -3532,7 +3532,7 @@ function renderMediaLibrary() {
         t("Open a QR code to send this file to a phone"),
         "phone-qr",
       );
-    addAction(moreActions, t("Organize"), "quiet", () => openLibraryEdit(job));
+    addAction(moreActions, t("Organize"), "quiet", () => openLibraryEdit(job), "", "pencil-simple");
     if (!missing)
       addAction(
         moreActions,
@@ -3565,7 +3565,8 @@ function renderMediaLibrary() {
         t("MP4, MP3, GIF or a smaller file"),
         "arrows-left-right",
       );
-      if (isAudioJob(job)) addAction(moreActions, t("Audio"), "quiet", () => openAudioTools(job.id));
+      if (isAudioJob(job))
+        addAction(moreActions, t("Audio"), "quiet", () => openAudioTools(job.id), "", "music-notes");
       else if (isVideoJob(job))
         addAction(moreActions, "Devil Cut", "quiet", () => devilCut.open(job.id), "", "scissors");
     }

@@ -410,7 +410,7 @@
 :root[data-theme] body main:not([data-page="music"]) :is(.library-more-actions, .queue-tools-panel),
 :root[data-theme] body dialog:not([class*="music"], .music-wrapped-dialog) {
   border: 1px solid color-mix(in srgb, var(--glass-ink) 18%, transparent);
-  background: color-mix(in srgb, var(--theme-panel, #15171c) 78%, transparent);
+  background: color-mix(in srgb, var(--theme-panel, #15171c) 92%, transparent);
   backdrop-filter: blur(22px) saturate(1.4);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.12),
@@ -544,4 +544,170 @@
   :root[data-theme] body.convert-page .convert-wheel-track::after {
     animation: none;
   }
+}
+
+/* Menus that list actions (More on a download or a library card): plain rows in one column with their icons
+   aligned, not a stack of separate pills, and wide enough for the longest label on one line. */
+:root[data-theme] body main .page-content:not(.page-music) .library-more-actions {
+  display: grid;
+  gap: 2px;
+  min-width: 220px;
+  padding: 6px;
+  border-radius: 16px;
+}
+:root[data-theme]
+  body
+  main
+  .page-content:not(.page-music)
+  .library-more-actions
+  > :is(button, button.quiet, button.outline) {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 12px;
+  border-color: transparent;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--glass-ink);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  translate: none;
+}
+:root[data-theme]
+  body
+  main
+  .page-content:not(.page-music)
+  .library-more-actions
+  > :is(button, button.quiet, button.outline):is(:hover, :focus-visible) {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--glass-ink) 10%, transparent);
+  box-shadow: none;
+  translate: none;
+}
+:root[data-theme] body main .page-content:not(.page-music) .library-more-actions > button::after {
+  display: none;
+}
+
+/* Settings: the section list on the left is a plain list; the open section is lit glass. */
+:root[data-theme] body dialog.app-settings-dialog .settings-nav {
+  width: 176px;
+  gap: 2px;
+}
+:root[data-theme] body dialog.app-settings-dialog .settings-nav > :is(button, button.quiet) {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 12px;
+  border-color: transparent;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  color: color-mix(in srgb, var(--glass-ink) 78%, transparent);
+  font-size: 12.5px;
+  line-height: 1.25;
+  text-align: left;
+  translate: none;
+}
+:root[data-theme] body dialog.app-settings-dialog .settings-nav > :is(button, button.quiet):hover {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--glass-ink) 8%, transparent);
+  box-shadow: none;
+  color: var(--glass-ink);
+  translate: none;
+}
+:root[data-theme]
+  body
+  dialog.app-settings-dialog
+  .settings-nav
+  > :is(button, button.quiet)[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--glass-ink) 16%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-ink) 16%, transparent),
+    color-mix(in srgb, var(--glass-ink) 7%, transparent)
+  );
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.16);
+  color: var(--glass-ink);
+}
+:root[data-theme] body dialog.app-settings-dialog .settings-nav > button::after {
+  display: none;
+}
+:root[data-theme] body dialog.app-settings-dialog > .settings-group {
+  margin-left: 196px;
+}
+
+/* The theme menu is taller than a small window: it scrolls inside (appearance.js ends it above the player bar). */
+:root[data-theme] body #quick-theme-menu {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Music settings: the song notification reads as a switch with its name and, under it, what it does; the local
+   control API's buttons look like buttons. */
+:root[data-theme] body #music-preferences .music-song-notice {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 10px;
+  text-align: left;
+}
+:root[data-theme] body #music-preferences .music-song-notice > span {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  justify-items: start;
+  text-align: left;
+}
+:root[data-theme] body #music-preferences .music-song-notice small {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  opacity: 0.75;
+}
+:root[data-theme] body #music-preferences .music-control-api-actions > button {
+  min-height: 32px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--glass-ink) 22%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--glass-ink) 8%, transparent);
+  color: var(--glass-ink);
+  font-weight: 650;
+  cursor: pointer;
+}
+:root[data-theme] body #music-preferences .music-control-api-actions > button:hover {
+  background: color-mix(in srgb, var(--glass-ink) 14%, transparent);
+}
+
+/* "What to follow" in the Watching window: the same glass track and lit choice as the filters. */
+:root[data-theme] body dialog#watch-dialog .watch-mode {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--glass-ink) 12%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--glass-ink) 5%, transparent);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.15);
+}
+:root[data-theme] body dialog#watch-dialog .watch-mode > button {
+  min-height: 30px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: color-mix(in srgb, var(--glass-ink) 75%, transparent);
+  font-weight: 650;
+}
+:root[data-theme] body dialog#watch-dialog .watch-mode > button.selected {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-ink) 20%, transparent),
+    color-mix(in srgb, var(--glass-ink) 9%, transparent)
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.26),
+    inset 0 0 0 1px color-mix(in srgb, var(--glass-accent) 50%, transparent);
+  color: var(--glass-ink);
 }
