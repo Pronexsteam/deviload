@@ -1,4 +1,4 @@
-import { t, onLanguageChange, errorText } from "./i18n.js";
+import { t, onLanguageChange, errorText, language } from "./i18n.js";
 import { exportMusicProfile, importMusicProfile } from "./music-profile.js";
 import { readCollectionTransfer, mergeCollectionTransfer } from "./music-collection-transfer.js";
 import { exportLibrary, libraryLists } from "./music-library-export.js";
@@ -121,6 +121,104 @@ export function wireMusicProfile({ invoke, read, restore }) {
       status.textContent = t("Library exported.");
     }),
   );
+  // Automatic backups: a copy of the profile in the app's folder once a week, the newest six kept, and any of
+  // them brought back through the same preview as an imported file.
+  const AUTO_KEY = "deviload-music-backup-auto",
+    WEEK = 7 * 24 * 60 * 60;
+  const backup = document.createElement("div"),
+    autoLabel = document.createElement("label"),
+    auto = document.createElement("input"),
+    autoText = document.createElement("span"),
+    last = document.createElement("p"),
+    copiesRow = document.createElement("div"),
+    copiesSelect = document.createElement("select"),
+    restoreCopy = document.createElement("button"),
+    backupNow = document.createElement("button");
+  backup.className = "music-backup";
+  autoLabel.className = "checkline";
+  auto.type = "checkbox";
+  autoLabel.append(auto, autoText);
+  last.className = "music-backup-last";
+  copiesRow.className = "setting-actions";
+  restoreCopy.type = backupNow.type = "button";
+  restoreCopy.className = backupNow.className = "outline small";
+  copiesRow.append(copiesSelect, restoreCopy, backupNow);
+  backup.append(autoLabel, last, copiesRow);
+  shelf.after(backup);
+  let copies = [];
+  const autoOn = () => {
+    try {
+      return localStorage.getItem(AUTO_KEY) !== "off";
+    } catch {
+      return true;
+    }
+  };
+  auto.checked = autoOn();
+  auto.addEventListener("change", () => {
+    try {
+      localStorage.setItem(AUTO_KEY, auto.checked ? "on" : "off");
+    } catch {
+      /* The choice lasts for this session. */
+    }
+  });
+  const day = seconds =>
+    new Date(seconds * 1000).toLocaleDateString(language(), {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  function backupText() {
+    autoText.textContent = t("Back up my music every week");
+    restoreCopy.textContent = t("Restore this backup");
+    backupNow.textContent = t("Back up now");
+    copiesSelect.setAttribute("aria-label", t("Backups"));
+    last.textContent = copies.length
+      ? t("Last backup: {date} · kept: {count}", {
+          date: day(copies[0].savedAt),
+          count: copies.length,
+        })
+      : t("No backups yet.");
+    for (const [index, option] of [...copiesSelect.options].entries())
+      option.textContent = day(copies[index].savedAt);
+    copiesSelect.hidden = restoreCopy.hidden = !copies.length;
+  }
+  async function listCopies() {
+    try {
+      copies = (await invoke("music_backup_list")) || [];
+    } catch {
+      copies = [];
+    }
+    copiesSelect.replaceChildren(...copies.map(copy => new Option("", copy.name)));
+    backupText();
+  }
+  async function saveCopy() {
+    const { saved, taste } = read();
+    await invoke("music_backup_save", { text: exportMusicProfile(saved, taste) });
+    await listCopies();
+  }
+  onLanguageChange(backupText);
+  backupNow.addEventListener("click", () =>
+    run(async () => {
+      await saveCopy();
+      status.textContent = t("Backup saved.");
+    }),
+  );
+  restoreCopy.addEventListener("click", () =>
+    run(async () => {
+      const source = await invoke("music_backup_read", { name: copiesSelect.value });
+      collection = null;
+      candidate = importMusicProfile(source);
+      describe();
+      preview.hidden = false;
+    }),
+  );
+  // The weekly copy is made quietly a little after start, so it never slows the app down as it opens.
+  if (window.__TAURI__?.core?.invoke)
+    setTimeout(async () => {
+      await listCopies();
+      const newest = copies[0]?.savedAt || 0;
+      if (autoOn() && Date.now() / 1000 - newest >= WEEK) await saveCopy().catch(() => {});
+    }, 20000);
   importing.addEventListener("click", () => file.click());
   file.addEventListener("change", () =>
     run(async () => {

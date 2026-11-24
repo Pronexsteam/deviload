@@ -138,6 +138,9 @@ import { wireMusicImport } from "./music-import-ui.js";
 import { mergeMusicImport, createLibraryIndex } from "./music-import-model.js";
 import { enhanceMusicShelves } from "./music-shelf-navigation.js";
 import { createMusicLibrarySidebar } from "./music-library-sidebar.js";
+import { createUnavailableSongs } from "./music-unavailable.js";
+import { aiArtistFilter } from "./music-ai-filter.js";
+import { wireAiArtists } from "./music-ai-artists.js";
 
 const $ = id => document.getElementById(id);
 const moods = {
@@ -327,6 +330,12 @@ export function createMusic({ invoke, onDownload, storage }) {
     playbackSourceContext = { kind: "restored" };
   const recommendationSession = createRecommendationSession(),
     automaticQueueIds = new Set();
+  // Songs that would not play for a reason of their own are shown faded in every list.
+  const unavailableSongs = createUnavailableSongs({
+    storage,
+    describe: reason => t("Would not play last time: {reason}", { reason: t(reason) }),
+  });
+  wireAiArtists({ invoke, storage });
   const publicDiscovery = createMusicDiscovery({ invoke });
   let publicGeneration = 0;
   const recommendationNodes = new Map(),
@@ -2412,6 +2421,7 @@ export function createMusic({ invoke, onDownload, storage }) {
       source: item => resolveRecordingSource(item, saved.sourceBindings),
       artistKey: canonicalArtistKey,
       allowed: items => recommendationSession.allowed(items),
+      excluded: key => aiArtistFilter.has(key),
     });
   }
   function plannedNext() {
@@ -3047,6 +3057,7 @@ export function createMusic({ invoke, onDownload, storage }) {
       if (token !== playRequest || resolvedTrack !== id) return;
       needsRefresh = false;
       unplayableInARow = 0;
+      unavailableSongs.clear(current.id);
       artist.textContent = displaySubtitle(current) || "YouTube Music";
       status("");
       if (!musicRoom?.isGuest()) recommendationSession.recover(current.id);
@@ -3326,6 +3337,13 @@ export function createMusic({ invoke, onDownload, storage }) {
   let unplayableInARow = 0;
   function skipUnplayable(item, { code, message = "" } = {}) {
     const ownFault = UNPLAYABLE.has(code) || (code === "restricted" && songRestriction.test(message));
+    // Lists fade a song only for what certainly belongs to it: undecodable audio or a named restriction,
+    // not a vague failure that may pass on the next try.
+    if (
+      item &&
+      (["decode", "unsupported"].includes(code) || (code === "restricted" && songRestriction.test(message)))
+    )
+      unavailableSongs.mark(item.id, message);
     if (!item || !ownFault || unplayableInARow >= 3 || navigator.onLine === false) return false;
     if (playbackOrigin === "room" || roomControlsPlayback() || musicRoom?.isGuest()) return false;
     const next = plannedNext();
@@ -3928,6 +3946,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     if (item.kind === "song") {
       card.dataset.trackId = item.id;
       markPlayback(card, item.id);
+      unavailableSongs.flag(card, item.id);
     }
     contextActions.set(card, () =>
       item.kind === "song"
@@ -4956,6 +4975,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     row.classList.toggle("music-album-track", albumRow);
     row.dataset.trackId = item.id;
     markPlayback(row, item.id);
+    unavailableSongs.flag(row, item.id);
     const select = button(
       t("Play {title}", { title: item.title }),
       null,

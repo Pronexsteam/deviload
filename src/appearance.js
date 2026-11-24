@@ -139,11 +139,16 @@ export function wireAppearance({
   }
   let sessionOnly = false;
   const updateStatus = () => {
-    const message = sessionOnly
-      ? t("Theme applied for this session. Storage is unavailable.")
-      : t("Your theme is saved on this device.");
-    if (status) status.textContent = message;
-    if (quickStatus) quickStatus.textContent = message;
+    // Said only when something is wrong: a theme that is simply remembered needs no note.
+    const message = sessionOnly ? t("Theme applied for this session. Storage is unavailable.") : "";
+    if (status) {
+      status.textContent = message;
+      status.hidden = !message;
+    }
+    if (quickStatus) {
+      quickStatus.textContent = message;
+      quickStatus.hidden = !message;
+    }
     if (quickLabel) quickLabel.textContent = t("Themes");
     quickButton?.setAttribute("aria-label", t("Themes"));
     for (const item of quickItems) {

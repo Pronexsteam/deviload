@@ -48,6 +48,15 @@ test("lyrics romanize Cyrillic, Greek, Hangul and kana but leave Han characters"
   assert.equal(lyricsLanguage([{text:"\u0457\u0436\u0430\u043a"}]),"uk");
 });
 
+test("Chinese lyrics are romanized with the pinyin the app supplies, Japanese kanji still are not",()=>{
+  const readings=new Map([["\u6211","w\u01d2"],["\u7231","\u00e0i"],["\u4f60","n\u01d0"]]);
+  assert.equal(romanize("\u6211\u7231\u4f60",readings),"w\u01d2 \u00e0i n\u01d0");
+  assert.equal(romanize("\u6211\u7231\u4f60 baby",readings),"w\u01d2 \u00e0i n\u01d0 baby");
+  assert.equal(romanize("\u6211\u7231\u4f60"),"","without readings Han lines stay as they are");
+  assert.equal(lyricsExtrasFor([{text:"\u6211\u7231\u4f60"}],"ru").romanize,true);
+  assert.equal(lyricsExtrasFor([{text:"\u6771\u4eac\u306e\u591c"}],"ru").romanize,false,"Japanese kanji lines are not offered");
+});
+
 test("lyrics offer translation only for languages the listener may not read",()=>{
   const russian=[{text:"\u041f\u0440\u0438\u0432\u0435\u0442"}],korean=[{text:"\uc0ac\ub791\ud574"}],english=[{text:"you and me"}];
   assert.deepEqual(lyricsExtrasFor(russian,"ru"),{source:"ru",romanize:false,translate:false});

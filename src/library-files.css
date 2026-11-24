@@ -1,0 +1,64 @@
+/* Devil Library: files that are gone, collection and tag choices in Organize, and the Watching button
+   beside the queue search. Colours come from the current theme's text colour, so light themes work too. */
+.media-library-item.is-missing .media-library-art > :is(img, .media-art-symbol) {
+  filter: grayscale(1);
+  opacity: 0.4;
+}
+.media-library-item.is-missing .media-library-info h3 {
+  opacity: 0.7;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.media-library-missing {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #c4313fe6;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+[data-view="list"] .media-library-missing {
+  position: static;
+  align-self: center;
+  margin-left: 6px;
+}
+.library-edit-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.library-edit-chips[hidden] {
+  display: none;
+}
+.library-edit-dialog button.library-edit-chip {
+  min-height: 0;
+  padding: 3px 10px;
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.library-edit-dialog button.library-edit-chip:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+:root body .library-edit-dialog .library-edit-chip[aria-pressed="true"] {
+  border-color: currentColor;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  color: inherit;
+}
+.library-edit-dialog .library-edit-chip[aria-pressed="true"]::before {
+  content: "✓ ";
+}
+.library-tools > .watch-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}

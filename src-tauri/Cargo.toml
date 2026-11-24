@@ -40,6 +40,7 @@ tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
 trash = "5"
 discord-rich-presence = "1.1"
+pinyin = { version = "0.11", default-features = false, features = ["plain", "with_tone"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

@@ -12,7 +12,28 @@ permissions:
   contents: write
 
 jobs:
+  # A draft release with its notes comes first, so the three systems build at the same time and each
+  # uploads its own packages into it; the feed job publishes it only when all of them succeeded.
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check that the tag matches the app version
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then echo "Tag $GITHUB_REF_NAME does not match version $version"; exit 1; fi
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Hand-written notes in .github/release-notes/<tag>.md win over generated ones.
+          notes=".github/release-notes/${GITHUB_REF_NAME}.md"
+          if [ -f "$notes" ]; then source=(--notes-file "$notes"); else source=(--generate-notes); fi
+          gh release create "$GITHUB_REF_NAME" --draft --title "Deviload $GITHUB_REF_NAME" "${source[@]}" --repo "$GITHUB_REPOSITORY"
+
   windows:
+    needs: prepare
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -41,17 +62,14 @@ jobs:
           DEVILOAD_LASTFM_KEY: ${{ secrets.LASTFM_API_KEY }}
           DEVILOAD_LASTFM_SECRET: ${{ secrets.LASTFM_SHARED_SECRET }}
         run: ./scripts/package.ps1
-      - name: Publish the release
+      - name: Upload the Windows packages
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $files = Get-ChildItem dist -File | Where-Object { $_.Extension -in '.exe', '.zip', '.json' } | ForEach-Object { $_.FullName }
-          # Hand-written notes in .github/release-notes/<tag>.md win over generated ones.
-          $notes = ".github/release-notes/${{ github.ref_name }}.md"
-          $source = @(if (Test-Path $notes) { '--notes-file'; $notes } else { '--generate-notes' })
-          gh release create "${{ github.ref_name }}" --draft --title "Deviload ${{ github.ref_name }}" @source @files
-          if ($LASTEXITCODE -ne 0) { throw "Release draft creation failed with exit code $LASTEXITCODE" }
+          gh release upload "${{ github.ref_name }}" @files
+          if ($LASTEXITCODE -ne 0) { throw "Uploading the Windows packages failed with exit code $LASTEXITCODE" }
       # The Windows part of the update feed; the feed job adds the other systems.
       - uses: actions/upload-artifact@v4
         with:
@@ -62,7 +80,7 @@ jobs:
   # An unsigned macOS test build with yt-dlp, FFmpeg and Deno inside the app, and
   # the same app packed for in-app updates.
   macos:
-    needs: windows
+    needs: prepare
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -107,7 +125,7 @@ jobs:
 
   # A Debian package and an AppImage for x86_64; the AppImage updates itself.
   linux:
-    needs: windows
+    needs: prepare
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:
@@ -159,7 +177,7 @@ jobs:
 
   # Keep the release a draft until every platform has built successfully.
   feed:
-    needs: [windows, macos, linux]
+    needs: [prepare, windows, macos, linux]
     if: needs.windows.result == 'success' && needs.macos.result == 'success' && needs.linux.result == 'success'
     runs-on: ubuntu-latest
     steps:

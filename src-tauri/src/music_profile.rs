@@ -1,7 +1,7 @@
 use std::io::Write;
 use tauri_plugin_dialog::DialogExt;
 
-fn validate(text: &str) -> Result<(), String> {
+pub(crate) fn validate(text: &str) -> Result<(), String> {
     let value: serde_json::Value = serde_json::from_str(text).map_err(|_| "Invalid music profile.")?;
     if value["format"] != "devil-music-profile" || !value["saved"].is_object() || !value["taste"].is_object() {
         return Err("Invalid music profile.".into());

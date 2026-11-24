@@ -1702,3 +1702,11 @@
 .music-ghost-clip.is-front {
   opacity: 1;
 }
+/* A song that would not play last time, for a reason of its own: faded, with the reason on hover. */
+:root body #devil-music :is(.music-track-row, .music-card-song).is-unavailable {
+  opacity: 0.45;
+}
+:root body #devil-music :is(.music-track-row, .music-card-song).is-unavailable:hover,
+:root body #devil-music :is(.music-track-row, .music-card-song).is-unavailable:focus-within {
+  opacity: 0.75;
+}
