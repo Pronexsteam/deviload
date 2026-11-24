@@ -1,6 +1,21 @@
 // Native title remains the fallback; popovers also work above modal dialogs.
-const selector =
-  ".music-icon-button[title],.music-card button[title],.music-navigation button[title],.music-library-panel-toggle[title],.music-lyrics-tools button[title],.quick-theme-toggle[title],.music-mini-page button[title]";
+// Every button that shows only an icon gets the same tooltip, in Devil Music and in the rest of the app.
+const selector = [
+  ".music-icon-button[title]",
+  ".music-card button[title]",
+  ".music-navigation button[title]",
+  ".music-library-panel-toggle[title]",
+  ".music-lyrics-tools button[title]",
+  ".quick-theme-toggle[title]",
+  ".music-mini-page button[title]",
+  ".topbar-actions button[title]",
+  ".icon-only[title]",
+  ".transfer-button[title]",
+  ".library-view button[title]",
+  ".dialog-close[title]",
+  ".sidebar-collapse[title]",
+  "body.sidebar-collapsed .sidebar .nav[title]",
+].join(",");
 const tip = document.createElement("div");
 tip.className = "ui-tip";
 tip.id = "music-ui-tip";

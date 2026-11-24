@@ -1,3 +1,4 @@
+import { aiArtistFilter } from "./music-ai-filter.js";
 import { tracks } from "./music-state.js";
 import { isMusicTrackId } from "./music-track-id.js";
 import { adaptiveDiscoveryShare } from "./music-recommendation-blend.js";
@@ -61,7 +62,8 @@ export function recommendationAllowed(profile) {
     (Array.isArray(profile?.hiddenSongs) ? profile.hiddenSongs : []).filter(validId).slice(0, HIDDEN_LIMIT),
   );
   const blocked = new Set(names(profile?.blockedArtists).slice(0, BLOCKED_LIMIT));
-  return item => !hidden.has(item.id) && !tasteArtistKeys(item).some(key => blocked.has(key));
+  return item =>
+    !hidden.has(item.id) && !tasteArtistKeys(item).some(key => blocked.has(key) || aiArtistFilter.has(key));
 }
 
 export function readTaste(storage) {

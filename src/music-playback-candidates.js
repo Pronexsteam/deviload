@@ -12,6 +12,8 @@ export function playbackCandidates(
     source = item => item,
     artistKey = name => name,
     allowed = items => items,
+    // Artists left out of automatic entries without being in the listener's own block list.
+    excluded = () => false,
   },
 ) {
   if (!automatic.size) return queue;
@@ -34,10 +36,10 @@ export function playbackCandidates(
   for (const item of candidates)
     if (
       !families.get(item.id).every(id => permitted.has(id) && !hiddenIds.has(id)) ||
-      (blockedArtists.size &&
-        [...(item.artists || []), ...(source(item)?.artists || [])].some(name =>
-          blockedArtists.has(artistKey(name)),
-        ))
+      [...(item.artists || []), ...(source(item)?.artists || [])].some(name => {
+        const key = artistKey(name);
+        return blockedArtists.has(key) || excluded(key);
+      })
     )
       rejected.add(item.id);
   return rejected.size ? queue.filter(item => !rejected.has(item.id)) : queue;

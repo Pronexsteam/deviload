@@ -123,7 +123,7 @@ test("changing themes persists appearance and motion without touching playback o
   assert.deepEqual(notifications,["glass-light","ambient"]);
   assert.equal(f.writes(),2);
   assert.equal(wireAppearance(f.options),stop);
-  f.language(); assert.equal(f.status.textContent,t("Your theme is saved on this device."));
+  f.language(); assert.equal(f.status.textContent,""); assert.equal(f.status.hidden,true,"a remembered theme needs no note");
   stop();stop();assert.deepEqual(f.stops(),{glass:1,language:1});
   f.select.dispatchEvent(new Event("change")); assert.equal(f.writes(),2);
 });

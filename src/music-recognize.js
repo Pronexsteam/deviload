@@ -9,6 +9,7 @@ export const LISTEN_SECONDS = 10;
 export async function recordSamples({
   seconds = LISTEN_SECONDS,
   signal,
+  onLevel = () => {},
   media = navigator.mediaDevices,
   Context = window.AudioContext,
 }) {
@@ -32,6 +33,9 @@ export async function recordSamples({
       tap.onaudioprocess = event => {
         const data = event.inputBuffer.getChannelData(0);
         chunks.push(Float32Array.from(data));
+        let sum = 0;
+        for (const value of data) sum += value * value;
+        onLevel(Math.sqrt(sum / data.length));
         length += data.length;
         if (length >= needed) resolve();
       };
@@ -100,6 +104,13 @@ export function rememberSong(song, source, storage = globalThis.localStorage, no
   }
   return list;
 }
+export function clearHistory(storage = globalThis.localStorage) {
+  try {
+    storage?.removeItem(HISTORY_KEY);
+  } catch {
+    /* Nothing kept to clear. */
+  }
+}
 // Signed 16-bit samples sent from the app as base64 little-endian bytes.
 export function samplesFromBase64(text) {
   const bytes = Uint8Array.from(atob(text || ""), char => char.charCodeAt(0));
@@ -120,18 +131,37 @@ export function wireMusicRecognize({
   like = null,
   storage = globalThis.localStorage,
 }) {
-  const button = document.createElement("button"),
-    icon = document.createElement("span");
+  const button = document.createElement("button");
   button.type = "button";
-  // Beside the search, not inside it, with a sound wave and a name: a microphone in a search field reads as
-  // voice search. The search form is moved into the top bar while the app starts, so the button follows it.
+  // Beside the search, not inside it: a round button with a small sound wave, since a microphone in a search
+  // field reads as voice search. The wave moves with what is heard, a ring fills over the listening seconds and
+  // turns while the song is looked up. The search form moves into the top bar at start; the button follows it.
   button.className = "music-recognize music-recognize-standalone";
-  icon.className = "icon";
-  icon.dataset.icon = "waveform";
-  icon.setAttribute("aria-hidden", "true");
-  const text = document.createElement("span");
-  text.className = "music-recognize-text";
-  button.append(icon, text);
+  button.dataset.phase = "idle";
+  const bars = document.createElement("span");
+  bars.className = "music-recognize-bars";
+  bars.setAttribute("aria-hidden", "true");
+  for (let i = 0; i < 5; i++) bars.append(document.createElement("i"));
+  const ring = document.createElementNS("http://www.w3.org/2000/svg", "svg"),
+    circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  ring.setAttribute("class", "music-recognize-ring");
+  ring.setAttribute("viewBox", "0 0 48 48");
+  ring.setAttribute("aria-hidden", "true");
+  circle.setAttribute("cx", "24");
+  circle.setAttribute("cy", "24");
+  circle.setAttribute("r", "22");
+  ring.append(circle);
+  button.append(ring, bars);
+  let settle = 0;
+  // idle, listening, recognizing, found or missed; the last two return to idle by themselves.
+  function phase(name) {
+    clearTimeout(settle);
+    button.dataset.phase = name;
+    if (name === "found" || name === "missed")
+      settle = setTimeout(() => (button.dataset.phase = "idle"), name === "found" ? 1600 : 700);
+  }
+  const level = value =>
+    button.style.setProperty("--level", Math.max(0.15, Math.min(1, value * 14)).toFixed(2));
   // Where the sound comes from: the room, this computer or a file; and the songs found before.
   const menu = document.createElement("div");
   menu.className = "music-recognize-menu";
@@ -161,9 +191,23 @@ export function wireMusicRecognize({
     computer: option("computer", "monitor"),
     file: option("file", "files"),
   };
-  const recentTitle = document.createElement("p"),
+  const recentTitle = document.createElement("div"),
+    recentName = document.createElement("p"),
+    clearRecent = document.createElement("button"),
+    clearIcon = document.createElement("span"),
     recent = document.createElement("div");
   recentTitle.className = "music-recognize-recent-title";
+  clearRecent.type = "button";
+  clearRecent.className = "music-recognize-clear";
+  clearIcon.className = "icon";
+  clearIcon.dataset.icon = "trash";
+  clearIcon.setAttribute("aria-hidden", "true");
+  clearRecent.append(clearIcon);
+  clearRecent.addEventListener("click", () => {
+    clearHistory(storage);
+    renderRecent();
+  });
+  recentTitle.append(recentName, clearRecent);
   recent.className = "music-recognize-recent";
   menu.append(sources.microphone.item, sources.computer.item, sources.file.item, recentTitle, recent);
   requestAnimationFrame(() => {
@@ -229,14 +273,14 @@ export function wireMusicRecognize({
   let controller = null;
   const label = () => {
     button.title = button.ariaLabel = controller ? t("Stop listening") : t("Identify a song");
-    text.textContent = controller ? t("Listening…") : t("Identify song");
     sources.microphone.name.textContent = t("With the microphone");
     sources.microphone.hint.textContent = t("A song playing in the room");
     sources.computer.name.textContent = t("This computer's sound");
     sources.computer.hint.textContent = t("A song in a browser, video or game");
     sources.file.name.textContent = t("From a file");
     sources.file.hint.textContent = t("An audio or video file on this computer");
-    recentTitle.textContent = t("Recently identified");
+    recentName.textContent = t("Recently identified");
+    clearRecent.title = clearRecent.ariaLabel = t("Clear the list");
   };
   label();
   onLanguageChange(label);
@@ -245,7 +289,7 @@ export function wireMusicRecognize({
   async function hear(source, signal) {
     if (source === "microphone") {
       notify(t("Listening… Hold the computer near the music."));
-      const { samples, rate } = await record({ signal });
+      const { samples, rate } = await record({ signal, onLevel: level });
       if (quiet(samples))
         throw Object.assign(
           new Error(
@@ -269,8 +313,10 @@ export function wireMusicRecognize({
         );
       return samples;
     }
+    phase("idle");
     const encoded = await invoke("music_recognize_file");
     if (encoded == null) return null;
+    phase("recognizing");
     notify(t("Recognizing…"));
     return samplesFromBase64(encoded);
   }
@@ -280,11 +326,18 @@ export function wireMusicRecognize({
     const { signal } = controller;
     button.classList.add("is-listening");
     button.setAttribute("aria-pressed", "true");
+    button.style.removeProperty("--level");
+    phase("listening");
+    let found = false;
     label();
     try {
       const samples = await hear(source, signal);
       if (signal.aborted) throw Object.assign(new Error(), { name: "AbortError" });
-      if (!samples) return;
+      if (!samples) {
+        found = null;
+        return;
+      }
+      phase("recognizing");
       notify(t("Recognizing…"));
       const signature = shazamSignature(samples);
       const song = await invoke("music_recognize", { uri: signature.uri, samplems: signature.samplems });
@@ -296,6 +349,7 @@ export function wireMusicRecognize({
             : t("No match for this sound."),
           true,
         );
+      found = true;
       rememberSong(song, source, storage);
       notify(t("Found: {title} — {artist}", { title: song.title, artist: song.artist }));
       search(song);
@@ -309,6 +363,7 @@ export function wireMusicRecognize({
       controller = null;
       button.classList.remove("is-listening");
       button.removeAttribute("aria-pressed");
+      phase(found ? "found" : found === null || signal.aborted ? "idle" : "missed");
       label();
     }
   }

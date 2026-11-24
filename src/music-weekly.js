@@ -324,11 +324,20 @@ export function createWeeklyStats(storage, { now = Date.now } = {}) {
       .sort((a, b) => b.seconds - a.seconds || a.title.localeCompare(b.title))
       .slice(0, limit);
   };
-  // Recap of the current month or year: the archive plus this week's days in that period.
-  function recap(kind = "month") {
+  // Recap of the current month or year: the archive plus this week's days in that period. A past year or month
+  // can be asked for while the archive still holds it ("2026-11" for a month, 2026 for a year), as the first
+  // days of a month look back at the one that just ended.
+  function recap(kind = "month", past = null) {
     prune();
     const today = dayKey(now()),
-      prefix = kind === "year" ? today.slice(0, 4) : today.slice(0, 7),
+      prefix =
+        kind === "year"
+          ? Number.isInteger(past)
+            ? String(past)
+            : today.slice(0, 4)
+          : typeof past === "string" && /^\d{4}-\d{2}$/.test(past)
+            ? past
+            : today.slice(0, 7),
       inside = key => key.startsWith(prefix);
     let seconds = 0,
       plays = 0;
@@ -372,7 +381,7 @@ export function createWeeklyStats(storage, { now = Date.now } = {}) {
             seconds: (old?.seconds || 0) + value,
           });
         }
-    const year = today.slice(0, 4);
+    const year = prefix.slice(0, 4);
     return {
       kind,
       seconds,

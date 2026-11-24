@@ -48,7 +48,7 @@ import { wireGlassOrb, wireGlassButtons } from "./music-glass.js";
 import { wireResultKeys } from "./music-results-keys.js";
 import { createMusicHomeTiles } from "./music-home-tiles.js";
 import { revealView, cascadeIn, flyFrom } from "./music-transitions.js";
-import { transitionPlan } from "./music-transition-model.js";
+import { transitionPlan, sameAlbum } from "./music-transition-model.js";
 import { createSleepTimer, sleepLabel, SLEEP_MINUTES } from "./music-sleep.js";
 import { musicShortcut } from "./music-shortcuts.js";
 import { wireMusicSpeed } from "./music-speed.js";
@@ -70,7 +70,7 @@ import { bufferedSeconds, canPrepareAudio, keyboardSeek } from "./music-playback
 import { createMusicNavigation } from "./music-navigation.js";
 import { wireMusicSearch } from "./music-search.js";
 import { createMusicPresence } from "./music-presence.js";
-import { t, language, onLanguageChange, errorText } from "./i18n.js";
+import { t, language, locale, onLanguageChange, errorText } from "./i18n.js";
 import { tracks, remember, reorderTrack, insertNext, restoreRemoved, playbackQueue } from "./music-state.js";
 import {
   recordListening,
@@ -138,6 +138,12 @@ import { wireMusicImport } from "./music-import-ui.js";
 import { mergeMusicImport, createLibraryIndex } from "./music-import-model.js";
 import { enhanceMusicShelves } from "./music-shelf-navigation.js";
 import { createMusicLibrarySidebar } from "./music-library-sidebar.js";
+import { createUnavailableSongs } from "./music-unavailable.js";
+import { aiArtistFilter } from "./music-ai-filter.js";
+import { wireAiArtists } from "./music-ai-artists.js";
+import { createWrapped } from "./music-wrapped.js";
+import { createDjMix } from "./music-dj.js";
+import { wrappedPeriod } from "./music-wrapped-model.js";
 
 const $ = id => document.getElementById(id);
 const moods = {
@@ -241,6 +247,9 @@ export function createMusic({ invoke, onDownload, storage }) {
   const moodShelves = moodCache(storage);
   let moodsAhead = false;
   const decks = createMusicDecks();
+  // DJ transitions, made once the sound graph exists; [mixTimer] starts the next song on its beat.
+  let djMix = null,
+    mixTimer = 0;
   let audio = decks.current;
   document.body.append(...decks.nodes);
   if (!storage)
@@ -256,6 +265,8 @@ export function createMusic({ invoke, onDownload, storage }) {
   saved.sourceBindings ??= [];
   const resolveRecordingSource = createRecordingSourceResolver();
   const weekly = createWeeklyStats(storage);
+  // Set once Devil Wrapped is ready; adds the banner of a finished week or month to the home.
+  let homeWrapped = null;
   let privateSession = false,
     statsSession = null,
     statsSeconds = 0,
@@ -327,6 +338,12 @@ export function createMusic({ invoke, onDownload, storage }) {
     playbackSourceContext = { kind: "restored" };
   const recommendationSession = createRecommendationSession(),
     automaticQueueIds = new Set();
+  // Songs that would not play for a reason of their own are shown faded in every list.
+  const unavailableSongs = createUnavailableSongs({
+    storage,
+    describe: reason => t("Would not play last time: {reason}", { reason: t(reason) }),
+  });
+  wireAiArtists({ invoke, storage });
   const publicDiscovery = createMusicDiscovery({ invoke });
   let publicGeneration = 0;
   const recommendationNodes = new Map(),
@@ -802,6 +819,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     invoke,
     canSkip: () => !musicRoom?.isGuest(),
   });
+  djMix = createDjMix({ invoke, sound });
   const orb = wireGlassOrb(dock.querySelector(".music-play-button"));
   wireGlassButtons();
   const ambient = createMusicAmbient({
@@ -1047,6 +1065,17 @@ export function createMusic({ invoke, onDownload, storage }) {
   soundButton.dataset.i18nTitle = "Sound and transitions";
   soundButton.dataset.i18nAriaLabel = "Sound and transitions";
   soundButton.id = "music-sound-open";
+  // DJ mix on and off from the More menu, without opening the sound settings.
+  const djButton = button(t("DJ mix"), "shuffle", () => sound.setDj(!sound.dj));
+  djButton.id = "music-dj-toggle";
+  const syncDj = () => {
+    const label = sound.dj ? t("DJ mix is on") : t("DJ mix");
+    djButton.title = djButton.ariaLabel = label;
+    djButton.setAttribute("aria-pressed", String(sound.dj));
+  };
+  syncDj();
+  onLanguageChange(syncDj);
+  addEventListener("music-vibe-change", syncDj);
   soundButton.append(el("span", "", t("Sound")));
   extras.insertBefore(soundButton, queueButton);
   const filters = el("div", "music-search-filters");
@@ -2412,6 +2441,7 @@ export function createMusic({ invoke, onDownload, storage }) {
       source: item => resolveRecordingSource(item, saved.sourceBindings),
       artistKey: canonicalArtistKey,
       allowed: items => recommendationSession.allowed(items),
+      excluded: key => aiArtistFilter.has(key),
     });
   }
   function plannedNext() {
@@ -2491,7 +2521,9 @@ export function createMusic({ invoke, onDownload, storage }) {
       !Number.isFinite(remaining) ||
       remaining <= 0 ||
       remaining > 240 ||
-      audio.currentTime < 2
+      audio.currentTime < 2 ||
+      // The other player still carries the song fading out; preparing the next one now would cut it off.
+      decks.fading
     )
       return;
     if (repeat === "one") return;
@@ -2858,10 +2890,15 @@ export function createMusic({ invoke, onDownload, storage }) {
       alternateId = null,
       localResult = null,
       retryAlternate = false,
+      mix = "",
     } = {},
   ) {
     if (origin !== "room" && roomControlsPlayback()) return;
     if (!queue[position]) return;
+    // Anything but the DJ transition itself ends a running one: bass and tempo go back to normal.
+    if (mix !== "dj") djMix?.cancel();
+    clearTimeout(mixTimer);
+    mixTimer = 0;
     changeSource.hidden = true;
     if (resumeSnapshot && current && resumeSnapshot.item.id === current.id)
       resumeSnapshot.position = resolvedTrack === current.id ? audio.currentTime : retryPosition;
@@ -2890,7 +2927,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     sessionTransition = true;
     const prepared =
       !alternateId && !localResult && !refresh && origin !== "room"
-        ? decks.take(queue[position].id, saved.volume, overlap)
+        ? decks.take(queue[position].id, saved.volume, overlap, mix)
         : null;
     if (prepared) audio = prepared;
     else decks.clear();
@@ -3047,6 +3084,7 @@ export function createMusic({ invoke, onDownload, storage }) {
       if (token !== playRequest || resolvedTrack !== id) return;
       needsRefresh = false;
       unplayableInARow = 0;
+      unavailableSongs.clear(current.id);
       artist.textContent = displaySubtitle(current) || "YouTube Music";
       status("");
       if (!musicRoom?.isGuest()) recommendationSession.recover(current.id);
@@ -3326,6 +3364,13 @@ export function createMusic({ invoke, onDownload, storage }) {
   let unplayableInARow = 0;
   function skipUnplayable(item, { code, message = "" } = {}) {
     const ownFault = UNPLAYABLE.has(code) || (code === "restricted" && songRestriction.test(message));
+    // Lists fade a song only for what certainly belongs to it: undecodable audio or a named restriction,
+    // not a vague failure that may pass on the next try.
+    if (
+      item &&
+      (["decode", "unsupported"].includes(code) || (code === "restricted" && songRestriction.test(message)))
+    )
+      unavailableSongs.mark(item.id, message);
     if (!item || !ownFault || unplayableInARow >= 3 || navigator.onLine === false) return false;
     if (playbackOrigin === "room" || roomControlsPlayback() || musicRoom?.isGuest()) return false;
     const next = plannedNext();
@@ -3839,15 +3884,58 @@ export function createMusic({ invoke, onDownload, storage }) {
       decks.ready(queue[upcoming].id)
     ) {
       const next = queue[upcoming],
-        plan = transitionPlan({
-          transition: sound.transition,
-          seamless: sound.seamless,
-          current,
-          next,
-          remaining,
-        });
-      const origin = automaticQueueIds.has(next.id) ? "recommendation" : "manual";
-      if (plan?.kind === "fade") {
+        origin = automaticQueueIds.has(next.id) ? "recommendation" : "manual",
+        // A DJ mix falls back to a plain fade of six seconds when no overlap is chosen.
+        fallback = sound.dj ? sound.transition || 6 : sound.transition,
+        mixing =
+          sound.dj && !(current && sameAlbum(current, next) && sound.seamless)
+            ? djMix.consider({
+                current,
+                next,
+                outgoing: audio,
+                incoming: decks.nodes.find(node => node !== audio),
+                remaining,
+                fallback,
+              })
+            : null,
+        plan =
+          mixing?.kind === "mix" || mixing?.kind === "wait"
+            ? null
+            : transitionPlan({ transition: fallback, seamless: sound.seamless, current, next, remaining });
+      if (mixing?.kind === "mix" && !mixTimer) {
+        const mix = mixing.plan,
+          from = current.id,
+          ahead = (mix.startAt - audio.currentTime) / audio.playbackRate;
+        // Started from a timer, not the next tick, so the next song lands on the beat.
+        if (ahead <= 1.5)
+          mixTimer = setTimeout(
+            () => {
+              mixTimer = 0;
+              const target = queue.findIndex(item => item.id === next.id);
+              if (
+                current?.id !== from ||
+                audio.paused ||
+                audio.seeking ||
+                sleep.holdsTrackEnd() ||
+                target < 0 ||
+                !decks.ready(next.id)
+              )
+                return;
+              const outgoing = audio;
+              captureListening();
+              playAt(target, {
+                overlap: mix.length / outgoing.playbackRate,
+                resume: mix.inStart,
+                skipped: false,
+                transitionIntent: "ended",
+                origin,
+                mix: "dj",
+              });
+              if (audio !== outgoing) djMix.run(mix, outgoing, audio);
+            },
+            Math.max(0, ahead * 1000),
+          );
+      } else if (plan?.kind === "fade") {
         captureListening();
         playAt(upcoming, { overlap: plan.overlap, skipped: false, transitionIntent: "ended", origin });
       } else if (plan?.kind === "join" && !joinTimer) {
@@ -3928,6 +4016,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     if (item.kind === "song") {
       card.dataset.trackId = item.id;
       markPlayback(card, item.id);
+      unavailableSongs.flag(card, item.id);
     }
     contextActions.set(card, () =>
       item.kind === "song"
@@ -4085,6 +4174,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     }
     if (view === "home") {
       homeTiles?.render();
+      homeWrapped?.(root);
       interestUI.render(root, { compact: true });
     }
     if (view === "interest") {
@@ -4956,6 +5046,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     row.classList.toggle("music-album-track", albumRow);
     row.dataset.trackId = item.id;
     markPlayback(row, item.id);
+    unavailableSongs.flag(row, item.id);
     const select = button(
       t("Play {title}", { title: item.title }),
       null,
@@ -5932,9 +6023,68 @@ export function createMusic({ invoke, onDownload, storage }) {
       [...saved.recent, ...saved.favorites, ...(saved.playlists || []).flatMap(list => list.items)].find(
         item => item?.id === id,
       ) || null;
+    const wrapped = createWrapped({
+      invoke,
+      weekly,
+      findItem,
+      play: id => {
+        const item = findItem(id);
+        if (item) playItems([item], item.id);
+      },
+      getAudio: () => audio,
+      currentId: () => current?.id,
+    });
+    // At the end of a week, and of a month, the home opens with its story until it is dismissed.
+    homeWrapped = root => {
+      const period = wrappedPeriod();
+      if (!period || !wrapped.available(period)) return;
+      const key = `deviload-music-wrapped-seen-${period.key}`;
+      try {
+        if (storage?.getItem(key)) return;
+      } catch {
+        /* Shown every time without storage. */
+      }
+      const month = period.kind === "month",
+        name = month
+          ? new Intl.DateTimeFormat(locale(), { month: "long" }).format(new Date(2026, period.month, 15))
+          : "",
+        banner = el("section", "music-wrapped-banner"),
+        text = el("div", "music-wrapped-banner-text"),
+        open = button(t("Open Wrapped"), null, () => wrapped.open(period), "primary"),
+        dismiss = button(
+          t("Not now"),
+          null,
+          () => {
+            try {
+              storage?.setItem(key, "1");
+            } catch {
+              /* Hidden until the next start. */
+            }
+            banner.remove();
+          },
+          "quiet",
+        );
+      text.append(
+        el(
+          "strong",
+          "",
+          month ? t("Your {month} in music is ready", { month: name }) : t("Your week in music is ready"),
+        ),
+        el(
+          "span",
+          "",
+          month
+            ? t("Minutes, top songs and artists of the month, ready to share as a story.")
+            : t("Minutes, top songs and artists of the last seven days, ready to share as a story."),
+        ),
+      );
+      banner.append(text, open, dismiss);
+      root.prepend(banner);
+    };
     const statsWindow = createStatsWindow({
       weekly,
       findItem,
+      wrapped,
       cover: item => cover(item, "", 96),
       motion: () => !matchMedia("(prefers-reduced-motion: reduce)").matches,
       tasteMap: createTasteMap({
@@ -6180,6 +6330,7 @@ export function createMusic({ invoke, onDownload, storage }) {
       quickVibe.row,
       saveToPlaylist,
       soundButton,
+      djButton,
       sleepButton,
       downloadButton,
       el("div", "music-dock-menu-sep"),

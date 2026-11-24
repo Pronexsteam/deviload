@@ -215,8 +215,9 @@ export function paintStory(ctx, scene, time, { spectrum = null, fade = true } = 
   ctx.restore();
 }
 
-// Records [scene] from the song at [url]; resolves with the video, or null when cancelled.
-export function recordStory({ canvas, scene, url, onProgress = () => {}, signal }) {
+// Records [scene] from the song at [url]; resolves with the video, or null when cancelled. [paint] draws one
+// frame; Devil Wrapped passes its own and records the same way.
+export function recordStory({ canvas, scene, url, onProgress = () => {}, signal, paint = paintStory }) {
   return new Promise((resolve, reject) => {
     const type = storyType(value => globalThis.MediaRecorder?.isTypeSupported?.(value));
     if (!type || !url) {
@@ -266,7 +267,7 @@ export function recordStory({ canvas, scene, url, onProgress = () => {}, signal 
       if (finished) return;
       finished = true;
       cancelAnimationFrame(frame);
-      paintStory(ctx, scene, end, { spectrum });
+      paint(ctx, scene, end, { spectrum });
       // A last frame of black lets the recorder catch the fade before it stops.
       setTimeout(() => recorder.stop(), 120);
     }
@@ -283,7 +284,7 @@ export function recordStory({ canvas, scene, url, onProgress = () => {}, signal 
       const time = media.currentTime;
       analyser.getByteFrequencyData(spectrum);
       gain.gain.setTargetAtTime(storyFade(time, scene.window), context.currentTime, 0.02);
-      paintStory(ctx, scene, time, { spectrum });
+      paint(ctx, scene, time, { spectrum });
       onProgress(Math.min(1, (time - start) / (end - start)), Math.max(0, end - time));
       if (time >= end || media.ended) stop();
       else frame = requestAnimationFrame(tick);
@@ -319,7 +320,7 @@ export function recordStory({ canvas, scene, url, onProgress = () => {}, signal 
             if (signal?.aborted) return;
             resolve(new Blob(chunks, { type: type.split(";")[0] }));
           };
-          paintStory(ctx, scene, start, { spectrum });
+          paint(ctx, scene, start, { spectrum });
           recorder.start(500);
           await media.play();
           frame = requestAnimationFrame(tick);

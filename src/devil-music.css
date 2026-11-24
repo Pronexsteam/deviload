@@ -102,45 +102,243 @@ body.music-page #open-youtube-view {
 .music-search button[hidden] {
   display: none;
 }
-/* Song recognition: an accent pill named "Identify song" beside the search, shown on the music page only. */
+/* Song recognition: a round button beside the search with a small sound wave, shown on the music page only.
+   Listening, the wave follows what is heard and a ring fills over the listening seconds; recognising, the ring
+   turns and the wave becomes a row of pulsing dots; a match flashes the button, a miss gives it a shake. */
 main:not([data-page="music"]) .music-recognize-standalone {
   display: none !important;
 }
 :root[data-theme] body .music-recognize-standalone {
-  gap: 6px;
-  padding: 0 12px;
-  border-radius: 999px;
-  color: var(--player-primary, #9ad0ff);
-  background: color-mix(in srgb, var(--player-primary, #9ad0ff) 14%, transparent);
-  font-size: 13px;
-  font-weight: 650;
-  white-space: nowrap;
+  /* The colour of the cover playing, so the button belongs to the song. */
+  --recognize: var(--cover-lyric-light, var(--player-primary, #9ad0ff));
+  --level: 0.6;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--recognize) 30%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--recognize) 14%, transparent);
+  box-shadow: none;
+  color: var(--recognize);
+  transition:
+    background 0.2s,
+    color 0.2s,
+    scale 0.35s cubic-bezier(0.2, 1.4, 0.32, 1);
 }
 :root[data-theme] body .music-recognize-standalone:hover {
-  background: color-mix(in srgb, var(--player-primary, #9ad0ff) 24%, transparent);
+  background: color-mix(in srgb, var(--recognize) 24%, transparent);
+  scale: 1.06;
 }
-:root[data-theme] body .music-recognize-standalone .icon {
-  width: 18px;
+.music-recognize-bars {
+  display: flex;
+  align-items: center;
+  gap: 2.5px;
   height: 18px;
 }
-@media (max-width: 900px) {
-  :root[data-theme] body .music-recognize-standalone .music-recognize-text {
-    display: none;
+.music-recognize-bars i {
+  --peak: 1;
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: currentColor;
+  scale: 1 var(--rest, 0.5);
+  transition: scale 0.3s cubic-bezier(0.2, 1.3, 0.32, 1);
+}
+.music-recognize-bars i:nth-child(1) {
+  --dur: 0.46s;
+  --rest: 0.32;
+  --peak: 0.55;
+  --delay: -0.4s;
+  --i: 0;
+}
+.music-recognize-bars i:nth-child(2) {
+  --dur: 0.38s;
+  --rest: 0.66;
+  --peak: 0.9;
+  --delay: -0.15s;
+  --i: 1;
+}
+.music-recognize-bars i:nth-child(3) {
+  --dur: 0.52s;
+  --rest: 1;
+  --peak: 1;
+  --delay: -0.55s;
+  --i: 2;
+}
+.music-recognize-bars i:nth-child(4) {
+  --dur: 0.41s;
+  --rest: 0.55;
+  --peak: 0.8;
+  --delay: -0.3s;
+  --i: 3;
+}
+.music-recognize-bars i:nth-child(5) {
+  --dur: 0.49s;
+  --rest: 0.3;
+  --peak: 0.6;
+  --delay: -0.05s;
+  --i: 4;
+}
+:root[data-theme] body .music-recognize-standalone:hover .music-recognize-bars i {
+  animation: music-recognize-wave 0.7s ease-in-out var(--delay) infinite alternate;
+}
+@keyframes music-recognize-wave {
+  from {
+    scale: 1 0.22;
+  }
+  to {
+    scale: 1 calc(0.25 + var(--peak) * var(--level) * 1.1);
   }
 }
-:root[data-theme] body .music-recognize-standalone.is-listening {
-  color: #e8876b;
-  animation: music-recognize-pulse 1.2s ease-in-out infinite;
+.music-recognize-ring {
+  position: absolute;
+  inset: -4px;
+  width: calc(100% + 8px);
+  height: calc(100% + 8px);
+  overflow: visible;
+  rotate: -90deg;
+  pointer-events: none;
 }
-@keyframes music-recognize-pulse {
-  50% {
-    background: #e8876b26;
+.music-recognize-ring circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 138.2;
+  stroke-dashoffset: 138.2;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+:root[data-theme] body .music-recognize-standalone:active {
+  scale: 0.92;
+}
+/* Listening, soft rings of sound leave the button one after the other. */
+:root[data-theme] body .music-recognize-standalone::before,
+:root[data-theme] body .music-recognize-standalone::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border: 1.5px solid var(--recognize);
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+}
+:root[data-theme] body .music-recognize-standalone[data-phase="listening"]::before,
+:root[data-theme] body .music-recognize-standalone[data-phase="listening"]::after {
+  animation: music-recognize-ripple 2s cubic-bezier(0.2, 0.6, 0.35, 1) infinite;
+}
+:root[data-theme] body .music-recognize-standalone[data-phase="listening"]::after {
+  animation-delay: 1s;
+}
+@keyframes music-recognize-ripple {
+  0% {
+    opacity: 0.5;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 1.75;
+  }
+}
+/* Listening: the wave follows the sound, the ring fills over the ten seconds. */
+:root[data-theme] body .music-recognize-standalone[data-phase="listening"] {
+  background: color-mix(in srgb, var(--recognize) 22%, transparent);
+}
+:root[data-theme] body .music-recognize-standalone[data-phase="listening"] .music-recognize-bars i {
+  animation: music-recognize-wave var(--dur) ease-in-out var(--delay) infinite alternate;
+}
+.music-recognize-standalone[data-phase="listening"] .music-recognize-ring circle {
+  opacity: 1;
+  animation: music-recognize-fill 10s linear forwards;
+}
+@keyframes music-recognize-fill {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+/* Recognising: a short arc goes round while the wave rests as dots taking turns. */
+.music-recognize-standalone[data-phase="recognizing"] .music-recognize-ring {
+  animation: music-recognize-turn 0.9s linear infinite;
+}
+.music-recognize-standalone[data-phase="recognizing"] .music-recognize-ring circle {
+  opacity: 1;
+  stroke-dasharray: 34 104.2;
+  stroke-dashoffset: 0;
+}
+@keyframes music-recognize-turn {
+  to {
+    rotate: 270deg;
+  }
+}
+:root[data-theme] body .music-recognize-standalone[data-phase="recognizing"] .music-recognize-bars i {
+  scale: 1 0.2;
+  animation: music-recognize-dot 0.9s cubic-bezier(0.3, 0, 0.3, 1) calc(var(--i) * 0.09s) infinite;
+}
+@keyframes music-recognize-dot {
+  0%,
+  55%,
+  100% {
+    translate: 0 0;
+    scale: 1 0.2;
+  }
+  25% {
+    translate: 0 -4px;
+    scale: 1 0.3;
+  }
+}
+/* Found: the button fills with the colour and the wave jumps once. */
+:root[data-theme] body .music-recognize-standalone[data-phase="found"] {
+  background: var(--recognize);
+  color: #0d0f14;
+  animation: music-recognize-found 0.6s cubic-bezier(0.2, 1.4, 0.32, 1);
+}
+:root[data-theme] body .music-recognize-standalone[data-phase="found"] .music-recognize-bars i {
+  scale: 1 var(--peak);
+  animation: music-recognize-cheer 0.55s cubic-bezier(0.2, 1.5, 0.35, 1) calc(var(--i) * 0.06s) both;
+}
+@keyframes music-recognize-cheer {
+  0% {
+    scale: 1 0.2;
+  }
+  55% {
+    scale: 1 1.2;
+  }
+  100% {
+    scale: 1 var(--peak);
+  }
+}
+@keyframes music-recognize-found {
+  0% {
+    scale: 0.85;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--recognize) 60%, transparent);
+  }
+  100% {
+    scale: 1;
+    box-shadow: 0 0 0 14px transparent;
+  }
+}
+:root[data-theme] body .music-recognize-standalone[data-phase="missed"] {
+  animation: music-recognize-miss 0.5s ease;
+}
+@keyframes music-recognize-miss {
+  20%,
+  60% {
+    translate: -3px 0;
+  }
+  40%,
+  80% {
+    translate: 3px 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  :root[data-theme] body .music-recognize-standalone.is-listening {
-    animation: none;
-    background: #e8876b26;
+  :root[data-theme] body .music-recognize-standalone,
+  :root[data-theme] body .music-recognize-standalone .music-recognize-bars i,
+  .music-recognize-standalone .music-recognize-ring {
+    animation: none !important;
   }
 }
 .music-search .music-search-submit {
@@ -3074,7 +3272,10 @@ body.music-focus .music-library-sidebar {
   opacity: 0.65;
 }
 .music-recognize-recent-title {
-  margin: 8px 12px 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 8px 6px 2px 12px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -3327,4 +3528,77 @@ body.music-focus .music-library-sidebar {
   min-width: 128px;
   padding: 5px 8px;
   font-size: 12px;
+}
+
+.music-recognize-recent-title p {
+  margin: 0;
+}
+/* Clearing a list is a small round button with a bin, beside the list it clears. */
+:is(.music-recognize-clear, .music-suggestion-clear) {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    opacity 0.2s,
+    color 0.2s;
+}
+:is(.music-recognize-clear, .music-suggestion-clear):hover {
+  background: rgb(255 255 255 / 0.1);
+  color: #ff8a7a;
+  opacity: 1;
+}
+:is(.music-recognize-clear, .music-suggestion-clear) .icon {
+  width: 15px;
+  height: 15px;
+}
+.music-recognize-recent-title[hidden],
+.music-suggestion-head[hidden] {
+  display: none;
+}
+.music-search-suggestions > .music-suggestion-head {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 2px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.music-suggestion-head > span {
+  opacity: 0.55;
+}
+.music-suggestion-head > .music-suggestion-clear {
+  margin-left: auto;
+}
+/* The list's rows are full-width buttons; the bin in its heading keeps its own small circle. */
+:root
+  body
+  :is(#devil-music, .topbar)
+  #music-search
+  .music-search-suggestions
+  .music-suggestion-head
+  > button.music-suggestion-clear {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  margin: 0 0 0 auto;
+  padding: 0;
+  border-radius: 50%;
 }

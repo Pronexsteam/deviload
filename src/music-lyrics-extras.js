@@ -41,13 +41,16 @@ export function lyricsExtras({
     lines = [],
     info = { source: "", romanize: false, translate: false },
     serial = 0,
-    queue = Promise.resolve();
+    queue = Promise.resolve(),
+    // Pinyin for the characters of Chinese lyrics, asked from the app once per song.
+    readings = null;
   const cache = new Map(readCache(storage));
   const keyFor = text => `${info.source}>${language()}:${text}`;
   const roman = button(t("Romanization"), "text-aa", () => {
     prefs.romanize = !prefs.romanize;
     save();
     paint();
+    loadReadings();
   });
   const translate = button(t("Translate lyrics"), "translate", () => {
     prefs.translate = !prefs.translate;
@@ -90,9 +93,23 @@ export function lyricsExtras({
         span.textContent = text;
         row.append(span);
       };
-      if (prefs.romanize && info.romanize) add(romanize(line.text), "is-roman");
+      if (prefs.romanize && info.romanize) add(romanize(line.text, readings), "is-roman");
       if (prefs.translate && info.translate)
         add(cache.get(keyFor((line.text || "").trim())), "is-translation");
+    }
+  }
+  async function loadReadings() {
+    const token = serial;
+    if (!prefs.romanize || info.source !== "zh" || readings) return;
+    try {
+      const pairs = await invoke("music_pinyin", { text: lines.map(line => line.text || "").join(" ") });
+      if (token !== serial) return;
+      readings = new Map(
+        Array.isArray(pairs) ? pairs.filter(pair => Array.isArray(pair) && pair.length === 2) : [],
+      );
+      paint();
+    } catch {
+      /* Without readings Chinese lines simply show no romanization. */
     }
   }
   function remember() {
@@ -153,10 +170,12 @@ export function lyricsExtras({
       body = next;
       lines = nextLines;
       serial++;
+      readings = null;
       info = body ? lyricsExtrasFor(lines, language()) : { source: "", romanize: false, translate: false };
       onNote("");
       sync();
       paint();
+      loadReadings();
       if (prefs.translate && info.translate) load();
     },
   };

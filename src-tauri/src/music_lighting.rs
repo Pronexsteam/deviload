@@ -252,10 +252,12 @@ fn launched_alive() -> bool {
     }
 }
 
-/// Starts OpenRGB in the tray with its SDK server on, the way it would be set up by hand.
+/// Starts OpenRGB as a background server only: no window and no icon in the tray, which would leave people
+/// wondering what the rainbow beside the clock is. It is closed again when the lights are turned off or
+/// Deviload quits. (--startminimized would open OpenRGB's own window, folded into the tray.)
 fn launch(path: &Path, port: u16) -> Result<(), String> {
     let mut command = hidden(path);
-    command.args(["--startminimized", "--server", "--server-port", &port.to_string(), "--noautoconnect"]);
+    command.args(["--server", "--server-port", &port.to_string(), "--noautoconnect"]);
     if let Some(dir) = path.parent() { command.current_dir(dir); }
     let child = command.spawn().map_err(|_| "missing")?;
     *LAUNCHED.lock().unwrap() = Some(child);

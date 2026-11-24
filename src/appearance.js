@@ -139,11 +139,16 @@ export function wireAppearance({
   }
   let sessionOnly = false;
   const updateStatus = () => {
-    const message = sessionOnly
-      ? t("Theme applied for this session. Storage is unavailable.")
-      : t("Your theme is saved on this device.");
-    if (status) status.textContent = message;
-    if (quickStatus) quickStatus.textContent = message;
+    // Said only when something is wrong: a theme that is simply remembered needs no note.
+    const message = sessionOnly ? t("Theme applied for this session. Storage is unavailable.") : "";
+    if (status) {
+      status.textContent = message;
+      status.hidden = !message;
+    }
+    if (quickStatus) {
+      quickStatus.textContent = message;
+      quickStatus.hidden = !message;
+    }
     if (quickLabel) quickLabel.textContent = t("Themes");
     quickButton?.setAttribute("aria-label", t("Themes"));
     for (const item of quickItems) {
@@ -177,7 +182,11 @@ export function wireAppearance({
     quickMenu.style.left =
       Math.max(12, Math.min(bounds.right - width, window.innerWidth - width - 12)) + "px";
     quickMenu.style.top = top + "px";
-    quickMenu.style.maxHeight = Math.max(80, window.innerHeight - top - 12) + "px";
+    // It ends above the player bar when one is showing, and scrolls inside instead of running under it.
+    const dock = document.querySelector?.(".music-dock"),
+      dockTop = dock?.getClientRects?.().length ? dock.getBoundingClientRect().top : window.innerHeight;
+    const floor = dockTop > top + 160 ? dockTop : window.innerHeight;
+    quickMenu.style.maxHeight = Math.max(80, floor - top - 12) + "px";
   };
   const closeQuickMenu = (returnFocus = false) => {
     if (!quickOpen) return;

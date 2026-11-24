@@ -284,13 +284,27 @@ function hangul(char) {
   );
 }
 
-export function needsRomanization(text) {
-  return typeof text === "string" && SCRIPT.test(text) && !HAN.test(text);
+// Han characters need a dictionary. For Chinese lyrics the app supplies pinyin readings, and those lines are
+// romanized too; in Japanese lyrics a line with kanji is left alone, as a Chinese reading would be wrong there.
+export function needsRomanization(text, chinese = false) {
+  if (typeof text !== "string") return false;
+  return chinese ? HAN.test(text) || SCRIPT.test(text) : SCRIPT.test(text) && !HAN.test(text);
 }
 
-// Han characters need a dictionary; lines that contain them are left alone.
-export function romanize(text) {
-  if (!needsRomanization(text)) return "";
+// Each character with a reading becomes its pinyin, as a word of its own.
+function pinyin(text, readings) {
+  let out = "";
+  for (const char of text) {
+    const reading = readings.get(char);
+    out += reading ? ` ${reading} ` : char;
+  }
+  return out;
+}
+
+export function romanize(text, readings = null) {
+  const chinese = readings instanceof Map && readings.size > 0;
+  if (!needsRomanization(text, chinese)) return "";
+  if (chinese) text = pinyin(text, readings);
   text = text.replace(/([\u039f\u03bf\u038c\u03cc])([\u03c5\u03cd])/g, (_, o) =>
     o.toLowerCase() === o ? "ou" : "Ou",
   );
@@ -368,7 +382,7 @@ export function lyricsExtrasFor(lines, ui) {
   const foreign = Boolean(source) && source !== ui && !seen.includes(source);
   return {
     source,
-    romanize: foreign && lines.some(line => needsRomanization(line.text)),
+    romanize: foreign && lines.some(line => needsRomanization(line.text, source === "zh")),
     translate: foreign && source !== "zh",
   };
 }

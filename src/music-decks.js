@@ -1,5 +1,6 @@
 // Two decoders let a prepared track start without reopening its media URL.
 import { musicGain } from "./music-volume.js";
+import { djFade } from "./music-dj-model.js";
 // Equal-power curves keep the combined loudness steady through an overlap.
 export const fadeCurve = progress => {
   const p = Math.max(0, Math.min(1, progress));
@@ -32,7 +33,7 @@ export function createMusicDecks({
   const progress = () => (tail ? Math.min(1, (now() - tail.start) / tail.duration) : 1);
   function apply() {
     const value = gain(),
-      curve = fadeCurve(progress());
+      curve = (tail?.curve || fadeCurve)(progress());
     active.volume = tail ? value * curve.in : value;
     for (const node of nodes)
       if (node !== active) node.volume = tail?.node === node ? value * curve.out : value;
@@ -56,6 +57,10 @@ export function createMusicDecks({
       return active;
     },
     owns: node => nodes.includes(node),
+    // True while the previous song still fades out on the other player, which cannot be prepared meanwhile.
+    get fading() {
+      return !!tail;
+    },
     stopTail,
     setVolume,
     setDim(value) {
@@ -81,7 +86,8 @@ export function createMusicDecks({
       prepared = { id, url, node, at: now() };
       return node;
     },
-    take(id, volume, overlap = 0) {
+    // [mix] "dj" keeps both songs up through the middle of the overlap, as a DJ does.
+    take(id, volume, overlap = 0, mix = "") {
       if (!this.ready(id)) return null;
       stopTail();
       const old = active;
@@ -90,7 +96,13 @@ export function createMusicDecks({
       level = musicGain(volume);
       // Very short overlaps are seamless album joins: the old track has ended.
       if (overlap > 0.15 && !old.paused) {
-        tail = { node: old, start: now(), duration: overlap * 1000, timer: null };
+        tail = {
+          node: old,
+          start: now(),
+          duration: overlap * 1000,
+          timer: null,
+          curve: mix === "dj" ? djFade : fadeCurve,
+        };
         apply();
         tail.timer = schedule(() => {
           apply();

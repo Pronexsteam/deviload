@@ -1,4 +1,5 @@
 import { t, onLanguageChange, locale } from "./i18n.js";
+import { currentPeriod } from "./music-wrapped-model.js";
 
 // "Your week in music": the listening summary card opens into a glass window. The window grows out of
 // the card's own outline and pours back into it when closed.
@@ -19,6 +20,7 @@ export function createStatsWindow({
   cover = () => make("span", "music-art"),
   motion = () => true,
   tasteMap = null,
+  wrapped = null,
 }) {
   const dialog = make("dialog", "music-stats-dialog");
   dialog.setAttribute("aria-labelledby", "music-stats-title");
@@ -89,6 +91,21 @@ export function createStatsWindow({
       tabs.append(tab);
     }
     titles.append(tabs);
+    // The Week and Month tabs lead into their story when there is enough listening to tell it.
+    const story = period === "week" || period === "month" ? currentPeriod(period) : null;
+    if (story && wrapped?.available(story)) {
+      const open = make(
+        "button",
+        "music-wrapped-open",
+        period === "week" ? t("Wrapped of the week") : t("Wrapped of the month"),
+      );
+      open.type = "button";
+      open.addEventListener("click", () => {
+        hide();
+        wrapped.open(story);
+      });
+      titles.append(open);
+    }
     const close = make("button", "music-stats-close", "");
     close.type = "button";
     close.title = close.ariaLabel = t("Close");

@@ -26,13 +26,49 @@ export function wireMusicSuggestions({
     const raw = JSON.parse(localStorage.getItem("deviload-music-searches") || "[]");
     if (Array.isArray(raw)) history = raw.filter(x => typeof x === "string").slice(0, 8);
   } catch {}
+  // Songs played before the list was last cleared stay out of it; the listening history itself is kept.
+  let hidden = new Set();
+  try {
+    const raw = JSON.parse(localStorage.getItem("deviload-music-suggest-hidden") || "[]");
+    if (Array.isArray(raw)) hidden = new Set(raw.filter(x => typeof x === "string").slice(0, 100));
+  } catch {}
   const panel = document.createElement("div"),
-    list = document.createElement("div");
+    list = document.createElement("div"),
+    head = document.createElement("div"),
+    headName = document.createElement("span"),
+    clear = document.createElement("button"),
+    clearIcon = document.createElement("span");
   panel.className = "music-search-suggestions music-text-suggestions";
   panel.hidden = true;
   list.id = "music-search-suggestions";
   list.role = "listbox";
-  panel.append(list);
+  // Clears the recent searches and recent songs offered here, shown only while the list holds them.
+  clear.type = "button";
+  clear.className = "music-suggestion-clear";
+  clearIcon.className = "icon";
+  clearIcon.dataset.icon = "trash";
+  clearIcon.setAttribute("aria-hidden", "true");
+  clear.append(clearIcon);
+  clear.addEventListener("mousedown", e => e.preventDefault());
+  clear.addEventListener("click", () => {
+    history = [];
+    hidden = new Set(
+      [
+        ...hidden,
+        ...getRecent()
+          .map(item => item?.id)
+          .filter(Boolean),
+      ].slice(-100),
+    );
+    try {
+      localStorage.setItem("deviload-music-searches", "[]");
+      localStorage.setItem("deviload-music-suggest-hidden", JSON.stringify([...hidden]));
+    } catch {}
+    refresh();
+  });
+  head.className = "music-suggestion-head";
+  head.append(headName, clear);
+  panel.append(head, list);
   form.append(panel);
   input.setAttribute("role", "combobox");
   input.setAttribute("aria-autocomplete", "list");
@@ -136,6 +172,9 @@ export function wireMusicSuggestions({
       list.append(node);
     });
     panel.hidden = !rows.length;
+    head.hidden = !!input.value.trim() || !rows.some(row => row.kind === "recent" || row.item);
+    headName.textContent = t("Recent");
+    clear.title = clear.ariaLabel = t("Clear recent searches");
     input.setAttribute("aria-expanded", String(!!rows.length));
   }
   async function request(job) {
@@ -187,7 +226,7 @@ export function wireMusicSuggestions({
       history: words,
       local,
       rich,
-      recent: isPrivate() ? [] : getRecent(),
+      recent: isPrivate() ? [] : getRecent().filter(item => !hidden.has(item?.id)),
       texts: [...remote, ...searchSuggestions(query, words, local)],
     });
   }

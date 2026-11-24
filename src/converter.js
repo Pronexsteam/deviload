@@ -14,6 +14,8 @@ import {
   trackOptions,
   jobError,
 } from "./converter-model.js";
+import { wireAppGlass } from "./app-glass.js";
+import { readUiScale, applyUiScale } from "./ui-scale.js";
 
 wireAppearance();
 
@@ -658,3 +660,6 @@ window.addEventListener("storage", event => {
 });
 hydrateMascots();
 if (invoke) add(await invoke("convert_pending").catch(() => []));
+wireAppGlass();
+// This window takes the interface size chosen in Settings.
+if (readUiScale() !== 1) applyUiScale(readUiScale());

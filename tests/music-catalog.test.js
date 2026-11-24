@@ -7,7 +7,7 @@ import {runInNewContext} from "node:vm";
 import {soundSettings} from '../src/music-sound-model.js';
 import {parseLyrics} from '../src/music-lyrics-timing.js';
 const source=readFileSync(new URL("../src/devil-music.js",import.meta.url),"utf8");
-function paging(invoke){const ctx={isLocalMusicId,localPlaybackSource,request:1,continuation:"page2",morePending:false,sections:[{title:"",items:[{id:"one"}]}],lastQuery:{kind:"search",value:"artist"},searchFilter:"songs",language:()=>"en",invoke,render(){},status(message){ctx.message=message;},flash(message){ctx.flashed=message;},errorText:String};return {ctx,load:runInNewContext(`(()=>{${source.slice(source.indexOf('  async function loadMore()'),source.indexOf('  function trackRow('))};return loadMore;})()`,ctx)};}
+function paging(invoke){const ctx={isLocalMusicId,localPlaybackSource,request:1,continuation:"page2",morePending:false,sections:[{title:"",items:[{id:"one"}]}],lastQuery:{kind:"search",value:"artist"},searchFilter:"songs",language:()=>"en",invoke,render(){},status(message){ctx.message=message;},flash(message){ctx.flashed=message;},unavailableSongs:{mark(){},clear(){},flag(){}},aiArtistFilter:{has(){return false;}},errorText:String};return {ctx,load:runInNewContext(`(()=>{${source.slice(source.indexOf('  async function loadMore()'),source.indexOf('  function trackRow('))};return loadMore;})()`,ctx)};}
 test("search continuation appends distinct results and retries the same page after failure",async()=>{
   let fails=true;const requests=[];const p=paging(async(_,args)=>{requests.push(args);if(fails)throw Error("offline");return {sections:[{items:[{id:"one"},{id:"two"}]}],continuation:"page3"};});
   await p.load();assert.equal(p.ctx.sections.length,1);assert.equal(p.ctx.continuation,"page2");assert.equal(p.ctx.morePending,false);
@@ -22,7 +22,7 @@ test("timed lyrics preserve repeated lines, sort timestamps and reject invalid m
   assert.equal(parseLyrics(null).length,0);assert.equal(parseLyrics('[999999:01]bad').length,0);
 });
 test("untrusted sound settings cannot enable arbitrary gains or transitions",()=>{
-  assert.deepEqual(JSON.parse(JSON.stringify(soundSettings({preset:"evil",soft:"true",level:"true",skipSilence:"true",transition:999}))),{preset:"flat",bands:[0,0,0,0,0,0],custom:[],selected:"",bypass:false,soft:false,level:false,transition:0,seamless:true,skipSilence:false,skipSegments:false,rate:1,vibe:""});
+  assert.deepEqual(JSON.parse(JSON.stringify(soundSettings({preset:"evil",soft:"true",level:"true",skipSilence:"true",transition:999}))),{preset:"flat",bands:[0,0,0,0,0,0],custom:[],selected:"",bypass:false,soft:false,level:false,transition:0,seamless:true,dj:false,skipSilence:false,skipSegments:false,rate:1,vibe:""});
 });
 test("an existing download takes priority over the network and a missing file falls back",async()=>{
   for(const bound of [false,true]){

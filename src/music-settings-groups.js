@@ -13,7 +13,12 @@ const GROUPS = [
   {
     key: "recommendations",
     title: () => t("Suggestions for you"),
-    match: [".music-discovery-controls", ":has(#music-public-discovery)", "#music-profile"],
+    match: [
+      ".music-discovery-controls",
+      ":has(#music-public-discovery)",
+      ":has(#music-hide-ai)",
+      "#music-profile",
+    ],
   },
   {
     key: "privacy",

@@ -65,6 +65,8 @@ import { downloadAuthView } from "./account-status.js";
 import { wireGalleryDownloads } from "./gallery-download.js";
 import { downloadMusic } from "./music-download.js";
 import { wireDownloadDetails, inspectionKey, sourceEstimate } from "./download-options.js";
+import { wireAppGlass } from "./app-glass.js";
+import { readUiScale, applyUiScale, saveUiScale } from "./ui-scale.js";
 // A press near the edge of a shrinking player button still counts (see press-capture.js).
 keepPresses();
 
@@ -226,6 +228,17 @@ function statusLabel(status) {
 }
 function speedText(value) {
   return /^\d+(?:\.\d+)?$/.test(value || "") ? t("{speed} MB/s", { speed: value }) : value || "";
+}
+// How long a download still needs, as yt-dlp estimates it; nothing when it does not know.
+function etaText(seconds) {
+  const value = Math.round(Number(seconds) || 0);
+  if (value <= 0) return "";
+  if (value < 60) return t("{seconds} s left", { seconds: value });
+  if (value < 3600) return t("{minutes} min left", { minutes: Math.round(value / 60) });
+  return t("{hours} h {minutes} min left", {
+    hours: Math.floor(value / 3600),
+    minutes: Math.round((value % 3600) / 60),
+  });
 }
 function bigSizeText(bytes) {
   return bytes >= 1073741824 ? t("{size} GB", { size: (bytes / 1073741824).toFixed(1) }) : sizeText(bytes);
@@ -456,6 +469,54 @@ musicNavigation.addEventListener("click", () =>
 );
 onLanguageChange(labelMusicNavigation);
 wireReleaseNotes(document.querySelector("main"));
+wireAppGlass();
+// Interface size from Settings, applied to this window at start and to every open window when it changes.
+{
+  const scale = readUiScale();
+  $("ui-scale").value = String(scale);
+  if (scale !== 1) applyUiScale(scale, invoke);
+  $("ui-scale").addEventListener("change", () => {
+    const value = Number($("ui-scale").value);
+    if (saveUiScale(value)) applyUiScale(value, invoke);
+  });
+}
+// The sidebar folds down to its icons for more room on small screens; the choice is remembered. Folded, each
+// section is named by its tooltip.
+const SIDEBAR_KEY = "deviload-sidebar-collapsed";
+function setSidebarCollapsed(collapsed) {
+  document.body.classList.toggle("sidebar-collapsed", collapsed);
+  const toggle = $("sidebar-collapse");
+  const label = collapsed ? t("Expand the sidebar") : t("Collapse the sidebar");
+  toggle.title = label;
+  toggle.setAttribute("aria-label", label);
+  toggle.setAttribute("aria-expanded", String(!collapsed));
+  for (const button of document.querySelectorAll(".sidebar .nav")) {
+    const name = button.querySelector("span:not(.icon)")?.textContent.trim() || "";
+    if (collapsed) {
+      if (!button.dataset.titleBefore) button.dataset.titleBefore = button.getAttribute("title") || "-";
+      button.title = name;
+    } else if (button.dataset.titleBefore) {
+      if (button.dataset.titleBefore === "-") button.removeAttribute("title");
+      else button.title = button.dataset.titleBefore;
+      delete button.dataset.titleBefore;
+    }
+  }
+}
+try {
+  setSidebarCollapsed(localStorage.getItem(SIDEBAR_KEY) === "1");
+} catch {
+  setSidebarCollapsed(false);
+}
+$("sidebar-collapse").addEventListener("click", () => {
+  const collapsed = !document.body.classList.contains("sidebar-collapsed");
+  setSidebarCollapsed(collapsed);
+  try {
+    localStorage.setItem(SIDEBAR_KEY, collapsed ? "1" : "0");
+  } catch {
+    /* Folded for this session only. */
+  }
+});
+onLanguageChange(() => setSidebarCollapsed(document.body.classList.contains("sidebar-collapsed")));
 const toolbar = document.querySelector(".topbar-actions");
 const overflowControls = [
   document.querySelector(".lang-menu"),
@@ -1608,10 +1669,33 @@ function showDefaultFolder(folder) {
   $("default-folder-text").title = folder || "";
   $("default-folder-reset").hidden = !folder;
 }
+// After the download folder changes, files saved straight into the old one can follow it in one click.
+// Files in subfolders (by channel, for a media server) keep their layout and stay where they are.
+const sameFolder = (a, b) => a.replace(/[\/]+$/, "").toLowerCase() === b.replace(/[\/]+$/, "").toLowerCase();
+function offerMoveDownloads(previous, saved) {
+  if (!previous || !saved || sameFolder(previous, saved)) return;
+  const ids = jobs
+    .filter(
+      job => inLibrary(job) && !libraryMissing.has(job.id) && sameFolder(fileFolder(job.file), previous),
+    )
+    .map(job => job.id);
+  if (!ids.length) return;
+  message(
+    tn(
+      "{count} downloaded file is still in the old folder.",
+      "{count} downloaded files are still in the old folder.",
+      ids.length,
+    ),
+    false,
+    { label: t("Move them here"), run: () => moveDownloadsTo(ids, saved) },
+  );
+}
 async function setDefaultFolder(folder) {
+  const previous = $("default-folder-text").title || "";
   try {
     const saved = await invoke("set_default_folder", { folder });
     showDefaultFolder(saved);
+    offerMoveDownloads(previous, saved);
     if (saved) {
       $("folder").value = saved;
       $("folder").dispatchEvent(new Event("input", { bubbles: true }));
@@ -2699,7 +2783,9 @@ function render(data) {
           (job.status === "running"
             ? isProcessing(job)
               ? processingLabel(job)
-              : [Math.round(job.percent) + "%", speedText(job.speed)].filter(Boolean).join(" · ")
+              : [Math.round(job.percent) + "%", speedText(job.speed), etaText(job.eta)]
+                  .filter(Boolean)
+                  .join(" · ")
             : statusLabel(job.status)),
       ),
     );
@@ -2886,14 +2972,17 @@ function render(data) {
           t("Play the finished file in Deviload."),
           "play",
         );
-        addAction(
+        // Round, with its label sliding out on hover: the text goes in its own span for that.
+        const phone = addAction(
           controls,
-          t("To phone"),
+          "",
           "transfer-button",
           () => startShare(job.id),
           t("Send this file to a phone with a QR code."),
-          "phone-transfer",
+          "phone-qr",
         );
+        phone.setAttribute("aria-label", t("To phone"));
+        phone.append(node("span", "transfer-label", t("To phone")));
         if (isAudioJob(job))
           addAction(
             menu,
@@ -2960,7 +3049,21 @@ function render(data) {
   devilCut.refresh();
   if (data.warning) message(translateMessage(data.warning), true);
 }
+// The taskbar icon shows how far the running downloads are, so it can be watched with the window minimized.
+// Live recordings have no end and do not count. The value goes to the system only when it changes.
+let taskbarValue;
+function syncTaskbar(runningJobs) {
+  if (!invoke) return;
+  const counted = runningJobs.filter(job => !job.live);
+  const value = counted.length
+    ? Math.round(counted.reduce((sum, job) => sum + (Number(job.percent) || 0), 0) / counted.length)
+    : null;
+  if (value === taskbarValue) return;
+  taskbarValue = value;
+  invoke("set_taskbar_progress", { progress: value }).catch(() => {});
+}
 function renderLiveDownload(runningJobs) {
+  syncTaskbar(runningJobs);
   const current = runningJobs[0];
   if (current && current.id !== liveFire.jobId) completionScene.stop();
   liveFire.setActive(Boolean(current), current?.id);
@@ -3020,7 +3123,7 @@ function renderLiveDownload(runningJobs) {
     ? phase
     : runningJobs.length > 1
       ? t("+{count} more", { count: runningJobs.length - 1 })
-      : speedText(current.speed);
+      : [speedText(current.speed), etaText(current.eta)].filter(Boolean).join(" · ");
   $("live-percent").textContent = finalizing ? t("PROCESSING") : Math.round(percent) + "%";
   if (finalizing) track.setAttribute("aria-valuetext", phase);
   else track.removeAttribute("aria-valuetext");
@@ -3047,6 +3150,64 @@ function refreshCollections() {
   for (const name of names) select.add(new Option(name, name));
   select.value = names.includes(current) ? current : "";
 }
+// The collections and tags already in use, offered as one-click choices in Organize. The web view's own
+// "saved info" suggestions are turned off for these fields, so the list comes from the library.
+function libraryNames() {
+  const entries = Object.values(libraryMeta);
+  const collections = [...new Set(entries.map(item => item.collection).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b),
+  );
+  const uses = new Map();
+  for (const item of entries) for (const tag of item.tags || []) uses.set(tag, (uses.get(tag) || 0) + 1);
+  const tags = [...uses.keys()].sort((a, b) => uses.get(b) - uses.get(a) || a.localeCompare(b)).slice(0, 24);
+  return { collections, tags };
+}
+const editTags = () =>
+  $("library-edit-tags")
+    .value.split(",")
+    .map(value => value.trim())
+    .filter(Boolean);
+function syncLibraryChips() {
+  const collection = $("library-edit-collection").value.trim(),
+    tags = new Set(editTags().map(tag => tag.toLocaleLowerCase()));
+  for (const chip of $("library-edit-collection-chips").children)
+    chip.setAttribute("aria-pressed", String(chip.dataset.value === collection));
+  for (const chip of $("library-edit-tag-chips").children)
+    chip.setAttribute("aria-pressed", String(tags.has(chip.dataset.value.toLocaleLowerCase())));
+}
+function libraryChips(host, values, choose) {
+  host.replaceChildren(
+    ...values.map(value => {
+      const chip = node("button", "library-edit-chip", value);
+      chip.type = "button";
+      chip.dataset.value = value;
+      chip.addEventListener("click", event => {
+        event.preventDefault();
+        choose(value);
+        syncLibraryChips();
+      });
+      return chip;
+    }),
+  );
+  host.hidden = !values.length;
+}
+function fillLibrarySuggestions() {
+  const { collections, tags } = libraryNames();
+  $("library-edit-collections").replaceChildren(...collections.map(name => new Option(name, name)));
+  libraryChips($("library-edit-collection-chips"), collections.slice(0, 12), name => {
+    const field = $("library-edit-collection");
+    field.value = field.value.trim() === name ? "" : name;
+  });
+  libraryChips($("library-edit-tag-chips"), tags, tag => {
+    const current = editTags(),
+      same = item => item.toLocaleLowerCase() === tag.toLocaleLowerCase();
+    $("library-edit-tags").value = (
+      current.some(same) ? current.filter(item => !same(item)) : [...current, tag]
+    ).join(", ");
+  });
+}
+$("library-edit-collection").addEventListener("input", syncLibraryChips);
+$("library-edit-tags").addEventListener("input", syncLibraryChips);
 function openLibraryEdit(job) {
   libraryEditingId = job.id;
   const entry = libraryEntry(job);
@@ -3054,8 +3215,139 @@ function openLibraryEdit(job) {
   $("library-edit-collection").value = entry.collection || "";
   $("library-edit-tags").value = (entry.tags || []).join(", ");
   $("library-edit-favorite").checked = !!entry.favorite;
+  fillLibrarySuggestions();
+  syncLibraryChips();
   $("library-edit-dialog").showModal();
 }
+// Collections, tags and favorites belong to the file's path, so they follow a file that moves.
+function moveLibraryMeta(from, to) {
+  if (!from || !to || from === to || !libraryMeta[from]) return;
+  libraryMeta[to] = libraryMeta[from];
+  delete libraryMeta[from];
+  saveLibraryMeta();
+}
+// Files that are no longer where they were saved: id → whether they can be fetched again on their own.
+// Checked when the library opens, when the app comes back into focus and after the list changes.
+let libraryMissing = new Map(),
+  missingTimer = 0;
+async function checkLibraryMissing() {
+  if (!invoke) return;
+  try {
+    const found = new Map((await invoke("library_missing")).map(item => [item.id, item.refetch]));
+    const changed =
+      found.size !== libraryMissing.size ||
+      [...found].some(([id, refetch]) => libraryMissing.get(id) !== refetch);
+    libraryMissing = found;
+    if (changed) renderMediaLibrary();
+  } catch {
+    /* The library still works without the check. */
+  }
+}
+function scheduleMissingCheck(delay = 600) {
+  clearTimeout(missingTimer);
+  missingTimer = setTimeout(checkLibraryMissing, delay);
+}
+addEventListener("focus", () => {
+  if (document.querySelector("main")?.dataset.page === "library") scheduleMissingCheck(200);
+});
+const fileFolder = file => file.replace(/[\\/][^\\/]*$/, "");
+async function locateLibraryFile(job) {
+  const open = window.__TAURI__?.dialog?.open;
+  if (!open) return;
+  const name = job.file.split(/[\\/]/).pop();
+  const path = await open({
+    multiple: false,
+    directory: false,
+    title: t("Where is {name} now?", { name }),
+    defaultPath: fileFolder(job.file) || undefined,
+  }).catch(() => null);
+  if (typeof path !== "string" || !path) return;
+  try {
+    const saved = await invoke("library_locate", { id: job.id, path });
+    moveLibraryMeta(job.file, saved);
+    message(t("Found. The library now uses the file at its new place."));
+    await refresh();
+    scheduleMissingCheck(0);
+  } catch (error) {
+    message(errorText(error), true);
+  }
+}
+async function refetchLibraryFile(job) {
+  try {
+    await invoke("library_refetch", { id: job.id });
+    message(t("Downloading it again. It appears in the library when it finishes."));
+    await refresh();
+    scheduleMissingCheck(0);
+  } catch (error) {
+    message(errorText(error), true);
+  }
+}
+// Moves finished files to another folder; the library keeps them, with their collections and tags.
+async function moveDownloadsTo(ids, folder) {
+  try {
+    const report = await invoke("move_downloads", { ids, folder });
+    for (const item of report.moved) moveLibraryMeta(item.from, item.to);
+    if (report.moved.length)
+      message(
+        tn("Moved {count} file to {folder}.", "Moved {count} files to {folder}.", report.moved.length, {
+          folder,
+        }),
+      );
+    if (report.failed.length)
+      message(
+        tn(
+          "{count} file was not moved: {reason}",
+          "{count} files were not moved: {reason}",
+          report.failed.length,
+          {
+            reason: errorText(report.failed[0].error),
+          },
+        ),
+        true,
+      );
+    if (!report.moved.length && !report.failed.length) message(t("The file is already in that folder."));
+    await refresh();
+    scheduleMissingCheck(0);
+  } catch (error) {
+    message(errorText(error), true);
+  }
+}
+async function moveLibraryFile(job) {
+  const open = window.__TAURI__?.dialog?.open;
+  if (!open) {
+    message(t("Folder selection is available in the Deviload app."), true);
+    return;
+  }
+  const folder = await open({
+    directory: true,
+    multiple: false,
+    title: t("Move to which folder?"),
+    defaultPath: fileFolder(job.file) || undefined,
+  }).catch(() => null);
+  if (typeof folder === "string" && folder) await moveDownloadsTo([job.id], folder);
+}
+$("library-clean-missing").addEventListener("click", async () => {
+  const ids = jobs.filter(job => inLibrary(job) && libraryMissing.has(job.id)).map(job => job.id);
+  let removed = 0;
+  for (const id of ids) {
+    try {
+      await invoke("remove_from_library", { id, deleteFile: false });
+      removed++;
+    } catch {
+      /* One entry that cannot be removed does not stop the others. */
+    }
+  }
+  if (removed)
+    message(
+      tn(
+        "Removed {count} entry whose file was gone.",
+        "Removed {count} entries whose files were gone.",
+        removed,
+      ),
+    );
+  await refresh();
+  scheduleMissingCheck(0);
+});
 $("library-edit-close").addEventListener("click", () => $("library-edit-dialog").close());
 $("library-edit-save").addEventListener("click", () => {
   const job = jobs.find(item => item.id === libraryEditingId);
@@ -3121,6 +3413,7 @@ $("library-sort").addEventListener("change", () => {
 // Files finished before sizes were recorded get measured once, the first time the library opens.
 let libraryMeasured = false;
 $("library-tab").addEventListener("click", async () => {
+  scheduleMissingCheck(0);
   if (libraryMeasured || !invoke) return;
   libraryMeasured = true;
   try {
@@ -3130,11 +3423,25 @@ $("library-tab").addEventListener("click", async () => {
   }
 });
 refreshCollections();
-let libraryKey = "";
+let libraryKey = "",
+  libraryFiles = "";
 function renderMediaLibrary() {
   const done = jobs.filter(inLibrary);
   $("media-library-total").textContent = String(done.length);
   $("clear-library").hidden = !done.length;
+  // A new or changed file list is checked for files that are gone, a moment after it settles.
+  const files = done.map(job => `${job.id}:${job.file}`).join("|");
+  if (files !== libraryFiles) {
+    libraryFiles = files;
+    scheduleMissingCheck();
+  }
+  const missingCount = done.filter(job => libraryMissing.has(job.id)).length;
+  $("library-clean-missing").hidden = !missingCount;
+  $("library-clean-missing-text").textContent = tn(
+    "Remove {count} missing file",
+    "Remove {count} missing files",
+    missingCount,
+  );
   let visible = done.filter(job => {
     if (mediaFilter === "audio" && !isLibraryAudio(job)) return false;
     if (mediaFilter === "video" && isLibraryAudio(job)) return false;
@@ -3171,7 +3478,16 @@ function renderMediaLibrary() {
     t("More"),
     done.length,
     order,
-    visible.map(job => [job.id, job.file, job.url, job.bytes, job.duration, job.channel, libraryEntry(job)]),
+    visible.map(job => [
+      job.id,
+      job.file,
+      job.url,
+      job.bytes,
+      job.duration,
+      job.channel,
+      libraryEntry(job),
+      libraryMissing.get(job.id),
+    ]),
   ]);
   if (key === libraryKey) return;
   libraryKey = key;
@@ -3211,7 +3527,8 @@ function renderMediaLibrary() {
         grid.append(heading);
       }
     }
-    const card = node("article", "media-library-item");
+    const missing = libraryMissing.has(job.id);
+    const card = node("article", "media-library-item" + (missing ? " is-missing" : ""));
     const art = node("div", "media-library-art");
     const fallback = node("span", "media-art-symbol", isLibraryAudio(job) ? "♫" : "▶");
     fallback.setAttribute("aria-hidden", "true");
@@ -3232,6 +3549,7 @@ function renderMediaLibrary() {
       isLibraryAudio(job) ? t("AUDIO") : /\.gif$/i.test(job.file) ? "GIF" : t("VIDEO"),
     );
     art.append(type);
+    if (missing) art.append(node("span", "media-library-missing", t("File not found")));
     const info = node("div", "media-library-info");
     const name = node("h3", "", job.file.split(/[\\/]/).pop());
     name.title = job.file;
@@ -3250,7 +3568,17 @@ function renderMediaLibrary() {
     const tags = [entry.favorite ? "★" : "", entry.collection, ...(entry.tags || [])].filter(Boolean);
     if (tags.length) info.append(node("p", "library-tags", tags.join(" · ")));
     const buttons = node("div", "media-library-actions");
-    addAction(buttons, t("Watch"), "quiet library-watch", () => openPlayer(job.id), "", "play");
+    // A file that is gone offers to find it again instead of playing it.
+    if (missing)
+      addAction(
+        buttons,
+        t("Locate file"),
+        "quiet library-watch",
+        () => locateLibraryFile(job),
+        t("Point to where the file is now"),
+        "magnifying-glass",
+      );
+    else addAction(buttons, t("Watch"), "quiet library-watch", () => openPlayer(job.id), "", "play");
     const more = node("details", "library-more");
     const moreActions = node("div", "library-more-actions");
     more.append(node("summary", "", t("More")), moreActions);
@@ -3261,40 +3589,62 @@ function renderMediaLibrary() {
         more.querySelector("summary").focus();
       }
     });
-    addAction(
-      moreActions,
-      t("To phone · QR"),
-      "quiet",
-      () => startShare(job.id),
-      t("Open a QR code to send this file to a phone"),
-      "phone-transfer",
-    );
-    addAction(moreActions, t("Organize"), "quiet", () => openLibraryEdit(job));
-    addAction(
-      moreActions,
-      t("Show in folder"),
-      "quiet",
-      async () => {
-        try {
-          await invoke("reveal_download", { id: job.id });
-        } catch (error) {
-          message(errorText(error), true);
-        }
-      },
-      "",
-      "folder-open",
-    );
-    addAction(
-      moreActions,
-      t("Convert"),
-      "quiet",
-      () => openConverter([job.file]),
-      t("MP4, MP3, GIF or a smaller file"),
-      "arrows-left-right",
-    );
-    if (isAudioJob(job)) addAction(moreActions, t("Audio"), "quiet", () => openAudioTools(job.id));
-    else if (isVideoJob(job))
-      addAction(moreActions, "Devil Cut", "quiet", () => devilCut.open(job.id), "", "scissors");
+    if (missing && libraryMissing.get(job.id))
+      addAction(
+        moreActions,
+        t("Download again"),
+        "quiet",
+        () => refetchLibraryFile(job),
+        t("Fetch this file again into the folder it was saved to"),
+        "download-simple",
+      );
+    if (!missing)
+      addAction(
+        moreActions,
+        t("To phone · QR"),
+        "quiet",
+        () => startShare(job.id),
+        t("Open a QR code to send this file to a phone"),
+        "phone-qr",
+      );
+    addAction(moreActions, t("Organize"), "quiet", () => openLibraryEdit(job), "", "pencil-simple");
+    if (!missing)
+      addAction(
+        moreActions,
+        t("Move to…"),
+        "quiet",
+        () => moveLibraryFile(job),
+        t("Move the file to another folder and keep it in the library"),
+        "folder-open",
+      );
+    if (!missing) {
+      addAction(
+        moreActions,
+        t("Show in folder"),
+        "quiet",
+        async () => {
+          try {
+            await invoke("reveal_download", { id: job.id });
+          } catch (error) {
+            message(errorText(error), true);
+          }
+        },
+        "",
+        "folder-open",
+      );
+      addAction(
+        moreActions,
+        t("Convert"),
+        "quiet",
+        () => openConverter([job.file]),
+        t("MP4, MP3, GIF or a smaller file"),
+        "arrows-left-right",
+      );
+      if (isAudioJob(job))
+        addAction(moreActions, t("Audio"), "quiet", () => openAudioTools(job.id), "", "music-notes");
+      else if (isVideoJob(job))
+        addAction(moreActions, "Devil Cut", "quiet", () => devilCut.open(job.id), "", "scissors");
+    }
     addAction(moreActions, t("Remove from library"), "quiet", () => askRemove(job, "library"), "", "trash");
     buttons.append(more);
     info.append(buttons);
