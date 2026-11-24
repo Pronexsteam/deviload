@@ -770,17 +770,30 @@ body:not(.music-page) {
   :is(.brand-scene, .nav-label, .side-status) {
   display: none;
 }
+/* Folded, every control in the column is the same 44px circle as the round buttons of the top bar. */
 :root[data-theme] body.sidebar-collapsed:not(.music-page) .sidebar-collapse {
-  margin: 0 auto 14px;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 12px;
+  border-color: color-mix(in srgb, var(--glass-ink) 10%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--glass-ink) 5%, transparent);
 }
 :root[data-theme] body.sidebar-collapsed:not(.music-page) .sidebar .nav {
   position: relative;
   justify-content: center;
-  width: 52px;
-  min-width: 52px;
-  margin-inline: auto;
-  padding-inline: 0;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  margin: 0 auto 6px;
+  padding: 0;
+  border-radius: 50%;
   overflow: visible;
+}
+:root[data-theme] body.sidebar-collapsed:not(.music-page) .sidebar .nav:is(.active, [aria-current="page"]) {
+  border-color: color-mix(in srgb, var(--glass-ink) 14%, transparent);
+  background: color-mix(in srgb, var(--glass-ink) 10%, transparent);
 }
 :root[data-theme] body.sidebar-collapsed:not(.music-page) .sidebar .nav > span:not(.icon) {
   display: none;
@@ -790,8 +803,8 @@ body:not(.music-page) {
 }
 :root[data-theme] body.sidebar-collapsed:not(.music-page) .sidebar .nav > b {
   position: absolute;
-  top: -3px;
-  right: -4px;
+  top: -4px;
+  right: -5px;
   min-width: 18px;
   height: 18px;
   margin: 0;
