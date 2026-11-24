@@ -79,6 +79,29 @@ export function wireReleaseNotes(workspace) {
     // Every release with its notes, newest first.
     const releases = [
       {
+        version: "2.18.0",
+        changes: [
+          t("DJ mix: the next song comes in on the beat at the same tempo and takes over the bass."),
+          t("Devil Wrapped: your week or month in music as a story to watch and share."),
+          t(
+            "Move downloads to another folder and keep them in the library, with an offer to move them when the download folder changes.",
+          ),
+          t(
+            "Missing files are marked in the library: find them, download them again or remove them, one by one or all at once.",
+          ),
+          t(
+            "Liquid glass across the app, a folding sidebar, an interface size setting and the time left on every download.",
+          ),
+        ],
+        fixes: [
+          t("A song fading out is no longer cut short when the next one is prepared."),
+          t("OpenRGB runs in the background without its own icon in the tray."),
+          t(
+            "Organize media offers your collections and tags instead of the browser's saved info, and songs that cannot play are faded in lists.",
+          ),
+        ],
+      },
+      {
         version: "2.17.0",
         changes: [
           t(

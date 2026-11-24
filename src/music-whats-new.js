@@ -38,6 +38,33 @@ export const NEWS = [
     title: () => t("New: download progress"),
     text: () => t("A song you download shows its progress here, then opens its folder in one click."),
   },
+  {
+    key: "new-dj-mix",
+    entry: ".music-dock-more",
+    target: "#music-dj-toggle",
+    title: () => t("New: DJ mix"),
+    text: () =>
+      t(
+        "The next song comes in on the beat at the same tempo and takes over the bass, the way a DJ mixes. One click turns it on or off.",
+      ),
+  },
+  {
+    key: "new-wrapped",
+    entry: ".music-sidebar-stats",
+    target: ".music-wrapped-open",
+    title: () => t("New: Devil Wrapped"),
+    text: () =>
+      t(
+        "Your week or month in music as a story to watch and share. A new one is ready at the end of every week and month.",
+      ),
+  },
+  {
+    key: "new-hide-ai",
+    entry: "#music-settings-top",
+    target: "#music-hide-ai",
+    title: () => t("New: hide AI-made artists"),
+    text: () => t("Keeps artists known to be made by AI out of recommendations and radio."),
+  },
 ];
 
 // Inside a closed menu or dialog it is hidden, and saying so takes only a selector match; the styles are asked only
