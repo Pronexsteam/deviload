@@ -1,0 +1,523 @@
+/* Liquid glass for the whole app outside Devil Music (which has its own): Downloads, Devil Library, Cinema,
+   Cut, Convert and their windows. Built from each theme's own ink, line and accent, so it suits every theme,
+   light ones included. Glass here is a gradient, a lit edge and a highlight that follows the pointer; real
+   background blur is kept for menus and windows, one at a time, so long lists stay smooth. */
+:root {
+  --glass-ink: var(--ui-ink, #f4f6f8);
+  --glass-accent: var(--theme-accent, #e8284c);
+  --glass-spring: cubic-bezier(0.2, 1.1, 0.3, 1);
+}
+
+/* Buttons: a glass pill with a lit top edge, clearer text and icons, a lift on hover and a press. */
+:root[data-theme]
+  body
+  :is(main .page-content:not(.page-music), dialog:not([class*="music"]), .cut-window, .convert-window)
+  :is(button.outline, button.quiet, summary.outline, .library-more > summary) {
+  position: relative;
+  isolation: isolate;
+  min-height: 34px;
+  border: 1px solid color-mix(in srgb, var(--glass-ink) 20%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-ink) 12%, transparent),
+    color-mix(in srgb, var(--glass-ink) 4%, transparent)
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.16),
+    inset 0 -1px 0 rgb(0 0 0 / 0.1),
+    0 4px 14px rgb(0 0 0 / 0.12);
+  color: var(--glass-ink);
+  overflow: hidden;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    box-shadow 0.25s,
+    translate 0.3s var(--glass-spring),
+    scale 0.15s;
+}
+:root[data-theme]
+  body
+  :is(main .page-content:not(.page-music), dialog:not([class*="music"]), .cut-window, .convert-window)
+  :is(button.outline, button.quiet, summary.outline, .library-more > summary)
+  .icon {
+  opacity: 1;
+}
+/* The highlight under the pointer: a soft spot of light where the cursor is (set by app-glass.js). */
+:root[data-theme]
+  body
+  :is(main .page-content:not(.page-music), dialog:not([class*="music"]), .cut-window, .convert-window)
+  :is(button.outline, button.quiet, summary.outline, .library-more > summary, button.primary):not(
+    [data-news]
+  )::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(
+    120px circle at var(--glass-x, 50%) var(--glass-y, -40%),
+    rgb(255 255 255 / 0.22),
+    transparent 60%
+  );
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s;
+}
+:root[data-theme]
+  body
+  :is(main .page-content:not(.page-music), dialog:not([class*="music"]), .cut-window, .convert-window)
+  :is(button.outline, button.quiet, summary.outline, .library-more > summary):is(:hover, :focus-visible) {
+  border-color: color-mix(in srgb, var(--glass-ink) 34%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-ink) 18%, transparent),
+    color-mix(in srgb, var(--glass-ink) 7%, transparent)
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.24),
+    inset 0 -1px 0 rgb(0 0 0 / 0.1),
+    0 8px 22px rgb(0 0 0 / 0.18),
+    0 0 0 1px color-mix(in srgb, var(--glass-accent) 18%, transparent);
+  translate: 0 -1px;
+}
+:root[data-theme]
+  body
+  :is(main .page-content:not(.page-music), dialog:not([class*="music"]), .cut-window, .convert-window)
+  :is(button.outline, button.quiet, summary.outline, .library-more > summary, button.primary):not(
+    [data-news]
+  ):hover::after {
+  opacity: 1;
+}
+:root[data-theme]
+  body
+  :is(main .page-content:not(.page-music), dialog:not([class*="music"]), .cut-window, .convert-window)
+  :is(button.outline, button.quiet, summary.outline, button.primary):active {
+  scale: 0.97;
+  translate: 0 0;
+}
+:root[data-theme]
+  body
+  :is(main .page-content:not(.page-music), dialog:not([class*="music"]), .cut-window, .convert-window)
+  :is(button, summary, input, select):focus-visible {
+  outline: 2px solid var(--glass-accent);
+  outline-offset: 2px;
+}
+:root[data-theme]
+  body
+  :is(main .page-content:not(.page-music), dialog:not([class*="music"]), .cut-window, .convert-window)
+  button:disabled {
+  opacity: 0.5;
+  translate: none;
+}
+
+/* Main actions keep their theme colour and gain a glass sheen. */
+:root[data-theme]
+  body
+  :is(main .page-content:not(.page-music), dialog:not([class*="music"]), .cut-window, .convert-window)
+  button.primary {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    inset 0 -2px 0 rgb(0 0 0 / 0.12),
+    0 8px 24px color-mix(in srgb, var(--glass-accent) 28%, transparent);
+  transition:
+    box-shadow 0.25s,
+    translate 0.3s var(--glass-spring),
+    scale 0.15s;
+}
+:root[data-theme]
+  body
+  :is(main .page-content:not(.page-music), dialog:not([class*="music"]), .cut-window, .convert-window)
+  button.primary:hover {
+  translate: 0 -1px;
+}
+
+/* Filters: a glass track; the chosen one is lit glass with a ring in the theme's accent. */
+:root[data-theme] body main:not([data-page="music"]) :is(.media-library-filters, .queue-filters) {
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--glass-ink) 12%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--glass-ink) 5%, transparent);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.18);
+}
+:root[data-theme] body main:not([data-page="music"]) :is(.media-library-filters, .queue-filters) > button {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: color-mix(in srgb, var(--glass-ink) 80%, transparent);
+  transition:
+    background 0.25s,
+    color 0.2s,
+    box-shadow 0.25s;
+}
+:root[data-theme]
+  body
+  main:not([data-page="music"])
+  :is(.media-library-filters, .queue-filters)
+  > button:hover {
+  background: color-mix(in srgb, var(--glass-ink) 9%, transparent);
+  color: var(--glass-ink);
+}
+:root[data-theme]
+  body
+  main:not([data-page="music"])
+  :is(.media-library-filters, .queue-filters)
+  > button.selected {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-ink) 22%, transparent),
+    color-mix(in srgb, var(--glass-ink) 10%, transparent)
+  );
+  color: var(--glass-ink);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28),
+    0 0 0 1px color-mix(in srgb, var(--glass-accent) 55%, transparent),
+    0 4px 14px color-mix(in srgb, var(--glass-accent) 22%, transparent);
+}
+
+/* The downloads page dims unchosen queue filters with a stronger rule of its own; the glass track replaces it. */
+:root[data-theme]
+  body
+  main[data-page="downloads"]
+  .queue-column
+  .queue-filters
+  > button:not(.selected):not(:hover) {
+  border-color: transparent;
+}
+
+/* Large tiles, small tiles or a list: the same glass track as the filters. */
+:root[data-theme] body main:not([data-page="music"]) .media-library-filters .library-view {
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--glass-ink) 12%, transparent);
+  background: color-mix(in srgb, var(--glass-ink) 5%, transparent);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.15);
+}
+:root[data-theme] body main:not([data-page="music"]) .media-library-filters .library-view > button {
+  width: 34px;
+  height: 30px;
+  min-height: 30px;
+  border-radius: 10px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: color-mix(in srgb, var(--glass-ink) 75%, transparent);
+}
+:root[data-theme] body main:not([data-page="music"]) .media-library-filters .library-view > button.selected {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-ink) 22%, transparent),
+    color-mix(in srgb, var(--glass-ink) 10%, transparent)
+  );
+  color: var(--glass-ink);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28),
+    inset 0 0 0 1px color-mix(in srgb, var(--glass-accent) 55%, transparent);
+}
+
+/* Sending to the phone: a plain round button that matches its neighbours (in the top bar, the bell and the
+   settings; on a finished download, the row's own glass buttons), with a phone showing a QR code. It keeps its
+   size; what it does is told by its tooltip. Devil Music has no use for the top bar one and keeps it hidden. */
+.icon[data-icon="phone-qr"] {
+  --glyph: url("assets/icons/phone-qr.svg");
+}
+:root[data-theme] body .topbar-actions #phone-open {
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--glass-ink) 10%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--glass-ink) 5%, transparent);
+  box-shadow: none;
+  color: var(--glass-ink);
+}
+:root[data-theme] body .topbar-actions #phone-open:hover {
+  background: color-mix(in srgb, var(--glass-ink) 10%, transparent);
+}
+:root[data-theme] body.music-page .topbar-actions #phone-open {
+  display: none;
+}
+:root[data-theme] body main .library .job .transfer-button {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--glass-ink) 20%, transparent);
+  border-radius: 50%;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-ink) 12%, transparent),
+    color-mix(in srgb, var(--glass-ink) 4%, transparent)
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.16),
+    0 4px 14px rgb(0 0 0 / 0.12);
+  color: var(--glass-ink);
+}
+:root[data-theme] body main .library .job .transfer-button:hover {
+  border-color: color-mix(in srgb, var(--glass-ink) 34%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-ink) 18%, transparent),
+    color-mix(in srgb, var(--glass-ink) 7%, transparent)
+  );
+}
+:root[data-theme] body :is(.topbar-actions #phone-open, main .library .job .transfer-button) .icon {
+  width: 19px;
+  height: 19px;
+  /* styles.css gives every outline icon a gap with !important; this one sits alone in a circle. */
+  margin: 0 !important;
+  opacity: 1;
+  color: inherit;
+}
+:root[data-theme]
+  body
+  :is(.topbar-actions #phone-open .phone-label, main .library .job .transfer-button .transfer-label) {
+  display: none;
+}
+
+/* The row under the link (quality, file, folder, settings): four controls of one height, corner and glass. */
+:root[data-theme]
+  body
+  main:not([data-page="music"])
+  .download-picks
+  :is(#quality-select, #container-select, #destination-quick, #options-toggle) {
+  height: 44px;
+  min-height: 44px;
+  border: 1px solid color-mix(in srgb, var(--glass-ink) 16%, transparent);
+  border-radius: 14px;
+  background-color: color-mix(in srgb, var(--glass-ink) 6%, transparent);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1);
+  color: var(--glass-ink);
+  translate: none;
+}
+:root[data-theme]
+  body
+  main:not([data-page="music"])
+  .download-picks
+  :is(#destination-quick, #options-toggle) {
+  background-image: none;
+}
+:root[data-theme]
+  body
+  main:not([data-page="music"])
+  .download-picks
+  :is(#quality-select, #container-select, #destination-quick, #options-toggle):hover {
+  border-color: color-mix(in srgb, var(--glass-ink) 28%, transparent);
+  background-color: color-mix(in srgb, var(--glass-ink) 10%, transparent);
+}
+
+/* The status under the queue reads in light themes too. */
+:root[data-theme] body main:not([data-page="music"]) .hero-status {
+  border: 1px solid color-mix(in srgb, var(--glass-ink) 14%, transparent);
+  background: color-mix(in srgb, var(--glass-ink) 7%, transparent);
+  color: var(--glass-ink);
+}
+
+/* Cards and queue rows: glass panels with a lit edge that rise a little under the pointer. */
+:root[data-theme] body main:not([data-page="music"]) :is(.media-library-item, .library .job) {
+  position: relative;
+  border-radius: 18px;
+  isolation: isolate;
+  border: 1px solid color-mix(in srgb, var(--glass-ink) 12%, transparent);
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--glass-ink) 9%, transparent),
+    color-mix(in srgb, var(--glass-ink) 3%, transparent) 60%
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    0 10px 30px rgb(0 0 0 / 0.16);
+  transition:
+    translate 0.35s var(--glass-spring),
+    box-shadow 0.3s,
+    border-color 0.3s;
+}
+:root[data-theme] body main:not([data-page="music"]) :is(.media-library-item, .library .job)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    260px circle at var(--glass-x, 50%) var(--glass-y, -30%),
+    rgb(255 255 255 / 0.1),
+    transparent 65%
+  );
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+:root[data-theme] body main:not([data-page="music"]) :is(.media-library-item, .library .job):hover {
+  border-color: color-mix(in srgb, var(--glass-ink) 22%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.16),
+    0 16px 40px rgb(0 0 0 / 0.24);
+}
+:root[data-theme] body main:not([data-page="music"]) .media-library-item:hover {
+  translate: 0 -3px;
+}
+:root[data-theme] body main:not([data-page="music"]) :is(.media-library-item, .library .job):hover::after {
+  opacity: 1;
+}
+
+/* The cover of a queue row follows the row's rounded corner. */
+:root[data-theme] body main:not([data-page="music"]) .library .job > .media-cover {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* The row's buttons keep clear of its rounded right edge. */
+:root[data-theme] body main:not([data-page="music"]) .library .job .job-controls {
+  padding-right: 12px;
+}
+
+/* Menus and windows: real frosted glass, since only one is open at a time. */
+:root[data-theme] body main:not([data-page="music"]) :is(.library-more-actions, .queue-tools-panel),
+:root[data-theme] body dialog:not([class*="music"], .music-wrapped-dialog) {
+  border: 1px solid color-mix(in srgb, var(--glass-ink) 18%, transparent);
+  background: color-mix(in srgb, var(--theme-panel, #15171c) 78%, transparent);
+  backdrop-filter: blur(22px) saturate(1.4);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    0 24px 60px rgb(0 0 0 / 0.38);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme]
+    body
+    :is(main, dialog, .cut-window, .convert-window)
+    :is(button, summary, .media-library-item, .job) {
+    translate: none !important;
+    transition: none !important;
+  }
+}
+
+/* Devil Convert's action wheel: glass tiles around a glass orb, on a glass ring with a slow running light. */
+:root[data-theme] body.convert-page .convert-workbench .convert-wheel .convert-wheel-track {
+  border-color: color-mix(in srgb, var(--glass-ink) 6%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    inset 0 0 30px rgb(0 0 0 / 0.25),
+    0 0 0 1px color-mix(in srgb, var(--glass-ink) 10%, transparent);
+  opacity: 1;
+  overflow: hidden;
+}
+:root[data-theme] body.convert-page .convert-workbench .convert-wheel .convert-wheel-track::after {
+  content: "";
+  position: absolute;
+  inset: -38px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0 70%,
+    color-mix(in srgb, var(--glass-accent) 30%, transparent) 85%,
+    transparent 100%
+  );
+  mask: radial-gradient(closest-side, transparent calc(100% - 38px), #000 calc(100% - 37px));
+  animation: convert-ring-light 9s linear infinite;
+}
+@keyframes convert-ring-light {
+  to {
+    rotate: 1turn;
+  }
+}
+:root[data-theme] body.convert-page .convert-workbench .convert-wheel .convert-wheel-core {
+  border: 1px solid color-mix(in srgb, var(--glass-ink) 20%, transparent);
+  background:
+    radial-gradient(circle at 32% 26%, rgb(255 255 255 / 0.18), transparent 46%),
+    radial-gradient(
+      circle at 50% 120%,
+      color-mix(in srgb, var(--glass-accent) 22%, transparent),
+      transparent 60%
+    ),
+    color-mix(in srgb, var(--glass-ink) 6%, var(--ui-panel, #15171c));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.2),
+    inset 0 -8px 18px rgb(0 0 0 / 0.25),
+    0 12px 34px rgb(0 0 0 / 0.3);
+}
+:root[data-theme] body.convert-page .convert-workbench .convert-wheel .convert-presets button {
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--glass-ink) 18%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-ink) 13%, transparent),
+    color-mix(in srgb, var(--glass-ink) 4%, transparent)
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.16),
+    0 8px 22px rgb(0 0 0 / 0.2);
+  backdrop-filter: blur(6px);
+  transition:
+    transform 0.35s var(--glass-spring),
+    border-color 0.2s,
+    box-shadow 0.25s,
+    background 0.25s;
+}
+:root[data-theme] body.convert-page .convert-workbench .convert-wheel .convert-presets button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(
+    110px circle at var(--glass-x, 50%) var(--glass-y, -30%),
+    rgb(255 255 255 / 0.2),
+    transparent 60%
+  );
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s;
+}
+:root[data-theme]
+  body.convert-page
+  .convert-workbench
+  .convert-wheel
+  .convert-presets
+  button:is(:hover, :focus-visible) {
+  transform: translate(-50%, -50%) translateY(-3px) scale(1.04);
+  border-color: color-mix(in srgb, var(--glass-ink) 34%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.24),
+    0 14px 30px rgb(0 0 0 / 0.28);
+}
+:root[data-theme] body.convert-page .convert-workbench .convert-wheel .convert-presets button:hover::after {
+  opacity: 1;
+}
+:root[data-theme] body.convert-page .convert-workbench .convert-wheel .convert-presets button:active {
+  transform: translate(-50%, -50%) scale(0.97);
+}
+:root[data-theme] body.convert-page .convert-workbench .convert-wheel .convert-presets button.selected {
+  border-color: var(--glass-accent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-accent) 34%, transparent),
+    color-mix(in srgb, var(--glass-accent) 12%, transparent)
+  );
+  color: var(--glass-ink);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.3),
+    0 0 0 1px color-mix(in srgb, var(--glass-accent) 60%, transparent),
+    0 10px 30px color-mix(in srgb, var(--glass-accent) 38%, transparent);
+}
+:root[data-theme] body.convert-page .convert-workbench .convert-wheel .convert-presets button:disabled {
+  opacity: 0.4;
+  transform: translate(-50%, -50%);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme] body.convert-page .convert-wheel-track::after {
+    animation: none;
+  }
+}

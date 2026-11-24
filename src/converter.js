@@ -14,6 +14,7 @@ import {
   trackOptions,
   jobError,
 } from "./converter-model.js";
+import { wireAppGlass } from "./app-glass.js";
 
 wireAppearance();
 
@@ -658,3 +659,4 @@ window.addEventListener("storage", event => {
 });
 hydrateMascots();
 if (invoke) add(await invoke("convert_pending").catch(() => []));
+wireAppGlass();

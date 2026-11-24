@@ -38,17 +38,29 @@
 }
 .music-wrapped-close {
   position: absolute;
-  top: 22px;
-  right: -56px;
-  width: 40px;
-  height: 40px;
-  border: 1px solid rgb(255 255 255 / 0.25);
+  z-index: 2;
+  top: 6%;
+  right: 4%;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 0.28);
   border-radius: 50%;
-  background: rgb(255 255 255 / 0.08);
+  background: rgb(0 0 0 / 0.35);
+  backdrop-filter: blur(10px);
   color: #fff;
-  font-size: 24px;
+  font-size: 26px;
   line-height: 1;
   cursor: pointer;
+  transition:
+    background 0.2s,
+    scale 0.2s;
+}
+.music-wrapped-close:hover {
+  background: rgb(0 0 0 / 0.55);
+  scale: 1.06;
 }
 .music-wrapped-bar {
   display: flex;

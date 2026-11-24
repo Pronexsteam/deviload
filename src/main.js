@@ -65,6 +65,7 @@ import { downloadAuthView } from "./account-status.js";
 import { wireGalleryDownloads } from "./gallery-download.js";
 import { downloadMusic } from "./music-download.js";
 import { wireDownloadDetails, inspectionKey, sourceEstimate } from "./download-options.js";
+import { wireAppGlass } from "./app-glass.js";
 // A press near the edge of a shrinking player button still counts (see press-capture.js).
 keepPresses();
 
@@ -456,6 +457,7 @@ musicNavigation.addEventListener("click", () =>
 );
 onLanguageChange(labelMusicNavigation);
 wireReleaseNotes(document.querySelector("main"));
+wireAppGlass();
 const toolbar = document.querySelector(".topbar-actions");
 const overflowControls = [
   document.querySelector(".lang-menu"),
@@ -2909,14 +2911,17 @@ function render(data) {
           t("Play the finished file in Deviload."),
           "play",
         );
-        addAction(
+        // Round, with its label sliding out on hover: the text goes in its own span for that.
+        const phone = addAction(
           controls,
-          t("To phone"),
+          "",
           "transfer-button",
           () => startShare(job.id),
           t("Send this file to a phone with a QR code."),
-          "phone-transfer",
+          "phone-qr",
         );
+        phone.setAttribute("aria-label", t("To phone"));
+        phone.append(node("span", "transfer-label", t("To phone")));
         if (isAudioJob(job))
           addAction(
             menu,
@@ -3525,7 +3530,7 @@ function renderMediaLibrary() {
         "quiet",
         () => startShare(job.id),
         t("Open a QR code to send this file to a phone"),
-        "phone-transfer",
+        "phone-qr",
       );
     addAction(moreActions, t("Organize"), "quiet", () => openLibraryEdit(job));
     if (!missing)

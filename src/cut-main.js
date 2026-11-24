@@ -4,6 +4,7 @@ import { t, errorText, translateDom, setLanguage, onLanguageChange } from "./i18
 import { mediaPreview, isVideoJob, isLibraryAudio } from "./view-model.js";
 import { createDevilCut } from "./devil-cut.js";
 import { wireAppearance } from "./appearance.js";
+import { wireAppGlass } from "./app-glass.js";
 
 wireAppearance();
 
@@ -90,3 +91,4 @@ if (invoke) {
   window.__TAURI__.event.listen("devilcut-open", event => handle(String(event.payload)));
 }
 hydrateMascots();
+wireAppGlass();
