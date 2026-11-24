@@ -2629,4 +2629,11 @@ export default {
 "Minutes, top songs and artists of your year, ready to share as a story.": "Минуты, главные песни и исполнители вашего года — можно поделиться в сторис.",
 "That is about {hours} hours of music": "Это около {hours} ч музыки без перерыва",
 "Since {month} you listened for": "С {month} вы слушали музыку",
+"{seconds} s left": "осталось ~{seconds} с",
+"{minutes} min left": "осталось ~{minutes} мин",
+"{hours} h {minutes} min left": "осталось ~{hours} ч {minutes} мин",
+"Invalid interface scale": "Недопустимый масштаб интерфейса",
+"Collapse the sidebar": "Свернуть боковую панель",
+"Expand the sidebar": "Развернуть боковую панель",
+"Interface size": "Размер интерфейса",
 };

@@ -396,6 +396,9 @@ pub struct Job {
     pub completed_at: u64,
     pub percent: f64,
     pub speed: String,
+    // Seconds left in the current download, as yt-dlp estimates it; 0 when unknown.
+    #[serde(default)]
+    pub eta: u32,
     pub file: String,
     pub log: Vec<String>,
     #[serde(default)]
@@ -472,6 +475,7 @@ impl Job {
                 }
                 // MiB per second; the UI adds the unit.
                 self.speed = p["speed"].as_f64().map(|s| format!("{:.1}", s / 1_048_576.0)).unwrap_or_default();
+                self.eta = if p["status"] == "finished" { 0 } else { p["eta"].as_f64().filter(|e| e.is_finite() && *e >= 0.0).map(|e| e.min(864_000.0) as u32).unwrap_or(0) };
             }
         } else if let Some(live) = line.strip_prefix("DEVI_LIVE:") {
             // "True" and the file yt-dlp writes, for a stream that is on the air right now.
@@ -557,10 +561,17 @@ mod tests {
         let template = args.iter().find(|arg| arg.contains("%(playlist_index)")).unwrap();
         assert_eq!(template.matches("%(playlist_title)").count(), 1);
     }
+    #[test] fn progress_keeps_the_time_left_until_the_file_is_finished() {
+        let mut job = Job { status: "running".into(), ..Job::default() };
+        job.consume(r#"DEVI_PROGRESS:{"status":"downloading","downloaded_bytes":50,"total_bytes":100,"speed":1048576,"eta":42}"#);
+        assert_eq!((job.percent.round() as u32, job.eta), (50, 42));
+        job.consume(r#"DEVI_PROGRESS:{"status":"finished","downloaded_bytes":100,"total_bytes":100}"#);
+        assert_eq!(job.eta, 0);
+    }
     #[test] fn saved_items_remember_their_archive_key() {
         let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(), percent: 0.0, speed: String::new(),
             file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None,
-            hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, stage: String::new() };
+            hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, eta: 0, stage: String::new() };
         job.consume("DEVI_CHANNEL:jawed");
         job.consume("DEVI_CHANNEL:");
         assert_eq!(job.channel, "jawed");
@@ -579,7 +590,7 @@ mod tests {
         assert!(a.iter().any(|arg| arg == "before_dl:DEVI_LIVE:%(is_live)s %(filename)j"));
         let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(), percent: 0.0, speed: String::new(),
             file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None,
-            hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, stage: String::new() };
+            hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, eta: 0, stage: String::new() };
         job.consume(r#"DEVI_LIVE:False "/video/clip.mp4""#);
         job.consume(r#"DEVI_LIVE:NA "/video/clip.mp4""#);
         assert!(!job.live && job.recording.is_empty());
@@ -595,7 +606,7 @@ mod tests {
     #[test] fn archive_skips_are_counted() {
         let mut job = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(), percent: 0.0, speed: String::new(),
             file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None,
-            hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, stage: String::new() };
+            hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, eta: 0, stage: String::new() };
         job.consume("[download] Song one has already been recorded in the archive");
         job.consume("[download] Downloading item 2 of 2");
         job.consume("[download] Song two has already been recorded in the archive");
@@ -732,7 +743,7 @@ mod tests {
     }
     #[test] fn progress_is_not_completion() {
         let mut j = Job { id: 1, url: String::new(), options: Options::default(), status: "running".into(),
-            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, stage: String::new() };
+            percent: 0.0, speed: String::new(), file: String::new(), log: vec![], scheduled_at: None, auto_retry: false, retry_attempts: 0, archived: 0, healed: vec![], downloads: vec![], bytes: 0, duration: 0.0, channel: String::new(), live: false, live_since: 0, live_limit: 0, recording: String::new(), stop_requested: false, repeat_at: 0, pid: None, hidden_in_queue: false, hidden_in_library: false, library_parent: None, completed_at: 0, eta: 0, stage: String::new() };
         j.consume(r#"DEVI_PROGRESS:{"downloaded_bytes":100,"total_bytes":100,"speed":1048576}"#);
         assert_eq!(j.percent, 100.0);
         assert_eq!(j.status, "running");

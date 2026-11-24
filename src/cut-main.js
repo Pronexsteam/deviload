@@ -5,6 +5,7 @@ import { mediaPreview, isVideoJob, isLibraryAudio } from "./view-model.js";
 import { createDevilCut } from "./devil-cut.js";
 import { wireAppearance } from "./appearance.js";
 import { wireAppGlass } from "./app-glass.js";
+import { readUiScale, applyUiScale } from "./ui-scale.js";
 
 wireAppearance();
 
@@ -92,3 +93,5 @@ if (invoke) {
 }
 hydrateMascots();
 wireAppGlass();
+// This window takes the interface size chosen in Settings.
+if (readUiScale() !== 1) applyUiScale(readUiScale());

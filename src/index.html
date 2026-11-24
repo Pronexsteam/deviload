@@ -23,7 +23,7 @@
 <div class="window-drag-strip" aria-hidden="true"></div>
 <aside class="sidebar">
   <div id="brand-scene" class="brand-scene"><span class="brand-word"><img class="brand-symbol" src="assets/deviload-mark.svg" alt="" aria-hidden="true"><span class="brand-name">Devil<span class="brand-accent">oad</span></span><small>YOUR MEDIA. YOUR RULES.</small></span></div>
-  <p class="nav-label">SECTIONS</p>
+  <button id="sidebar-collapse" class="sidebar-collapse" type="button" aria-label="Collapse the sidebar" title="Collapse the sidebar" aria-expanded="true"><span class="icon" data-icon="sidebar-simple" aria-hidden="true"></span></button><p class="nav-label">SECTIONS</p>
   <nav aria-label="Sections">
     <button id="downloads-tab" class="nav active" type="button" aria-current="page"><span class="nav-icon icon" data-icon="download-simple" aria-hidden="true"></span><span>Downloads</span><b id="total">0</b></button>
     <button id="library-tab" class="nav" type="button"><span class="nav-icon icon" data-icon="folders" aria-hidden="true"></span><span>Devil Library</span><b id="library-count">0</b></button>
@@ -166,6 +166,8 @@
     <label class="appearance-label" for="appearance-theme">Theme</label>
     <select id="appearance-theme" aria-describedby="appearance-status"><option value="ambient">Ambient</option><option value="glass-light">Light Liquid Glass</option><option value="aurora">Aurora</option><option value="prism">Prism</option><option value="live">Live</option><option value="noir">Noir</option><option value="vinyl">Vinyl</option><option value="paper">Paper</option></select>
     <p id="appearance-status" class="settings-note" role="status" hidden></p>
+    <label class="appearance-label" for="ui-scale">Interface size</label>
+    <select id="ui-scale"><option value="0.9">90%</option><option value="1">100%</option><option value="1.1">110%</option><option value="1.25">125%</option></select>
   </section>
   <section class="settings-group"><h3>Accounts</h3>
     <div class="setting-row"><div><strong id="account-state">YouTube</strong><p id="account-hint">Not signed in. Needed for age-restricted, private and members-only videos.</p></div><button id="account-action" class="primary small" type="button">Sign in</button></div>

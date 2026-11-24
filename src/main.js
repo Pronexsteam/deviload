@@ -66,6 +66,7 @@ import { wireGalleryDownloads } from "./gallery-download.js";
 import { downloadMusic } from "./music-download.js";
 import { wireDownloadDetails, inspectionKey, sourceEstimate } from "./download-options.js";
 import { wireAppGlass } from "./app-glass.js";
+import { readUiScale, applyUiScale, saveUiScale } from "./ui-scale.js";
 // A press near the edge of a shrinking player button still counts (see press-capture.js).
 keepPresses();
 
@@ -227,6 +228,17 @@ function statusLabel(status) {
 }
 function speedText(value) {
   return /^\d+(?:\.\d+)?$/.test(value || "") ? t("{speed} MB/s", { speed: value }) : value || "";
+}
+// How long a download still needs, as yt-dlp estimates it; nothing when it does not know.
+function etaText(seconds) {
+  const value = Math.round(Number(seconds) || 0);
+  if (value <= 0) return "";
+  if (value < 60) return t("{seconds} s left", { seconds: value });
+  if (value < 3600) return t("{minutes} min left", { minutes: Math.round(value / 60) });
+  return t("{hours} h {minutes} min left", {
+    hours: Math.floor(value / 3600),
+    minutes: Math.round((value % 3600) / 60),
+  });
 }
 function bigSizeText(bytes) {
   return bytes >= 1073741824 ? t("{size} GB", { size: (bytes / 1073741824).toFixed(1) }) : sizeText(bytes);
@@ -458,6 +470,53 @@ musicNavigation.addEventListener("click", () =>
 onLanguageChange(labelMusicNavigation);
 wireReleaseNotes(document.querySelector("main"));
 wireAppGlass();
+// Interface size from Settings, applied to this window at start and to every open window when it changes.
+{
+  const scale = readUiScale();
+  $("ui-scale").value = String(scale);
+  if (scale !== 1) applyUiScale(scale, invoke);
+  $("ui-scale").addEventListener("change", () => {
+    const value = Number($("ui-scale").value);
+    if (saveUiScale(value)) applyUiScale(value, invoke);
+  });
+}
+// The sidebar folds down to its icons for more room on small screens; the choice is remembered. Folded, each
+// section is named by its tooltip.
+const SIDEBAR_KEY = "deviload-sidebar-collapsed";
+function setSidebarCollapsed(collapsed) {
+  document.body.classList.toggle("sidebar-collapsed", collapsed);
+  const toggle = $("sidebar-collapse");
+  const label = collapsed ? t("Expand the sidebar") : t("Collapse the sidebar");
+  toggle.title = label;
+  toggle.setAttribute("aria-label", label);
+  toggle.setAttribute("aria-expanded", String(!collapsed));
+  for (const button of document.querySelectorAll(".sidebar .nav")) {
+    const name = button.querySelector("span:not(.icon)")?.textContent.trim() || "";
+    if (collapsed) {
+      if (!button.dataset.titleBefore) button.dataset.titleBefore = button.getAttribute("title") || "-";
+      button.title = name;
+    } else if (button.dataset.titleBefore) {
+      if (button.dataset.titleBefore === "-") button.removeAttribute("title");
+      else button.title = button.dataset.titleBefore;
+      delete button.dataset.titleBefore;
+    }
+  }
+}
+try {
+  setSidebarCollapsed(localStorage.getItem(SIDEBAR_KEY) === "1");
+} catch {
+  setSidebarCollapsed(false);
+}
+$("sidebar-collapse").addEventListener("click", () => {
+  const collapsed = !document.body.classList.contains("sidebar-collapsed");
+  setSidebarCollapsed(collapsed);
+  try {
+    localStorage.setItem(SIDEBAR_KEY, collapsed ? "1" : "0");
+  } catch {
+    /* Folded for this session only. */
+  }
+});
+onLanguageChange(() => setSidebarCollapsed(document.body.classList.contains("sidebar-collapsed")));
 const toolbar = document.querySelector(".topbar-actions");
 const overflowControls = [
   document.querySelector(".lang-menu"),
@@ -2724,7 +2783,9 @@ function render(data) {
           (job.status === "running"
             ? isProcessing(job)
               ? processingLabel(job)
-              : [Math.round(job.percent) + "%", speedText(job.speed)].filter(Boolean).join(" · ")
+              : [Math.round(job.percent) + "%", speedText(job.speed), etaText(job.eta)]
+                  .filter(Boolean)
+                  .join(" · ")
             : statusLabel(job.status)),
       ),
     );
@@ -2988,7 +3049,21 @@ function render(data) {
   devilCut.refresh();
   if (data.warning) message(translateMessage(data.warning), true);
 }
+// The taskbar icon shows how far the running downloads are, so it can be watched with the window minimized.
+// Live recordings have no end and do not count. The value goes to the system only when it changes.
+let taskbarValue;
+function syncTaskbar(runningJobs) {
+  if (!invoke) return;
+  const counted = runningJobs.filter(job => !job.live);
+  const value = counted.length
+    ? Math.round(counted.reduce((sum, job) => sum + (Number(job.percent) || 0), 0) / counted.length)
+    : null;
+  if (value === taskbarValue) return;
+  taskbarValue = value;
+  invoke("set_taskbar_progress", { progress: value }).catch(() => {});
+}
 function renderLiveDownload(runningJobs) {
+  syncTaskbar(runningJobs);
   const current = runningJobs[0];
   if (current && current.id !== liveFire.jobId) completionScene.stop();
   liveFire.setActive(Boolean(current), current?.id);
@@ -3048,7 +3123,7 @@ function renderLiveDownload(runningJobs) {
     ? phase
     : runningJobs.length > 1
       ? t("+{count} more", { count: runningJobs.length - 1 })
-      : speedText(current.speed);
+      : [speedText(current.speed), etaText(current.eta)].filter(Boolean).join(" · ");
   $("live-percent").textContent = finalizing ? t("PROCESSING") : Math.round(percent) + "%";
   if (finalizing) track.setAttribute("aria-valuetext", phase);
   else track.removeAttribute("aria-valuetext");

@@ -2579,4 +2579,11 @@ export default {
 "Minutes, top songs and artists of your year, ready to share as a story.": "Minutos, canciones y artistas principales de tu año, listos para compartir como historia.",
 "That is about {hours} hours of music": "Son unas {hours} horas de música",
 "Since {month} you listened for": "Desde {month} escuchaste música durante",
+"{seconds} s left": "quedan ~{seconds} s",
+"{minutes} min left": "quedan ~{minutes} min",
+"{hours} h {minutes} min left": "quedan ~{hours} h {minutes} min",
+"Invalid interface scale": "Escala de interfaz no válida",
+"Collapse the sidebar": "Contraer la barra lateral",
+"Expand the sidebar": "Expandir la barra lateral",
+"Interface size": "Tamaño de la interfaz",
 };

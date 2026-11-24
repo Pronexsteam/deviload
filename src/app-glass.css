@@ -711,3 +711,120 @@
     inset 0 0 0 1px color-mix(in srgb, var(--glass-accent) 50%, transparent);
   color: var(--glass-ink);
 }
+
+/* Tooltips: a small frosted glass label, the same for every icon button in the app. */
+:root[data-theme] body .ui-tip {
+  padding: 6px 11px;
+  border: 1px solid color-mix(in srgb, var(--glass-ink) 16%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--theme-panel, #15171c) 86%, transparent);
+  backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    0 10px 28px rgb(0 0 0 / 0.3);
+  color: var(--glass-ink);
+  font-weight: 600;
+}
+
+/* The sidebar folds down to its icons. The button sits at its top; folded, the column narrows smoothly, the
+   labels, brand and status step aside, and the counters become small badges on the icons. */
+.sidebar-collapse {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: -6px 0 6px auto;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: color-mix(in srgb, var(--glass-ink) 70%, transparent);
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    color 0.2s;
+}
+.sidebar-collapse:hover {
+  background: color-mix(in srgb, var(--glass-ink) 9%, transparent);
+  color: var(--glass-ink);
+}
+.sidebar-collapse .icon {
+  width: 18px;
+  height: 18px;
+}
+body:not(.music-page) {
+  transition: grid-template-columns 0.35s var(--glass-spring);
+}
+:root[data-theme] body.sidebar-collapsed:not(.music-page) {
+  grid-template-columns: 80px minmax(0, 1fr) !important;
+}
+:root[data-theme] body.sidebar-collapsed:not(.music-page) .sidebar {
+  /* The panel frame starts 14px in (app-surfaces .sidebar::before), so the items sit in its middle. */
+  padding-left: 21px;
+  padding-right: 7px;
+  overflow: hidden;
+}
+:root[data-theme]
+  body.sidebar-collapsed:not(.music-page)
+  .sidebar
+  :is(.brand-scene, .nav-label, .side-status) {
+  display: none;
+}
+:root[data-theme] body.sidebar-collapsed:not(.music-page) .sidebar-collapse {
+  margin: 0 auto 14px;
+}
+:root[data-theme] body.sidebar-collapsed:not(.music-page) .sidebar .nav {
+  position: relative;
+  justify-content: center;
+  width: 52px;
+  min-width: 52px;
+  margin-inline: auto;
+  padding-inline: 0;
+  overflow: visible;
+}
+:root[data-theme] body.sidebar-collapsed:not(.music-page) .sidebar .nav > span:not(.icon) {
+  display: none;
+}
+:root[data-theme] body.sidebar-collapsed:not(.music-page) .sidebar .nav > .nav-icon {
+  margin: 0 !important;
+}
+:root[data-theme] body.sidebar-collapsed:not(.music-page) .sidebar .nav > b {
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0 3px;
+  border: 2px solid #111317;
+  border-radius: 999px;
+  box-sizing: border-box;
+  background: #343a45;
+  color: #fff;
+  font-size: 9px;
+  line-height: 14px;
+}
+/* The Ko-fi button at the foot of the sidebar folds to its heart with the sidebar. */
+:root[data-theme] body.sidebar-collapsed:not(.music-page) #support-float {
+  left: 25px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+  justify-content: center;
+}
+:root[data-theme] body.sidebar-collapsed:not(.music-page) #support-float > span:not(.icon),
+:root[data-theme] body.sidebar-collapsed:not(.music-page) #support-float::after {
+  display: none;
+}
+:root[data-theme] body.sidebar-collapsed:not(.music-page) #support-float > .icon {
+  margin: 0 !important;
+}
+/* With the sidebar folded the player and the drag strip start where the narrow column ends. */
+:root[data-theme] body.sidebar-collapsed:not(.music-page) .music-dock,
+body.sidebar-collapsed:not(.music-page) .window-drag-strip {
+  left: 80px;
+}
+body:not(.music-page) .music-dock {
+  transition: left 0.35s var(--glass-spring);
+}
