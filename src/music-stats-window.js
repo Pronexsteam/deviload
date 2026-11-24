@@ -19,6 +19,7 @@ export function createStatsWindow({
   cover = () => make("span", "music-art"),
   motion = () => true,
   tasteMap = null,
+  wrapped = null,
 }) {
   const dialog = make("dialog", "music-stats-dialog");
   dialog.setAttribute("aria-labelledby", "music-stats-title");
@@ -89,6 +90,17 @@ export function createStatsWindow({
       tabs.append(tab);
     }
     titles.append(tabs);
+    // The Year tab leads into the year's story when there is enough listening to tell it.
+    const year = new Date().getFullYear();
+    if (period === "year" && wrapped?.available(year)) {
+      const story = make("button", "music-wrapped-open", t("Open Devil Wrapped {year}", { year }));
+      story.type = "button";
+      story.addEventListener("click", () => {
+        hide();
+        wrapped.open(year);
+      });
+      titles.append(story);
+    }
     const close = make("button", "music-stats-close", "");
     close.type = "button";
     close.title = close.ariaLabel = t("Close");

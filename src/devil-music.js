@@ -141,6 +141,8 @@ import { createMusicLibrarySidebar } from "./music-library-sidebar.js";
 import { createUnavailableSongs } from "./music-unavailable.js";
 import { aiArtistFilter } from "./music-ai-filter.js";
 import { wireAiArtists } from "./music-ai-artists.js";
+import { createWrapped } from "./music-wrapped.js";
+import { wrappedSeason } from "./music-wrapped-model.js";
 
 const $ = id => document.getElementById(id);
 const moods = {
@@ -259,6 +261,8 @@ export function createMusic({ invoke, onDownload, storage }) {
   saved.sourceBindings ??= [];
   const resolveRecordingSource = createRecordingSourceResolver();
   const weekly = createWeeklyStats(storage);
+  // Set once Devil Wrapped is ready; adds the year's banner to the home in its season.
+  let homeWrapped = null;
   let privateSession = false,
     statsSession = null,
     statsSeconds = 0,
@@ -4104,6 +4108,7 @@ export function createMusic({ invoke, onDownload, storage }) {
     }
     if (view === "home") {
       homeTiles?.render();
+      homeWrapped?.(root);
       interestUI.render(root, { compact: true });
     }
     if (view === "interest") {
@@ -5952,9 +5957,55 @@ export function createMusic({ invoke, onDownload, storage }) {
       [...saved.recent, ...saved.favorites, ...(saved.playlists || []).flatMap(list => list.items)].find(
         item => item?.id === id,
       ) || null;
+    const wrapped = createWrapped({
+      invoke,
+      weekly,
+      likes: () => saved.favorites.length,
+      findItem,
+      play: id => {
+        const item = findItem(id);
+        if (item) playItems([item], item.id);
+      },
+      getAudio: () => audio,
+      currentId: () => current?.id,
+    });
+    // From December to mid-January the home opens with the year's story, until it is dismissed.
+    homeWrapped = root => {
+      const year = wrappedSeason();
+      if (year === null || !wrapped.available(year)) return;
+      const key = `deviload-music-wrapped-seen-${year}`;
+      try {
+        if (storage?.getItem(key)) return;
+      } catch {
+        /* Shown every time without storage. */
+      }
+      const banner = el("section", "music-wrapped-banner"),
+        text = el("div", "music-wrapped-banner-text"),
+        open = button(t("Open Devil Wrapped {year}", { year }), null, () => wrapped.open(year), "primary"),
+        dismiss = button(
+          t("Not now"),
+          null,
+          () => {
+            try {
+              storage?.setItem(key, "1");
+            } catch {
+              /* Hidden until the next start. */
+            }
+            banner.remove();
+          },
+          "quiet",
+        );
+      text.append(
+        el("strong", "", t("Your {year} in music is ready", { year })),
+        el("span", "", t("Minutes, top songs and artists of your year, ready to share as a story.")),
+      );
+      banner.append(text, open, dismiss);
+      root.prepend(banner);
+    };
     const statsWindow = createStatsWindow({
       weekly,
       findItem,
+      wrapped,
       cover: item => cover(item, "", 96),
       motion: () => !matchMedia("(prefers-reduced-motion: reduce)").matches,
       tasteMap: createTasteMap({

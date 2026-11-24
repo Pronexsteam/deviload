@@ -1,0 +1,116 @@
+/* Devil Wrapped: the year's story in a phone-shaped frame over a dimmed app, controls underneath. */
+.music-wrapped-dialog {
+  width: 100vw;
+  max-width: none;
+  height: 100vh;
+  max-height: none;
+  margin: 0;
+  padding: 2.5vh 0 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  overflow: hidden;
+}
+.music-wrapped-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.music-wrapped-dialog::backdrop {
+  background: rgb(4 4 8 / 0.82);
+  backdrop-filter: blur(18px);
+}
+.music-wrapped-stage {
+  position: relative;
+  height: min(84vh, calc((100vw - 40px) * 16 / 9));
+  aspect-ratio: 9 / 16;
+}
+.music-wrapped-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 28px;
+  box-shadow:
+    0 30px 90px rgb(0 0 0 / 0.55),
+    inset 0 0 0 1px rgb(255 255 255 / 0.12);
+  cursor: pointer;
+}
+.music-wrapped-close {
+  position: absolute;
+  top: 22px;
+  right: -56px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgb(255 255 255 / 0.25);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.08);
+  color: #fff;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+.music-wrapped-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.music-wrapped-dialog .music-wrapped-step {
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgb(255 255 255 / 0.22);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.08);
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+}
+.music-wrapped-dialog .music-wrapped-bar .outline {
+  border-color: rgb(255 255 255 / 0.3);
+  background: rgb(255 255 255 / 0.06);
+  color: #fff;
+}
+.music-wrapped-status {
+  min-height: 1.4em;
+  margin: 0;
+  font-size: 13px;
+  color: rgb(255 255 255 / 0.75);
+}
+.music-wrapped-open {
+  justify-self: start;
+  margin-top: 10px;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(120deg, #e8284c, #7c3aed);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+:root body #devil-music .music-wrapped-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 22px;
+  padding: 18px 22px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 15% 20%, rgb(255 255 255 / 0.16), transparent 45%),
+    linear-gradient(120deg, #e8284c, #7c3aed 60%, #0ea5e9);
+  color: #fff;
+}
+.music-wrapped-banner-text {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+}
+.music-wrapped-banner-text strong {
+  font-size: 20px;
+}
+.music-wrapped-banner-text span {
+  opacity: 0.85;
+}
+:root body #devil-music .music-wrapped-banner .quiet {
+  color: #fff;
+}
