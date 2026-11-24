@@ -224,6 +224,30 @@
 .icon[data-icon="phone-qr"] {
   --glyph: url("assets/icons/phone-qr.svg");
 }
+/* The round buttons of the top bar (YouTube, notifications, settings, folder, phone) share one circle. */
+:root[data-theme]
+  body
+  .topbar-actions
+  :is(#open-youtube-view, #notice-button, #music-settings-top, #open-folder, #phone-open) {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--glass-ink) 10%, transparent);
+  border-radius: 50%;
+  background-color: color-mix(in srgb, var(--glass-ink) 5%, transparent);
+  box-shadow: none;
+}
+:root[data-theme]
+  body
+  .topbar-actions
+  :is(#open-youtube-view, #notice-button, #music-settings-top, #open-folder, #phone-open):hover {
+  background-color: color-mix(in srgb, var(--glass-ink) 10%, transparent);
+}
+:root[data-theme] body .topbar-actions #open-folder .icon {
+  margin: 0 !important;
+}
 :root[data-theme] body .topbar-actions #phone-open {
   display: inline-grid;
   place-items: center;
