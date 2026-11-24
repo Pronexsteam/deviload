@@ -2,9 +2,16 @@ import { t, locale } from "./i18n.js";
 import { artworkCandidates } from "./music-artwork.js";
 import { recordStory } from "./music-lyric-story.js";
 import { STORY, storyFade } from "./music-lyric-story-model.js";
-import { wrappedSlides, slideAt, storyLength, countUp, SLIDE_SECONDS } from "./music-wrapped-model.js";
+import {
+  wrappedSlides,
+  slideAt,
+  storyLength,
+  countUp,
+  SLIDE_SECONDS,
+  monthOf,
+} from "./music-wrapped-model.js";
 
-// Devil Wrapped: the year in music as a vertical story. Every frame is drawn on one canvas, so what plays in
+// Devil Wrapped: a week or a month in music as a vertical story. Every frame is drawn on one canvas, so what plays in
 // the window is exactly what the saved video shows, with the listener's top song as its sound.
 const W = STORY.width,
   H = STORY.height,
@@ -152,22 +159,34 @@ function line(ctx, text, y, size, appear, alpha = 0.85, weight = 600) {
 }
 
 const number = value => Number(value).toLocaleString(locale());
-// "October" for a story that starts in October, and "October – December" for the months it covers.
-const monthName = (index, form = "long") =>
-  new Intl.DateTimeFormat(locale(), { month: form }).format(new Date(2026, index, 15));
+const monthName = index =>
+  new Intl.DateTimeFormat(locale(), { month: "long" }).format(new Date(2026, index, 15));
 const capital = text => text.charAt(0).toUpperCase() + text.slice(1);
-// The month as it stands after "since": the form a date uses (the genitive in Russian), taken from a full date.
-const monthGenitive = index =>
-  new Intl.DateTimeFormat(locale(), { day: "numeric", month: "long" })
-    .formatToParts(new Date(2026, index, 15))
-    .find(part => part.type === "month")?.value || monthName(index);
-function covered(since, form = "long") {
-  if (since === null || since === undefined) return "";
-  const now = new Date().getMonth(),
-    last = now >= since ? now : 11;
-  return last === since
-    ? capital(monthName(since, form))
-    : `${capital(monthName(since, form))} – ${monthName(last, form)}`;
+// The dates of the story: "19 – 25 November" for a week, "November 2026" for a month.
+export function periodLabel(period, days = []) {
+  if (period.kind === "month") return `${capital(monthName(period.month))} ${period.year}`;
+  const first = days[0]?.date,
+    last = days.at(-1)?.date;
+  if (!first || !last) return t("The last seven days");
+  return new Intl.DateTimeFormat(locale(), { day: "numeric", month: "long" }).formatRange(
+    new Date(`${first}T12:00`),
+    new Date(`${last}T12:00`),
+  );
+}
+// Outlined big text, made smaller until it fits the width.
+function outline(ctx, text, y, size, alpha, beat) {
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = "rgba(255,255,255,0.9)";
+  ctx.lineWidth = 5;
+  ctx.textAlign = "center";
+  let font = size * (1 + beat * 0.04);
+  ctx.font = `900 ${font}px ${FONT}`;
+  while (ctx.measureText(text).width > W - 120 && font > 60) {
+    font -= 10;
+    ctx.font = `900 ${font}px ${FONT}`;
+  }
+  ctx.strokeText(text, W / 2, y);
+  ctx.globalAlpha = 1;
 }
 
 function slide(ctx, data, progress, covers, time, beat) {
@@ -176,38 +195,30 @@ function slide(ctx, data, progress, covers, time, beat) {
     case "intro": {
       eyebrow(ctx, "Devil Music", 700, appear(0));
       bigText(ctx, "Wrapped", 900, 230, appear(0.08));
-      ctx.globalAlpha = appear(0.18);
-      ctx.strokeStyle = "rgba(255,255,255,0.9)";
-      ctx.lineWidth = 5;
-      ctx.font = `900 ${300 * (1 + beat * 0.04)}px ${FONT}`;
-      ctx.textAlign = "center";
-      ctx.strokeText(String(data.year), W / 2, 1250);
-      ctx.globalAlpha = 1;
-      line(ctx, data.since === null ? t("Your year in music") : covered(data.since), 1420, 54, appear(0.3));
+      outline(
+        ctx,
+        data.period.kind === "month" ? capital(monthName(data.period.month)) : t("Week"),
+        1250,
+        300,
+        appear(0.18),
+        beat,
+      );
+      line(ctx, data.period.label, 1420, 54, appear(0.3));
       break;
     }
     case "minutes": {
       eyebrow(
         ctx,
-        data.since === null
-          ? t("This year you listened for")
-          : t("Since {month} you listened for", { month: monthGenitive(data.since) }),
+        data.period.kind === "month"
+          ? t("In {month} you listened for", { month: monthName(data.period.month) })
+          : t("This week you listened for"),
         640,
         appear(0),
       );
       bigText(ctx, number(countUp(data.minutes, progress)), 900, 260, appear(0.05));
       line(ctx, t("minutes"), 1000, 70, appear(0.1), 0.95, 700);
       line(ctx, t("{plays} listens", { plays: number(data.plays) }), 1220, 54, appear(0.45));
-      if (data.days >= 1)
-        line(
-          ctx,
-          t("That is about {days} days of music", { days: data.days.toLocaleString(locale()) }),
-          1300,
-          46,
-          appear(0.55),
-          0.7,
-        );
-      else if (data.minutes >= 60)
+      if (data.minutes >= 60)
         line(
           ctx,
           t("That is about {hours} hours of music", { hours: Math.round(data.minutes / 60) }),
@@ -275,12 +286,12 @@ function slide(ctx, data, progress, covers, time, beat) {
       });
       break;
     }
-    case "month": {
-      eyebrow(ctx, t("Your biggest month"), 520, appear(0));
-      const name = new Intl.DateTimeFormat(locale(), { month: "long" }).format(
-        new Date(2026, data.index, 15),
-      );
-      bigText(ctx, name.charAt(0).toUpperCase() + name.slice(1), 720, 180, appear(0.06));
+    case "day": {
+      eyebrow(ctx, t("Your biggest day"), 520, appear(0));
+      const weekday = date => new Date(`${date}T12:00`),
+        long = new Intl.DateTimeFormat(locale(), { weekday: "long" }),
+        short = new Intl.DateTimeFormat(locale(), { weekday: "short" });
+      bigText(ctx, capital(long.format(weekday(data.date))), 720, 170, appear(0.06));
       line(
         ctx,
         t("{minutes} minutes of music", { minutes: number(countUp(data.minutes, progress)) }),
@@ -288,27 +299,21 @@ function slide(ctx, data, progress, covers, time, beat) {
         52,
         appear(0.15),
       );
-      const most = Math.max(1, ...data.months),
-        width = (W - 200) / 12;
-      data.months.forEach((seconds, i) => {
-        const height = 600 * (seconds / most) * ease((progress - 0.2 - i * 0.02) / 0.35);
+      const most = Math.max(1, ...data.days.map(day => day.seconds)),
+        width = (W - 200) / data.days.length;
+      data.days.forEach((day, i) => {
+        const height = 560 * (day.seconds / most) * ease((progress - 0.2 - i * 0.03) / 0.35),
+          x = 100 + i * width;
         ctx.fillStyle = i === data.index ? "#fff" : "rgba(255,255,255,0.35)";
-        roundRect(ctx, 100 + i * width + 8, 1560 - height, width - 16, Math.max(6, height), 12);
+        roundRect(ctx, x + 14, 1500 - height, width - 28, Math.max(6, height), 14);
         ctx.fill();
+        ctx.globalAlpha = appear(0.2) * (i === data.index ? 1 : 0.6);
+        ctx.font = `700 38px ${FONT}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(short.format(weekday(day.date)), x + width / 2, 1560);
+        ctx.globalAlpha = 1;
       });
-      break;
-    }
-    case "likes": {
-      eyebrow(ctx, t("Songs you loved"), 640, appear(0));
-      ctx.globalAlpha = appear(0.05);
-      ctx.fillStyle = "#fff";
-      ctx.font = `400 ${260 * (1 + beat * 0.08)}px ${FONT}`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("♥", W / 2, 860);
-      ctx.globalAlpha = 1;
-      bigText(ctx, number(countUp(data.likes, progress)), 1200, 220, appear(0.12));
-      line(ctx, t("songs liked this year and before"), 1300, 50, appear(0.25), 0.8);
       break;
     }
     case "summary": {
@@ -321,8 +326,8 @@ function slide(ctx, data, progress, covers, time, beat) {
       ctx.lineWidth = 2;
       ctx.stroke();
       ctx.globalAlpha = 1;
-      eyebrow(ctx, `Devil Wrapped ${data.year}`, 360, shown);
-      if (data.since !== null) line(ctx, covered(data.since), 420, 38, shown, 0.65);
+      eyebrow(ctx, "Devil Wrapped", 360, shown);
+      line(ctx, data.period.label, 420, 38, shown, 0.65);
       line(ctx, t("Minutes listened"), 500, 44, appear(0.05), 0.7);
       bigText(ctx, number(data.minutes), 640, 150, appear(0.08));
       if (data.artist) {
@@ -397,7 +402,7 @@ const base64 = blob =>
     reader.readAsDataURL(blob);
   });
 
-export function createWrapped({ invoke, weekly, likes, findItem, play, getAudio, currentId }) {
+export function createWrapped({ invoke, weekly, findItem, play, getAudio, currentId }) {
   const dialog = document.createElement("dialog"),
     stage = document.createElement("div"),
     canvas = document.createElement("canvas"),
@@ -498,7 +503,10 @@ export function createWrapped({ invoke, weekly, likes, findItem, play, getAudio,
     try {
       const blob = await new Promise(resolve => picture.toBlob(resolve, "image/png"));
       if (
-        await invoke("save_lyric_card", { png: await base64(blob), name: `Devil Wrapped ${scene.year}.png` })
+        await invoke("save_lyric_card", {
+          png: await base64(blob),
+          name: `Devil Wrapped ${scene.period.label}.png`,
+        })
       )
         status.textContent = t("Picture saved.");
     } catch {
@@ -541,7 +549,7 @@ export function createWrapped({ invoke, weekly, likes, findItem, play, getAudio,
       status.textContent = t("Saving the video…");
       const saved = await invoke("save_lyric_story", {
         video: await base64(video),
-        name: `Devil Wrapped ${scene.year}`,
+        name: `Devil Wrapped ${scene.period.label}`,
       });
       status.textContent = saved ? t("Video saved. Post it as a story or a short.") : "";
     } catch (error) {
@@ -556,17 +564,29 @@ export function createWrapped({ invoke, weekly, likes, findItem, play, getAudio,
     }
   });
 
-  // The slides this year can show, without opening anything; empty when there is too little to tell.
-  const slidesFor = year => {
-    const recap = weekly.recap("year", year);
-    return wrappedSlides({ recap, likes: likes(), year });
+  // The numbers of a period: the last seven days day by day, or a month from the monthly totals.
+  const recapFor = period => {
+    if (period.kind === "month") return weekly.recap("month", monthOf(period));
+    const summary = weekly.summary();
+    return {
+      minutes: summary.totalMinutes,
+      plays: summary.totalQualifiedPlays,
+      artists: weekly.artists(5),
+      songs: weekly.songs(5),
+      days: weekly.daily(),
+    };
+  };
+  // The slides a period can show, without opening anything; empty when there is too little to tell.
+  const slidesFor = period => {
+    const recap = recapFor(period);
+    return wrappedSlides({ recap, period: { ...period, label: periodLabel(period, recap.days) } });
   };
   return {
-    available: year => slidesFor(year).length > 0,
-    async open(year) {
-      const slides = slidesFor(year);
+    available: period => !!period && slidesFor(period).length > 0,
+    async open(period) {
+      const slides = slidesFor(period);
       if (!slides.length) return false;
-      const songs = weekly.recap("year", year).songs;
+      const songs = recapFor(period).songs;
       const covers = new Map();
       await Promise.all(
         songs.map(async song => {
@@ -577,7 +597,7 @@ export function createWrapped({ invoke, weekly, likes, findItem, play, getAudio,
       scene = {
         slides,
         covers,
-        year,
+        period: slides[0].period,
         song: songs[0] || null,
         window: { start: 0, end: storyLength(slides) },
       };
@@ -586,7 +606,7 @@ export function createWrapped({ invoke, weekly, likes, findItem, play, getAudio,
       status.textContent = "";
       labels();
       dialog.showModal();
-      // The year starts with its top song, as the sound of the story.
+      // The story starts with its top song, as its sound.
       if (scene.song && currentId() !== scene.song.id) play(scene.song.id);
       last = performance.now();
       cancelAnimationFrame(frame);

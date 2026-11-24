@@ -1,23 +1,20 @@
-// Devil Wrapped: the year in Devil Music as a short story of slides. This file only shapes the numbers; the
-// picture is drawn by music-wrapped.js. Everything comes from what this device already keeps (the yearly recap
-// and the likes), so nothing is sent anywhere to make it.
+// Devil Wrapped: a week or a month of Devil Music as a short story of slides. This file only shapes the
+// numbers; the picture is drawn by music-wrapped.js. Everything comes from what this device keeps (the last seven
+// days in detail and a total for each month), so the story covers exactly the listening it shows and nothing
+// is sent anywhere to make it.
 export const SLIDE_SECONDS = 4.6;
 
-// The slides worth showing for this year, in order. A slide with nothing to say is left out, and a year with
-// almost no listening gets no Wrapped at all.
-export function wrappedSlides({ recap, likes = 0, year }) {
+// The slides worth showing for a period, in order. A slide with nothing to say is left out, and a period with
+// almost no listening gets no Wrapped at all. [recap.days] is the week day by day; a month has none.
+export function wrappedSlides({ recap, period }) {
   const minutes = Math.max(0, Math.floor(Number(recap?.minutes) || 0)),
     plays = Math.max(0, Math.floor(Number(recap?.plays) || 0)),
     artists = (recap?.artists || []).filter(artist => artist?.name).slice(0, 5),
     songs = (recap?.songs || []).filter(song => song?.title).slice(0, 5),
-    months = Array.isArray(recap?.months) ? recap.months : [];
-  if (minutes < 10 || !songs.length) return [];
-  // Most people have not listened here since January: the story names the months it really covers
-  // (null when it is the whole year, or when the months are unknown).
-  const first = months.findIndex(month => month.seconds > 0),
-    since = first > 0 ? first : null;
-  const slides = [{ kind: "intro", year, since }];
-  slides.push({ kind: "minutes", minutes, plays, since, days: Math.round((minutes / 1440) * 10) / 10 });
+    days = Array.isArray(recap?.days) ? recap.days : [];
+  if (minutes < 10 || !songs.length || !period) return [];
+  const slides = [{ kind: "intro", period }];
+  slides.push({ kind: "minutes", period, minutes, plays });
   if (artists[0])
     slides.push({
       kind: "artist",
@@ -34,28 +31,69 @@ export function wrappedSlides({ recap, likes = 0, year }) {
       kind: "artists",
       artists: artists.map(artist => ({ name: artist.name, minutes: Math.floor(artist.seconds / 60) })),
     });
-  const best = months.reduce(
-    (top, month, index) => (month.seconds > (top?.seconds || 0) ? { ...month, index } : top),
+  const best = days.reduce(
+    (top, day, index) => (day.seconds > (top?.seconds || 0) ? { ...day, index } : top),
     null,
   );
-  if (best && months.filter(month => month.seconds > 0).length > 1)
+  if (best && days.filter(day => day.seconds > 0).length > 1)
     slides.push({
-      kind: "month",
+      kind: "day",
       index: best.index,
+      date: best.date,
       minutes: Math.floor(best.seconds / 60),
-      months: months.map(month => month.seconds),
+      days: days.map(day => ({ date: day.date, seconds: day.seconds })),
     });
-  if (likes > 0) slides.push({ kind: "likes", likes });
   slides.push({
     kind: "summary",
-    year,
-    since,
+    period,
     minutes,
     artist: artists[0]?.name || "",
     songs: songs.slice(0, 3),
   });
   return slides;
 }
+
+const pad = value => String(value).padStart(2, "0");
+const dayKey = date => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+
+// The Wrapped ready on a given day: a month from its last day to the third of the next, otherwise the week on
+// Sunday and Monday. [key] tells one period from another, so a dismissed banner stays away until the next.
+export function wrappedPeriod(date = new Date()) {
+  const year = date.getFullYear(),
+    month = date.getMonth(),
+    day = date.getDate(),
+    last = new Date(year, month + 1, 0).getDate();
+  if (day === last) return { kind: "month", year, month, key: `month-${year}-${pad(month + 1)}` };
+  if (day <= 3) {
+    const before = new Date(year, month - 1, 1);
+    return {
+      kind: "month",
+      year: before.getFullYear(),
+      month: before.getMonth(),
+      key: `month-${before.getFullYear()}-${pad(before.getMonth() + 1)}`,
+    };
+  }
+  const weekday = date.getDay();
+  if (weekday === 0 || weekday === 1) {
+    const sunday = new Date(year, month, day - weekday);
+    return { kind: "week", key: `week-${dayKey(sunday)}` };
+  }
+  return null;
+}
+
+// The period that the stats window offers: the current week or the current month.
+export const currentPeriod = (kind, date = new Date()) =>
+  kind === "month"
+    ? {
+        kind,
+        year: date.getFullYear(),
+        month: date.getMonth(),
+        key: `month-${date.getFullYear()}-${pad(date.getMonth() + 1)}`,
+      }
+    : { kind: "week", key: `week-${dayKey(date)}` };
+
+// "2026-11" for a month period, as the weekly statistics name their months.
+export const monthOf = period => `${period.year}-${pad(period.month + 1)}`;
 
 const sameArtist = (a, b) =>
   typeof a === "string" && typeof b === "string" && a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -69,15 +107,6 @@ export function slideAt(slides, seconds) {
 }
 
 export const storyLength = slides => slides.length * SLIDE_SECONDS;
-
-// Wrapped is offered from December to the middle of January, when everyone looks back at their year.
-export function wrappedSeason(date = new Date()) {
-  const month = date.getMonth(),
-    day = date.getDate();
-  if (month === 11) return date.getFullYear();
-  if (month === 0 && day <= 15) return date.getFullYear() - 1;
-  return null;
-}
 
 // Counting up to a number in the first part of a slide, eased so it lands softly.
 export function countUp(value, progress, share = 0.45) {

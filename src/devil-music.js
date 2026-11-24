@@ -70,7 +70,7 @@ import { bufferedSeconds, canPrepareAudio, keyboardSeek } from "./music-playback
 import { createMusicNavigation } from "./music-navigation.js";
 import { wireMusicSearch } from "./music-search.js";
 import { createMusicPresence } from "./music-presence.js";
-import { t, language, onLanguageChange, errorText } from "./i18n.js";
+import { t, language, locale, onLanguageChange, errorText } from "./i18n.js";
 import { tracks, remember, reorderTrack, insertNext, restoreRemoved, playbackQueue } from "./music-state.js";
 import {
   recordListening,
@@ -143,7 +143,7 @@ import { aiArtistFilter } from "./music-ai-filter.js";
 import { wireAiArtists } from "./music-ai-artists.js";
 import { createWrapped } from "./music-wrapped.js";
 import { createDjMix } from "./music-dj.js";
-import { wrappedSeason } from "./music-wrapped-model.js";
+import { wrappedPeriod } from "./music-wrapped-model.js";
 
 const $ = id => document.getElementById(id);
 const moods = {
@@ -265,7 +265,7 @@ export function createMusic({ invoke, onDownload, storage }) {
   saved.sourceBindings ??= [];
   const resolveRecordingSource = createRecordingSourceResolver();
   const weekly = createWeeklyStats(storage);
-  // Set once Devil Wrapped is ready; adds the year's banner to the home in its season.
+  // Set once Devil Wrapped is ready; adds the banner of a finished week or month to the home.
   let homeWrapped = null;
   let privateSession = false,
     statsSession = null,
@@ -6026,7 +6026,6 @@ export function createMusic({ invoke, onDownload, storage }) {
     const wrapped = createWrapped({
       invoke,
       weekly,
-      likes: () => saved.favorites.length,
       findItem,
       play: id => {
         const item = findItem(id);
@@ -6035,19 +6034,23 @@ export function createMusic({ invoke, onDownload, storage }) {
       getAudio: () => audio,
       currentId: () => current?.id,
     });
-    // From December to mid-January the home opens with the year's story, until it is dismissed.
+    // At the end of a week, and of a month, the home opens with its story until it is dismissed.
     homeWrapped = root => {
-      const year = wrappedSeason();
-      if (year === null || !wrapped.available(year)) return;
-      const key = `deviload-music-wrapped-seen-${year}`;
+      const period = wrappedPeriod();
+      if (!period || !wrapped.available(period)) return;
+      const key = `deviload-music-wrapped-seen-${period.key}`;
       try {
         if (storage?.getItem(key)) return;
       } catch {
         /* Shown every time without storage. */
       }
-      const banner = el("section", "music-wrapped-banner"),
+      const month = period.kind === "month",
+        name = month
+          ? new Intl.DateTimeFormat(locale(), { month: "long" }).format(new Date(2026, period.month, 15))
+          : "",
+        banner = el("section", "music-wrapped-banner"),
         text = el("div", "music-wrapped-banner-text"),
-        open = button(t("Open Devil Wrapped {year}", { year }), null, () => wrapped.open(year), "primary"),
+        open = button(t("Open Wrapped"), null, () => wrapped.open(period), "primary"),
         dismiss = button(
           t("Not now"),
           null,
@@ -6062,8 +6065,18 @@ export function createMusic({ invoke, onDownload, storage }) {
           "quiet",
         );
       text.append(
-        el("strong", "", t("Your {year} in music is ready", { year })),
-        el("span", "", t("Minutes, top songs and artists of your year, ready to share as a story.")),
+        el(
+          "strong",
+          "",
+          month ? t("Your {month} in music is ready", { month: name }) : t("Your week in music is ready"),
+        ),
+        el(
+          "span",
+          "",
+          month
+            ? t("Minutes, top songs and artists of the month, ready to share as a story.")
+            : t("Minutes, top songs and artists of the last seven days, ready to share as a story."),
+        ),
       );
       banner.append(text, open, dismiss);
       root.prepend(banner);
