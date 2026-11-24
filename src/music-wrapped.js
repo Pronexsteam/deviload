@@ -152,6 +152,23 @@ function line(ctx, text, y, size, appear, alpha = 0.85, weight = 600) {
 }
 
 const number = value => Number(value).toLocaleString(locale());
+// "October" for a story that starts in October, and "October – December" for the months it covers.
+const monthName = (index, form = "long") =>
+  new Intl.DateTimeFormat(locale(), { month: form }).format(new Date(2026, index, 15));
+const capital = text => text.charAt(0).toUpperCase() + text.slice(1);
+// The month as it stands after "since": the form a date uses (the genitive in Russian), taken from a full date.
+const monthGenitive = index =>
+  new Intl.DateTimeFormat(locale(), { day: "numeric", month: "long" })
+    .formatToParts(new Date(2026, index, 15))
+    .find(part => part.type === "month")?.value || monthName(index);
+function covered(since, form = "long") {
+  if (since === null || since === undefined) return "";
+  const now = new Date().getMonth(),
+    last = now >= since ? now : 11;
+  return last === since
+    ? capital(monthName(since, form))
+    : `${capital(monthName(since, form))} – ${monthName(last, form)}`;
+}
 
 function slide(ctx, data, progress, covers, time, beat) {
   const appear = step => ease((progress - step) / 0.18);
@@ -166,11 +183,18 @@ function slide(ctx, data, progress, covers, time, beat) {
       ctx.textAlign = "center";
       ctx.strokeText(String(data.year), W / 2, 1250);
       ctx.globalAlpha = 1;
-      line(ctx, t("Your year in music"), 1420, 54, appear(0.3));
+      line(ctx, data.since === null ? t("Your year in music") : covered(data.since), 1420, 54, appear(0.3));
       break;
     }
     case "minutes": {
-      eyebrow(ctx, t("This year you listened for"), 640, appear(0));
+      eyebrow(
+        ctx,
+        data.since === null
+          ? t("This year you listened for")
+          : t("Since {month} you listened for", { month: monthGenitive(data.since) }),
+        640,
+        appear(0),
+      );
       bigText(ctx, number(countUp(data.minutes, progress)), 900, 260, appear(0.05));
       line(ctx, t("minutes"), 1000, 70, appear(0.1), 0.95, 700);
       line(ctx, t("{plays} listens", { plays: number(data.plays) }), 1220, 54, appear(0.45));
@@ -298,6 +322,7 @@ function slide(ctx, data, progress, covers, time, beat) {
       ctx.stroke();
       ctx.globalAlpha = 1;
       eyebrow(ctx, `Devil Wrapped ${data.year}`, 360, shown);
+      if (data.since !== null) line(ctx, covered(data.since), 420, 38, shown, 0.65);
       line(ctx, t("Minutes listened"), 500, 44, appear(0.05), 0.7);
       bigText(ctx, number(data.minutes), 640, 150, appear(0.08));
       if (data.artist) {

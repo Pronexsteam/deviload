@@ -2628,4 +2628,5 @@ export default {
 "Your {year} in music is ready": "Ваш {year} в музыке готов",
 "Minutes, top songs and artists of your year, ready to share as a story.": "Минуты, главные песни и исполнители вашего года — можно поделиться в сторис.",
 "That is about {hours} hours of music": "Это около {hours} ч музыки без перерыва",
+"Since {month} you listened for": "С {month} вы слушали музыку",
 };

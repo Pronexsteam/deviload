@@ -12,8 +12,12 @@ export function wrappedSlides({ recap, likes = 0, year }) {
     songs = (recap?.songs || []).filter(song => song?.title).slice(0, 5),
     months = Array.isArray(recap?.months) ? recap.months : [];
   if (minutes < 10 || !songs.length) return [];
-  const slides = [{ kind: "intro", year }];
-  slides.push({ kind: "minutes", minutes, plays, days: Math.round((minutes / 1440) * 10) / 10 });
+  // Most people have not listened here since January: the story names the months it really covers
+  // (null when it is the whole year, or when the months are unknown).
+  const first = months.findIndex(month => month.seconds > 0),
+    since = first > 0 ? first : null;
+  const slides = [{ kind: "intro", year, since }];
+  slides.push({ kind: "minutes", minutes, plays, since, days: Math.round((minutes / 1440) * 10) / 10 });
   if (artists[0])
     slides.push({
       kind: "artist",
@@ -45,6 +49,7 @@ export function wrappedSlides({ recap, likes = 0, year }) {
   slides.push({
     kind: "summary",
     year,
+    since,
     minutes,
     artist: artists[0]?.name || "",
     songs: songs.slice(0, 3),

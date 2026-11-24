@@ -2578,4 +2578,5 @@ export default {
 "Your {year} in music is ready": "Tu {year} en música está listo",
 "Minutes, top songs and artists of your year, ready to share as a story.": "Minutos, canciones y artistas principales de tu año, listos para compartir como historia.",
 "That is about {hours} hours of music": "Son unas {hours} horas de música",
+"Since {month} you listened for": "Desde {month} escuchaste música durante",
 };

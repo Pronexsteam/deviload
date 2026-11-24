@@ -35,6 +35,12 @@ test("the year becomes slides that only say what the numbers support", () => {
   assert.equal(slides[1].days, 3.8);
   assert.equal(slides[2].song.title, "Get Lucky", "the top artist shows their own song");
   assert.equal(slides[5].index, 10, "November was the busiest month");
+  assert.equal(slides[0].since, 3, "listening began in April, and the story says so");
+  const allYear = wrappedSlides({
+    recap: { ...recap, months: recap.months.map(m => ({ ...m, seconds: 100 })) },
+    year: 2026,
+  });
+  assert.equal(allYear[0].since, null, "a whole year is just the year");
   const quiet = wrappedSlides({
     recap: { ...recap, artists: [recap.artists[0]], months: [] },
     likes: 0,
