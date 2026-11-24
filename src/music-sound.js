@@ -135,8 +135,14 @@ export function createMusicSound({
           filter.Q.value = 0.7;
           return filter;
         });
+        // A low shelf for DJ transitions: the bass of one song is taken out while the other's plays.
+        const mixLow = context.createBiquadFilter();
+        mixLow.type = "lowshelf";
+        mixLow.frequency.value = 180;
+        mixLow.gain.value = 0;
         source.connect(preamp);
-        let output = preamp;
+        preamp.connect(mixLow);
+        let output = mixLow;
         for (const filter of filters) {
           output.connect(filter);
           output = filter;
@@ -158,13 +164,14 @@ export function createMusicSound({
         wet.connect(bus);
         bus.connect(context.destination);
         panner.connect(context.destination);
-        graphs.push({ node, filters, preamp, compressor, dry, wet, bus, convolver, panner });
+        graphs.push({ node, filters, preamp, mixLow, compressor, dry, wet, bus, convolver, panner });
       }
     }
     apply();
     await context.resume();
   }
   const needsGraph = () =>
+    settings.dj ||
     settings.soft ||
     settings.level ||
     settings.skipSilence ||
@@ -369,6 +376,7 @@ export function createMusicSound({
     soft = toggle(value => (settings.soft = value)),
     level = toggle(value => (settings.level = value)),
     transition = choice(value => (settings.transition = Number(value))),
+    dj = toggle(value => (settings.dj = value)),
     seamless = toggle(value => (settings.seamless = value)),
     skipSilence = toggle(value => (settings.skipSilence = value)),
     skipSegments = toggle(value => (settings.skipSegments = value)),
@@ -477,6 +485,11 @@ export function createMusicSound({
       ],
       String(settings.transition),
     );
+    dj.input.checked = settings.dj;
+    dj.label.textContent = t("DJ mix");
+    dj.label.title = t(
+      "The next song comes in on the beat at the same tempo and takes over the bass halfway, the way a DJ mixes. Songs without a steady beat fade as usual.",
+    );
     seamless.input.checked = settings.seamless;
     seamless.label.textContent = t("Play albums without gaps");
     skipSilence.input.checked = settings.skipSilence;
@@ -576,6 +589,45 @@ export function createMusicSound({
     },
     get seamless() {
       return settings.seamless;
+    },
+    get dj() {
+      return settings.dj;
+    },
+    setDj(value) {
+      settings.dj = !!value;
+      commit();
+    },
+    // Builds the sound graph ahead of a DJ transition, which needs its bass filter.
+    prepareMix: () => activate().catch(() => {}),
+    // A tempo factor for one player during and after a DJ transition.
+    bend(node, factor) {
+      speed.bend(node, factor);
+    },
+    // The bass swap of a DJ transition: the incoming song starts without its bass and takes it over from
+    // the outgoing one [at] seconds from now, within [swap] seconds. Both come back to normal afterwards.
+    bassSwap(incoming, outgoing, at, swap, end) {
+      if (!context) return;
+      const now = context.currentTime,
+        low = -26,
+        set = (graph, from, to, when) => {
+          if (!graph) return;
+          const gain = graph.mixLow.gain;
+          gain.cancelScheduledValues(now);
+          gain.setValueAtTime(from, now);
+          gain.setValueAtTime(from, now + when);
+          gain.linearRampToValueAtTime(to, now + when + swap);
+        };
+      const into = graphs.find(graph => graph.node === incoming),
+        away = graphs.find(graph => graph.node === outgoing);
+      set(into, low, 0, at);
+      set(away, 0, low, at);
+      away?.mixLow.gain.setValueAtTime(0, now + end);
+    },
+    resetBass(node) {
+      const graph = graphs.find(graph => graph.node === node);
+      if (!graph || !context) return;
+      graph.mixLow.gain.cancelScheduledValues(context.currentTime);
+      graph.mixLow.gain.setValueAtTime(0, context.currentTime);
     },
     get skipSegments() {
       return settings.skipSegments;

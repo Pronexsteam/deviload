@@ -36,6 +36,7 @@ export function soundSettings(raw = {}) {
     level: raw.level === true,
     transition: TRANSITIONS.includes(raw.transition) ? raw.transition : 0,
     seamless: raw.seamless !== false,
+    dj: raw.dj === true,
     skipSilence: raw.skipSilence === true,
     skipSegments: raw.skipSegments === true,
     rate: Number.isFinite(raw.rate) ? Math.round(Math.max(0.5, Math.min(2, raw.rate)) * 20) / 20 : 1,
@@ -69,7 +70,8 @@ export function equalizerHeadroom(bands, sampleRate = 48000) {
   return peak > 1.00001 ? 1 / (peak * 10 ** (0.5 / 20)) : 1;
 }
 export function createMusicRate(nodes, getRate, getVibe = () => null) {
-  const fast = new WeakMap();
+  const fast = new WeakMap(),
+    bent = new WeakMap();
   let mode = "";
   const pitchSupported = nodes.every(
     node => "preservesPitch" in node || "webkitPreservesPitch" in node || "mozPreservesPitch" in node,
@@ -86,12 +88,15 @@ export function createMusicRate(nodes, getRate, getVibe = () => null) {
     }
     const rate = Math.round((mode || !pitchSupported ? 1 : getRate()) * shift * 1000) / 1000;
     // Silence has no pitch to preserve, so it may pass faster even where pitch correction is missing.
-    node.playbackRate = (!mode && fast.get(node)) || rate;
+    // A DJ transition bends the next song toward the tempo of the one before it, around the chosen speed.
+    node.playbackRate =
+      (!mode && fast.get(node)) || Math.round(rate * (mode ? 1 : bent.get(node) || 1) * 1000) / 1000;
     node.defaultPlaybackRate = rate;
   }
   for (const node of nodes)
     node.addEventListener("loadedmetadata", () => {
       fast.delete(node);
+      bent.delete(node);
       apply(node);
     });
   return {
@@ -107,6 +112,12 @@ export function createMusicRate(nodes, getRate, getVibe = () => null) {
     hurry(node, rate) {
       if (rate) fast.set(node, rate);
       else fast.delete(node);
+      apply(node);
+    },
+    // A tempo factor for one player; 1 or nothing ends it.
+    bend(node, factor) {
+      if (factor && factor !== 1) bent.set(node, factor);
+      else bent.delete(node);
       apply(node);
     },
     setMode(value) {

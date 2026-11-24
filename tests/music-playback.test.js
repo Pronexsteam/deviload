@@ -58,7 +58,7 @@ function player(invoke,items=[song(1)]){
     wireMusicProfile:options=>{ctx.profileActions=options;},library:{invalidateUndo(){},find(){}},musicGain,previousVolume:.7,syncVolume(){},showLocal(){},load(){},newReleases:{cached:()=>[],load:async()=>[]},
     request:0,loading:false,loaded:false,sections:[],continuation:null,morePending:false,listFilter:"",listSort:"original",rememberNavigation(){},selectView:next=>{ctx.view=next;},skeleton(){},render(){ctx.rendered=ctx.sections;},prepareHomeSelection(){},showPlaylist(){},
     $:id=>{if(!controls.has(id))controls.set(id,field());return controls.get(id);},
-    captureListening(){},persist(){},persistSession(){},syncDock(){},renderQueue(){},status(message){ctx.message=message;},flash(message){ctx.flashed=message;},unavailableSongs:{mark(){},clear(){},flag(){}},aiArtistFilter:{has(){return false;}},
+    captureListening(){},persist(){},persistSession(){},syncDock(){},renderQueue(){},status(message){ctx.message=message;},flash(message){ctx.flashed=message;},unavailableSongs:{mark(){},clear(){},flag(){}},aiArtistFilter:{has(){return false;}},djMix:null,mixTimer:0,
     document:{querySelectorAll:()=>[],addEventListener(){}},navigator:{},performance,DOMException,
     setTimeout(fn){const id=++serial;timers.set(id,fn);return id;},clearTimeout(id){timers.delete(id);}};
   Object.assign(ctx,{publicDiscovery:{candidates:async()=>[],clear(){}},publicGeneration:0});

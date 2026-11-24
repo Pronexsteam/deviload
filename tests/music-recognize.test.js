@@ -4,7 +4,7 @@ import { findPeaks, encodeSignature, crc32, shazamSignature, toInt16, SAMPLE_RAT
 
 const element = tag => {
   const classes = new Set();
-  const node = { tag, children: [], handlers: {}, dataset: {}, attributes: {}, value: "", maxLength: 120 };
+  const node = { tag, children: [], handlers: {}, dataset: {}, attributes: {}, value: "", maxLength: 120, style: { setProperty() {}, removeProperty() {} } };
   node.classList = { add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name) };
   node.append = (...items) => node.children.push(...items);
   node.insertBefore = item => node.children.push(item);
@@ -17,7 +17,7 @@ const element = tag => {
   return node;
 };
 globalThis.requestAnimationFrame ??= fn => fn();
-globalThis.document ??= { documentElement: { lang: "en" }, createElement: element };
+globalThis.document ??= { documentElement: { lang: "en" }, createElement: element, createElementNS: (namespace, tag) => element(tag) };
 const { wireMusicRecognize, resample, quiet, readHistory, rememberSong, samplesFromBase64, HISTORY_KEY } = await import(
   "../src/music-recognize.js"
 );

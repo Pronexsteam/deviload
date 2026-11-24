@@ -1834,11 +1834,6 @@
 :root body main[data-page="music"] #devil-music .music-moods > button {
   flex: none;
 }
-/* Identify song is an accent, not an alarm: a soft tint without a bright outline. */
-:root[data-theme] body .music-recognize-standalone {
-  border: 1px solid color-mix(in srgb, var(--player-primary, #9ad0ff) 26%, transparent);
-  box-shadow: none;
-}
 /* Other pages keep their last rows clear of the player bar floating over them. */
 body:has(.music-dock:not([hidden])) main:not([data-page="music"]) {
   padding-bottom: 176px !important;
@@ -1878,4 +1873,9 @@ body:has(.music-dock:not([hidden])) main:not([data-page="music"]) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+/* DJ mix in the More menu: lit while it is on. */
+#music-dock-menu > #music-dj-toggle[aria-pressed="true"] {
+  color: var(--cover-lyric-light, var(--player-primary, #9ad0ff));
 }
